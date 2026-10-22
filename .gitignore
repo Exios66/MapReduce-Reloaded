@@ -1,0 +1,22 @@
+# Go
+/go/bin/
+*.test
+*.out
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Job data and benchmark output
+/data/
+/bench/results/
+/tmp/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
