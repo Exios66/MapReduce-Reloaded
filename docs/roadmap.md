@@ -31,8 +31,8 @@ possible, then extend them for modern infrastructure and modern use cases.
 
 - Work proceeds one small, reviewable unit at a time. Each issue is roughly
   one PR, and each commit covers one concept.
-- Every feature ships with tests. `make check` must pass before every push;
-  the pre-push hook enforces this
+- Every feature ships with tests. `make check` should pass before every push;
+  the pre-push hook runs it in clones where `make hooks` was run
   ([ADR 0002](design/0002-local-quality-gate.md)).
 - Each phase adds a short architecture decision record (ADR) under
   [`design/`](design/), covering the decision, the alternatives and the
