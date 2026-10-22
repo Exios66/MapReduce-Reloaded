@@ -9,7 +9,12 @@ PYTHON ?= python3
 
 all: check
 
-check: proto-check lint test
+# Run the three stages one after another, even under `make -j`: code
+# generation rewrites go/gen and python/.../gen, which lint and test read.
+check:
+	$(MAKE) proto-check
+	$(MAKE) lint
+	$(MAKE) test
 
 # One-time setup per clone: tell git to use the hooks in .githooks/.
 hooks:
@@ -37,12 +42,16 @@ proto:
 proto-lint:
 	$(TOOLS)/buf lint
 
-# Fail if a .proto change would break existing clients, compared with main.
-# Skipped while main has no .proto files yet.
+# Fail if a .proto change would break existing clients, compared with main on
+# GitHub. We fetch it first so a missing or stale local main cannot hide a
+# break. Skipped only while main has no .proto files yet.
+PROTO_BASE := origin/main
 proto-breaking:
-	@if git ls-tree -r --name-only main -- proto | grep -q '\.proto$$'; then \
-		$(TOOLS)/buf breaking --against '.git#branch=main'; \
-	else echo "proto-breaking: main has no .proto files yet, skipping"; fi
+	@git fetch --quiet origin main
+	@files=$$(git ls-tree -r --name-only $(PROTO_BASE) -- proto) || exit 1; \
+	if echo "$$files" | grep -q '\.proto$$'; then \
+		$(TOOLS)/buf breaking --against '.git#ref=$(PROTO_BASE)'; \
+	else echo "proto-breaking: $(PROTO_BASE) has no .proto files yet, skipping"; fi
 
 # Fail if regenerating changes anything, i.e. the generated code in git (or
 # staged for commit) is out of date with proto/.
