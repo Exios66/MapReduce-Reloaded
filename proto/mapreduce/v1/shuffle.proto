@@ -1,0 +1,38 @@
+// The shuffle service, run by every worker.
+//
+// After a map task finishes, its output stays on the worker that ran it,
+// split into R partition files. Each reduce task then fetches its partition
+// from every map task's worker through this service (§3.1 step 5: "the
+// reduce worker uses remote procedure calls to read the buffered data from
+// the local disks of the map workers").
+
+syntax = "proto3";
+
+package mapreduce.v1;
+
+option go_package = "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1";
+
+// ShuffleService moves intermediate data from map workers to reduce workers.
+service ShuffleService {
+  // Streams one map task's output for one partition, in chunks, so neither
+  // side ever holds the whole partition in memory.
+  rpc FetchPartition(FetchPartitionRequest) returns (stream FetchPartitionResponse);
+}
+
+message FetchPartitionRequest {
+  // The job the data belongs to.
+  string job_id = 1;
+  // Which map task's output to read.
+  uint32 map_index = 2;
+  // Which reduce partition to read.
+  uint32 partition = 3;
+  // Byte offset to start from, so an interrupted fetch can resume instead of
+  // starting over. 0 for a fresh fetch.
+  uint64 offset = 4;
+}
+
+message FetchPartitionResponse {
+  // The next bytes of the partition file, in the record format described in
+  // docs/file-format.md. The stream ends after the last chunk.
+  bytes data = 1;
+}
