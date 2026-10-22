@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -117,7 +119,8 @@ func TestCoordinatorServiceRoundTrip(t *testing.T) {
 
 	// RPCs the fake does not implement return codes.Unimplemented rather than
 	// crashing: that is what the embedded Unimplemented server is for.
-	if _, err := client.Heartbeat(ctx, &mrpb.HeartbeatRequest{WorkerId: "w1"}); err == nil {
-		t.Fatal("want Unimplemented error from Heartbeat")
+	_, err = client.Heartbeat(ctx, &mrpb.HeartbeatRequest{WorkerId: "w1"})
+	if status.Code(err) != codes.Unimplemented {
+		t.Fatalf("Heartbeat: want codes.Unimplemented, got %v", err)
 	}
 }
