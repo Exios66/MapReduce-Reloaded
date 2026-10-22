@@ -37,8 +37,10 @@ The main design choices:
      new attempts of the same task.
    - Every report names its attempt, so the coordinator can accept the first
      completion and reject duplicates (`ReportTaskResponse.accepted`).
-3. **Map output stays on the worker.** `ReportTask` returns a
-   `PartitionLocation` per partition (§3.2). Reducers fetch the data directly
+3. **Map output stays on the worker.** A successful map task's `ReportTask`
+   request carries one `PartitionLocation` per partition in
+   `TaskSuccess.outputs` (§3.2); the response only says whether the report
+   was accepted. Reducers fetch the data directly
    from the map worker with `FetchPartition`. The coordinator only stores
    locations and never touches data.
    - `PartitionLocation.uri` is reserved for Phase 6's external shuffle mode.
@@ -94,4 +96,5 @@ The main design choices:
   code lives inside the `mapreduce_reloaded` package.
 - Python requires `grpcio>=1.84.1` and `protobuf>=7.35.1`, matching the
   generator.
-- Go requires Go 1.25+, the minimum for `google.golang.org/grpc` v1.84.
+- Go requires Go 1.26+. gRPC v1.84 needs 1.25, but the patched
+  `golang.org/x/net` and `golang.org/x/text` releases need 1.26.

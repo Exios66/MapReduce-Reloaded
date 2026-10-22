@@ -14,7 +14,10 @@ guarantee (see Consequences).
 
 ## Decision
 
-- `make check` is the single quality gate. It runs, for both languages:
+- `make check` is the single quality gate. It runs, in order:
+  - `proto-check` (added in Phase 0, #3): `buf lint`, the `buf breaking`
+    compatibility check against `main`, code generation, and a check that the
+    committed generated code is up to date;
   - formatting checks;
   - `go vet`;
   - `golangci-lint`;

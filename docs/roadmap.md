@@ -176,7 +176,7 @@ Each phase ends in a runnable, tested state.
 **Phase 0 — Foundations (about 1 week)**
 - Write `proto/` messages and services: `Task`, `TaskKind`, `TaskState`, `RequestTask`, `ReportTask`, `Heartbeat`, `FetchPartition` (server-stream), `SubmitJob`, `JobStatus`, `Counters`.
 - Write `docs/file-format.md`: length-prefixed `(key, value)` records with block CRC32C and optional compression. Both languages must read and write it identically.
-- Set up the Go module and Python package skeletons, the Makefile (`buf` or `protoc` codegen), and the local quality gate (`make check` plus a pre-push hook: go test, pytest, ruff, golangci-lint).
+- Set up the Go module and Python package skeletons, the Makefile (`buf` or `protoc` codegen), and the local quality gate (`make check` plus a pre-push hook: buf lint and breaking checks, generated-code freshness, go test, pytest, ruff, golangci-lint).
 
 **Phase 1 — Sequential core + local mode (F1, F15–F17, F20)**
 - Public API in both languages, plus text/kv input formats and the external merge sort.
