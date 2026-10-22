@@ -123,12 +123,12 @@ One record, key `"hello"`, value `"1"`, no compression:
 4D 52 4B 56 01 00 00 00     header: "MRKV", version 1, codec 0, reserved
 08 00 00 00                 block: stored_len = 8
 01 00 00 00                        record_count = 1
-xx xx xx xx                        crc32c(payload)
+59 25 69 78                        crc32c(payload) = 0x78692559
 05 68 65 6C 6C 6F 01 31            payload: len 5, "hello", len 1, "1"
 00 00 00 00                 footer: end marker
 01 00 00 00 00 00 00 00             total_records = 1
 01 00 00 00 00 00 00 00             block_count = 1
-yy yy yy yy                         crc32c(previous 16 bytes)
+33 EA 40 F9                         crc32c(previous 16 bytes) = 0xF940EA33
 ```
 
 The exact bytes are in `testdata/format/one_record.mrkv`.
