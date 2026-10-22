@@ -11,7 +11,7 @@ gRPC, observability, high availability, and multi-language user code.
 
 ## Status
 
-**Phase 0 — foundations.** Repository layout, build and CI only; no
+**Phase 0 — foundations.** Repository layout, build and checks only; no
 MapReduce functionality yet. See the [roadmap](docs/roadmap.md) for the full
 plan and the [paper mapping](docs/paper-mapping.md) for feature-by-feature
 progress against the paper.
@@ -33,10 +33,13 @@ Requirements: Go 1.24+, Python 3.11+, `golangci-lint`, `ruff`.
 
 ```sh
 pip install -e "python[dev]"   # install the Python package + dev tools
-make test                      # Go and Python tests
-make lint                      # gofmt, go vet, golangci-lint, ruff
+make hooks                     # once per clone: run `make check` before every push
+make check                     # all linters and tests (the project's quality gate)
 make fmt                       # auto-format both languages
 ```
+
+There is no automatic hosted CI. `make check`, run by the pre-push hook, is
+the gate. See [ADR 0002](docs/design/0002-local-quality-gate.md).
 
 ## Design records
 
