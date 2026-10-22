@@ -1,6 +1,44 @@
 # Roadmap
 
-The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F23) are tracked in [paper-mapping.md](paper-mapping.md).
+The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F23)
+are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
+GitHub issue, labelled by phase and numbered in the order it should be done.
+
+## Context
+
+The goal is to rebuild the core of Google's MapReduce as described in Dean &
+Ghemawat, *MapReduce: Simplified Data Processing on Large Clusters* (OSDI
+2004). The rebuild should include as many of the paper's original features as
+possible, then extend them for modern infrastructure and modern use cases.
+
+- **Scope:** a real distributed system. A coordinator and N workers talk over
+  the network. The cluster runs locally with Docker Compose and can optionally
+  be deployed to Kubernetes.
+- **Languages:** Go is the primary implementation. Python is a second,
+  complete reference implementation. The original system was C++; see
+  [ADR 0001](design/0001-languages-and-shared-contract.md) for why we use Go
+  and Python instead.
+- **Key architectural idea:** both languages share one contract:
+  - gRPC/protobuf for RPC;
+  - a documented on-disk record format;
+  - a language-neutral partition hash.
+
+  Go and Python components can therefore be mixed in one cluster, and running
+  the same job through both implementations gives a byte-for-byte correctness
+  check.
+
+## Development process
+
+- Work proceeds one small, reviewable unit at a time. Each issue is roughly
+  one PR, and each commit covers one concept.
+- Every feature ships with tests. CI must be green before merge.
+- Each phase adds a short architecture decision record (ADR) under
+  [`design/`](design/), covering the decision, the alternatives and the
+  rationale.
+- Code favours clarity over cleverness. Doc comments cite paper sections
+  (e.g. `// §3.3: re-execute completed map tasks`).
+- [paper-mapping.md](paper-mapping.md) is updated whenever a paper feature
+  lands.
 
 ## 1. Paper feature checklist (what "faithful" means)
 
