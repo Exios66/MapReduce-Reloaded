@@ -30,7 +30,7 @@ bench/     data generators and benchmark harness             (Phase 7)
 
 ## Development
 
-Requirements: Go 1.25+, Python 3.11+, `golangci-lint`.
+Requirements: Go 1.26+, Python 3.11+, `golangci-lint` v2 (built with Go 1.26+).
 
 ```sh
 pip install -e "python[dev]"   # install the Python package + dev tools
