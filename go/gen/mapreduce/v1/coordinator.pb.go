@@ -238,7 +238,9 @@ func (x *RequestTaskRequest) GetWorkerId() string {
 
 type RequestTaskResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Exactly one of these is set.
+	// The coordinator always sets exactly one of these. A worker that finds
+	// none set (e.g. a newer coordinator sent a kind this worker does not know)
+	// treats it as `wait` with a default delay, so old workers keep working.
 	//
 	// Types that are valid to be assigned to Assignment:
 	//
