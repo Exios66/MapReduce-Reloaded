@@ -19,7 +19,8 @@ progress against the paper.
 ## Repository layout
 
 ```
-proto/     gRPC/protobuf contract shared by Go and Python   (Phase 0)
+proto/     gRPC/protobuf contract shared by Go and Python
+scripts/   code generation and other helper scripts
 go/        Go implementation
 python/    Python reference implementation
 docs/      roadmap, paper mapping, file format, design records (ADRs)
@@ -29,13 +30,15 @@ bench/     data generators and benchmark harness             (Phase 7)
 
 ## Development
 
-Requirements: Go 1.24+, Python 3.11+, `golangci-lint`, `ruff`.
+Requirements: Go 1.25+, Python 3.11+, `golangci-lint`.
 
 ```sh
 pip install -e "python[dev]"   # install the Python package + dev tools
+make tools                     # install pinned code generators into .tools/bin
 make hooks                     # once per clone: run `make check` before every push
 make check                     # all linters and tests (the project's quality gate)
 make fmt                       # auto-format both languages
+make proto                     # regenerate code after editing proto/
 ```
 
 `make` runs Python as `python3`. To use another interpreter, e.g. a

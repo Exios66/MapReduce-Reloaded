@@ -7,10 +7,15 @@ name = "mapreduce-reloaded"
 version = "0.0.1"
 description = "A modern re-implementation of Google's 2004 MapReduce (Python reference implementation)."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    # Versions match the generator in scripts/gen-proto.sh; generated code
+    # refuses to load with an older runtime.
+    "grpcio>=1.84.1",
+    "protobuf>=7.35.1",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+dev = ["pytest>=8", "ruff>=0.5", "grpcio-tools==1.84.1"]
 
 [tool.setuptools.packages.find]
 include = ["mapreduce_reloaded*"]
@@ -18,6 +23,7 @@ include = ["mapreduce_reloaded*"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["mapreduce_reloaded/gen"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

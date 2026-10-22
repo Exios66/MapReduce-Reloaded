@@ -1,3 +1,6 @@
+# Pinned dev tools (make tools)
+/.tools/
+
 # Go
 /go/bin/
 *.test
