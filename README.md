@@ -13,7 +13,8 @@ gRPC, observability, high availability, and multi-language user code.
 
 **Phase 0 — foundations.** Repository layout, build and checks only; no
 MapReduce functionality yet. See the [roadmap](docs/roadmap.md) for the full
-plan and the [paper mapping](docs/paper-mapping.md) for feature-by-feature
+plan, [the roadmap explained](docs/roadmap-explained.md) for a plain-language
+walkthrough and the 6-week schedule, and the [paper mapping](docs/paper-mapping.md) for feature-by-feature
 progress against the paper.
 
 ## Repository layout

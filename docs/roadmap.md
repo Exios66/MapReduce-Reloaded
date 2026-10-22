@@ -27,6 +27,24 @@ possible, then extend them for modern infrastructure and modern use cases.
   the same job through both implementations gives a byte-for-byte correctness
   check.
 
+## Delivery scope (6 weeks)
+
+The full plan below is about 20 weeks of work. The delivered scope, with a
+week-by-week schedule and a plain-language walkthrough, is in
+[roadmap-explained.md](roadmap-explained.md). In short:
+
+- **In scope:**
+  - Phases 0–4: every paper feature, F1–F23, in Go;
+  - the Python halves of #5 and #8–#12: file format, hash, formats, sort,
+    combiner and local mode;
+  - #41 S3/MinIO storage and #42 compression;
+  - #57 and #58: benchmarks and the paper's §5 experiments;
+  - #60: the final report.
+- **Stretch** (issues kept open with a `[stretch]` prefix):
+  - #35–#39: Python distributed parity;
+  - #43–#55: the remaining modern extensions;
+  - #59: evaluation of the extensions.
+
 ## Development process
 
 - Work proceeds one small, reviewable unit at a time. Each issue is roughly
