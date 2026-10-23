@@ -29,8 +29,12 @@ BINARY = [
     (b"z" * 200, b"key longer than the block target"),
 ]
 
+# A small block target forces several blocks out of a few records.
+SMALL_TARGET = 64
+BLOCK_TARGETS = {"many_records": SMALL_TARGET, "binary_keys": SMALL_TARGET}
+
 one_bytes = mrkv.encode(ONE)
-many_bytes = mrkv.encode(MANY, block_target=64)
+many_bytes = mrkv.encode(MANY, block_target=SMALL_TARGET)
 
 # Corruptions, each derived from a valid file.
 corrupt = bytearray(one_bytes)
@@ -44,7 +48,7 @@ VECTORS = {
     "empty": (mrkv.encode([]), []),
     "one_record": (one_bytes, ONE),
     "many_records": (many_bytes, MANY),
-    "binary_keys": (mrkv.encode(BINARY, block_target=64), BINARY),
+    "binary_keys": (mrkv.encode(BINARY, block_target=SMALL_TARGET), BINARY),
     "corrupt_block": (bytes(corrupt), "checksum_mismatch"),
     "truncated": (many_bytes[:-10], "truncated"),
     "missing_block": (missing_block, "count_mismatch"),
@@ -59,6 +63,8 @@ for name, (data, expected) in VECTORS.items():
     if isinstance(expected, str):
         entry["error"] = expected
     else:
+        # Writers given this block target must reproduce the file exactly.
+        entry["block_target"] = BLOCK_TARGETS.get(name, mrkv.DEFAULT_BLOCK_TARGET)
         entry["records"] = [[b64(k), b64(v)] for k, v in expected]
     manifest[name] = entry
 

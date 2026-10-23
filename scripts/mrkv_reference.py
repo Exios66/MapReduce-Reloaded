@@ -13,6 +13,7 @@ MAGIC = b"MRKV"
 VERSION = 1
 CODEC_NONE = 0
 DEFAULT_BLOCK_TARGET = 64 * 1024
+MAX_BLOCK_SIZE = 64 * 1024 * 1024
 
 
 class MRKVError(Exception):
@@ -138,6 +139,8 @@ def decode(data):
         (stored_len,) = struct.unpack_from("<I", data, pos)
         if stored_len == 0:
             break
+        if stored_len > MAX_BLOCK_SIZE:
+            raise MRKVError("bad_block", f"block of {stored_len} bytes exceeds the limit")
         if pos + 12 + stored_len > len(data):
             raise MRKVError("truncated", "block runs past end of file")
         _, count, checksum = struct.unpack_from("<III", data, pos)
