@@ -20,7 +20,7 @@ Status: `planned` → `in progress` → `done`.
 | F10 | Atomic commits | §3.3 | 2 | | | | planned |
 | F11 | Locality-aware scheduling | §3.4 | 4 | | | | planned |
 | F12 | Task granularity (M, R ≫ workers) | §3.5 | 2 | `go/internal/split`, `go/internal/coordinator` | `mapreduce_reloaded/split.py` | `TestSizeFor`, `TestSubmitJob` | done |
-| F13 | Backup tasks for stragglers | §3.6 | 3 | | | | planned |
+| F13 | Backup tasks for stragglers | §3.6 | 3 | `go/internal/coordinator` | | `TestBackups`, `TestRecoverBackup`, `TestClusterBackupTasks` | done |
 | F14 | Custom partitioning function | §4.1 | 2 | | | | planned |
 | F15 | Sorted keys within a partition | §4.2 | 1 | `go/internal/extsort` | `mapreduce_reloaded/extsort.py` | `TestSort`, `TestGroups`, `test_extsort.py` | done |
 | F16 | Combiner | §4.3 | 1 | `go/internal/combine` | `mapreduce_reloaded/combine.py` | `TestCombinerPreservesOutput`, `test_combine.py` | done |

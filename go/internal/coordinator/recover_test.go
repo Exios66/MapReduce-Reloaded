@@ -10,9 +10,9 @@ import (
 
 // recoverServer recovers a server from the log at path, and closes the
 // log when the test ends.
-func recoverServer(t *testing.T, path string) *Server {
+func recoverServer(t *testing.T, cfg Config, path string) *Server {
 	t.Helper()
-	s, log, err := Recover(Config{}, path)
+	s, log, err := Recover(cfg, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := recoverServer(t, path)
+	s := recoverServer(t, Config{}, path)
 	old := register(t, s)
 	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
 		Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 2,
@@ -83,7 +83,7 @@ func TestRecover(t *testing.T) {
 	succeed(t, s, old, next(t, s, old), nil) // reduce 0
 	running := next(t, s, old)               // reduce 1, lost in the crash
 
-	s = recoverServer(t, path)
+	s = recoverServer(t, Config{}, path)
 	if st := jobStatus(t, s, job); st.GetMapTasksCompleted() != 1 || st.GetReduceTasksCompleted() != 1 || st.GetCounters().GetValues()["n"] != 2 {
 		t.Fatalf("recovered status %v; want 1 map and 1 reduce done, counted once", st)
 	}
@@ -102,11 +102,45 @@ func TestRecover(t *testing.T) {
 		t.Fatal("the job did not finish")
 	}
 
-	s = recoverServer(t, path) // replaying a finished job, and a restart, again
+	s = recoverServer(t, Config{}, path) // replaying a finished job, and a restart, again
 	if st := jobStatus(t, s, job); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED || st.GetCounters().GetValues()["n"] != 3 {
 		t.Fatalf("recovered status %v; want succeeded", st)
 	}
 	if w := register(t, s); w != "r3-w1" {
 		t.Fatalf("worker ID %s after the second restart, want r3-w1", w)
+	}
+}
+
+// A backup attempt is logged like any other, and replays whether or not
+// the restarted coordinator makes backups itself.
+func TestRecoverBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := recoverServer(t, Config{Backups: true}, path)
+	w1, w2 := register(t, s), register(t, s)
+	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := next(t, s, w1)
+	backup := next(t, s, w2)
+	if backup.GetTask().GetIndex() != 0 || backup.GetAttempt() != 1 {
+		t.Fatalf("w2 got %v; want attempt 1 of map 0", backup)
+	}
+	if !succeed(t, s, w2, backup, outputs(0, 1)) {
+		t.Fatal("backup's completion rejected")
+	}
+
+	s = recoverServer(t, Config{}, path)
+	if st := jobStatus(t, s, sub.GetJobId()); st.GetMapTasksCompleted() != 1 {
+		t.Fatalf("recovered status %v; want the map done", st)
+	}
+	if succeed(t, s, w1, original, outputs(0, 1)) {
+		t.Fatal("accepted the original's completion after the backup's")
 	}
 }

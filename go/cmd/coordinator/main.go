@@ -31,18 +31,20 @@ import (
 func main() {
 	addr := flag.String("addr", ":7070", "address to listen on")
 	dataDir := flag.String("data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
+	backups := flag.Bool("backups", true, "run backup attempts of the last tasks of each phase")
 	flag.Parse()
-	if err := run(*addr, *dataDir); err != nil {
+	if err := run(*addr, *dataDir, *backups); err != nil {
 		fmt.Fprintln(os.Stderr, "coordinator:", err)
 		os.Exit(1)
 	}
 }
 
-func run(addr, dataDir string) (err error) {
+func run(addr, dataDir string, backups bool) (err error) {
 	cfg := coordinator.Config{
 		HeartbeatInterval: 3 * time.Second,
 		WorkerTimeout:     10 * time.Second, // three missed heartbeats
 		RetryAfter:        time.Second,
+		Backups:           backups,
 	}
 	var srv *coordinator.Server
 	if dataDir == "" {

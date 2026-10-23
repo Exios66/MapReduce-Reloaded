@@ -47,6 +47,10 @@ const SkipAfter = 2
 // the worker's disk; a completed reduce
 // task's output is in the global file system, so it stays done (§3.3).
 // The first attempt to complete wins; later reports are rejected.
+//
+// Near the end of a phase, an in-progress task may get one backup attempt
+// on another worker, so that one slow machine does not hold up the job
+// (§3.6).
 type TaskTable struct {
 	maps, reduces []task
 	mapsDone      int
@@ -68,27 +72,38 @@ func NewTaskTable(m, r int) *TaskTable {
 // Next returns an idle task to run: a map task, or a reduce task once every
 // map task has completed (§3.1). It returns false if there is none.
 func (t *TaskTable) Next() (Task, bool) {
+	return t.find(func(ts *task) bool { return ts.state == pb.TaskState_TASK_STATE_IDLE })
+}
+
+// Backup returns an in-progress task of the current phase that may get a
+// backup attempt on worker (§3.6). It returns false if there is none.
+func (t *TaskTable) Backup(worker string) (Task, bool) {
+	return t.find(func(ts *task) bool { return ts.canBackUp(worker) })
+}
+
+// find returns the first task of the current phase that ok accepts.
+func (t *TaskTable) find(ok func(*task) bool) (Task, bool) {
 	kind, tasks := pb.TaskKind_TASK_KIND_MAP, t.maps
 	if t.mapsDone == len(t.maps) {
 		kind, tasks = pb.TaskKind_TASK_KIND_REDUCE, t.reduces
 	}
 	for i := range tasks {
-		if tasks[i].state == pb.TaskState_TASK_STATE_IDLE {
+		if ok(&tasks[i]) {
 			return Task{kind, uint32(i)}, true
 		}
 	}
 	return Task{}, false
 }
 
-// Assign starts a new attempt of an idle task on worker and returns its
-// number.
+// Assign starts a new attempt on worker of an idle task, or a backup
+// attempt of one running elsewhere, and returns its number.
 func (t *TaskTable) Assign(id Task, worker string) (uint32, error) {
 	ts, err := t.task(id)
 	if err != nil {
 		return 0, err
 	}
-	if ts.state != pb.TaskState_TASK_STATE_IDLE {
-		return 0, fmt.Errorf("coordinator: assign %v: task is %v", id, ts.state)
+	if ts.state != pb.TaskState_TASK_STATE_IDLE && !ts.canBackUp(worker) {
+		return 0, fmt.Errorf("coordinator: assign %v to %s: task is %v on %d workers", id, worker, ts.state, len(ts.running))
 	}
 	attempt := ts.attempts
 	ts.attempts++
@@ -261,6 +276,20 @@ func (t *TaskTable) checkOutputs(index uint32, outputs []*pb.PartitionLocation) 
 		}
 	}
 	return nil
+}
+
+// canBackUp reports whether the task may get a backup attempt on worker: it
+// is in progress with one attempt, on another worker.
+func (ts *task) canBackUp(worker string) bool {
+	if ts.state != pb.TaskState_TASK_STATE_IN_PROGRESS || len(ts.running) != 1 {
+		return false
+	}
+	for _, w := range ts.running {
+		if w == worker {
+			return false
+		}
+	}
+	return true
 }
 
 // runsOn reports whether attempt is running on worker.

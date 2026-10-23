@@ -86,7 +86,8 @@ failing, and jobs still finish correctly.*
   restart. The 2004 system simply aborted the job in this case. See
   [explainers/18-coordinator-recovery.md](explainers/18-coordinator-recovery.md).
 - **#25** Backup tasks: near the end of a job, start duplicates of the slow
-  tasks. In the paper, turning this off made jobs 44% slower.
+  tasks. In the paper, turning this off made jobs 44% slower. See
+  [explainers/20-backup-tasks.md](explainers/20-backup-tasks.md).
 - **#26** Bad-record skipping: if user code crashes on the same record
   twice, skip that record. See
   [explainers/19-bad-records.md](explainers/19-bad-records.md).

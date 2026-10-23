@@ -110,8 +110,11 @@ func TestRequestTask(t *testing.T) {
 	if err != nil || resp.GetMapTask() == nil {
 		t.Fatalf("got %v, %v; want the map task", resp, err)
 	}
-	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w}); resp.GetWait() == nil {
-		t.Fatalf("got %v; want wait while the map runs", resp)
+	other := register(t, s)
+	for _, w := range []string{w, other} { // backups are off by default
+		if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w}); resp.GetWait() == nil {
+			t.Fatalf("got %v; want wait while the map runs", resp)
+		}
 	}
 	s.Shutdown()
 	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w}); resp.GetShutdown() == nil {

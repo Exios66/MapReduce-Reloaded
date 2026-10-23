@@ -207,6 +207,49 @@ func TestFailWithCrash(t *testing.T) {
 	}
 }
 
+// An in-progress task gets at most one backup attempt, on another worker.
+// Whichever attempt completes first wins (§3.6).
+func TestBackups(t *testing.T) {
+	tt := NewTaskTable(2, 1)
+	m0, m1 := Task{mapKind, 0}, Task{mapKind, 1}
+	a := mustAssign(t, tt, m0, "w1")
+	if next, _ := tt.Backup("w2"); next != m0 {
+		t.Fatalf("Backup(w2) = %v, want %v", next, m0)
+	}
+	b := mustAssign(t, tt, m1, "w2")
+	if next, _ := tt.Backup("w1"); next != m1 {
+		t.Fatalf("Backup(w1) = %v, want %v, which w1 is not running", next, m1)
+	}
+	backup := mustAssign(t, tt, m1, "w1")
+	if next, ok := tt.Backup("w3"); next != m0 || !ok {
+		t.Fatalf("Backup(w3) = %v, %v; want %v", next, ok, m0)
+	}
+	mustAssign(t, tt, m0, "w3")
+	if next, ok := tt.Backup("w4"); ok {
+		t.Fatalf("Backup(w4) = %v; want nothing: every task has its backup", next)
+	}
+
+	// The backup of m1 wins; the original's report is rejected.
+	if ok, _ := tt.Complete(m1, backup, "w1", outputs(1, 1)); !ok {
+		t.Fatal("backup's completion rejected")
+	}
+	if ok, _ := tt.Complete(m1, b, "w2", outputs(1, 1)); ok {
+		t.Fatal("original's completion accepted after the backup's")
+	}
+	// m0 loses its original to a failure, and its backup carries on.
+	if err := tt.Fail(m0, a, "w1", &pb.TaskFailure{}); err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, tt, m0, inProgress)
+	if next, _ := tt.Backup("w1"); next != m0 {
+		t.Fatalf("Backup(w1) = %v, want %v again", next, m0)
+	}
+	// Losing the backup's worker too leaves m0 with no attempt.
+	tt.ResetWorker("w3")
+	assertState(t, tt, m0, idle)
+	checkCounts(t, tt)
+}
+
 func TestErrors(t *testing.T) {
 	tt := NewTaskTable(1, 2)
 	m0 := Task{mapKind, 0}
@@ -225,8 +268,12 @@ func TestErrors(t *testing.T) {
 		t.Error("Skip of an unknown task succeeded")
 	}
 	a := mustAssign(t, tt, m0, "w1")
-	if _, err := tt.Assign(m0, "w2"); err == nil {
-		t.Error("assigned a task twice")
+	if _, err := tt.Assign(m0, "w1"); err == nil {
+		t.Error("backed a task up on its own worker")
+	}
+	mustAssign(t, tt, m0, "w2")
+	if _, err := tt.Assign(m0, "w3"); err == nil {
+		t.Error("backed a task up twice")
 	}
 	nowhere := outputs(0, 2)
 	nowhere[1].Uri = ""
@@ -254,11 +301,16 @@ func TestInvariants(t *testing.T) {
 			before, _ := tt.State(id)
 			switch rng.IntN(4) {
 			case 0:
-				if next, ok := tt.Next(); ok {
+				w := workers[rng.IntN(len(workers))]
+				next, ok := tt.Next()
+				if !ok {
+					next, ok = tt.Backup(w)
+				}
+				if ok {
 					if next.Kind == reduceKind && !mapsComplete(tt) {
 						t.Fatalf("seed %d: reduce offered before the maps completed", seed)
 					}
-					a := mustAssign(t, tt, next, workers[rng.IntN(len(workers))])
+					a := mustAssign(t, tt, next, w)
 					if a != attempts[next] {
 						t.Fatalf("seed %d: %v got attempt %d, want %d", seed, next, a, attempts[next])
 					}
@@ -305,7 +357,7 @@ func checkCounts(t *testing.T, tt *TaskTable) {
 			if ts.state == completed {
 				n++
 			}
-			if (ts.state == inProgress) != (len(ts.running) > 0) {
+			if (ts.state == inProgress) != (len(ts.running) > 0) || len(ts.running) > 2 {
 				t.Fatalf("task in state %v has %d running attempts", ts.state, len(ts.running))
 			}
 		}

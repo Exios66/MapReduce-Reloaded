@@ -81,7 +81,7 @@ Each item maps to a paper section and will get a test.
 | F10 | Atomic commit semantics: map output reported to master once; reduce output via atomic rename (§3.3) | Write to temp file, `rename`/object-store commit; duplicate completions ignored |
 | F11 | Locality: schedule map tasks near their input data (§3.4) | Workers advertise a host/zone label; scheduler prefers a matching split |
 | F12 | Task granularity: M and R much larger than the number of workers (§3.5) | Configurable; defaults derived from input size and worker count |
-| F13 | Backup tasks for stragglers near the end of the job (§3.6) | Speculative copies once the job is about 95% done; first finisher wins |
+| F13 | Backup tasks for stragglers near the end of the job (§3.6) | Speculative copies once no task of the current phase is idle; first finisher wins |
 | F14 | Custom partitioning function, e.g. `hash(Hostname(url))` (§4.1) | `Partitioner` interface; built-in hash and range partitioners |
 | F15 | Ordering guarantee: keys sorted within each partition (§4.2) | Comes from the sort-merge in the reduce phase; test asserts it |
 | F16 | Combiner function (§4.3) | Optional `Combiner`, run on spill and on merge |

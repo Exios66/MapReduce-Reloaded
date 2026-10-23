@@ -37,8 +37,9 @@ var inputs = []string{filepath.Join(corpus, "*.txt")}
 // pass under go test -count=N.
 var mapStuck, reduceStuck = make(chan struct{}, 1), make(chan struct{}, 1)
 
-// The first attempt of reduce task 0 of test.pause-reduce also sends on
-// reduceStuck, then fails once resume is sent on.
+// The first attempt of map task 0 of test.pause-map, and of reduce task 0 of
+// test.pause-reduce, also sends on its channel, then fails once resume is
+// sent on.
 var resume = make(chan struct{})
 
 func init() {
@@ -87,6 +88,17 @@ func init() {
 	})
 	api.Register("test.hang-reduce", hangReduce)
 
+	pauseMap := wordcount.Program
+	pauseMap.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if first(ctx, api.MapTask) {
+			mapStuck <- struct{}{}
+			<-resume
+			return errors.New("paused")
+		}
+		return wordcount.Map(ctx, key, value, out)
+	})
+	api.Register("test.pause-map", pauseMap)
+
 	pauseReduce := wordcount.Program
 	pauseReduce.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
 		if first(ctx, api.ReduceTask) {
@@ -119,12 +131,14 @@ func listen(t *testing.T, addr string, register func(*grpc.Server)) (string, fun
 }
 
 // cluster is a coordinator that declares a worker dead after 100 ms of
-// silence and logs to a write-ahead log. Tests add workers to it, each with
+// silence, logs to a write-ahead log, and makes no backup attempts unless
+// configured to. Tests add workers to it, each with
 // its own work directory and shuffle server, and may kill them, or restart
 // the coordinator.
 type cluster struct {
 	t       *testing.T
 	ctx     context.Context
+	cfg     coordinator.Config
 	srv     *coordinator.Server
 	addr    string
 	stop    func() // stops the coordinator
@@ -133,11 +147,20 @@ type cluster struct {
 	live    []chan error // Run results of the workers not killed
 }
 
-func newCluster(t *testing.T) *cluster {
+// newCluster starts a cluster, after configure, if given, has changed its
+// coordinator's configuration.
+func newCluster(t *testing.T, configure ...func(*coordinator.Config)) *cluster {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	c := &cluster{t: t, ctx: ctx, workDir: t.TempDir()}
+	c := &cluster{t: t, ctx: ctx, workDir: t.TempDir(), cfg: coordinator.Config{
+		HeartbeatInterval: 10 * time.Millisecond,
+		WorkerTimeout:     100 * time.Millisecond,
+		RetryAfter:        10 * time.Millisecond,
+	}}
+	for _, f := range configure {
+		f(&c.cfg)
+	}
 	c.start()
 	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -150,11 +173,7 @@ func newCluster(t *testing.T) *cluster {
 
 // start starts the coordinator from its log, on c.addr once it has one.
 func (c *cluster) start() {
-	srv, log, err := coordinator.Recover(coordinator.Config{
-		HeartbeatInterval: 10 * time.Millisecond,
-		WorkerTimeout:     100 * time.Millisecond,
-		RetryAfter:        10 * time.Millisecond,
-	}, filepath.Join(c.workDir, "coordinator.log"))
+	srv, log, err := coordinator.Recover(c.cfg, filepath.Join(c.workDir, "coordinator.log"))
 	if err != nil {
 		c.t.Fatal(err)
 	}
@@ -211,14 +230,7 @@ func (c *cluster) addWorker() (kill func()) {
 // job's final status.
 func (c *cluster) wait(job string) *pb.GetJobStatusResponse {
 	c.t.Helper()
-	var status *pb.GetJobStatusResponse
-	for status.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
-		time.Sleep(10 * time.Millisecond)
-		var err error
-		if status, err = c.client.GetJobStatus(c.ctx, &pb.GetJobStatusRequest{JobId: job}, grpc.WaitForReady(true)); err != nil {
-			c.t.Fatal(err)
-		}
-	}
+	status := c.succeeded(job)
 	c.srv.Shutdown()
 	for _, done := range c.live {
 		if done == nil {
@@ -226,6 +238,20 @@ func (c *cluster) wait(job string) *pb.GetJobStatusResponse {
 		}
 		if err := <-done; err != nil {
 			c.t.Fatalf("worker: %v", err)
+		}
+	}
+	return status
+}
+
+// succeeded waits for job to succeed, and returns its status.
+func (c *cluster) succeeded(job string) *pb.GetJobStatusResponse {
+	c.t.Helper()
+	var status *pb.GetJobStatusResponse
+	for status.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+		time.Sleep(10 * time.Millisecond)
+		var err error
+		if status, err = c.client.GetJobStatus(c.ctx, &pb.GetJobStatusRequest{JobId: job}, grpc.WaitForReady(true)); err != nil {
+			c.t.Fatal(err)
 		}
 	}
 	return status
@@ -323,6 +349,25 @@ func TestClusterSurvivesWorkerLoss(t *testing.T) {
 		assertGolden(t, c.output())
 		assertMapOutputRecords(t, status)
 	})
+}
+
+// A task stuck on a slow worker is finished by a backup attempt on another,
+// while the slow one is still running (§3.6).
+func TestClusterBackupTasks(t *testing.T) {
+	for program, stuck := range map[string]chan struct{}{"test.pause-map": mapStuck, "test.pause-reduce": reduceStuck} {
+		t.Run(program, func(t *testing.T) {
+			c := newCluster(t, func(cfg *coordinator.Config) { cfg.Backups = true })
+			job := c.submit(program)
+			c.addWorker()
+			c.addWorker()
+			<-stuck
+			c.succeeded(job)
+			resume <- struct{}{} // the slow attempt fails, too late to matter
+			status := c.wait(job)
+			assertGolden(t, c.output())
+			assertMapOutputRecords(t, status)
+		})
+	}
 }
 
 // A restarted coordinator resumes the job from its log: its workers

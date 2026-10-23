@@ -29,6 +29,10 @@ type Config struct {
 	// RetryAfter is how long a worker with nothing to do waits before
 	// asking again.
 	RetryAfter time.Duration
+	// Backups enables backup attempts: once no task of the current phase is
+	// idle, a worker that asks for work gets a second attempt of a task
+	// still running elsewhere (§3.6).
+	Backups bool
 	// Log, if set, is the write-ahead log: every change to a job or its
 	// tasks is appended to it before any reply depends on it (§3.3).
 	Log Log
@@ -199,7 +203,8 @@ func (s *Server) submit(rec *pb.JobSubmitted) {
 }
 
 // RequestTask hands an idle worker its next task: map tasks first, reduce
-// tasks once every map task has completed (§3.1).
+// tasks once every map task has completed (§3.1), then backup attempts if
+// enabled (§3.6).
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -211,7 +216,11 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Shutdown{Shutdown: &pb.ShutdownInstruction{}}}, nil
 	}
 	if s.active != nil {
-		if t, ok := s.active.tasks.Next(); ok {
+		t, ok := s.active.tasks.Next()
+		if !ok && s.cfg.Backups {
+			t, ok = s.active.tasks.Backup(worker)
+		}
+		if ok {
 			return s.assign(t, worker)
 		}
 	}
