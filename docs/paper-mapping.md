@@ -10,7 +10,7 @@ Status: `planned` → `in progress` → `done`.
 |-----|---------|---------|-------|----|--------|------|--------|
 | F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | `Example_wordCount`, `test_api.py`, word count golden tests | done |
 | F2  | Input splitting (16–64 MB) | §3.1 | 2 | `go/internal/split` | `mapreduce_reloaded/split.py` | `TestPlanCoversInput`, `test_split.py` | done |
-| F3  | Master + M map / R reduce tasks | §3.1 | 2 | | | | planned |
+| F3  | Master + M map / R reduce tasks | §3.1 | 2 | `go/internal/coordinator`, `go/internal/worker` | — | `TestClusterWordCount`, `server_test.go` | done |
 | F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition` | `mapreduce_reloaded/partition` | `testdata/hash/vectors.json` | in progress (hash done; spill is #17) |
 | F5  | Remote fetch, sort, group, reduce | §3.1 | 2 | | | | planned |
 | F6  | R output files | §3.1 | 2 | | | | planned |
@@ -19,7 +19,7 @@ Status: `planned` → `in progress` → `done`.
 | F9  | Master checkpoint / recovery | §3.3 | 3 | | | | planned |
 | F10 | Atomic commits | §3.3 | 2 | | | | planned |
 | F11 | Locality-aware scheduling | §3.4 | 4 | | | | planned |
-| F12 | Task granularity (M, R ≫ workers) | §3.5 | 2 | `go/internal/split` | `mapreduce_reloaded/split.py` | `TestSizeFor`, `TestDefaultR` | in progress |
+| F12 | Task granularity (M, R ≫ workers) | §3.5 | 2 | `go/internal/split`, `go/internal/coordinator` | `mapreduce_reloaded/split.py` | `TestSizeFor`, `TestSubmitJob` | done |
 | F13 | Backup tasks for stragglers | §3.6 | 3 | | | | planned |
 | F14 | Custom partitioning function | §4.1 | 2 | | | | planned |
 | F15 | Sorted keys within a partition | §4.2 | 1 | `go/internal/extsort` | `mapreduce_reloaded/extsort.py` | `TestSort`, `TestGroups`, `test_extsort.py` | done |
