@@ -66,7 +66,9 @@ type Server struct {
 	mu       sync.Mutex
 	workers  *Registry
 	jobs     map[string]*job
-	active   *job // the running job, or nil
+	order    []*job       // every job, in the order submitted
+	active   *job         // the running job, or nil
+	lost     []LostWorker // since this process started, for Status
 	stopping bool
 }
 
@@ -115,6 +117,8 @@ func (s *Server) Expire(now time.Time) []string {
 			}
 			reset = s.active.tasks.ResetWorker(w)
 		}
+		s.lost = append(s.lost, LostWorker{ID: w, At: now, Tasks: reset})
+		s.lost = s.lost[max(0, len(s.lost)-maxLost):]
 		slog.Warn("worker lost", "worker", w, "tasks reset", len(reset))
 	}
 	return dead
@@ -220,6 +224,7 @@ func (s *Server) submit(rec *pb.JobSubmitted) {
 		ran:    map[Task]pb.Locality{},
 	}
 	s.jobs[j.id], s.active = j, j
+	s.order = append(s.order, j)
 }
 
 // RequestTask hands an idle worker its next task: map tasks first, the
@@ -389,6 +394,11 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetJobId())
 	}
+	return j.status(), nil
+}
+
+// status describes the job's progress.
+func (j *job) status() *pb.GetJobStatusResponse {
 	mapsDone, reducesDone := j.tasks.Progress()
 	state := pb.JobState_JOB_STATE_MAPPING
 	switch {
@@ -416,7 +426,7 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 		Error:                j.err,
 		MapTasksHostLocal:    near[pb.Locality_LOCALITY_HOST],
 		MapTasksZoneLocal:    near[pb.Locality_LOCALITY_ZONE],
-	}, nil
+	}
 }
 
 // total sums the counters of every task's accepted attempt.
