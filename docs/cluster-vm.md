@@ -82,7 +82,8 @@ Web pages (the status UI from #32, MinIO's console) are reached through an
 SSH tunnel, so no port is opened to the network:
 
 ```sh
-ssh -L 18080:localhost:18080 mr-vm   # then open http://localhost:18080
+ssh -L 18080:localhost:18080 -L 18900:localhost:18900 mr-vm
+# then open http://localhost:18080 (status UI) or http://localhost:18900 (MinIO)
 ```
 
 ## Living alongside CS544 coursework

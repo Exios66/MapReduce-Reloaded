@@ -65,7 +65,8 @@ A worker's life:
    `reduce_task`, `wait` or `shutdown`.
 3. The worker does the work.
 4. **`ReportTask`**: the worker reports `success` (with output locations and
-   counters) or `failure` (with the error and the record it crashed on).
+   counters) or `failure` (with the error and, when known, the record it
+   crashed on).
    `accepted: false` means another attempt already won (§3.3).
 5. **`Heartbeat`**: every few seconds the worker says it is still alive and
    how far along it is. The reply can `cancel` a losing backup task or ask

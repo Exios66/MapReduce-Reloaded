@@ -11,12 +11,13 @@ gRPC, observability, high availability, and multi-language user code.
 
 ## Status
 
-**Phase 0 — foundations.** Repository layout, build and checks only; no
-MapReduce functionality yet. See the [roadmap](docs/roadmap.md) for the full
+**Phase 3 — fault tolerance.** Local mode runs jobs in Go and Python, and
+the Go coordinator and workers run them over gRPC, re-running the work of
+workers that die (§3.3). See the [roadmap](docs/roadmap.md) for the full
 plan, [the roadmap explained](docs/roadmap-explained.md) for a plain-language
 walkthrough and the 6-week schedule, and the [paper mapping](docs/paper-mapping.md) for feature-by-feature
-progress against the paper. The cluster runs on a single 8 GB VM; see
-[cluster VM](docs/cluster-vm.md) for setup.
+progress against the paper. From #21 the cluster runs in containers on a
+single 8 GB VM; see [cluster VM](docs/cluster-vm.md) for setup.
 
 ## Repository layout
 
