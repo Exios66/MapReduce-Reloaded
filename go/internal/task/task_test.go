@@ -78,8 +78,11 @@ func TestMapThenReduce(t *testing.T) {
 		}
 		total += counts[ReduceOutputRecords]
 	}
-	if total != 3 || len(dirNames(t, spec.Output)) != 2 {
-		t.Fatalf("%d records in %v, want 3 in two part files", total, dirNames(t, spec.Output))
+	if err := Cleanup(spec.Output); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"part-r-00000", "part-r-00001"}; total != 3 || !slices.Equal(dirNames(t, spec.Output), want) {
+		t.Fatalf("%d records in %v, want 3 in %v", total, dirNames(t, spec.Output), want)
 	}
 }
 
@@ -116,8 +119,11 @@ func TestFailedAttemptLeavesNoFiles(t *testing.T) {
 	if _, err := Reduce(failing, api.TaskID{Kind: api.ReduceTask, Attempt: 1}, sources); !errors.Is(err, errBoom) {
 		t.Fatalf("Reduce error = %v", err)
 	}
-	if names := dirNames(t, spec.Output); !slices.Equal(names, []string{"part-r-00000"}) {
+	if names := dirNames(t, spec.Output); !slices.Equal(names, []string{TempDir, "part-r-00000"}) {
 		t.Fatalf("output is %v, want only the first attempt's file", names)
+	}
+	if names := dirNames(t, filepath.Join(spec.Output, TempDir)); len(names) != 0 {
+		t.Fatalf("failed attempt left %v", names)
 	}
 	if data, err := os.ReadFile(filepath.Join(spec.Output, "part-r-00000")); err != nil || len(data) != 0 {
 		t.Fatalf("first attempt's output became %q (%v)", data, err)
