@@ -79,5 +79,9 @@ func run(c config) (err error) {
 	defer func() { _ = conn.Close() }()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return worker.New(pb.NewCoordinatorServiceClient(conn), c.workDir, info).Run(ctx)
+	err = worker.New(pb.NewCoordinatorServiceClient(conn), c.workDir, info).Run(ctx)
+	if ctx.Err() != nil {
+		return nil // stopped by a signal, as asked
+	}
+	return err
 }

@@ -128,6 +128,10 @@ func TestFetchResumes(t *testing.T) {
 func TestFetchGivesUp(t *testing.T) {
 	srv, client := serve(t, randomBytes(ChunkSize), 0)
 	srv.down.Store(true)
+	empty := NewReader(context.Background(), client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1})
+	if n, err := empty.Read(nil); n != 0 || err != nil || srv.calls.Load() != 0 {
+		t.Fatalf("empty Read = %d, %v; want 0, nil without fetching", n, err)
+	}
 	if _, err := fetch(client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("got %v, want Unavailable", err)
 	}

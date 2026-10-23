@@ -30,7 +30,8 @@ worker B: reduce 1 ──FetchPartition(job, map 0, partition 1)──► A
 On a transient error (`Unavailable`, `ResourceExhausted`, `Aborted`) the
 reader reconnects and asks for the file from the byte it got to, waiting
 100 ms, 200 ms, 400 ms, 800 ms. Any chunk that arrives resets that budget;
-four failures in a row with no progress end the fetch. Resuming keeps one
+once four retries in a row make no progress, the next failure ends the
+fetch. Resuming keeps one
 contiguous stream from byte 0, so the file's block checksums and footer
 still check everything the reducer read. Errors that retrying cannot fix,
 such as `NotFound`, end the fetch at once.

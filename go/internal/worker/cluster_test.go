@@ -32,8 +32,9 @@ var inputs = []string{filepath.Join(corpus, "*.txt")}
 
 // The first attempt of map task 0 of test.hang-map, and of reduce task 0 of
 // test.hang-reduce, never returns, like a task on a machine that died. Each
-// closes its channel when it gets there.
-var mapStuck, reduceStuck = make(chan struct{}), make(chan struct{})
+// sends on its channel when it gets there, once per job, so the tests also
+// pass under go test -count=N.
+var mapStuck, reduceStuck = make(chan struct{}, 1), make(chan struct{}, 1)
 
 func init() {
 	first := func(ctx api.Context, kind api.TaskKind) bool {
@@ -53,7 +54,7 @@ func init() {
 	hangMap := wordcount.Program
 	hangMap.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
 		if first(ctx, api.MapTask) {
-			close(mapStuck)
+			mapStuck <- struct{}{}
 			select {}
 		}
 		return wordcount.Map(ctx, key, value, out)
@@ -63,7 +64,7 @@ func init() {
 	hangReduce := wordcount.Program
 	hangReduce.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
 		if first(ctx, api.ReduceTask) {
-			close(reduceStuck)
+			reduceStuck <- struct{}{}
 			select {}
 		}
 		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)

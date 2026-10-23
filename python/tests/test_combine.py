@@ -27,11 +27,11 @@ def counting_context():
 
 def map_side(tmp_path, ws, combiner=None, ctx=None):
     ctx = ctx or Context(TaskID("map", 0))
-    fn = combine.func(ctx, combiner) if combiner else None
-    sorter = Sorter(dir=str(tmp_path), budget=2048, combine=fn)
-    for w in ws:
-        sorter.add(w, b"1")
-    return list(sorter.sorted()), sorter
+    fn = combine.func(ctx, combiner) if combiner is not None else None
+    with Sorter(dir=str(tmp_path), budget=2048, combine=fn) as sorter:
+        for w in ws:
+            sorter.add(w, b"1")
+        return list(sorter.sorted()), sorter
 
 
 def reduce(records):

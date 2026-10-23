@@ -12,6 +12,12 @@ import (
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 )
 
+func init() {
+	p, _ := api.Lookup("wordcount")
+	p.Partitioner = api.PartitionFunc(func([]byte, uint32) uint32 { return 0 })
+	api.Register("test.partitioned", p)
+}
+
 func TestJobSpec(t *testing.T) {
 	m := &pb.JobSpec{
 		Program:        "wordcount",
@@ -35,6 +41,16 @@ func TestJobSpec(t *testing.T) {
 	m.UseCombiner = false
 	if spec, _ := JobSpec(m); spec.Program.Combiner != nil {
 		t.Fatal("combiner kept with use_combiner false")
+	}
+}
+
+func TestPartitioner(t *testing.T) {
+	m := &pb.JobSpec{Program: "test.partitioned", Inputs: []string{"in"}, Output: "o", NumReduceTasks: 1}
+	for name, custom := range map[string]bool{"": true, "hash": false} {
+		m.Partitioner = name
+		if spec, err := JobSpec(m); err != nil || (spec.Program.Partitioner != nil) != custom {
+			t.Errorf("partitioner %q: got %+v, %v; want the program's own: %v", name, spec.Program.Partitioner, err, custom)
+		}
 	}
 }
 
@@ -65,8 +81,10 @@ func TestSplitRoundTrip(t *testing.T) {
 	if err != nil || got != (formats.Split{Path: abs, Start: 10, End: 25}) {
 		t.Fatalf("Split = %+v, %v", got, err)
 	}
-	if _, err := Split(&pb.InputSplit{Uri: "s3://b/k"}); err == nil {
-		t.Fatal("s3 URI accepted")
+	for _, uri := range []string{"s3://b/k", "file://host/a.txt"} {
+		if _, err := Split(&pb.InputSplit{Uri: uri}); err == nil {
+			t.Fatalf("%s accepted", uri)
+		}
 	}
 	if _, err := Path("file://%zz"); err == nil {
 		t.Fatal("malformed URI accepted")

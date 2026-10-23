@@ -26,12 +26,15 @@ Steps 2 and 3 for one task live in `go/internal/task`, which the workers
 use too (#16); only the scheduling differs. Each attempt writes its files
 under temporary names and renames them once complete, so a failed or
 duplicate attempt never leaves a partial file under a final name (§3.3).
+A job refuses an output directory that already holds part files, so its
+output is never mixed with an earlier job's.
 
 ## Why the output never depends on M
 
 Each sort is stable, and the reduce merges map outputs in map task order.
 So the values of a key always reach the reducer in input order, however
-the input was split. The golden tests run M = 1, 3 and 7 and expect the
+the input was split. (A combiner, if the job has one, may merge some of
+them first.) The golden tests run M = 1, 3 and 7 and expect the
 same bytes. A second test uses a reducer that concatenates values, so any
 reordering would change its output.
 

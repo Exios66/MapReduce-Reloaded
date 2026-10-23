@@ -31,13 +31,13 @@ def main(argv: list[str] | None = None) -> None:
     if not args.local:
         parser.error("only --local is supported so far")
     try:
-        inputs = split.expand(args.inputs)
+        split.expand(args.inputs)  # fail here, not mid-job, if a pattern matches nothing
         spec = JobSpec(
             program=load(args.program),
-            inputs=tuple(inputs),
+            inputs=tuple(args.inputs),
             output=args.output,
             r=args.r,
-            split_size=split.size_for(inputs, args.m) if args.m > 0 else 0,
+            split_size=split.size_for(args.inputs, args.m) if args.m else 0,
         )
     except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
         parser.error(str(e))

@@ -22,7 +22,7 @@ const (
 func outputs(i uint32, r int) []*pb.PartitionLocation {
 	locs := make([]*pb.PartitionLocation, r)
 	for p := range locs {
-		locs[p] = &pb.PartitionLocation{MapIndex: i, Partition: uint32(p)}
+		locs[p] = &pb.PartitionLocation{MapIndex: i, Partition: uint32(p), Uri: "file:///map-output"}
 	}
 	return locs
 }
@@ -59,8 +59,9 @@ func TestLifecycle(t *testing.T) {
 	for _, c := range []struct {
 		id      Task
 		attempt uint32
-	}{{m0, a}, {m1, b}} {
-		if ok, err := tt.Complete(c.id, c.attempt, outputs(c.id.Index, 1)); !ok || err != nil {
+		worker  string
+	}{{m0, a, "w1"}, {m1, b, "w2"}} {
+		if ok, err := tt.Complete(c.id, c.attempt, c.worker, outputs(c.id.Index, 1)); !ok || err != nil {
 			t.Fatalf("Complete(%v) = %v, %v", c.id, ok, err)
 		}
 	}
@@ -71,7 +72,7 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("Sources(0) = %v", src)
 	}
 	c := mustAssign(t, tt, r0, "w1")
-	if ok, _ := tt.Complete(r0, c, nil); !ok || !tt.Done() {
+	if ok, _ := tt.Complete(r0, c, "w1", nil); !ok || !tt.Done() {
 		t.Fatal("job not done after its last reduce completed")
 	}
 }
@@ -80,10 +81,13 @@ func TestFirstCompletionWins(t *testing.T) {
 	tt := NewTaskTable(1, 1)
 	m0 := Task{mapKind, 0}
 	a := mustAssign(t, tt, m0, "w1")
-	if ok, _ := tt.Complete(m0, a, outputs(0, 1)); !ok {
+	if ok, _ := tt.Complete(m0, a, "w2", outputs(0, 1)); ok {
+		t.Fatal("completion reported by another worker accepted")
+	}
+	if ok, _ := tt.Complete(m0, a, "w1", outputs(0, 1)); !ok {
 		t.Fatal("first completion rejected")
 	}
-	if ok, _ := tt.Complete(m0, a, outputs(0, 1)); ok {
+	if ok, _ := tt.Complete(m0, a, "w1", outputs(0, 1)); ok {
 		t.Fatal("second completion accepted")
 	}
 	if maps, _ := tt.Progress(); maps != 1 {
@@ -95,18 +99,23 @@ func TestFailReturnsToIdle(t *testing.T) {
 	tt := NewTaskTable(1, 1)
 	m0 := Task{mapKind, 0}
 	a := mustAssign(t, tt, m0, "w1")
-	if err := tt.Fail(m0, a+1); err != nil { // not running: ignored
-		t.Fatal(err)
+	for _, report := range []struct {
+		attempt uint32
+		worker  string
+	}{{a + 1, "w1"}, {a, "w2"}} { // not running on that worker: ignored
+		if err := tt.Fail(m0, report.attempt, report.worker); err != nil {
+			t.Fatal(err)
+		}
 	}
 	assertState(t, tt, m0, inProgress)
-	if err := tt.Fail(m0, a); err != nil {
+	if err := tt.Fail(m0, a, "w1"); err != nil {
 		t.Fatal(err)
 	}
 	assertState(t, tt, m0, idle)
 	if b := mustAssign(t, tt, m0, "w2"); b != a+1 {
 		t.Fatalf("second attempt is %d, want %d", b, a+1)
 	}
-	if ok, _ := tt.Complete(m0, a, outputs(0, 1)); ok {
+	if ok, _ := tt.Complete(m0, a, "w1", outputs(0, 1)); ok {
 		t.Fatal("completion of the failed attempt accepted")
 	}
 }
@@ -118,12 +127,12 @@ func TestResetWorker(t *testing.T) {
 	m0, m1, r0, r1 := Task{mapKind, 0}, Task{mapKind, 1}, Task{reduceKind, 0}, Task{reduceKind, 1}
 	for _, id := range []Task{m0, m1} {
 		a := mustAssign(t, tt, id, "w1")
-		if _, err := tt.Complete(id, a, outputs(id.Index, 2)); err != nil {
+		if _, err := tt.Complete(id, a, "w1", outputs(id.Index, 2)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	a := mustAssign(t, tt, r0, "w1")
-	if _, err := tt.Complete(r0, a, nil); err != nil {
+	if _, err := tt.Complete(r0, a, "w1", nil); err != nil {
 		t.Fatal(err)
 	}
 	mustAssign(t, tt, r1, "w1")
@@ -146,8 +155,8 @@ func TestErrors(t *testing.T) {
 	tt := NewTaskTable(1, 2)
 	m0 := Task{mapKind, 0}
 	for name, err := range map[string]error{
-		"unknown task": tt.Fail(Task{reduceKind, 2}, 0),
-		"no kind":      tt.Fail(Task{Index: 0}, 0),
+		"unknown task": tt.Fail(Task{reduceKind, 2}, 0, "w1"),
+		"no kind":      tt.Fail(Task{Index: 0}, 0, "w1"),
 	} {
 		if err == nil || !strings.Contains(err.Error(), "no task") {
 			t.Errorf("%s: got %v", name, err)
@@ -160,8 +169,10 @@ func TestErrors(t *testing.T) {
 	if _, err := tt.Assign(m0, "w2"); err == nil {
 		t.Error("assigned a task twice")
 	}
-	for _, bad := range [][]*pb.PartitionLocation{outputs(0, 1), outputs(1, 2), nil} {
-		if ok, err := tt.Complete(m0, a, bad); ok || err == nil {
+	nowhere := outputs(0, 2)
+	nowhere[1].Uri = ""
+	for _, bad := range [][]*pb.PartitionLocation{outputs(0, 1), outputs(1, 2), nowhere, {nil, nil}, nil} {
+		if ok, err := tt.Complete(m0, a, "w1", bad); ok || err == nil {
 			t.Errorf("Complete accepted outputs %v", bad)
 		}
 	}
@@ -195,7 +206,7 @@ func TestInvariants(t *testing.T) {
 					attempts[next]++
 				}
 			case 1:
-				ok, err := tt.Complete(id, uint32(rng.IntN(3)), outputs(id.Index, r))
+				ok, err := tt.Complete(id, uint32(rng.IntN(3)), workers[rng.IntN(len(workers))], outputs(id.Index, r))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -203,7 +214,7 @@ func TestInvariants(t *testing.T) {
 					t.Fatalf("seed %d: %v completed from %v", seed, id, before)
 				}
 			case 2:
-				if err := tt.Fail(id, uint32(rng.IntN(3))); err != nil {
+				if err := tt.Fail(id, uint32(rng.IntN(3)), workers[rng.IntN(len(workers))]); err != nil {
 					t.Fatal(err)
 				}
 				if after, _ := tt.State(id); before == completed && after != completed {

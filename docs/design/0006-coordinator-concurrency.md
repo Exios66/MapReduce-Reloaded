@@ -8,7 +8,8 @@ The coordinator's state (§3.2) is the task table, the worker registry and
 the job. Many goroutines touch it: one per RPC (RequestTask, ReportTask,
 Heartbeat, GetJobStatus) plus a timer that expires silent workers. A single
 RPC often reads and changes several parts at once: reporting a map task
-updates the table and checks the worker is still registered.
+checks that the attempt still runs on the reporting worker, then updates
+the table.
 
 There are two usual ways to make this safe: a lock, or an actor loop that
 owns the state and receives requests on a channel.
@@ -39,6 +40,7 @@ owns the state and receives requests on a channel.
 
 - Handlers are easy to read and to test: the table and registry are tested
   directly, with no goroutines, and the race detector checks the handlers.
-- All RPCs are serialised. At this project's scale (a handful of workers,
-  thousands of tasks), each critical section takes microseconds, so this
-  is not a bottleneck. The paper's master is also a single process (§3.2).
+- All changes to the state are serialised; only SubmitJob's checks of
+  the file system run outside the lock. At this project's scale (a handful
+  of workers, thousands of tasks), each critical section takes
+  microseconds, so this is not a bottleneck. The paper's master is also a single process (§3.2).

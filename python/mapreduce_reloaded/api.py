@@ -91,7 +91,8 @@ reducer = Reducer
 # A combiner is a reducer applied to parts of one map task's output (§4.3).
 # It may run zero, one or more times on any subset of a key's values, so it
 # must be commutative and associative, emit only the key it was given, and
-# emit values the reducer accepts as input.
+# leave the job's result unchanged: reducing its output must give what
+# reducing its input would.
 combiner = Reducer
 
 

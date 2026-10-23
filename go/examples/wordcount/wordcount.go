@@ -36,15 +36,15 @@ func Map(_ api.Context, _, line []byte, out api.Emitter) error {
 
 // Sum emits the sum of a word's counts.
 func Sum(_ api.Context, word []byte, counts iter.Seq[[]byte], out api.Emitter) error {
-	total := 0
+	var total int64
 	for c := range counts {
-		n, err := strconv.Atoi(string(c))
+		n, err := strconv.ParseInt(string(c), 10, 64)
 		if err != nil {
 			return err
 		}
 		total += n
 	}
-	return out.Emit(word, strconv.AppendInt(nil, int64(total), 10))
+	return out.Emit(word, strconv.AppendInt(nil, total, 10))
 }
 
 func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }

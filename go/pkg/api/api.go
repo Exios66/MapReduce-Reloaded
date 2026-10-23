@@ -19,7 +19,7 @@ type Emitter interface {
 // Mapper processes one input record (§2). For text input, key is the byte
 // offset of the line and value is the line.
 //
-// key and value are valid only during the call.
+// key and value are valid only during the call and must not be modified.
 type Mapper interface {
 	Map(ctx Context, key, value []byte, out Emitter) error
 }
@@ -27,7 +27,8 @@ type Mapper interface {
 // Reducer processes one intermediate key and all of its values (§2). Values
 // arrive in no particular order and may not fit in memory, so they are
 // streamed: values can be ranged over once, and each value is valid only
-// until the next iteration.
+// until the next iteration. key is valid only during the call. Neither may be
+// modified: the framework reads them to find where the key's values end.
 type Reducer interface {
 	Reduce(ctx Context, key []byte, values iter.Seq[[]byte], out Emitter) error
 }
@@ -38,7 +39,8 @@ type Reducer interface {
 // subset of a key's values, so it must:
 //   - be commutative and associative, like a sum or a maximum;
 //   - emit only the key it was given;
-//   - emit values the Reducer accepts as input.
+//   - leave the job's result unchanged: reducing its output must give what
+//     reducing its input would.
 type Combiner = Reducer
 
 // Partitioner chooses the reduce task, in 0..r-1, for an intermediate key

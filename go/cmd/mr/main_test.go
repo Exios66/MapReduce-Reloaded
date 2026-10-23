@@ -50,7 +50,7 @@ func TestSubmitAndStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeConn()
-	done := make(chan error)
+	done := make(chan error, 1) // buffered, so the worker never blocks if the test fails first
 	go func() { done <- worker.New(client, t.TempDir(), &pb.WorkerInfo{}).Run(context.Background()) }()
 
 	out := filepath.Join(t.TempDir(), "out")
