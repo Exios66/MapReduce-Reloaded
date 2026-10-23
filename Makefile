@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check cluster-up cluster-down e2e tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -32,7 +32,11 @@ cluster-up:
 	$(COMPOSE) up -d --build
 
 cluster-down:
-	$(COMPOSE) down -v --remove-orphans
+	$(COMPOSE) --profile monitoring down -v --remove-orphans
+
+# Prometheus at 127.0.0.1:19090 and Grafana at 127.0.0.1:13000.
+monitoring-up:
+	$(COMPOSE) --profile monitoring up -d prometheus grafana
 
 e2e: cluster-up
 	scripts/e2e.sh
