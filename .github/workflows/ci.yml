@@ -1,9 +1,10 @@
 name: CI
 
+# Automatic runs are disabled: the quality gate is `make check`, run locally
+# by the pre-push hook (see docs/design/0002-local-quality-gate.md).
+# This workflow can still be started by hand from the Actions tab.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   go:

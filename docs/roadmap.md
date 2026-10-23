@@ -31,7 +31,9 @@ possible, then extend them for modern infrastructure and modern use cases.
 
 - Work proceeds one small, reviewable unit at a time. Each issue is roughly
   one PR, and each commit covers one concept.
-- Every feature ships with tests. CI must be green before merge.
+- Every feature ships with tests. `make check` should pass before every push;
+  the pre-push hook runs it in clones where `make hooks` was run
+  ([ADR 0002](design/0002-local-quality-gate.md)).
 - Each phase adds a short architecture decision record (ADR) under
   [`design/`](design/), covering the decision, the alternatives and the
   rationale.
@@ -174,7 +176,7 @@ Each phase ends in a runnable, tested state.
 **Phase 0 — Foundations (about 1 week)**
 - Write `proto/` messages and services: `Task`, `TaskKind`, `TaskState`, `RequestTask`, `ReportTask`, `Heartbeat`, `FetchPartition` (server-stream), `SubmitJob`, `JobStatus`, `Counters`.
 - Write `docs/file-format.md`: length-prefixed `(key, value)` records with block CRC32C and optional compression. Both languages must read and write it identically.
-- Set up the Go module and Python package skeletons, the Makefile (`buf` or `protoc` codegen), CI (go test, pytest, ruff, golangci-lint) and pre-commit.
+- Set up the Go module and Python package skeletons, the Makefile (`buf` or `protoc` codegen), and the local quality gate (`make check` plus a pre-push hook: go test, pytest, ruff, golangci-lint).
 
 **Phase 1 — Sequential core + local mode (F1, F15–F17, F20)**
 - Public API in both languages, plus text/kv input formats and the external merge sort.
@@ -224,7 +226,7 @@ Each phase ends in a runnable, tested state.
 
 - **Unit tests:** partitioner (cross-language hash vectors), external sort, record framing round-trip, task-table state machine (property-based).
 - **Golden tests:** every example job in distributed mode must produce output identical to `--local` mode on a fixed corpus (e.g. Project Gutenberg texts and a synthetic web-link graph).
-- **Fault-injection tests:** the chaos harness from Phase 3 runs in CI, using a small Compose cluster.
+- **Fault-injection tests:** the chaos harness from Phase 3 runs as `make chaos`, using a small Compose cluster.
 - **Interop tests:** the Phase 5 matrix.
 - **End-to-end smoke test:** `make cluster-up && mr submit examples/wordcount --input s3://bench/gutenberg --reduces 8`, then check the status UI at `localhost:8080`, the Prometheus metrics, and the output diff.
 - **Benchmarks** (`bench/`): throughput, job completion time, and the cost of stragglers with and without backup tasks.
