@@ -195,6 +195,12 @@ check_python() {
     fi
 }
 
+# python_ok: true if python3 is 3.11+ with venv support. When it is not,
+# check_python reports why.
+python_ok() {
+    python3 -c 'import sys, ensurepip, venv; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1
+}
+
 install_venv() {
     if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest' 2>/dev/null; then
         return 0
@@ -208,7 +214,7 @@ install_venv() {
 check_machine
 if [ "$MODE" = install ]; then
     install_go
-    command -v python3 >/dev/null 2>&1 && install_venv
+    python_ok && install_venv
     echo
 fi
 check_git
