@@ -26,7 +26,7 @@ var one = []byte("1")
 
 // Map emits (word, "1") for each word of a line.
 func Map(_ api.Context, _, line []byte, out api.Emitter) error {
-	for _, word := range bytes.FieldsFunc(line, isSpace) {
+	for _, word := range Words(line) {
 		if err := out.Emit(word, one); err != nil {
 			return err
 		}
@@ -46,5 +46,8 @@ func Sum(_ api.Context, word []byte, counts iter.Seq[[]byte], out api.Emitter) e
 	}
 	return out.Emit(word, strconv.AppendInt(nil, total, 10))
 }
+
+// Words returns the words of a line.
+func Words(line []byte) [][]byte { return bytes.FieldsFunc(line, isSpace) }
 
 func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }

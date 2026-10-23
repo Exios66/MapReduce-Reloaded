@@ -5,6 +5,7 @@ package all
 import (
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/distsort"
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/grep"
+	_ "github.com/exios66/mapreduce-reloaded/go/examples/invertedindex"
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/reverselinks"
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/urlfreq"
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"

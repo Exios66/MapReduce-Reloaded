@@ -84,6 +84,9 @@ type Context interface {
 	Task() TaskID
 	// Param returns a job parameter, or "" if it is not set.
 	Param(name string) string
+	// Input returns the path of the file a map task's split is from, or ""
+	// in a reduce task.
+	Input() string
 	// Count adds delta to a named counter (§4.9). Counts from failed or
 	// duplicate attempts are discarded.
 	Count(name string, delta int64)
