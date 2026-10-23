@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,12 +11,40 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
+	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
 const raven = "../../../testdata/corpus/raven.txt"
+
+// test.param emits the value of its "key" parameter once per line.
+func init() {
+	api.Register("test.param", api.Program{
+		Mapper: api.MapFunc(func(ctx api.Context, _, _ []byte, out api.Emitter) error {
+			return out.Emit([]byte(ctx.Param("key")), []byte("1"))
+		}),
+		Reducer: api.ReduceFunc(wordcount.Sum),
+	})
+}
+
+// Each -param reaches the program, and a later one with the same name wins.
+func TestParams(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out")
+	args := []string{"run", "-local", "-param", "key=old", "-param", "key=a=b", "test.param", out, raven}
+	if err := run(args, new(strings.Builder), new(strings.Builder)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(out, "part-r-00000"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(got), "a=b\t") || strings.Count(string(got), "\n") != 1 {
+		t.Fatalf("output %q; want one record keyed a=b", got)
+	}
+}
 
 func TestRunLocal(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out")
@@ -118,7 +147,9 @@ func TestErrors(t *testing.T) {
 		{[]string{"nope"}, "usage"},
 		{[]string{"run", "wordcount", "out", "in"}, "needs -local"},
 		{[]string{"run", "-local", "wordcount", "out"}, "usage"},
-		{[]string{"run", "-local", "nope", "out", raven}, `unknown program "nope"; registered: wordcount`},
+		{[]string{"run", "-local", "nope", "out", raven}, `unknown program "nope"; registered: test.param, wordcount`},
+		{[]string{"run", "-local", "-param", "novalue", "wordcount", "out", raven}, "not name=value"},
+		{[]string{"submit", "-param", "=v", "wordcount", "out", raven}, "not name=value"},
 		{[]string{"run", "-local", "-r", "4294967296", "wordcount", "out", "in"}, "too large"},
 		{[]string{"run", "-local", "-m", "2", "wordcount", "out", "missing"}, "no input matches"},
 		{[]string{"run", "-bogus"}, "not defined"},

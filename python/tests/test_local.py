@@ -203,6 +203,27 @@ def test_cli(tmp_path, capsys):
     assert not (out / local.TEMP_DIR).exists()
 
 
+def test_cli_params(tmp_path, monkeypatch):
+    specs = []
+    monkeypatch.setattr(local, "run", lambda spec, work: specs.append(spec) or {})
+    main(
+        [
+            "run",
+            "--local",
+            "--param",
+            "k=old",
+            "--param",
+            "k=a=b",
+            "--param",
+            "e=",
+            "wordcount",
+            str(tmp_path),
+            RAVEN,
+        ]
+    )
+    assert specs[0].params == {"k": "a=b", "e": ""}
+
+
 def test_cli_globs_once(tmp_path):
     (tmp_path / "[a].txt").write_bytes(Path(RAVEN).read_bytes())  # "[a]" is glob syntax
     main(["run", "--local", "wordcount", str(tmp_path / "out"), str(tmp_path / "*.txt")])
@@ -217,6 +238,7 @@ def test_cli_globs_once(tmp_path):
         (["run", "--local", "wordcount", "out", "missing"], "no input matches"),
         (["run", "--local", "-r", "0", "wordcount", "out", RAVEN], "at least 1"),
         (["run", "--local", "-m", "-1", "wordcount", "out", RAVEN], "m must be at least 1"),
+        (["run", "--local", "--param", "novalue", "wordcount", "out", RAVEN], "is not NAME=VALUE"),
     ],
 )
 def test_cli_errors(capsys, args, want):

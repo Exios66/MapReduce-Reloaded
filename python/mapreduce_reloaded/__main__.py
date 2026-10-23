@@ -1,10 +1,12 @@
 """Runs MapReduce jobs, mirroring go/cmd/mr:
 
-    python -m mapreduce_reloaded run --local [-m M] [-r R] PROGRAM OUTPUT_DIR INPUT...
+    python -m mapreduce_reloaded run --local [-m M] [-r R] [--param NAME=VALUE]...
+        PROGRAM OUTPUT_DIR INPUT...
 
 PROGRAM is an example name, such as wordcount, or module:attribute naming a
-Program. Inputs may be files or glob patterns. Counters are printed to
-standard error. Only local mode exists so far (§4.7).
+Program. Inputs may be files or glob patterns. Each --param is passed to the
+program, which reads it from ctx.params. Counters are printed to standard
+error. Only local mode exists so far (§4.7).
 """
 
 import argparse
@@ -23,6 +25,14 @@ def main(argv: list[str] | None = None) -> None:
     run.add_argument("--local", action="store_true", help="run every task in this process")
     run.add_argument("-m", type=int, default=0, help="approximate number of map tasks")
     run.add_argument("-r", type=int, default=1, help="number of reduce tasks")
+    run.add_argument(
+        "--param",
+        type=param,
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="a parameter for the program; may be repeated",
+    )
     run.add_argument("program")
     run.add_argument("output")
     run.add_argument("inputs", nargs="+")
@@ -38,6 +48,7 @@ def main(argv: list[str] | None = None) -> None:
             output=args.output,
             r=args.r,
             split_size=split.size_for(args.inputs, args.m) if args.m else 0,
+            params=dict(args.param),
         )
     except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
         parser.error(str(e))
@@ -45,6 +56,14 @@ def main(argv: list[str] | None = None) -> None:
         counts = local.run(spec, work)
     for name in sorted(counts):
         print(f"{name}\t{counts[name]}", file=sys.stderr)
+
+
+def param(arg: str) -> tuple[str, str]:
+    """Parses a NAME=VALUE parameter."""
+    name, sep, value = arg.partition("=")
+    if not name or not sep:
+        raise argparse.ArgumentTypeError(f"{arg!r} is not NAME=VALUE")
+    return name, value
 
 
 def load(name: str) -> Program:
