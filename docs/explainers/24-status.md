@@ -29,6 +29,18 @@ workers' are on port 8081 inside the Compose network, not published, since
 there are several. `make e2e` checks that the coordinator's `/metrics` shows
 the job's reduce tasks completed.
 
+## Dashboard
+
+`make monitoring-up` starts Prometheus (`127.0.0.1:19090`), which scrapes
+the coordinator and every worker each 5 seconds, and Grafana
+(`127.0.0.1:13000`, read-only without a login). Its MapReduce dashboard
+shows live workers, each job's progress, tasks by kind and state, task
+attempts finished per second, and map output written and fetched per
+second. They sit in the Compose `monitoring` profile, so `cluster-up` and
+`e2e` do not start them; `cluster-down` removes them. The files are in
+`deploy/compose/monitoring`, and `TestDashboardQueriesServedMetrics` checks
+that the dashboard queries only metrics that are served.
+
 ## Logs
 
 `-log-format json` makes the coordinator and worker log one JSON object per

@@ -1,6 +1,7 @@
 # The cluster on one machine (docs/cluster-vm.md): one coordinator and four
 # workers. `make cluster-up` starts it, `make e2e` runs word count on it and
-# `make cluster-down` removes it.
+# `make cluster-down` removes it. `make monitoring-up` adds Prometheus and
+# Grafana with a dashboard of the cluster's metrics.
 #
 # Every container sees the input at /corpus and job output at /out, because
 # job specs carry absolute paths. Map output stays inside each worker and is
@@ -39,6 +40,31 @@ services:
     entrypoint: [mr]
     profiles: [tools]
     mem_limit: 128m
+
+  # The monitoring profile: Prometheus scrapes the coordinator and every
+  # worker, and Grafana shows them (docs/explainers/24-status.md).
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [monitoring]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:19090:9090"
+    mem_limit: 256m
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: [monitoring]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true" # read-only, and bound to localhost
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:13000:3000"
+    mem_limit: 256m
+    depends_on: [prometheus]
 
 volumes:
   output:
