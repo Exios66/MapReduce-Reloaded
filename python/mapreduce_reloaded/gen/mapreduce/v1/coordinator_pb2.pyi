@@ -171,7 +171,7 @@ class GetJobStatusRequest(_message.Message):
     def __init__(self, job_id: _Optional[str] = ...) -> None: ...
 
 class GetJobStatusResponse(_message.Message):
-    __slots__ = ("job_id", "state", "map_tasks_total", "map_tasks_completed", "reduce_tasks_total", "reduce_tasks_completed", "counters", "error")
+    __slots__ = ("job_id", "state", "map_tasks_total", "map_tasks_completed", "reduce_tasks_total", "reduce_tasks_completed", "counters", "error", "map_tasks_host_local", "map_tasks_zone_local")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
     STATE_FIELD_NUMBER: _ClassVar[int]
     MAP_TASKS_TOTAL_FIELD_NUMBER: _ClassVar[int]
@@ -180,6 +180,8 @@ class GetJobStatusResponse(_message.Message):
     REDUCE_TASKS_COMPLETED_FIELD_NUMBER: _ClassVar[int]
     COUNTERS_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
+    MAP_TASKS_HOST_LOCAL_FIELD_NUMBER: _ClassVar[int]
+    MAP_TASKS_ZONE_LOCAL_FIELD_NUMBER: _ClassVar[int]
     job_id: str
     state: JobState
     map_tasks_total: int
@@ -188,4 +190,6 @@ class GetJobStatusResponse(_message.Message):
     reduce_tasks_completed: int
     counters: _types_pb2.Counters
     error: str
-    def __init__(self, job_id: _Optional[str] = ..., state: _Optional[_Union[JobState, str]] = ..., map_tasks_total: _Optional[int] = ..., map_tasks_completed: _Optional[int] = ..., reduce_tasks_total: _Optional[int] = ..., reduce_tasks_completed: _Optional[int] = ..., counters: _Optional[_Union[_types_pb2.Counters, _Mapping]] = ..., error: _Optional[str] = ...) -> None: ...
+    map_tasks_host_local: int
+    map_tasks_zone_local: int
+    def __init__(self, job_id: _Optional[str] = ..., state: _Optional[_Union[JobState, str]] = ..., map_tasks_total: _Optional[int] = ..., map_tasks_completed: _Optional[int] = ..., reduce_tasks_total: _Optional[int] = ..., reduce_tasks_completed: _Optional[int] = ..., counters: _Optional[_Union[_types_pb2.Counters, _Mapping]] = ..., error: _Optional[str] = ..., map_tasks_host_local: _Optional[int] = ..., map_tasks_zone_local: _Optional[int] = ...) -> None: ...

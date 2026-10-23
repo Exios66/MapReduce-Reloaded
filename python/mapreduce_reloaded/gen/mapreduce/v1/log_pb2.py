@@ -26,7 +26,7 @@ from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2 as mapreduce_dot
 from mapreduce_reloaded.gen.mapreduce.v1 import types_pb2 as mapreduce_dot_v1_dot_types__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16mapreduce/v1/log.proto\x12\x0cmapreduce.v1\x1a\x1emapreduce/v1/coordinator.proto\x1a\x18mapreduce/v1/types.proto\"\x98\x02\n\tLogRecord\x12\x33\n\rjob_submitted\x18\x01 \x01(\x0b\x32\x1a.mapreduce.v1.JobSubmittedH\x00\x12\x33\n\rtask_assigned\x18\x02 \x01(\x0b\x32\x1a.mapreduce.v1.TaskAssignedH\x00\x12\x38\n\rtask_reported\x18\x03 \x01(\x0b\x32\x1f.mapreduce.v1.ReportTaskRequestH\x00\x12/\n\x0bworker_lost\x18\x04 \x01(\x0b\x32\x18.mapreduce.v1.WorkerLostH\x00\x12,\n\trestarted\x18\x05 \x01(\x0b\x32\x17.mapreduce.v1.RestartedH\x00\x42\x08\n\x06record\"l\n\x0cJobSubmitted\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\"\n\x03job\x18\x02 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\x12(\n\x06splits\x18\x03 \x03(\x0b\x32\x18.mapreduce.v1.InputSplit\"O\n\x0cTaskAssigned\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\x11\n\tworker_id\x18\x02 \x01(\t\"\x1f\n\nWorkerLost\x12\x11\n\tworker_id\x18\x01 \x01(\t\"\x0b\n\tRestartedBGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16mapreduce/v1/log.proto\x12\x0cmapreduce.v1\x1a\x1emapreduce/v1/coordinator.proto\x1a\x18mapreduce/v1/types.proto\"\x98\x02\n\tLogRecord\x12\x33\n\rjob_submitted\x18\x01 \x01(\x0b\x32\x1a.mapreduce.v1.JobSubmittedH\x00\x12\x33\n\rtask_assigned\x18\x02 \x01(\x0b\x32\x1a.mapreduce.v1.TaskAssignedH\x00\x12\x38\n\rtask_reported\x18\x03 \x01(\x0b\x32\x1f.mapreduce.v1.ReportTaskRequestH\x00\x12/\n\x0bworker_lost\x18\x04 \x01(\x0b\x32\x18.mapreduce.v1.WorkerLostH\x00\x12,\n\trestarted\x18\x05 \x01(\x0b\x32\x17.mapreduce.v1.RestartedH\x00\x42\x08\n\x06record\"l\n\x0cJobSubmitted\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\"\n\x03job\x18\x02 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\x12(\n\x06splits\x18\x03 \x03(\x0b\x32\x18.mapreduce.v1.InputSplit\"y\n\x0cTaskAssigned\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\x11\n\tworker_id\x18\x02 \x01(\t\x12(\n\x08locality\x18\x03 \x01(\x0e\x32\x16.mapreduce.v1.Locality\"\x1f\n\nWorkerLost\x12\x11\n\tworker_id\x18\x01 \x01(\t\"\x0b\n\tRestartedBGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,9 +39,9 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_JOBSUBMITTED']._serialized_start=381
   _globals['_JOBSUBMITTED']._serialized_end=489
   _globals['_TASKASSIGNED']._serialized_start=491
-  _globals['_TASKASSIGNED']._serialized_end=570
-  _globals['_WORKERLOST']._serialized_start=572
-  _globals['_WORKERLOST']._serialized_end=603
-  _globals['_RESTARTED']._serialized_start=605
-  _globals['_RESTARTED']._serialized_end=616
+  _globals['_TASKASSIGNED']._serialized_end=612
+  _globals['_WORKERLOST']._serialized_start=614
+  _globals['_WORKERLOST']._serialized_end=645
+  _globals['_RESTARTED']._serialized_start=647
+  _globals['_RESTARTED']._serialized_end=658
 # @@protoc_insertion_point(module_scope)

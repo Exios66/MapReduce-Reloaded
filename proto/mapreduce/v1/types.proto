@@ -33,6 +33,18 @@ enum TaskState {
   TASK_STATE_COMPLETED = 3;
 }
 
+// How close a map task's worker was to its input split (§3.4).
+enum Locality {
+  // The split's locations are unknown, or the task is a reduce task.
+  LOCALITY_UNSPECIFIED = 0;
+  // On a host that holds the split.
+  LOCALITY_HOST = 1;
+  // In a zone that holds the split, on another host.
+  LOCALITY_ZONE = 2;
+  // Elsewhere: the split is read over the network.
+  LOCALITY_REMOTE = 3;
+}
+
 // Names one task within one job. Stable across retries.
 message TaskId {
   // The job this task belongs to.

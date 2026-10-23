@@ -33,12 +33,14 @@ class JobSubmitted(_message.Message):
     def __init__(self, job_id: _Optional[str] = ..., job: _Optional[_Union[_types_pb2.JobSpec, _Mapping]] = ..., splits: _Optional[_Iterable[_Union[_types_pb2.InputSplit, _Mapping]]] = ...) -> None: ...
 
 class TaskAssigned(_message.Message):
-    __slots__ = ("attempt", "worker_id")
+    __slots__ = ("attempt", "worker_id", "locality")
     ATTEMPT_FIELD_NUMBER: _ClassVar[int]
     WORKER_ID_FIELD_NUMBER: _ClassVar[int]
+    LOCALITY_FIELD_NUMBER: _ClassVar[int]
     attempt: _types_pb2.TaskAttemptId
     worker_id: str
-    def __init__(self, attempt: _Optional[_Union[_types_pb2.TaskAttemptId, _Mapping]] = ..., worker_id: _Optional[str] = ...) -> None: ...
+    locality: _types_pb2.Locality
+    def __init__(self, attempt: _Optional[_Union[_types_pb2.TaskAttemptId, _Mapping]] = ..., worker_id: _Optional[str] = ..., locality: _Optional[_Union[_types_pb2.Locality, str]] = ...) -> None: ...
 
 class WorkerLost(_message.Message):
     __slots__ = ("worker_id",)
