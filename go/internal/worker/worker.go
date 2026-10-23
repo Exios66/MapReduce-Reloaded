@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/extsort"
@@ -49,10 +51,26 @@ func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.Worke
 	return &Worker{coordinator: coordinator, workDir: workDir, info: info, logger: slog.Default()}
 }
 
+// errForgotten means the coordinator no longer knows this worker: it
+// declared it dead (§3.3), or restarted.
+var errForgotten = errors.New("the coordinator forgot this worker")
+
 // Run registers and runs tasks until the coordinator says to shut down, or
-// ctx is done, or an RPC fails.
+// ctx is done, or an RPC fails. If the coordinator forgets the worker, it
+// registers again under a new ID.
 func (w *Worker) Run(ctx context.Context) (err error) {
 	defer func() { err = errors.Join(err, w.shuffle.Close()) }()
+	for {
+		if err = w.session(ctx); !errors.Is(err, errForgotten) {
+			return err
+		}
+		w.logger.Warn("registering again", "err", err)
+	}
+}
+
+// session registers, then runs tasks under that registration, sending
+// heartbeats while it does.
+func (w *Worker) session(ctx context.Context) error {
 	// Wait for the coordinator to come up: workers may start before it.
 	reg, err := w.coordinator.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: w.info}, grpc.WaitForReady(true))
 	if err != nil {
@@ -60,9 +78,15 @@ func (w *Worker) Run(ctx context.Context) (err error) {
 	}
 	w.id = reg.GetWorkerId()
 	w.logger = slog.Default().With("worker", w.id)
+	beating, stop := context.WithCancel(ctx)
+	defer stop()
+	go w.heartbeat(beating, w.id, reg.GetHeartbeatInterval().AsDuration())
 
 	for {
 		resp, err := w.coordinator.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w.id})
+		if status.Code(err) == codes.NotFound {
+			return errForgotten
+		}
 		if err != nil {
 			return fmt.Errorf("request task: %w", err)
 		}
@@ -90,6 +114,26 @@ func (w *Worker) Run(ctx context.Context) (err error) {
 		}
 		if _, err := w.coordinator.ReportTask(ctx, report); err != nil {
 			return fmt.Errorf("report task: %w", err)
+		}
+	}
+}
+
+// heartbeat tells the coordinator every interval that worker id is alive,
+// until ctx is done. Asking for a task counts as a heartbeat too; these
+// cover the time a task runs. A failed heartbeat is not retried: the next
+// one, or the next task request, tells the coordinator.
+func (w *Worker) heartbeat(ctx context.Context, id string, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			_, _ = w.coordinator.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: id})
 		}
 	}
 }
