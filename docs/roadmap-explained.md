@@ -40,7 +40,8 @@ identical bytes, which gives a second, independent correctness check.
 
 - **#7 The programming interface:** the user writes only a `map` function
   and a `reduce` function. Hiding networks and failures behind those two
-  functions is the paper's whole point.
+  functions is the paper's whole point. See
+  [explainers/07-programming-api.md](explainers/07-programming-api.md).
 - **#8–#9 Reading and writing files:** plain text and our own format. See
   [explainers/06-kv-reader-writer.md](explainers/06-kv-reader-writer.md).
 - **#10 Sorting data bigger than memory:** sort chunks that fit in memory,
