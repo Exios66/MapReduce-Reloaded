@@ -114,7 +114,7 @@ func init() {
 // listen serves the services that register adds on addr, or on a free
 // localhost port if addr is "". It returns the address, and stop, which
 // closes the port at once.
-func listen(t *testing.T, addr string, register func(*grpc.Server)) (string, func()) {
+func listen(t *testing.T, addr string, register func(*grpc.Server), opts ...grpc.ServerOption) (string, func()) {
 	t.Helper()
 	if addr == "" {
 		addr = "127.0.0.1:0"
@@ -123,7 +123,7 @@ func listen(t *testing.T, addr string, register func(*grpc.Server)) (string, fun
 	if err != nil {
 		t.Fatal(err)
 	}
-	gs := grpc.NewServer()
+	gs := grpc.NewServer(opts...)
 	register(gs)
 	go func() { _ = gs.Serve(lis) }()
 	t.Cleanup(gs.Stop)
@@ -145,6 +145,7 @@ type cluster struct {
 	client  pb.CoordinatorServiceClient
 	workDir string
 	live    []chan error // Run results of the workers not killed
+	gates   []*gate      // of each worker
 }
 
 // newCluster starts a cluster, after configure, if given, has changed its
@@ -210,15 +211,26 @@ func (c *cluster) submit(program string) string {
 func (c *cluster) output() string { return filepath.Join(c.workDir, "out") }
 
 // addWorker starts a worker. kill stops it as if its machine died: its
-// heartbeats stop, and its map output can no longer be fetched.
+// heartbeats stop, and its map output can no longer be fetched. The
+// worker's RPCs, to the coordinator and to its shuffle server, pass
+// through c.gates[i], where i is its index in c.live.
 func (c *cluster) addWorker() (kill func()) {
 	dir := filepath.Join(c.workDir, fmt.Sprint(len(c.live)))
-	addr, stopShuffle := listen(c.t, "", func(gs *grpc.Server) { pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir)) })
+	g := new(gate)
+	addr, stopShuffle := listen(c.t, "", func(gs *grpc.Server) { pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir)) },
+		grpc.StreamInterceptor(g.stream))
+	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithUnaryInterceptor(g.unary))
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	c.t.Cleanup(func() { _ = conn.Close() })
 	ctx, cancel := context.WithCancel(c.ctx)
 	done := make(chan error, 1)
-	go func() { done <- worker.New(c.client, dir, &pb.WorkerInfo{ShuffleAddress: addr}).Run(ctx) }()
+	go func() {
+		done <- worker.New(pb.NewCoordinatorServiceClient(conn), dir, &pb.WorkerInfo{ShuffleAddress: addr}).Run(ctx)
+	}()
 	i := len(c.live)
-	c.live = append(c.live, done)
+	c.live, c.gates = append(c.live, done), append(c.gates, g)
 	return func() {
 		cancel()
 		stopShuffle()

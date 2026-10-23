@@ -98,7 +98,8 @@ failing, and jobs still finish correctly.*
   [explainers/17-side-outputs.md](explainers/17-side-outputs.md).
 - **#29 Chaos testing:** randomly kill and freeze machines during a job, 50
   runs in a row, and check the output still matches the oracle. This is the
-  strongest demo.
+  strongest demo. See
+  [explainers/22-chaos.md](explainers/22-chaos.md).
 
 ### Phase 4 — Finish the paper's features (#30–#34)
 

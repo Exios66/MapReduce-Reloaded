@@ -36,6 +36,9 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	if err := task.CheckOutput(spec.Output); err != nil {
 		return nil, err
 	}
+	if err := task.Setup(spec.Output); err != nil {
+		return nil, err
+	}
 
 	counts := map[string]int64{}
 	add := func(c map[string]int64) {
