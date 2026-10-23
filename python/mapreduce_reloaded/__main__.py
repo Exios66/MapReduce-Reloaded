@@ -12,7 +12,7 @@ import importlib
 import sys
 import tempfile
 
-from mapreduce_reloaded import local
+from mapreduce_reloaded import local, split
 from mapreduce_reloaded.api import JobSpec, Program
 
 
@@ -31,13 +31,13 @@ def main(argv: list[str] | None = None) -> None:
     if not args.local:
         parser.error("only --local is supported so far")
     try:
-        inputs = local.expand(args.inputs)
+        inputs = split.expand(args.inputs)
         spec = JobSpec(
             program=load(args.program),
             inputs=tuple(inputs),
             output=args.output,
             r=args.r,
-            split_size=local.split_size(inputs, args.m) if args.m > 0 else 0,
+            split_size=split.size_for(inputs, args.m) if args.m > 0 else 0,
         )
     except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
         parser.error(str(e))
