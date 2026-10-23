@@ -67,6 +67,8 @@ func TestSubmitJob(t *testing.T) {
 
 	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{Program: "nope"}})
 	assertCode(t, err, codes.InvalidArgument)
+	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{})
+	assertCode(t, err, codes.InvalidArgument)
 }
 
 func TestOneJobAtATime(t *testing.T) {
@@ -104,16 +106,19 @@ func TestReportTask(t *testing.T) {
 	resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
 	attempt := resp.GetMapTask().GetAttempt()
 	success := &pb.ReportTaskRequest_Success{Success: &pb.TaskSuccess{
-		Outputs:  []*pb.PartitionLocation{{MapIndex: 0, Partition: 0}},
+		Outputs:  []*pb.PartitionLocation{{MapIndex: 0, Partition: 0, Uri: "file:///map-output"}},
 		Counters: &pb.Counters{Values: map[string]int64{"n": 1}},
 	}}
 
 	_, err := s.ReportTask(ctx, &pb.ReportTaskRequest{Attempt: &pb.TaskAttemptId{Task: &pb.TaskId{JobId: "nope"}}})
 	assertCode(t, err, codes.NotFound)
-	_, err = s.ReportTask(ctx, &pb.ReportTaskRequest{Attempt: attempt, Outcome: &pb.ReportTaskRequest_Success{
+	_, err = s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: attempt, Outcome: &pb.ReportTaskRequest_Success{
 		Success: &pb.TaskSuccess{},
 	}})
 	assertCode(t, err, codes.InvalidArgument) // no outputs
+	if rep, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: "other", Attempt: attempt, Outcome: success}); err != nil || rep.GetAccepted() {
+		t.Fatalf("report from another worker: %v, %v; want ignored", rep, err)
+	}
 
 	for _, want := range []bool{true, false} { // the second report is a duplicate
 		rep, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: attempt, Outcome: success})
@@ -131,7 +136,7 @@ func TestReportTask(t *testing.T) {
 	if len(reduce.GetSources()) != 1 {
 		t.Fatalf("reduce task %v; want one source", reduce)
 	}
-	rep, err := s.ReportTask(ctx, &pb.ReportTaskRequest{Attempt: reduce.GetAttempt(), Outcome: &pb.ReportTaskRequest_Failure{
+	rep, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: reduce.GetAttempt(), Outcome: &pb.ReportTaskRequest_Failure{
 		Failure: &pb.TaskFailure{Message: "boom"},
 	}})
 	if err != nil || rep.GetAccepted() {
@@ -164,7 +169,7 @@ func TestExpire(t *testing.T) {
 	s.cfg.WorkerTimeout = time.Minute
 	resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
 	_, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: resp.GetMapTask().GetAttempt(), Outcome: &pb.ReportTaskRequest_Success{
-		Success: &pb.TaskSuccess{Outputs: []*pb.PartitionLocation{{MapIndex: 0, Partition: 0}}},
+		Success: &pb.TaskSuccess{Outputs: []*pb.PartitionLocation{{MapIndex: 0, Partition: 0, Uri: "file:///map-output"}}},
 	}})
 	if err != nil {
 		t.Fatal(err)

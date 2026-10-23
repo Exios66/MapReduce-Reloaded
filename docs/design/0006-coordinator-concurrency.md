@@ -8,7 +8,8 @@ The coordinator's state (§3.2) is the task table, the worker registry and
 the job. Many goroutines touch it: one per RPC (RequestTask, ReportTask,
 Heartbeat, GetJobStatus) plus a timer that expires silent workers. A single
 RPC often reads and changes several parts at once: reporting a map task
-updates the table and checks the worker is still registered.
+checks that the attempt still runs on the reporting worker, then updates
+the table.
 
 There are two usual ways to make this safe: a lock, or an actor loop that
 owns the state and receives requests on a channel.

@@ -88,17 +88,16 @@ func (t *TaskTable) Assign(id Task, worker string) (uint32, error) {
 	return attempt, nil
 }
 
-// Complete records that an attempt finished. A map task's outputs must hold
-// one location per partition, in order. It reports whether the result was
-// accepted: false if the task already completed or the attempt is no longer
-// running, for example because its worker was declared lost.
-func (t *TaskTable) Complete(id Task, attempt uint32, outputs []*pb.PartitionLocation) (bool, error) {
+// Complete records that worker finished an attempt. A map task's outputs
+// must hold one location per partition, in order. It reports whether the
+// result was accepted: false if the task already completed or the attempt is
+// not running on worker, for example because its worker was declared lost.
+func (t *TaskTable) Complete(id Task, attempt uint32, worker string, outputs []*pb.PartitionLocation) (bool, error) {
 	ts, err := t.task(id)
 	if err != nil {
 		return false, err
 	}
-	worker, running := ts.running[attempt]
-	if !running {
+	if !ts.runsOn(attempt, worker) {
 		return false, nil
 	}
 	if id.Kind == pb.TaskKind_TASK_KIND_MAP {
@@ -115,15 +114,15 @@ func (t *TaskTable) Complete(id Task, attempt uint32, outputs []*pb.PartitionLoc
 	return true, nil
 }
 
-// Fail records that an attempt failed. The task becomes idle again unless
-// another attempt is still running. Reports for attempts that are not
-// running are ignored.
-func (t *TaskTable) Fail(id Task, attempt uint32) error {
+// Fail records that an attempt on worker failed. The task becomes idle again
+// unless another attempt is still running. Reports for attempts that are not
+// running on worker are ignored.
+func (t *TaskTable) Fail(id Task, attempt uint32, worker string) error {
 	ts, err := t.task(id)
 	if err != nil {
 		return err
 	}
-	if _, running := ts.running[attempt]; running {
+	if ts.runsOn(attempt, worker) {
 		delete(ts.running, attempt)
 		ts.idleIfStopped()
 	}
@@ -203,8 +202,17 @@ func (t *TaskTable) checkOutputs(index uint32, outputs []*pb.PartitionLocation) 
 			return fmt.Errorf("coordinator: map %d reported output %d as map %d partition %d",
 				index, p, o.GetMapIndex(), o.GetPartition())
 		}
+		if o.GetWorkerAddress() == "" && o.GetUri() == "" {
+			return fmt.Errorf("coordinator: map %d reported output %d with no location", index, p)
+		}
 	}
 	return nil
+}
+
+// runsOn reports whether attempt is running on worker.
+func (ts *task) runsOn(attempt uint32, worker string) bool {
+	w, running := ts.running[attempt]
+	return running && w == worker
 }
 
 // stopAttemptsOn stops the task's running attempts on worker, and reports

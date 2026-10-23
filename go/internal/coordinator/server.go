@@ -126,6 +126,9 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 // workers (§3.5), and plans its map tasks.
 func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
 	m := proto.CloneOf(req.GetJob())
+	if m == nil {
+		return nil, status.Error(codes.InvalidArgument, "no job")
+	}
 	if m.GetNumReduceTasks() == 0 {
 		s.mu.Lock()
 		m.NumReduceTasks = split.DefaultR(s.workers.Len())
@@ -207,8 +210,9 @@ func (j *job) assign(t Task, worker string) (*pb.RequestTaskResponse, error) {
 	}}, nil
 }
 
-// ReportTask records the outcome of an attempt. The first successful attempt
-// of a task is accepted, and only its counters are kept (§3.3, §4.9).
+// ReportTask records the outcome of an attempt, from the worker it was
+// assigned to. The first successful attempt of a task is accepted, and only
+// its counters are kept (§3.3, §4.9).
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -220,12 +224,12 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 
 	if req.GetFailure() != nil {
-		if err := j.tasks.Fail(t, id.GetAttempt()); err != nil {
+		if err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId()); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 		return &pb.ReportTaskResponse{}, nil
 	}
-	accepted, err := j.tasks.Complete(t, id.GetAttempt(), req.GetSuccess().GetOutputs())
+	accepted, err := j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
