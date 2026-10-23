@@ -97,6 +97,10 @@ ssh -L 18770:127.0.0.1:18770 mr-vm
 
 Containers continue to use `coordinator:7070`.
 
+The status page and Prometheus metrics are at `127.0.0.1:18780` (`/` and
+`/metrics`), also bound only to loopback; forward them the same way with
+`ssh -L 18780:127.0.0.1:18780 mr-vm`.
+
 Web pages (the status UI from #32, MinIO's console) are reached through an
 SSH tunnel, so no port is opened to the network:
 
