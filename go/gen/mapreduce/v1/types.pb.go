@@ -494,9 +494,12 @@ type JobSpec struct {
 	UseCombiner bool `protobuf:"varint,9,opt,name=use_combiner,json=useCombiner,proto3" json:"use_combiner,omitempty"`
 	// Free-form parameters passed to the user's program, e.g. the pattern for
 	// distributed grep.
-	Params        map[string]string `protobuf:"bytes,10,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Params map[string]string `protobuf:"bytes,10,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// The most bad records the job may skip (§4.6). Once more would be
+	// skipped, the job fails. Unset means no limit, as in the paper.
+	MaxSkippedRecords *uint64 `protobuf:"varint,11,opt,name=max_skipped_records,json=maxSkippedRecords,proto3,oneof" json:"max_skipped_records,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *JobSpec) Reset() {
@@ -597,6 +600,13 @@ func (x *JobSpec) GetParams() map[string]string {
 		return x.Params
 	}
 	return nil
+}
+
+func (x *JobSpec) GetMaxSkippedRecords() uint64 {
+	if x != nil && x.MaxSkippedRecords != nil {
+		return *x.MaxSkippedRecords
+	}
+	return 0
 }
 
 // Identity and capabilities of a worker.
@@ -701,7 +711,7 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\x06values\x18\x01 \x03(\v2\".mapreduce.v1.Counters.ValuesEntryR\x06values\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xaa\x03\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xf7\x03\n" +
 	"\aJobSpec\x12\x18\n" +
 	"\aprogram\x18\x01 \x01(\tR\aprogram\x12\x16\n" +
 	"\x06inputs\x18\x02 \x03(\tR\x06inputs\x12\x16\n" +
@@ -713,10 +723,12 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\vpartitioner\x18\b \x01(\tR\vpartitioner\x12!\n" +
 	"\fuse_combiner\x18\t \x01(\bR\vuseCombiner\x129\n" +
 	"\x06params\x18\n" +
-	" \x03(\v2!.mapreduce.v1.JobSpec.ParamsEntryR\x06params\x1a9\n" +
+	" \x03(\v2!.mapreduce.v1.JobSpec.ParamsEntryR\x06params\x123\n" +
+	"\x13max_skipped_records\x18\v \x01(\x04H\x00R\x11maxSkippedRecords\x88\x01\x01\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"s\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x16\n" +
+	"\x14_max_skipped_records\"s\n" +
 	"\n" +
 	"WorkerInfo\x12'\n" +
 	"\x0fshuffle_address\x18\x01 \x01(\tR\x0eshuffleAddress\x12\x12\n" +
@@ -777,6 +789,7 @@ func file_mapreduce_v1_types_proto_init() {
 	if File_mapreduce_v1_types_proto != nil {
 		return
 	}
+	file_mapreduce_v1_types_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
