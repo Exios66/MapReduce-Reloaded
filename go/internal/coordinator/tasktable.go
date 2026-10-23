@@ -168,6 +168,19 @@ func (t *TaskTable) ResetWorker(worker string) []Task {
 	return reset
 }
 
+// StopAll stops every running attempt, as when the coordinator restarts:
+// the attempts' workers will register again under new IDs. Completed tasks
+// stay completed; a map output that turns out to be lost is reported by
+// the reduce task that cannot fetch it.
+func (t *TaskTable) StopAll() {
+	for _, ts := range [][]task{t.maps, t.reduces} {
+		for i := range ts {
+			clear(ts[i].running)
+			ts[i].idleIfStopped()
+		}
+	}
+}
+
 // Sources returns where partition p of every map task's output lives, for a
 // reduce task. It must be called only once all map tasks have completed.
 func (t *TaskTable) Sources(p uint32) []*pb.PartitionLocation {
