@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
+	"github.com/exios66/mapreduce-reloaded/go/internal/promtext"
 )
 
 // Source is where the status comes from: a *coordinator.Server.
@@ -32,7 +33,7 @@ func Handler(src Source) http.Handler {
 		}
 	})
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		w.Header().Set("Content-Type", promtext.ContentType)
 		_, _ = w.Write(metrics(src.Status()))
 	})
 	return mux
