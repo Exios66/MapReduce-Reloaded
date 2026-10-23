@@ -165,16 +165,16 @@ func TestFailWithLostOutput(t *testing.T) {
 	lost := tt.Sources(0)[0]
 	stale := &pb.PartitionLocation{MapIndex: 0, WorkerAddress: "w9:7000"}
 	for _, l := range []*pb.PartitionLocation{nil, stale} {
-		if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", l); err != nil {
+		if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", &pb.TaskFailure{LostOutput: l}); err != nil {
 			t.Fatal(err)
 		}
 		assertState(t, tt, m0, completed)
 	}
-	if err := tt.Fail(r0, 99, "w2", lost); err != nil { // not a running attempt
+	if err := tt.Fail(r0, 99, "w2", &pb.TaskFailure{LostOutput: lost}); err != nil { // not a running attempt
 		t.Fatal(err)
 	}
 	assertState(t, tt, m0, completed)
-	if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", lost); err != nil {
+	if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", &pb.TaskFailure{LostOutput: lost}); err != nil {
 		t.Fatal(err)
 	}
 	assertState(t, tt, m0, idle)
@@ -183,6 +183,28 @@ func TestFailWithLostOutput(t *testing.T) {
 		t.Fatal("no task to run")
 	}
 	checkCounts(t, tt)
+}
+
+// A record is skipped once SkipAfter attempts have crashed on it. Crashes
+// that are not reported by a running attempt do not count (§4.6).
+func TestFailWithCrash(t *testing.T) {
+	tt := NewTaskTable(1, 1)
+	m0 := Task{mapKind, 0}
+	crash := func(n uint64) *pb.TaskFailure { return &pb.TaskFailure{FailedRecord: &n} }
+	for _, f := range []*pb.TaskFailure{crash(5), {}, crash(7), crash(5)} {
+		if err := tt.Fail(m0, mustAssign(t, tt, m0, "w1"), "w1", f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tt.Fail(m0, 99, "w1", crash(7)); err != nil { // not a running attempt
+		t.Fatal(err)
+	}
+	if skip, err := tt.Skip(m0); err != nil || !slices.Equal(skip, []uint64{5}) {
+		t.Fatalf("Skip = %v, %v; want [5]", skip, err)
+	}
+	if skip, _ := tt.Skip(Task{reduceKind, 0}); len(skip) != 0 {
+		t.Fatalf("reduce task skips %v", skip)
+	}
 }
 
 func TestErrors(t *testing.T) {
@@ -198,6 +220,9 @@ func TestErrors(t *testing.T) {
 	}
 	if _, err := tt.State(Task{mapKind, 1}); err == nil {
 		t.Error("State of an unknown task succeeded")
+	}
+	if _, err := tt.Skip(Task{mapKind, 1}); err == nil {
+		t.Error("Skip of an unknown task succeeded")
 	}
 	a := mustAssign(t, tt, m0, "w1")
 	if _, err := tt.Assign(m0, "w2"); err == nil {

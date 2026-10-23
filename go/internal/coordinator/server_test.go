@@ -167,6 +167,27 @@ func TestReportTask(t *testing.T) {
 	assertCode(t, err, codes.NotFound)
 }
 
+// After SkipAfter attempts crash on a record, the next attempt is told to
+// skip it (§4.6).
+func TestSkipRecords(t *testing.T) {
+	s, w, _ := newJob(t, 1)
+	for range SkipAfter {
+		resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+		if skip := resp.GetMapTask().GetSkipRecords(); len(skip) != 0 {
+			t.Fatalf("skipping %v before %d crashes", skip, SkipAfter)
+		}
+		if _, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: resp.GetMapTask().GetAttempt(), Outcome: &pb.ReportTaskRequest_Failure{
+			Failure: &pb.TaskFailure{FailedRecord: proto.Uint64(0)},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	if skip := resp.GetMapTask().GetSkipRecords(); !slices.Equal(skip, []uint64{0}) {
+		t.Fatalf("map task %v; want it to skip record 0", resp.GetMapTask())
+	}
+}
+
 // memLog keeps the records appended to it, and fails once err is set.
 type memLog struct {
 	records []*pb.LogRecord
