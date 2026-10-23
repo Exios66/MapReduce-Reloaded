@@ -90,6 +90,9 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	if *f.r > math.MaxUint32 {
 		return job{}, fmt.Errorf("-r %d is too large", *f.r)
 	}
+	if *f.m > math.MaxInt {
+		return job{}, fmt.Errorf("-m %d is too large", *f.m)
+	}
 	j := job{program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r)}
 	if *f.m > 0 {
 		var err error

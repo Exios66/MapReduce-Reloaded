@@ -90,7 +90,9 @@ func TestValidate(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	api.Register("test.wordcount", wordCount)
+	if _, ok := api.Lookup("test.wordcount"); !ok { // registered already under go test -count=N
+		api.Register("test.wordcount", wordCount)
+	}
 	if _, ok := api.Lookup("test.wordcount"); !ok {
 		t.Fatal("registered program not found")
 	}
