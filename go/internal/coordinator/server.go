@@ -29,6 +29,16 @@ type Config struct {
 	// RetryAfter is how long a worker with nothing to do waits before
 	// asking again.
 	RetryAfter time.Duration
+	// Log, if set, is the write-ahead log: every change to a job or its
+	// tasks is appended to it before any reply depends on it (§3.3).
+	Log Log
+}
+
+// Log is where a coordinator records its decisions. After a failed Append
+// it must keep failing, so that a coordinator whose log has fallen behind
+// its memory accepts no more changes; *wal.Log does.
+type Log interface {
+	Append(record []byte) error
 }
 
 // Server implements CoordinatorService. It runs one job at a time; a job
@@ -83,6 +93,9 @@ func (s *Server) Expire(now time.Time) []string {
 	for _, w := range dead {
 		var reset []Task
 		if s.active != nil {
+			if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_WorkerLost{WorkerLost: &pb.WorkerLost{WorkerId: w}}}); err != nil {
+				slog.Error("logging a lost worker", "worker", w, "err", err)
+			}
 			reset = s.active.tasks.ResetWorker(w)
 		}
 		slog.Warn("worker lost", "worker", w, "tasks reset", len(reset))
@@ -164,15 +177,24 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	if s.active != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "job %s is still running", s.active.id)
 	}
+	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
+	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}); err != nil {
+		return nil, err
+	}
+	s.submit(rec)
+	return &pb.SubmitJobResponse{JobId: rec.GetJobId()}, nil
+}
+
+// submit makes the job rec describes the active one.
+func (s *Server) submit(rec *pb.JobSubmitted) {
 	j := &job{
-		id:     fmt.Sprintf("job-%d", len(s.jobs)+1),
-		spec:   m,
-		splits: splits,
-		tasks:  NewTaskTable(len(splits), int(m.GetNumReduceTasks())),
+		id:     rec.GetJobId(),
+		spec:   rec.GetJob(),
+		splits: rec.GetSplits(),
+		tasks:  NewTaskTable(len(rec.GetSplits()), int(rec.GetJob().GetNumReduceTasks())),
 		counts: map[Task]map[string]int64{},
 	}
 	s.jobs[j.id], s.active = j, j
-	return &pb.SubmitJobResponse{JobId: j.id}, nil
 }
 
 // RequestTask hands an idle worker its next task: map tasks first, reduce
@@ -189,7 +211,7 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	}
 	if s.active != nil {
 		if t, ok := s.active.tasks.Next(); ok {
-			return s.active.assign(t, worker)
+			return s.assign(t, worker)
 		}
 	}
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Wait{
@@ -197,12 +219,18 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	}}, nil
 }
 
-func (j *job) assign(t Task, worker string) (*pb.RequestTaskResponse, error) {
+// assign starts an attempt at t, a task of the active job, on worker.
+func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) {
+	j := s.active
 	attempt, err := j.tasks.Assign(t, worker)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	id := &pb.TaskAttemptId{Task: &pb.TaskId{JobId: j.id, Kind: t.Kind, Index: t.Index}, Attempt: attempt}
+	rec := &pb.TaskAssigned{Attempt: id, WorkerId: worker}
+	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}); err != nil {
+		return nil, err
+	}
 	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_MapTask{
 			MapTask: &pb.MapTask{Attempt: id, Job: j.spec, Split: j.splits[t.Index]},
@@ -219,23 +247,28 @@ func (j *job) assign(t Task, worker string) (*pb.RequestTaskResponse, error) {
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id := req.GetAttempt()
-	j, ok := s.jobs[id.GetTask().GetJobId()]
+	j, ok := s.jobs[req.GetAttempt().GetTask().GetJobId()]
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "unknown job %q", id.GetTask().GetJobId())
+		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetAttempt().GetTask().GetJobId())
 	}
-	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
-
-	if f := req.GetFailure(); f != nil {
-		if err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f.GetLostOutput()); err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		return &pb.ReportTaskResponse{}, nil
-	}
-	accepted, err := j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
+	accepted, err := s.report(j, req)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskReported{TaskReported: req}}); err != nil {
+		return nil, err
+	}
+	return &pb.ReportTaskResponse{Accepted: accepted}, nil
+}
+
+// report applies req to j, and says whether it completed its task.
+func (s *Server) report(j *job, req *pb.ReportTaskRequest) (accepted bool, err error) {
+	id := req.GetAttempt()
+	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
+	if f := req.GetFailure(); f != nil {
+		return false, j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f.GetLostOutput())
+	}
+	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
 	if accepted {
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
@@ -244,7 +277,7 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 			s.active = nil
 		}
 	}
-	return &pb.ReportTaskResponse{Accepted: accepted}, nil
+	return accepted, err
 }
 
 func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {
@@ -282,6 +315,22 @@ func (j *job) total() map[string]int64 {
 		}
 	}
 	return sum
+}
+
+// record appends rec to the log, if there is one. It runs under the lock,
+// so no reply reveals a change before the log holds it (ADR 0007).
+func (s *Server) record(rec *pb.LogRecord) error {
+	if s.cfg.Log == nil {
+		return nil
+	}
+	b, err := proto.Marshal(rec)
+	if err == nil {
+		err = s.cfg.Log.Append(b)
+	}
+	if err != nil {
+		return status.Errorf(codes.Unavailable, "coordinator log: %v", err)
+	}
+	return nil
 }
 
 // cleanup removes what dead or failed reduce attempts left in the job's
