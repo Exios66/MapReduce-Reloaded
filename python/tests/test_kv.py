@@ -76,6 +76,7 @@ OK = header()
 MALFORMED = {
     "empty input": (b"", "truncated"),
     "short header": (b"MRKV", "truncated"),
+    "short non-MRKV": (b"PK\x03\x04\x14", "bad_magic"),
     "version 2": (header(version=2) + footer(0, 0), "unsupported_version"),
     "zstd codec": (header(codec=1) + footer(0, 0), "unsupported_codec"),
     "reserved set": (header(reserved=b"\x00\x01") + footer(0, 0), "bad_header"),

@@ -158,6 +158,7 @@ func TestMalformed(t *testing.T) {
 	}{
 		{"empty input", nil, ErrTruncated},
 		{"short header", []byte("MRKV"), ErrTruncated},
+		{"short non-MRKV", []byte("PK\x03\x04\x14"), ErrBadMagic},
 		{"version 2", file(header(2, 0, 0, 0), footer(0, 0)), ErrUnsupportedVersion},
 		{"zstd codec", file(header(1, 1, 0, 0), footer(0, 0)), ErrUnsupportedCodec},
 		{"reserved set", file(header(1, 0, 0, 1), footer(0, 0)), ErrBadHeader},

@@ -126,9 +126,11 @@ def read(f: BinaryIO) -> Iterator[tuple[bytes, bytes]]:
     the file is only known to be valid once iteration ends without error.
     Raises FormatError on any spec violation.
     """
-    header = _read_exact(f, 8)
-    if header[:4] != _MAGIC:
+    # The magic is checked first, so a short file that is not MRKV at all
+    # reports bad_magic rather than truncated.
+    if _read_exact(f, 4) != _MAGIC:
         raise FormatError("bad_magic")
+    header = _MAGIC + _read_exact(f, 4)
     if header[4] != _VERSION:
         raise FormatError("unsupported_version", str(header[4]))
     if header[5] != _CODEC_NONE:

@@ -75,13 +75,19 @@ func (r *Reader) Err() error {
 }
 
 func (r *Reader) readHeader() error {
+	// The magic is checked first, so a short file that is not MRKV at all
+	// reports bad_magic rather than truncated.
 	var h [headerSize]byte
-	if err := r.readFull(h[:]); err != nil {
+	if err := r.readFull(h[:4]); err != nil {
+		return err
+	}
+	if string(h[:4]) != magic {
+		return ErrBadMagic
+	}
+	if err := r.readFull(h[4:]); err != nil {
 		return err
 	}
 	switch {
-	case string(h[:4]) != magic:
-		return ErrBadMagic
 	case h[4] != version:
 		return fmt.Errorf("%w: %d", ErrUnsupportedVersion, h[4])
 	case h[5] != codecNone:

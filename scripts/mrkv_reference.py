@@ -121,10 +121,10 @@ def decode(data):
     or bytes after the footer. Its kind attribute identifies the error using
     the spec's error kinds, including 'bad_block' from varint decoding.
     """
+    if data[:4] != MAGIC[: len(data)]:
+        raise MRKVError("bad_magic")
     if len(data) < 8:
         raise MRKVError("truncated", "shorter than header")
-    if data[:4] != MAGIC:
-        raise MRKVError("bad_magic")
     if data[4] != VERSION:
         raise MRKVError("unsupported_version", str(data[4]))
     if data[5] != CODEC_NONE:
