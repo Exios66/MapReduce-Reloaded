@@ -27,7 +27,9 @@ worker B: reduce 1 ──FetchPartition(job, map 0, partition 1)──► A
 
 ## When a fetch breaks
 
-On a transient error (`Unavailable`, `ResourceExhausted`, `Aborted`) the
+An attempt that receives nothing for 30 s (`IdleTimeout`), as from a frozen
+worker or a dead connection, is abandoned with `DeadlineExceeded`. On that
+or another transient error (`Unavailable`, `ResourceExhausted`, `Aborted`) the
 reader reconnects and asks for the file from the byte it got to, waiting
 100 ms, 200 ms, 400 ms, 800 ms. Any chunk that arrives resets that budget;
 once four retries in a row make no progress, the next failure ends the

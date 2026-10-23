@@ -23,6 +23,10 @@ const (
 	baseDelay  = 100 * time.Millisecond
 )
 
+// IdleTimeout ends a fetch attempt that receives nothing for this long, as
+// from a frozen worker or a dead connection. It counts as a transient error.
+const IdleTimeout = 30 * time.Second
+
 // Reader reads one map output file from the worker that holds it. It is a
 // single contiguous stream from the start of the file, however many times
 // it reconnects, so the file's checksums still cover everything read.
@@ -34,12 +38,13 @@ type Reader struct {
 	cancel   context.CancelFunc // ends stream
 	buf      []byte
 	failures int
+	idle     time.Duration
 }
 
 // NewReader returns a reader for the file that req names, starting at
 // req.Offset. Closing it ends any fetch in progress.
 func NewReader(ctx context.Context, client pb.ShuffleServiceClient, req *pb.FetchPartitionRequest) *Reader {
-	return &Reader{ctx: ctx, client: client, req: proto.CloneOf(req)}
+	return &Reader{ctx: ctx, client: client, req: proto.CloneOf(req), idle: IdleTimeout}
 }
 
 func (r *Reader) Read(p []byte) (int, error) {
@@ -64,7 +69,11 @@ func (r *Reader) fill() error {
 		}
 		r.stream, r.cancel = stream, cancel
 	}
+	timer := time.AfterFunc(r.idle, r.cancel)
 	resp, err := r.stream.Recv()
+	if !timer.Stop() {
+		err = status.Errorf(codes.DeadlineExceeded, "shuffle: no data for %v", r.idle)
+	}
 	if errors.Is(err, io.EOF) {
 		return io.EOF
 	}
@@ -96,7 +105,7 @@ func (r *Reader) retry(err error) error {
 
 func transient(err error) bool {
 	switch status.Code(err) {
-	case codes.Unavailable, codes.ResourceExhausted, codes.Aborted:
+	case codes.Unavailable, codes.ResourceExhausted, codes.Aborted, codes.DeadlineExceeded:
 		return true
 	}
 	return false
