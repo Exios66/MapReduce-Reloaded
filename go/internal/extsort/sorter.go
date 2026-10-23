@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -38,20 +39,29 @@ type Config struct {
 	// Budget is the approximate memory, in bytes, for buffered records.
 	// When it is exceeded, the buffer is sorted and spilled to a run file.
 	Budget int
+	// Combine, if set, is applied to each sorted buffer as it is spilled,
+	// and its output is written instead (§4.3). With Combine set, Sorted
+	// always spills, so every record passes through it.
+	Combine CombineFunc
 }
+
+// CombineFunc reads sorted records and emits a combined replacement. It must
+// emit keys in sorted order.
+type CombineFunc func(in Records, emit func(key, value []byte) error) error
 
 // A Sorter accepts records in any order and returns them sorted by key. It
 // keeps at most about Budget bytes in memory, spilling sorted runs to disk
 // and merging them at the end. Close removes the run files.
 type Sorter struct {
-	cfg    Config
-	arena  []byte // keys and values of buffered records, back to back
-	recs   []span // buffered records, as offsets into arena
-	used   int    // approximate memory used by the buffer
-	dir    string // run directory, created on the first spill
-	runs   []string
-	files  []*os.File // runs opened by Sorted
-	sorted bool
+	cfg     Config
+	arena   []byte // keys and values of buffered records, back to back
+	recs    []span // buffered records, as offsets into arena
+	used    int    // approximate memory used by the buffer
+	dir     string // run directory, created on the first spill
+	runs    []string
+	spilled int64      // bytes written to runs
+	files   []*os.File // runs opened by Sorted
+	sorted  bool
 }
 
 type span struct{ off, klen, vlen int }
@@ -81,13 +91,16 @@ func (s *Sorter) Add(key, value []byte) error {
 // Runs returns the number of runs spilled to disk so far.
 func (s *Sorter) Runs() int { return len(s.runs) }
 
+// SpilledBytes returns the total size of the runs spilled so far.
+func (s *Sorter) SpilledBytes() int64 { return s.spilled }
+
 // Sorted returns all records in key order. It may be called once.
 func (s *Sorter) Sorted() (Records, error) {
 	if s.sorted {
 		return nil, errors.New("extsort: Sorted called twice")
 	}
 	s.sorted = true
-	if len(s.runs) == 0 {
+	if len(s.runs) == 0 && s.cfg.Combine == nil {
 		s.sort()
 		return &memRecords{s: s, i: -1}, nil
 	}
@@ -145,16 +158,25 @@ func (s *Sorter) spill() error {
 	if err != nil {
 		return err
 	}
-	w := kv.NewWriter(f)
-	for _, r := range s.recs {
-		if err := w.Write(s.key(r), s.value(r)); err != nil {
-			return errors.Join(err, f.Close())
+	cw := &countingWriter{w: f}
+	w := kv.NewWriter(cw)
+	if s.cfg.Combine != nil {
+		err = s.cfg.Combine(&memRecords{s: s, i: -1}, w.Write)
+	} else {
+		for _, r := range s.recs {
+			if err = w.Write(s.key(r), s.value(r)); err != nil {
+				break
+			}
 		}
 	}
-	if err := errors.Join(w.Close(), f.Close()); err != nil {
+	if err == nil {
+		err = w.Close()
+	}
+	if err := errors.Join(err, f.Close()); err != nil {
 		return err
 	}
 	s.runs = append(s.runs, path)
+	s.spilled += cw.n
 	s.arena, s.recs, s.used = s.arena[:0], s.recs[:0], 0
 	return nil
 }
@@ -169,3 +191,14 @@ func (m *memRecords) Next() bool    { m.i++; return m.i < len(m.s.recs) }
 func (m *memRecords) Key() []byte   { return m.s.key(m.s.recs[m.i]) }
 func (m *memRecords) Value() []byte { return m.s.value(m.s.recs[m.i]) }
 func (m *memRecords) Err() error    { return nil }
+
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
+}
