@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -42,6 +43,7 @@ type Worker struct {
 	shuffle     shuffle.Clients
 	id          string
 	logger      *slog.Logger
+	stats       stats
 }
 
 // New returns a worker that writes map output under workDir. If
@@ -86,6 +88,7 @@ func (w *Worker) session(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
 	}
+	w.stats.registrations.Add(1)
 	w.id = reg.GetWorkerId()
 	w.logger = slog.Default().With("worker", w.id)
 	beating, stop := context.WithCancel(ctx)
@@ -103,10 +106,14 @@ func (w *Worker) session(ctx context.Context) error {
 		var report *pb.ReportTaskRequest
 		switch a := resp.GetAssignment().(type) {
 		case *pb.RequestTaskResponse_MapTask:
+			done := w.stats.start(mapKind)
 			outputs, counts, err := w.runMap(a.MapTask)
+			done(err)
 			report = w.report(a.MapTask.GetAttempt(), outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
+			done := w.stats.start(reduceKind)
 			counts, err := w.runReduce(ctx, a.ReduceTask)
+			done(err)
 			report = w.report(a.ReduceTask.GetAttempt(), nil, counts, err)
 		case *pb.RequestTaskResponse_Shutdown:
 			return nil
@@ -182,6 +189,7 @@ func (w *Worker) runMap(m *pb.MapTask) ([]*pb.PartitionLocation, map[string]int6
 			}
 		}
 		locations[r] = loc
+		w.stats.mapOutputBytes.Add(uint64(size))
 	}
 	return locations, counts, nil
 }
@@ -219,7 +227,7 @@ func (w *Worker) open(ctx context.Context, job string, src *pb.PartitionLocation
 		r := shuffle.NewReader(ctx, client, &pb.FetchPartitionRequest{
 			JobId: job, MapIndex: src.GetMapIndex(), Partition: src.GetPartition(),
 		})
-		return fetch{r, src}, nil
+		return fetch{r, src, &w.stats.fetchedBytes}, nil
 	}
 	path, err := wire.Path(src.GetUri())
 	if err != nil {
@@ -252,15 +260,18 @@ func (w *Worker) report(id *pb.TaskAttemptId, outputs []*pb.PartitionLocation, c
 	return req
 }
 
-// fetch reads a map output from the worker that holds it. When that worker
-// cannot serve it, the error says which output was lost.
+// fetch reads a map output from the worker that holds it, adding the bytes
+// read to fetched. When that worker cannot serve it, the error says which
+// output was lost.
 type fetch struct {
 	*shuffle.Reader
-	src *pb.PartitionLocation
+	src     *pb.PartitionLocation
+	fetched *atomic.Uint64
 }
 
 func (f fetch) Read(p []byte) (int, error) {
 	n, err := f.Reader.Read(p)
+	f.fetched.Add(uint64(n))
 	switch status.Code(err) {
 	case codes.Unavailable, codes.NotFound, codes.DeadlineExceeded:
 		err = &lostOutput{f.src, err}

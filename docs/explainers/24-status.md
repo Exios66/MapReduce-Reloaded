@@ -17,17 +17,26 @@ them to predict how long a job would take and to find slow machines.
 Both read `coordinator.Server.Status`, a copy of the coordinator's state
 taken under its lock. Nothing in `statusweb` touches the lock.
 
-In the Compose cluster both are at `127.0.0.1:18780`. `make e2e` checks that
-`/metrics` shows the job's reduce tasks completed.
+`worker -http :8081` serves the worker's own `/metrics`: task attempts
+finished by kind and result (`mr_worker_tasks_total{kind,result}`), those
+running (`mr_worker_task_running{kind}`), bytes of map output written and
+fetched, and registrations. It is off by default. They are atomic counters
+on the worker, in `worker/metrics.go`; both servers write the text format
+with `promtext`.
+
+In the Compose cluster the coordinator's are at `127.0.0.1:18780`; the
+workers' are on port 8081 inside the Compose network, not published, since
+there are several. `make e2e` checks that the coordinator's `/metrics` shows
+the job's reduce tasks completed.
 
 ## Choices
 
-- **No dependencies.** The metrics are a few gauges, and the text format
+- **No dependencies.** The metrics are a few gauges and counters, and the text format
   takes about 30 lines to write. The Prometheus client library would be
   worth adding for histograms, not for this.
-- **Gauges, not counters.** A job's counters can go down when a lost map
-  task's counts are replaced by its re-run's (#27), so they are not
-  Prometheus counters.
+- **Gauges for jobs, counters for workers.** A job's counters can go down
+  when a lost map task's counts are replaced by its re-run's (#27), so they
+  are not Prometheus counters. A worker's only go up while it runs.
 - **A refreshing page, not a script.** `<meta http-equiv="refresh">` keeps
   the page free of JavaScript and of any CDN.
 - **Lost workers since the process started.** They are kept in memory, the
@@ -35,6 +44,6 @@ In the Compose cluster both are at `127.0.0.1:18780`. `make e2e` checks that
 
 ## Limits
 
-- Bytes and rates are not shown, since workers do not report them yet.
+- The status page shows no bytes or rates: workers count them in their own
+  `/metrics`, but do not report them to the coordinator.
 - Per-attempt logs are not shown either.
-- Workers serve no metrics of their own.
