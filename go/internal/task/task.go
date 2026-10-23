@@ -41,14 +41,15 @@ func MapOutput(dir string, m, r int) string {
 
 // Map runs a map task attempt: it maps one split and writes one sorted,
 // combined MRKV file per reduce task to dir, named by MapOutput. It skips the
-// split's records numbered in skip (§4.6). It returns the size of each file
-// and the attempt's counters.
-func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip []uint64) (sizes []int64, counts map[string]int64, err error) {
+// split's records numbered in skip (§4.6). User code logs to log, which
+// the caller tags with the task. It returns the size of each file and the
+// attempt's counters.
+func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip []uint64, log *slog.Logger) (sizes []int64, counts map[string]int64, err error) {
 	in, err := formats.Input(spec.InputFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx := newContext(spec, id, skip)
+	ctx := newContext(spec, id, skip, log)
 	ctx.input = split.Path
 	defer ctx.commitSide(&err)
 	defer recovered(&err)
@@ -112,8 +113,9 @@ const TempDir = "_temporary"
 // Reduce runs a reduce task attempt over partition id.Index of every map
 // task's output, given in map task order, and writes
 // <spec.Output>/part-r-<id.Index> through a file in TempDir. It skips the key
-// groups numbered in skip (§4.6). It returns the attempt's counters.
-func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64) (counts map[string]int64, err error) {
+// groups numbered in skip (§4.6). User code logs to log, which the caller
+// tags with the task. It returns the attempt's counters.
+func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64, log *slog.Logger) (counts map[string]int64, err error) {
 	out, err := formats.Output(spec.OutputFormat)
 	if err != nil {
 		return nil, err
@@ -127,7 +129,7 @@ func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []u
 	}
 	defer commit(&err, w, tmp, path)
 
-	ctx := newContext(spec, id, skip)
+	ctx := newContext(spec, id, skip, log)
 	defer ctx.commitSide(&err) // before the part file, which marks the task done
 	defer recovered(&err)
 	emit := emitter(func(key, value []byte) error {
@@ -252,14 +254,14 @@ type taskContext struct {
 	skip   map[uint64]bool
 }
 
-func newContext(spec api.JobSpec, id api.TaskID, skip []uint64) *taskContext {
+func newContext(spec api.JobSpec, id api.TaskID, skip []uint64, log *slog.Logger) *taskContext {
 	c := &taskContext{
 		task:   id,
 		params: spec.Params,
 		output: spec.Output,
 		side:   map[string]*sideFile{},
 		counts: map[string]int64{},
-		logger: slog.Default().With("task", fmt.Sprintf("%v-%d.%d", id.Kind, id.Index, id.Attempt)),
+		logger: log,
 		skip:   map[uint64]bool{},
 	}
 	for _, n := range skip {

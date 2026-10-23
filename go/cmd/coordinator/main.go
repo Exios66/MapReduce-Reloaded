@@ -1,6 +1,6 @@
 // Command coordinator serves the coordinator ("master", §3.2) of a cluster.
 //
-//	coordinator [-addr :7070] [-http :8080] [-data-dir dir]
+//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-log-format text|json]
 //
 // It runs until interrupted, then tells workers to exit. With -data-dir it
 // logs every decision there, and a restarted coordinator resumes its job
@@ -27,6 +27,7 @@ import (
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
+	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
 	"github.com/exios66/mapreduce-reloaded/go/internal/statusweb"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wal"
 )
@@ -36,8 +37,13 @@ func main() {
 	httpAddr := flag.String("http", ":8080", "address of the status page and /metrics (empty: none)")
 	dataDir := flag.String("data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
 	backups := flag.Bool("backups", true, "run backup attempts of the last tasks of each phase")
+	logFormat := flag.String("log-format", "text", "log format: text or json")
 	flag.Parse()
-	if err := run(*addr, *httpAddr, *dataDir, *backups); err != nil {
+	err := logs.Setup(*logFormat)
+	if err == nil {
+		err = run(*addr, *httpAddr, *dataDir, *backups)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "coordinator:", err)
 		os.Exit(1)
 	}

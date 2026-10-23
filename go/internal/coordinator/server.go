@@ -119,7 +119,7 @@ func (s *Server) Expire(now time.Time) []string {
 		}
 		s.lost = append(s.lost, LostWorker{ID: w, At: now, Tasks: reset})
 		s.lost = s.lost[max(0, len(s.lost)-maxLost):]
-		slog.Warn("worker lost", "worker", w, "tasks reset", len(reset))
+		slog.Warn("worker lost", "worker", w, "tasks_reset", len(reset))
 	}
 	return dead
 }
