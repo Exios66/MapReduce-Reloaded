@@ -43,7 +43,7 @@ func NewReader(ctx context.Context, client pb.ShuffleServiceClient, req *pb.Fetc
 }
 
 func (r *Reader) Read(p []byte) (int, error) {
-	for len(r.buf) == 0 {
+	for len(r.buf) == 0 && len(p) > 0 {
 		if err := r.fill(); err != nil {
 			return 0, err
 		}

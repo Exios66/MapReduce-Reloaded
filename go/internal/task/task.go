@@ -188,7 +188,8 @@ func attemptPath(path string, attempt uint32) string {
 func commit(err *error, c io.Closer, tmp, path string) {
 	if *err = errors.Join(*err, c.Close()); *err == nil {
 		*err = os.Rename(tmp, path)
-	} else {
+	}
+	if *err != nil {
 		_ = os.Remove(tmp) // best effort: the attempt has already failed
 	}
 }
