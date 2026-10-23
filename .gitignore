@@ -13,6 +13,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+.hypothesis/
 
 # Job data and benchmark output
 /data/

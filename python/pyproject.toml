@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5", "grpcio-tools==1.84.1"]
+dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5", "grpcio-tools==1.84.1"]
 
 [tool.setuptools.packages.find]
 include = ["mapreduce_reloaded*"]

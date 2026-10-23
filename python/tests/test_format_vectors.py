@@ -1,8 +1,8 @@
 """Checks the MRKV golden vectors in testdata/format/ against the spec.
 
 Uses the spec-literal reference codec in scripts/mrkv_reference.py. The
-production reader and writer (issue #8) will be tested against the same
-vectors.
+production reader and writer are tested against the same vectors in
+test_kv.py.
 """
 
 import base64
