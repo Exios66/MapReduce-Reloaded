@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -21,12 +22,13 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 )
 
-// flaky breaks its first `fails` fetches after one chunk, or fails every
-// fetch at once while down, and counts every fetch.
+// flaky breaks its first `fails` fetches after one chunk, stalls the next
+// `stalls` before any, or fails every fetch at once while down, and
+// counts every fetch.
 type flaky struct {
 	*Server
-	fails, calls atomic.Int32
-	down         atomic.Bool
+	fails, stalls, calls atomic.Int32
+	down                 atomic.Bool
 }
 
 func (f *flaky) FetchPartition(req *pb.FetchPartitionRequest, stream grpc.ServerStreamingServer[pb.FetchPartitionResponse]) error {
@@ -36,18 +38,24 @@ func (f *flaky) FetchPartition(req *pb.FetchPartitionRequest, stream grpc.Server
 	}
 	if f.fails.Add(-1) >= 0 {
 		stream = &cut{ServerStreamingServer: stream}
+	} else if f.stalls.Add(-1) >= 0 {
+		stream = &cut{ServerStreamingServer: stream, stall: true}
 	}
 	return f.Server.FetchPartition(req, stream)
 }
 
-// cut is a stream that breaks after its first message.
+// cut is a stream that breaks after its first message, or that stalls
+// until the client gives up.
 type cut struct {
 	grpc.ServerStreamingServer[pb.FetchPartitionResponse]
-	sent bool
+	sent, stall bool
 }
 
 func (c *cut) Send(m *pb.FetchPartitionResponse) error {
-	if c.sent {
+	if c.stall {
+		<-c.Context().Done()
+	}
+	if c.sent || c.stall {
 		return status.Error(codes.Unavailable, "connection lost")
 	}
 	c.sent = true
@@ -85,6 +93,7 @@ func serve(t *testing.T, data []byte, fails int32) (*flaky, pb.ShuffleServiceCli
 
 func fetch(client pb.ShuffleServiceClient, req *pb.FetchPartitionRequest) ([]byte, error) {
 	r := NewReader(context.Background(), client, req)
+	r.idle = 50 * time.Millisecond
 	defer func() { _ = r.Close() }()
 	return io.ReadAll(r)
 }
@@ -134,6 +143,26 @@ func TestFetchGivesUp(t *testing.T) {
 	}
 	if _, err := fetch(client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("got %v, want Unavailable", err)
+	}
+	if n := srv.calls.Load(); n != MaxRetries+1 {
+		t.Fatalf("%d fetches, want %d", n, MaxRetries+1)
+	}
+}
+
+// A fetch that stalls is abandoned after the idle timeout and resumed; one
+// that keeps stalling gives up with DeadlineExceeded.
+func TestFetchStalls(t *testing.T) {
+	data := randomBytes(4 * ChunkSize)
+	srv, client := serve(t, data, 0)
+	srv.stalls.Store(2)
+	got, err := fetch(client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1})
+	if err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("got %d bytes (%v), want %d", len(got), err, len(data))
+	}
+	srv.stalls.Store(MaxRetries + 1)
+	srv.calls.Store(0)
+	if _, err := fetch(client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1}); status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("got %v, want DeadlineExceeded", err)
 	}
 	if n := srv.calls.Load(); n != MaxRetries+1 {
 		t.Fatalf("%d fetches, want %d", n, MaxRetries+1)

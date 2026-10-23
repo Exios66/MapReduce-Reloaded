@@ -206,9 +206,10 @@ func (w *Worker) open(ctx context.Context, job string, src *pb.PartitionLocation
 		if err != nil {
 			return nil, err
 		}
-		return shuffle.NewReader(ctx, client, &pb.FetchPartitionRequest{
+		r := shuffle.NewReader(ctx, client, &pb.FetchPartitionRequest{
 			JobId: job, MapIndex: src.GetMapIndex(), Partition: src.GetPartition(),
-		}), nil
+		})
+		return fetch{r, src}, nil
 	}
 	path, err := wire.Path(src.GetUri())
 	if err != nil {
@@ -223,7 +224,12 @@ func (w *Worker) report(id *pb.TaskAttemptId, outputs []*pb.PartitionLocation, c
 	req := &pb.ReportTaskRequest{WorkerId: w.id, Attempt: id}
 	if err != nil {
 		w.logger.Warn("task failed", "task", id.GetTask(), "attempt", id.GetAttempt(), "err", err)
-		req.Outcome = &pb.ReportTaskRequest_Failure{Failure: &pb.TaskFailure{Message: err.Error()}}
+		failure := &pb.TaskFailure{Message: err.Error()}
+		var lost *lostOutput
+		if errors.As(err, &lost) {
+			failure.LostOutput = lost.src
+		}
+		req.Outcome = &pb.ReportTaskRequest_Failure{Failure: failure}
 	} else {
 		req.Outcome = &pb.ReportTaskRequest_Success{Success: &pb.TaskSuccess{
 			Outputs: outputs, Counters: &pb.Counters{Values: counts},
@@ -231,3 +237,32 @@ func (w *Worker) report(id *pb.TaskAttemptId, outputs []*pb.PartitionLocation, c
 	}
 	return req
 }
+
+// fetch reads a map output from the worker that holds it. When that worker
+// cannot serve it, the error says which output was lost.
+type fetch struct {
+	*shuffle.Reader
+	src *pb.PartitionLocation
+}
+
+func (f fetch) Read(p []byte) (int, error) {
+	n, err := f.Reader.Read(p)
+	switch status.Code(err) {
+	case codes.Unavailable, codes.NotFound, codes.DeadlineExceeded:
+		err = &lostOutput{f.src, err}
+	}
+	return n, err
+}
+
+// lostOutput is the error of a fetch from a worker that is gone or no
+// longer has the output (§3.3).
+type lostOutput struct {
+	src *pb.PartitionLocation
+	err error
+}
+
+func (e *lostOutput) Error() string {
+	return fmt.Sprintf("map %d output at %s: %v", e.src.GetMapIndex(), e.src.GetWorkerAddress(), e.err)
+}
+
+func (e *lostOutput) Unwrap() error { return e.err }

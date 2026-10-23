@@ -27,7 +27,9 @@ worker B: reduce 1 ──FetchPartition(job, map 0, partition 1)──► A
 
 ## When a fetch breaks
 
-On a transient error (`Unavailable`, `ResourceExhausted`, `Aborted`) the
+An attempt that receives nothing for 30 s (`IdleTimeout`), as from a frozen
+worker or a dead connection, is abandoned with `DeadlineExceeded`. On that
+or another transient error (`Unavailable`, `ResourceExhausted`, `Aborted`) the
 reader reconnects and asks for the file from the byte it got to, waiting
 100 ms, 200 ms, 400 ms, 800 ms. Any chunk that arrives resets that budget;
 once four retries in a row make no progress, the next failure ends the
@@ -36,8 +38,13 @@ contiguous stream from byte 0, so the file's block checksums and footer
 still check everything the reducer read. Errors that retrying cannot fix,
 such as `NotFound`, end the fetch at once.
 
-The reduce task then fails, and the coordinator runs it again. Telling a
-dead worker from a slow one, and re-running its map tasks, is #23.
+The reduce task then fails, and the coordinator runs it again. If the fetch
+ended with `Unavailable`, `NotFound` or `DeadlineExceeded`, the report names
+the map output as lost (`TaskFailure.lost_output`), and the coordinator runs
+that map task again, as the paper's reducers do (§3.3). It does so only if
+the output is still at the address reported, so a stale report cannot undo
+a map task that already ran again elsewhere. A dead worker is also caught by
+its missing heartbeats; see [16-worker-failure.md](16-worker-failure.md).
 
 ## Cleaning up
 

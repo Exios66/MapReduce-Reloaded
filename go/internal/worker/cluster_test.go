@@ -36,6 +36,10 @@ var inputs = []string{filepath.Join(corpus, "*.txt")}
 // pass under go test -count=N.
 var mapStuck, reduceStuck = make(chan struct{}, 1), make(chan struct{}, 1)
 
+// The first attempt of reduce task 0 of test.pause-reduce also sends on
+// reduceStuck, then fails once resume is sent on.
+var resume = make(chan struct{})
+
 func init() {
 	first := func(ctx api.Context, kind api.TaskKind) bool {
 		id := ctx.Task()
@@ -70,6 +74,17 @@ func init() {
 		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)
 	})
 	api.Register("test.hang-reduce", hangReduce)
+
+	pauseReduce := wordcount.Program
+	pauseReduce.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
+		if first(ctx, api.ReduceTask) {
+			reduceStuck <- struct{}{}
+			<-resume
+			return errors.New("paused")
+		}
+		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)
+	})
+	api.Register("test.pause-reduce", pauseReduce)
 }
 
 // listen serves the services that register adds on a free localhost port.
@@ -260,6 +275,24 @@ func TestClusterSurvivesWorkerLoss(t *testing.T) {
 		assertGolden(t, c.output())
 		assertMapOutputRecords(t, status)
 	})
+}
+
+// A reduce that cannot fetch a map output reports it, and the map task runs
+// again, though the worker that held the output is still alive (§3.3).
+func TestClusterReRunsLostMapOutput(t *testing.T) {
+	c := newCluster(t)
+	job := c.submit("test.pause-reduce")
+	c.addWorker()
+	<-reduceStuck // every map task is done
+	for _, f := range c.mapFiles(job) {
+		if err := os.Remove(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resume <- struct{}{}
+	status := c.wait(job)
+	assertGolden(t, c.output())
+	assertMapOutputRecords(t, status)
 }
 
 // assertMapOutputRecords checks that each map task's records counted once,

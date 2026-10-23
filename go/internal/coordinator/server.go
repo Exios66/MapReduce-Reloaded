@@ -226,8 +226,8 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	}
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 
-	if req.GetFailure() != nil {
-		if err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId()); err != nil {
+	if f := req.GetFailure(); f != nil {
+		if err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f.GetLostOutput()); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 		return &pb.ReportTaskResponse{}, nil

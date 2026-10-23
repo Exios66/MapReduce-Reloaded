@@ -755,7 +755,10 @@ type TaskFailure struct {
 	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 	// Sequence number of the record being processed when the user's code
 	// crashed, if known (§4.6).
-	FailedRecord  *uint64 `protobuf:"varint,2,opt,name=failed_record,json=failedRecord,proto3,oneof" json:"failed_record,omitempty"`
+	FailedRecord *uint64 `protobuf:"varint,2,opt,name=failed_record,json=failedRecord,proto3,oneof" json:"failed_record,omitempty"`
+	// The map output a reduce task could not fetch, if that is why it
+	// failed. The coordinator runs that map task again (§3.3).
+	LostOutput    *PartitionLocation `protobuf:"bytes,3,opt,name=lost_output,json=lostOutput,proto3" json:"lost_output,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -802,6 +805,13 @@ func (x *TaskFailure) GetFailedRecord() uint64 {
 		return *x.FailedRecord
 	}
 	return 0
+}
+
+func (x *TaskFailure) GetLostOutput() *PartitionLocation {
+	if x != nil {
+		return x.LostOutput
+	}
+	return nil
 }
 
 type ReportTaskResponse struct {
@@ -1300,10 +1310,12 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\aoutcome\"|\n" +
 	"\vTaskSuccess\x129\n" +
 	"\aoutputs\x18\x01 \x03(\v2\x1f.mapreduce.v1.PartitionLocationR\aoutputs\x122\n" +
-	"\bcounters\x18\x02 \x01(\v2\x16.mapreduce.v1.CountersR\bcounters\"c\n" +
+	"\bcounters\x18\x02 \x01(\v2\x16.mapreduce.v1.CountersR\bcounters\"\xa5\x01\n" +
 	"\vTaskFailure\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12(\n" +
-	"\rfailed_record\x18\x02 \x01(\x04H\x00R\ffailedRecord\x88\x01\x01B\x10\n" +
+	"\rfailed_record\x18\x02 \x01(\x04H\x00R\ffailedRecord\x88\x01\x01\x12@\n" +
+	"\vlost_output\x18\x03 \x01(\v2\x1f.mapreduce.v1.PartitionLocationR\n" +
+	"lostOutputB\x10\n" +
 	"\x0e_failed_record\"0\n" +
 	"\x12ReportTaskResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\"e\n" +
@@ -1411,29 +1423,30 @@ var file_mapreduce_v1_coordinator_proto_depIdxs = []int32{
 	11, // 15: mapreduce.v1.ReportTaskRequest.failure:type_name -> mapreduce.v1.TaskFailure
 	25, // 16: mapreduce.v1.TaskSuccess.outputs:type_name -> mapreduce.v1.PartitionLocation
 	26, // 17: mapreduce.v1.TaskSuccess.counters:type_name -> mapreduce.v1.Counters
-	14, // 18: mapreduce.v1.HeartbeatRequest.running:type_name -> mapreduce.v1.TaskProgress
-	22, // 19: mapreduce.v1.TaskProgress.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	22, // 20: mapreduce.v1.HeartbeatResponse.cancel:type_name -> mapreduce.v1.TaskAttemptId
-	23, // 21: mapreduce.v1.SubmitJobRequest.job:type_name -> mapreduce.v1.JobSpec
-	0,  // 22: mapreduce.v1.GetJobStatusResponse.state:type_name -> mapreduce.v1.JobState
-	26, // 23: mapreduce.v1.GetJobStatusResponse.counters:type_name -> mapreduce.v1.Counters
-	1,  // 24: mapreduce.v1.CoordinatorService.RegisterWorker:input_type -> mapreduce.v1.RegisterWorkerRequest
-	3,  // 25: mapreduce.v1.CoordinatorService.RequestTask:input_type -> mapreduce.v1.RequestTaskRequest
-	9,  // 26: mapreduce.v1.CoordinatorService.ReportTask:input_type -> mapreduce.v1.ReportTaskRequest
-	13, // 27: mapreduce.v1.CoordinatorService.Heartbeat:input_type -> mapreduce.v1.HeartbeatRequest
-	16, // 28: mapreduce.v1.CoordinatorService.SubmitJob:input_type -> mapreduce.v1.SubmitJobRequest
-	18, // 29: mapreduce.v1.CoordinatorService.GetJobStatus:input_type -> mapreduce.v1.GetJobStatusRequest
-	2,  // 30: mapreduce.v1.CoordinatorService.RegisterWorker:output_type -> mapreduce.v1.RegisterWorkerResponse
-	4,  // 31: mapreduce.v1.CoordinatorService.RequestTask:output_type -> mapreduce.v1.RequestTaskResponse
-	12, // 32: mapreduce.v1.CoordinatorService.ReportTask:output_type -> mapreduce.v1.ReportTaskResponse
-	15, // 33: mapreduce.v1.CoordinatorService.Heartbeat:output_type -> mapreduce.v1.HeartbeatResponse
-	17, // 34: mapreduce.v1.CoordinatorService.SubmitJob:output_type -> mapreduce.v1.SubmitJobResponse
-	19, // 35: mapreduce.v1.CoordinatorService.GetJobStatus:output_type -> mapreduce.v1.GetJobStatusResponse
-	30, // [30:36] is the sub-list for method output_type
-	24, // [24:30] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	25, // 18: mapreduce.v1.TaskFailure.lost_output:type_name -> mapreduce.v1.PartitionLocation
+	14, // 19: mapreduce.v1.HeartbeatRequest.running:type_name -> mapreduce.v1.TaskProgress
+	22, // 20: mapreduce.v1.TaskProgress.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	22, // 21: mapreduce.v1.HeartbeatResponse.cancel:type_name -> mapreduce.v1.TaskAttemptId
+	23, // 22: mapreduce.v1.SubmitJobRequest.job:type_name -> mapreduce.v1.JobSpec
+	0,  // 23: mapreduce.v1.GetJobStatusResponse.state:type_name -> mapreduce.v1.JobState
+	26, // 24: mapreduce.v1.GetJobStatusResponse.counters:type_name -> mapreduce.v1.Counters
+	1,  // 25: mapreduce.v1.CoordinatorService.RegisterWorker:input_type -> mapreduce.v1.RegisterWorkerRequest
+	3,  // 26: mapreduce.v1.CoordinatorService.RequestTask:input_type -> mapreduce.v1.RequestTaskRequest
+	9,  // 27: mapreduce.v1.CoordinatorService.ReportTask:input_type -> mapreduce.v1.ReportTaskRequest
+	13, // 28: mapreduce.v1.CoordinatorService.Heartbeat:input_type -> mapreduce.v1.HeartbeatRequest
+	16, // 29: mapreduce.v1.CoordinatorService.SubmitJob:input_type -> mapreduce.v1.SubmitJobRequest
+	18, // 30: mapreduce.v1.CoordinatorService.GetJobStatus:input_type -> mapreduce.v1.GetJobStatusRequest
+	2,  // 31: mapreduce.v1.CoordinatorService.RegisterWorker:output_type -> mapreduce.v1.RegisterWorkerResponse
+	4,  // 32: mapreduce.v1.CoordinatorService.RequestTask:output_type -> mapreduce.v1.RequestTaskResponse
+	12, // 33: mapreduce.v1.CoordinatorService.ReportTask:output_type -> mapreduce.v1.ReportTaskResponse
+	15, // 34: mapreduce.v1.CoordinatorService.Heartbeat:output_type -> mapreduce.v1.HeartbeatResponse
+	17, // 35: mapreduce.v1.CoordinatorService.SubmitJob:output_type -> mapreduce.v1.SubmitJobResponse
+	19, // 36: mapreduce.v1.CoordinatorService.GetJobStatus:output_type -> mapreduce.v1.GetJobStatusResponse
+	31, // [31:37] is the sub-list for method output_type
+	25, // [25:31] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_mapreduce_v1_coordinator_proto_init() }
