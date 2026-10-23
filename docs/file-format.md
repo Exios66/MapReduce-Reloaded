@@ -96,6 +96,44 @@ sorts first. Records with equal keys keep the order in which they were
 written. Job output files have no ordering requirement from the format,
 although reduce output is sorted in practice (§4.2).
 
+## Partitioning
+
+A map task writes each record to one of R partitions, one per reduce task.
+The default partition of a key is (§3.1, §4.1):
+
+```
+partition(key, R) = fnv1a64(key) mod R        R ≥ 1
+```
+
+`fnv1a64` is the 64-bit FNV-1a hash over the key's **raw bytes**. All
+arithmetic is on unsigned 64-bit integers and wraps around (mod 2^64):
+
+```
+h = 0xcbf29ce484222325            # offset basis
+for each byte b of key:
+    h = h XOR b
+    h = h * 0x00000100000001b3    # FNV prime, wrapping
+return h
+```
+
+- The result of `mod R` is in `0..R-1`. R = 0 is an error.
+- Keys are never decoded or normalised before hashing. A UTF-8 string and the
+  same text in another encoding are different keys.
+- Reference values: `fnv1a64("") = cbf29ce484222325`,
+  `fnv1a64("a") = af63dc4c8601ec8c`, `fnv1a64("foobar") = 85944171f73967e8`.
+  More vectors are in `testdata/hash/vectors.json`.
+
+Why a fixed, specified hash: every map task, in either language, must send a
+given key to the same reducer, or that reducer would see only part of the key's
+values. The languages' built-in hashes cannot do this. Go's `hash/maphash`
+and Python's `hash()` are randomly seeded per process, on purpose, to resist
+hash-flooding attacks. FNV-1a is short enough to implement identically
+everywhere and fast for short keys. It is not cryptographic, and does not
+need to be: it only spreads keys across partitions.
+
+A job can replace this function with a custom partitioner (§4.1, paper
+feature F14).
+
 ## Errors a reader must detect
 
 | Error kind | Condition |
