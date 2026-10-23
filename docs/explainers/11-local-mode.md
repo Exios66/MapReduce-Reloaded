@@ -22,8 +22,10 @@ The paper offers it for debugging. We use it for that, and as the
 3. **Reduce** task r merges file r of every map task, in map task order,
    groups equal keys and calls the reducer. It writes `part-r-<r>`.
 
-These are the same building blocks the workers will use in Phase 2. Only
-the scheduling changes.
+Steps 2 and 3 for one task live in `go/internal/task`, which the workers
+use too (#16); only the scheduling differs. Each attempt writes its files
+under temporary names and renames them once complete, so a failed or
+duplicate attempt never leaves a partial file under a final name (§3.3).
 
 ## Why the output never depends on M
 
