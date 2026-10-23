@@ -51,8 +51,9 @@ speak the same language if both understand the ticket format.
 - re-run after its worker dies (§3.3);
 - duplicated as a backup when it runs slowly (§3.6).
 
-When two copies both report "done", the coordinator uses the attempt number
-to accept one and reject the other.
+When two copies both report "done", the coordinator accepts the report from
+the attempt that completes first and rejects the other. The attempt number
+identifies each execution. It does not decide which report wins.
 
 ### `coordinator.proto` — the coordinator's interface
 
