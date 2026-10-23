@@ -8,7 +8,7 @@ import pytest
 
 from mapreduce_reloaded import local, split
 from mapreduce_reloaded.api import JobSpec
-from mapreduce_reloaded.examples import distsort, grep, reverselinks, urlfreq
+from mapreduce_reloaded.examples import distsort, grep, invertedindex, reverselinks, urlfreq
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 INPUTS = (str(CORPUS / "*.txt"),)
@@ -43,6 +43,17 @@ def test_grep(tmp_path, m):
 def test_grep_no_pattern(tmp_path):
     with pytest.raises(ValueError, match="no pattern"):
         run(tmp_path, grep.program, 1, {})
+
+
+@pytest.mark.parametrize("m", [1, 3, 7])
+def test_invertedindex(tmp_path, m):
+    index = {}
+    for f in sorted(CORPUS.glob("*.txt")):
+        for word in f.read_bytes().split():
+            index.setdefault(word, {})[f.name.encode()] = None  # kept in file order
+    want = b"".join(w + b"\t" + b",".join(files) + b"\n" for w, files in sorted(index.items()))
+    out = run(tmp_path, invertedindex.program, m, {})
+    assert (out / "part-r-00000").read_bytes() == want
 
 
 def write(tmp_path, data):
