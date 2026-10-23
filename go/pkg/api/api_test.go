@@ -76,6 +76,17 @@ func TestValidate(t *testing.T) {
 		!strings.Contains(err.Error(), "no Mapper") || !strings.Contains(err.Error(), "R must be at least 1") {
 		t.Fatalf("empty spec: got %v, want every problem listed", err)
 	}
+	nilFuncs := valid
+	nilFuncs.Program = api.Program{
+		Mapper: api.MapFunc(nil), Reducer: api.ReduceFunc(nil),
+		Combiner: api.ReduceFunc(nil), Partitioner: api.PartitionFunc(nil),
+	}
+	err := nilFuncs.Validate()
+	for _, want := range []string{"no Mapper", "no Reducer", "Combiner is a nil function", "Partitioner is a nil function"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("nil functions: got %v, want %q", err, want)
+		}
+	}
 }
 
 func TestRegister(t *testing.T) {
