@@ -86,6 +86,9 @@ func readAll(f *os.File, replay func([]byte) error) (int64, error) {
 			if next == size {
 				return off, nil // torn: the last record was not fully written
 			}
+			if zero, err := zeroed(f, off, size); err != nil || zero {
+				return off, err // torn: the file system extended the file with zeros
+			}
 			return 0, fmt.Errorf("%w at offset %d", ErrCorrupt, off)
 		}
 		if err := replay(payload); err != nil {
@@ -94,6 +97,22 @@ func readAll(f *os.File, replay func([]byte) error) (int64, error) {
 		off = next
 	}
 	return off, nil
+}
+
+// zeroed reports whether f holds only zero bytes from off to size.
+func zeroed(f *os.File, off, size int64) (bool, error) {
+	buf := make([]byte, 32<<10)
+	for off < size {
+		n, err := f.ReadAt(buf[:min(int64(len(buf)), size-off)], off)
+		if err != nil {
+			return false, err
+		}
+		if slices.ContainsFunc(buf[:n], func(b byte) bool { return b != 0 }) {
+			return false, nil
+		}
+		off += int64(n)
+	}
+	return true, nil
 }
 
 func truncate(f *os.File, end int64) error {

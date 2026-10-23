@@ -82,6 +82,7 @@ func TestTornTail(t *testing.T) {
 		"short payload": data[:len(data)-1],
 		"bad checksum":  flipped,
 		"zeroed":        zeroed,
+		"long zeroed":   append(slices.Clone(zeroed), make([]byte, 3*headerSize)...),
 	} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, file, 0o644); err != nil {
