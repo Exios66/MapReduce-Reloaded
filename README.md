@@ -38,6 +38,9 @@ make check                     # all linters and tests (the project's quality ga
 make fmt                       # auto-format both languages
 ```
 
+`make` runs Python as `python3`. To use another interpreter, e.g. a
+virtualenv's `python`, pass `PYTHON=...` (`make check PYTHON=python`).
+
 There is no automatic hosted CI. `make check`, run by the pre-push hook, is
 the gate. See [ADR 0002](docs/design/0002-local-quality-gate.md).
 

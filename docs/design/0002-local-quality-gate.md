@@ -25,7 +25,7 @@ guarantee (see Consequences).
   `make hooks`, which sets `core.hooksPath`.
 - Because `make check` tests the working tree, the hook first makes sure the
   working tree *is* the pushed commit: every pushed branch must be the one
-  checked out (`HEAD`), and there must be no uncommitted or untracked files.
+  checked out (`HEAD`; tags are not checked), and there must be no uncommitted or untracked files.
   Otherwise an uncommitted local fix could make the checks pass while a
   broken commit is pushed.
 - The GitHub Actions workflow is kept, but it only runs when started by hand

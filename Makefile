@@ -4,6 +4,9 @@
 
 .PHONY: all check hooks test lint fmt go-test go-lint py-test py-lint
 
+# Python interpreter; many systems only have python3. Override with PYTHON=...
+PYTHON ?= python3
+
 all: check
 
 check: lint test
@@ -27,7 +30,7 @@ go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
 
 py-test:
-	cd python && python -m pytest -q
+	cd python && $(PYTHON) -m pytest -q
 
 py-lint:
 	cd python && ruff format --check . && ruff check .

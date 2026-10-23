@@ -4,7 +4,7 @@
 # Bypass in an emergency with: git push --no-verify
 #
 # `make check` tests the working tree, so the hook only lets a push through
-# when the working tree is exactly the commit being pushed: every pushed ref
+# when the working tree is exactly the commit being pushed: every pushed branch
 # must point at HEAD, and there must be no uncommitted or untracked files.
 set -e
 cd "$(git rev-parse --show-toplevel)"
@@ -15,6 +15,9 @@ pushing=false
 while read -r local_ref local_oid remote_ref remote_oid; do
     # Deleting a remote branch sends an all-zero oid; there is nothing to test.
     case "$local_oid" in *[!0]*) ;; *) continue ;; esac
+    # Only branch updates are checked. Tags (and other refs) name commits that
+    # were checked when their branch was pushed.
+    case "$remote_ref" in refs/heads/*) ;; *) continue ;; esac
 
     if [ "$(git rev-parse "$local_oid^{commit}")" != "$head" ]; then
         echo "pre-push: $local_ref is not checked out; check it out and push again." >&2
