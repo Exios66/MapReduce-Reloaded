@@ -36,6 +36,12 @@ The paper's worker catches the crash with a signal handler, and sends the
 record's number in a last UDP packet before it dies. In Go, `recover` lets
 the worker catch the panic and report it like any other failure.
 
-The paper sets no limit on how many records a job may skip. Issue #26 also
-asks for one, above which the job fails. That needs a way to fail a job,
-which comes next.
+## A limit
+
+The paper sets no limit on how many records a job may skip, and by default
+neither does this one. A job may set `max_skipped_records` (`mr submit
+-max-skipped N`). Once more than N records are on its tasks' skip lists,
+the job fails: its status becomes `FAILED`, with the reason in `error`, and
+no more of its tasks are handed out. The check counts skip lists rather
+than the `skipped.records` counter, so the job fails as soon as the crash
+is reported, before any attempt skips the record.
