@@ -1,0 +1,40 @@
+# The cluster on one machine (docs/cluster-vm.md): one coordinator and four
+# workers. `make cluster-up` starts it, `make e2e` runs word count on it and
+# `make cluster-down` removes it.
+#
+# Every container sees the input at /corpus and job output at /out, because
+# job specs carry absolute paths. Map output stays inside each worker and is
+# fetched over the network (§3.1 step 5).
+name: mapreduce
+
+x-node: &node
+  image: mapreduce-reloaded
+  volumes:
+    - ../../testdata/corpus:/corpus:ro
+    - output:/out
+
+services:
+  coordinator:
+    <<: *node
+    build:
+      context: ../../go
+      dockerfile: ../deploy/docker/Dockerfile
+    command: [coordinator, -addr, ":7070"]
+    mem_limit: 256m
+
+  worker:
+    <<: *node
+    command: [worker, -coordinator, "coordinator:7070"]
+    mem_limit: 768m
+    deploy:
+      replicas: 4
+    depends_on: [coordinator]
+
+  # Runs one mr command: docker compose run --rm mr submit ...
+  mr:
+    <<: *node
+    entrypoint: [mr]
+    profiles: [tools]
+
+volumes:
+  output:
