@@ -2,15 +2,17 @@
 // repeatedly asks for a task, runs it and reports the outcome, until the
 // coordinator tells it to shut down.
 //
-// Map output goes to a directory shared by all workers, and reducers read it
-// from there by URI. The shuffle server (#18) will serve it over the network
-// instead.
+// Map output stays in the worker's own work directory. A worker that
+// advertises a shuffle address serves it from there, and reducers fetch it
+// over the network (§3.1 step 5). A worker without one writes to a directory
+// shared by all workers, and reducers read it from there by URI.
 package worker
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -19,6 +21,9 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/extsort"
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
+	"github.com/exios66/mapreduce-reloaded/go/internal/shuffle"
 	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
 )
@@ -30,20 +35,24 @@ const defaultWait = time.Second
 // Worker runs tasks for one coordinator.
 type Worker struct {
 	coordinator pb.CoordinatorServiceClient
-	workDir     string // the shared directory for map output
+	workDir     string // where map output goes
 	info        *pb.WorkerInfo
+	shuffle     shuffle.Clients
 	id          string
 	logger      *slog.Logger
 }
 
-// New returns a worker that writes map output under workDir.
+// New returns a worker that writes map output under workDir. If
+// info.ShuffleAddress is set, the caller serves workDir there with a
+// shuffle.Server.
 func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.WorkerInfo) *Worker {
 	return &Worker{coordinator: coordinator, workDir: workDir, info: info, logger: slog.Default()}
 }
 
 // Run registers and runs tasks until the coordinator says to shut down, or
 // ctx is done, or an RPC fails.
-func (w *Worker) Run(ctx context.Context) error {
+func (w *Worker) Run(ctx context.Context) (err error) {
+	defer func() { err = errors.Join(err, w.shuffle.Close()) }()
 	// Wait for the coordinator to come up: workers may start before it.
 	reg, err := w.coordinator.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: w.info}, grpc.WaitForReady(true))
 	if err != nil {
@@ -63,7 +72,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			outputs, counts, err := w.runMap(a.MapTask)
 			report = w.report(a.MapTask.GetAttempt(), outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
-			counts, err := w.runReduce(a.ReduceTask)
+			counts, err := w.runReduce(ctx, a.ReduceTask)
 			report = w.report(a.ReduceTask.GetAttempt(), nil, counts, err)
 		case *pb.RequestTaskResponse_Shutdown:
 			return nil
@@ -109,17 +118,22 @@ func (w *Worker) runMap(m *pb.MapTask) ([]*pb.PartitionLocation, map[string]int6
 	}
 	locations := make([]*pb.PartitionLocation, len(sizes))
 	for r, size := range sizes {
-		uri, err := wire.URI(task.MapOutput(dir, int(id.Index), r))
-		if err != nil {
-			return nil, nil, err
+		loc := &pb.PartitionLocation{
+			MapIndex: id.Index, Partition: uint32(r), SizeBytes: uint64(size),
+			WorkerAddress: w.info.GetShuffleAddress(),
 		}
-		locations[r] = &pb.PartitionLocation{MapIndex: id.Index, Partition: uint32(r), SizeBytes: uint64(size), Uri: uri}
+		if loc.WorkerAddress == "" {
+			if loc.Uri, err = wire.URI(task.MapOutput(dir, int(id.Index), r)); err != nil {
+				return nil, nil, err
+			}
+		}
+		locations[r] = loc
 	}
 	return locations, counts, nil
 }
 
 // runReduce runs a reduce task over the map outputs it lists.
-func (w *Worker) runReduce(m *pb.ReduceTask) (map[string]int64, error) {
+func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask) (counts map[string]int64, err error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, err
@@ -128,18 +142,35 @@ func (w *Worker) runReduce(m *pb.ReduceTask) (map[string]int64, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths := make([]string, len(m.GetSources()))
+	sources := make([]extsort.Records, len(m.GetSources()))
 	for i, src := range m.GetSources() {
-		if paths[i], err = wire.Path(src.GetUri()); err != nil {
+		var r io.ReadCloser
+		if r, err = w.open(ctx, m.GetAttempt().GetTask().GetJobId(), src); err != nil {
 			return nil, err
 		}
+		defer func() { err = errors.Join(err, r.Close()) }()
+		sources[i] = kv.NewReader(r)
 	}
-	sources, closeSources, err := task.OpenSources(paths)
+	return task.Reduce(spec, id, sources)
+}
+
+// open opens one map output: from the worker that holds it, or from shared
+// storage when its location has no worker address.
+func (w *Worker) open(ctx context.Context, job string, src *pb.PartitionLocation) (io.ReadCloser, error) {
+	if addr := src.GetWorkerAddress(); addr != "" {
+		client, err := w.shuffle.Get(addr)
+		if err != nil {
+			return nil, err
+		}
+		return shuffle.NewReader(ctx, client, &pb.FetchPartitionRequest{
+			JobId: job, MapIndex: src.GetMapIndex(), Partition: src.GetPartition(),
+		}), nil
+	}
+	path, err := wire.Path(src.GetUri())
 	if err != nil {
 		return nil, err
 	}
-	counts, err := task.Reduce(spec, id, sources)
-	return counts, errors.Join(err, closeSources())
+	return os.Open(path)
 }
 
 // report builds the report of an attempt that returned outputs and counts,

@@ -1,15 +1,20 @@
 // Command worker runs tasks for a coordinator until it says to exit.
 //
-//	worker -coordinator host:7070 -work-dir /shared/mr
+//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir]
 //
-// Every worker must see the same -work-dir: map output is written there and
-// reducers read it from there, until the shuffle server (#18) exists.
+// It keeps map output in its work directory and serves it to reducers on
+// -listen; other workers reach it at -advertise. Without -work-dir it uses a
+// new temporary directory and removes it on exit, intermediate files
+// included. With -listen "" it serves nothing: every worker must then share
+// the same -work-dir, and reducers read map output from there.
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,31 +24,60 @@ import (
 
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/shuffle"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
 )
 
+type config struct {
+	coordinator, listen, advertise, workDir string
+}
+
 func main() {
-	addr := flag.String("coordinator", "localhost:7070", "coordinator address")
-	workDir := flag.String("work-dir", "", "directory for map output, shared by all workers")
+	var c config
+	flag.StringVar(&c.coordinator, "coordinator", "localhost:7070", "coordinator address")
+	flag.StringVar(&c.listen, "listen", ":7071", `address to serve map output on; "" to use a shared -work-dir instead`)
+	flag.StringVar(&c.advertise, "advertise", "", "address other workers fetch map output from (default: this host and the -listen port)")
+	flag.StringVar(&c.workDir, "work-dir", "", "directory for map output (default: a temporary directory)")
 	flag.Parse()
-	if err := run(*addr, *workDir); err != nil {
+	if err := run(c); err != nil {
 		fmt.Fprintln(os.Stderr, "worker:", err)
 		os.Exit(1)
 	}
 }
 
-func run(addr, workDir string) error {
-	if workDir == "" {
-		return fmt.Errorf("-work-dir is required")
+func run(c config) (err error) {
+	host, _ := os.Hostname() // only a hint for locality scheduling (§3.4)
+	info := &pb.WorkerInfo{Host: host, Slots: 1}
+	switch {
+	case c.listen == "" && c.workDir == "":
+		return errors.New(`-listen "" needs a shared -work-dir`)
+	case c.workDir == "":
+		if c.workDir, err = os.MkdirTemp("", "mr-worker-"); err != nil {
+			return err
+		}
+		defer func() { err = errors.Join(err, os.RemoveAll(c.workDir)) }()
 	}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if c.listen != "" {
+		lis, err := net.Listen("tcp", c.listen)
+		if err != nil {
+			return err
+		}
+		gs := grpc.NewServer()
+		pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(c.workDir))
+		go func() { _ = gs.Serve(lis) }()
+		defer gs.Stop()
+		if info.ShuffleAddress = c.advertise; c.advertise == "" {
+			_, port, _ := net.SplitHostPort(lis.Addr().String())
+			info.ShuffleAddress = net.JoinHostPort(host, port)
+		}
+	}
+
+	conn, err := grpc.NewClient(c.coordinator, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close() }()
-
-	host, _ := os.Hostname() // only a hint for locality scheduling (§3.4)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return worker.New(pb.NewCoordinatorServiceClient(conn), workDir, &pb.WorkerInfo{Host: host, Slots: 1}).Run(ctx)
+	return worker.New(pb.NewCoordinatorServiceClient(conn), c.workDir, info).Run(ctx)
 }

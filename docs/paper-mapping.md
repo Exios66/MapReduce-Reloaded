@@ -12,7 +12,7 @@ Status: `planned` → `in progress` → `done`.
 | F2  | Input splitting (16–64 MB) | §3.1 | 2 | `go/internal/split` | `mapreduce_reloaded/split.py` | `TestPlanCoversInput`, `test_split.py` | done |
 | F3  | Master + M map / R reduce tasks | §3.1 | 2 | `go/internal/coordinator`, `go/internal/worker` | — | `TestClusterWordCount`, `server_test.go` | done |
 | F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition`, `go/internal/task` | `mapreduce_reloaded/partition` | `testdata/hash/vectors.json`, `TestClusterMapOutputMatchesLocal`, `TestCustomPartitioner` | done |
-| F5  | Remote fetch, sort, group, reduce | §3.1 | 2 | | | | planned |
+| F5  | Remote fetch, sort, group, reduce | §3.1 | 2 | `go/internal/shuffle`, `go/internal/task` | — | `shuffle_test.go`, `TestClusterWordCount` | done |
 | F6  | R output files | §3.1 | 2 | | | | planned |
 | F7  | Master data structures | §3.2 | 2 | `go/internal/coordinator` | — | `TestInvariants`, `TestResetWorker` | done |
 | F8  | Worker failure + map re-execution | §3.3 | 3 | | | | planned |

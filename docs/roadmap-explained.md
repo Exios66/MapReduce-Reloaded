@@ -65,7 +65,7 @@ identical bytes, which gives a second, independent correctness check.
   [explainers/14-cluster.md](explainers/14-cluster.md).
 - **#17** Map tasks write R sorted output files.
 - **#18** The shuffle server: reducers download their share of each map
-  task's output.
+  task's output. See [explainers/15-shuffle.md](explainers/15-shuffle.md).
 - **#19** Reducers fetch, merge and reduce.
 - **#20** Safe commits: write to a temporary file, then rename it in one
   step, so a half-written output file can never be seen.
