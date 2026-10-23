@@ -22,7 +22,11 @@ func JobSpec(m *pb.JobSpec) (api.JobSpec, error) {
 	if !ok {
 		return api.JobSpec{}, fmt.Errorf("wire: unknown program %q", m.GetProgram())
 	}
-	if name := m.GetPartitioner(); name != "" && name != "hash" {
+	switch name := m.GetPartitioner(); name {
+	case "": // the program's own, if it has one
+	case "hash":
+		p.Partitioner = nil
+	default:
 		return api.JobSpec{}, fmt.Errorf("wire: unknown partitioner %q", name)
 	}
 	if !m.GetUseCombiner() {
@@ -94,8 +98,8 @@ func URI(path string) (string, error) {
 	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}).String(), nil
 }
 
-// Path returns the local path of a file:// URI. A string with no scheme is
-// already a path.
+// Path returns the local path of a file:// URI, which must name no host but
+// localhost. A string with no scheme is already a path.
 func Path(uri string) (string, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -105,6 +109,9 @@ func Path(uri string) (string, error) {
 	case "":
 		return uri, nil
 	case "file":
+		if u.Host != "" && u.Host != "localhost" {
+			return "", fmt.Errorf("wire: %q names a remote host", uri)
+		}
 		return filepath.FromSlash(u.Path), nil
 	}
 	return "", fmt.Errorf("wire: unsupported URI %q", uri)

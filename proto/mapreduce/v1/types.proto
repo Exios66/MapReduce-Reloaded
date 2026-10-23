@@ -111,7 +111,8 @@ message JobSpec {
   string input_format = 6;
   // Name of the output format, e.g. "text" or "kv" (§4.4).
   string output_format = 7;
-  // Name of the partitioner. Empty means hash(key) mod R (§4.1).
+  // Name of the partitioner: "hash" for hash(key) mod R (§4.1). Empty means
+  // the program's own partitioner, or hash if it has none.
   string partitioner = 8;
   // Whether to run the program's Combiner on map output (§4.3).
   bool use_combiner = 9;

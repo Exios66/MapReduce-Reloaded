@@ -487,7 +487,8 @@ type JobSpec struct {
 	InputFormat string `protobuf:"bytes,6,opt,name=input_format,json=inputFormat,proto3" json:"input_format,omitempty"`
 	// Name of the output format, e.g. "text" or "kv" (§4.4).
 	OutputFormat string `protobuf:"bytes,7,opt,name=output_format,json=outputFormat,proto3" json:"output_format,omitempty"`
-	// Name of the partitioner. Empty means hash(key) mod R (§4.1).
+	// Name of the partitioner: "hash" for hash(key) mod R (§4.1). Empty means
+	// the program's own partitioner, or hash if it has none.
 	Partitioner string `protobuf:"bytes,8,opt,name=partitioner,proto3" json:"partitioner,omitempty"`
 	// Whether to run the program's Combiner on map output (§4.3).
 	UseCombiner bool `protobuf:"varint,9,opt,name=use_combiner,json=useCombiner,proto3" json:"use_combiner,omitempty"`
