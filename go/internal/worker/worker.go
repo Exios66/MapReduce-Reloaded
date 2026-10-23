@@ -166,7 +166,7 @@ func (w *Worker) runMap(m *pb.MapTask) ([]*pb.PartitionLocation, map[string]int6
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	sizes, counts, err := task.Map(spec, id, split, dir)
+	sizes, counts, err := task.Map(spec, id, split, dir, m.GetSkipRecords())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -205,7 +205,7 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask) (counts map[st
 		defer func() { err = errors.Join(err, r.Close()) }()
 		sources[i] = kv.NewReader(r)
 	}
-	return task.Reduce(spec, id, sources)
+	return task.Reduce(spec, id, sources, m.GetSkipRecords())
 }
 
 // open opens one map output: from the worker that holds it, or from shared
@@ -238,6 +238,10 @@ func (w *Worker) report(id *pb.TaskAttemptId, outputs []*pb.PartitionLocation, c
 		var lost *lostOutput
 		if errors.As(err, &lost) {
 			failure.LostOutput = lost.src
+		}
+		var crash *task.CrashError
+		if errors.As(err, &crash) {
+			failure.FailedRecord = &crash.Record
 		}
 		req.Outcome = &pb.ReportTaskRequest_Failure{Failure: failure}
 	} else {

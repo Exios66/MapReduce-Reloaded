@@ -28,6 +28,7 @@ const (
 	MapInputRecords     = "map.input.records"
 	MapOutputRecords    = "map.output.records"
 	ReduceOutputRecords = "reduce.output.records"
+	SkippedRecords      = "skipped.records"
 )
 
 // MapOutput returns the path of map task m's output for partition r in dir.
@@ -36,14 +37,15 @@ func MapOutput(dir string, m, r int) string {
 }
 
 // Map runs a map task attempt: it maps one split and writes one sorted,
-// combined MRKV file per reduce task to dir, named by MapOutput. It returns
-// the size of each file and the attempt's counters.
-func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string) (sizes []int64, counts map[string]int64, err error) {
+// combined MRKV file per reduce task to dir, named by MapOutput. It skips the
+// split's records numbered in skip (§4.6). It returns the size of each file
+// and the attempt's counters.
+func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip []uint64) (sizes []int64, counts map[string]int64, err error) {
 	in, err := formats.Input(spec.InputFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx := newContext(spec, id)
+	ctx := newContext(spec, id, skip)
 	defer ctx.commitSide(&err)
 	p := spec.Program
 	partitioner := p.Partitioner
@@ -70,9 +72,9 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string) (size
 		ctx.Count(MapOutputRecords, 1)
 		return sorters[partitioner.Partition(key, spec.R)].Add(key, value)
 	})
-	for records.Next() {
+	for n := uint64(0); records.Next(); n++ {
 		ctx.Count(MapInputRecords, 1)
-		if err := p.Mapper.Map(ctx, records.Key(), records.Value(), emit); err != nil {
+		if err := ctx.call(n, func() error { return p.Mapper.Map(ctx, records.Key(), records.Value(), emit) }); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -100,9 +102,9 @@ const TempDir = "_temporary"
 
 // Reduce runs a reduce task attempt over partition id.Index of every map
 // task's output, given in map task order, and writes
-// <spec.Output>/part-r-<id.Index> through a file in TempDir. It returns the
-// attempt's counters.
-func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records) (counts map[string]int64, err error) {
+// <spec.Output>/part-r-<id.Index> through a file in TempDir. It skips the key
+// groups numbered in skip (§4.6). It returns the attempt's counters.
+func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64) (counts map[string]int64, err error) {
 	out, err := formats.Output(spec.OutputFormat)
 	if err != nil {
 		return nil, err
@@ -119,17 +121,19 @@ func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records) (counts 
 	}
 	defer commit(&err, w, tmp, path)
 
-	ctx := newContext(spec, id)
+	ctx := newContext(spec, id, skip)
 	defer ctx.commitSide(&err) // before the part file, which marks the task done
 	emit := emitter(func(key, value []byte) error {
 		ctx.Count(ReduceOutputRecords, 1)
 		return w.Write(key, value)
 	})
 	merged := extsort.Merge(sources...) // in map task order, so equal keys stay in input order
+	n := uint64(0)
 	for key, values := range extsort.Groups(merged) {
-		if err := spec.Program.Reducer.Reduce(ctx, key, values, emit); err != nil {
+		if err := ctx.call(n, func() error { return spec.Program.Reducer.Reduce(ctx, key, values, emit) }); err != nil {
 			return nil, err
 		}
+		n++
 	}
 	return ctx.counts, merged.Err()
 }
@@ -211,6 +215,18 @@ func commit(err *error, c io.Closer, tmp, path string) {
 // closeJoin closes c, adding any error to *err. Use it with defer.
 func closeJoin(err *error, c io.Closer) { *err = errors.Join(*err, c.Close()) }
 
+// CrashError is the error of an attempt whose user code panicked on a
+// record: for a map task, the input record's number in its split; for a
+// reduce task, the key group's number. Both count from 0 (§4.6).
+type CrashError struct {
+	Record uint64
+	Panic  any
+}
+
+func (e *CrashError) Error() string {
+	return fmt.Sprintf("task: user code panicked on record %d: %v", e.Record, e.Panic)
+}
+
 // taskContext is the api.Context of one attempt. An attempt runs on one
 // goroutine, so its counters need no locking.
 type taskContext struct {
@@ -220,17 +236,38 @@ type taskContext struct {
 	logger *slog.Logger
 	output string
 	side   map[string]*sideFile
+	skip   map[uint64]bool
 }
 
-func newContext(spec api.JobSpec, id api.TaskID) *taskContext {
-	return &taskContext{
+func newContext(spec api.JobSpec, id api.TaskID, skip []uint64) *taskContext {
+	c := &taskContext{
 		task:   id,
 		params: spec.Params,
 		output: spec.Output,
 		side:   map[string]*sideFile{},
 		counts: map[string]int64{},
 		logger: slog.Default().With("task", fmt.Sprintf("%v-%d.%d", id.Kind, id.Index, id.Attempt)),
+		skip:   map[uint64]bool{},
 	}
+	for _, n := range skip {
+		c.skip[n] = true
+	}
+	return c
+}
+
+// call runs f, the user's code for record n, unless n is to be skipped. A
+// panic in f becomes a *CrashError, so the worker can report the record.
+func (c *taskContext) call(n uint64, f func() error) (err error) {
+	if c.skip[n] {
+		c.Count(SkippedRecords, 1)
+		return nil
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			err = &CrashError{Record: n, Panic: v}
+		}
+	}()
+	return f()
 }
 
 func (c *taskContext) Task() api.TaskID               { return c.task }
