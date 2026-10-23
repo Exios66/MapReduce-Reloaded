@@ -50,6 +50,7 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 	}
 	ctx := newContext(spec, id, skip)
 	defer ctx.commitSide(&err)
+	defer recovered(&err)
 	p := spec.Program
 	partitioner := p.Partitioner
 	if partitioner == nil {
@@ -128,6 +129,7 @@ func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []u
 
 	ctx := newContext(spec, id, skip)
 	defer ctx.commitSide(&err) // before the part file, which marks the task done
+	defer recovered(&err)
 	emit := emitter(func(key, value []byte) error {
 		ctx.Count(ReduceOutputRecords, 1)
 		return w.Write(key, value)
@@ -273,6 +275,15 @@ func (c *taskContext) call(n uint64, f func() error) (err error) {
 		}
 	}()
 	return f()
+}
+
+// recovered turns a panic in user code outside any one record, such as a
+// combiner's in the final spill, into the attempt's error, so that the
+// attempt fails and commits nothing.
+func recovered(err *error) {
+	if v := recover(); v != nil {
+		*err = fmt.Errorf("task: panic: %v", v)
+	}
 }
 
 func (c *taskContext) Task() api.TaskID               { return c.task }

@@ -50,6 +50,9 @@ func run(addr, dataDir string, backups bool) (err error) {
 	if dataDir == "" {
 		srv = coordinator.NewServer(cfg)
 	} else {
+		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+			return err
+		}
 		var log *wal.Log
 		if srv, log, err = coordinator.Recover(cfg, filepath.Join(dataDir, "coordinator.log")); err != nil {
 			return err

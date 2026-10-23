@@ -11,10 +11,11 @@ job=/out/e2e-$(date +%s)
 got=$(mktemp -d)
 trap 'rm -rf "$got"' EXIT
 
-"${compose[@]}" run --rm mr submit -coordinator coordinator:7070 -m 7 -r 4 -wait \
-    wordcount "$job" '/corpus/*.txt'
-"${compose[@]}" cp "coordinator:$job" "$got/out"
-diff -r testdata/corpus/expected "$got/out"
+# The job is bounded, since it never finishes if every worker is killed;
+# the memory check below then says why.
+submitted=0
+timeout 600 "${compose[@]}" run --rm mr submit -coordinator coordinator:7070 -m 7 -r 4 -wait \
+    wordcount "$job" '/corpus/*.txt' || submitted=$?
 
 containers=$("${compose[@]}" ps -aq)
 if [ -z "$containers" ]; then
@@ -32,4 +33,10 @@ if [ -n "$oom" ]; then
     echo "e2e: killed for exceeding the memory limit: $oom" >&2
     exit 1
 fi
+if [ "$submitted" -ne 0 ]; then
+    echo "e2e: the job failed or timed out (exit $submitted)" >&2
+    exit 1
+fi
+"${compose[@]}" cp "coordinator:$job" "$got/out"
+diff -r testdata/corpus/expected "$got/out"
 echo "e2e: output matches the golden output"

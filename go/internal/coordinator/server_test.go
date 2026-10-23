@@ -83,7 +83,7 @@ func TestSubmitJob(t *testing.T) {
 	if err := os.WriteFile(in, []byte("x\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+	_, err = NewServer(Config{}).SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
 		Program: "wordcount", Inputs: []string{in}, Output: used, NumReduceTasks: 1,
 	}})
 	assertCode(t, err, codes.AlreadyExists)
