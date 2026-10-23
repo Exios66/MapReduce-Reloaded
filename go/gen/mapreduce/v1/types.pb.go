@@ -138,6 +138,63 @@ func (TaskState) EnumDescriptor() ([]byte, []int) {
 	return file_mapreduce_v1_types_proto_rawDescGZIP(), []int{1}
 }
 
+// How close a map task's worker was to its input split (§3.4).
+type Locality int32
+
+const (
+	// The split's locations are unknown, or the task is a reduce task.
+	Locality_LOCALITY_UNSPECIFIED Locality = 0
+	// On a host that holds the split.
+	Locality_LOCALITY_HOST Locality = 1
+	// In a zone that holds the split, on another host.
+	Locality_LOCALITY_ZONE Locality = 2
+	// Elsewhere: the split is read over the network.
+	Locality_LOCALITY_REMOTE Locality = 3
+)
+
+// Enum value maps for Locality.
+var (
+	Locality_name = map[int32]string{
+		0: "LOCALITY_UNSPECIFIED",
+		1: "LOCALITY_HOST",
+		2: "LOCALITY_ZONE",
+		3: "LOCALITY_REMOTE",
+	}
+	Locality_value = map[string]int32{
+		"LOCALITY_UNSPECIFIED": 0,
+		"LOCALITY_HOST":        1,
+		"LOCALITY_ZONE":        2,
+		"LOCALITY_REMOTE":      3,
+	}
+)
+
+func (x Locality) Enum() *Locality {
+	p := new(Locality)
+	*p = x
+	return p
+}
+
+func (x Locality) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Locality) Descriptor() protoreflect.EnumDescriptor {
+	return file_mapreduce_v1_types_proto_enumTypes[2].Descriptor()
+}
+
+func (Locality) Type() protoreflect.EnumType {
+	return &file_mapreduce_v1_types_proto_enumTypes[2]
+}
+
+func (x Locality) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Locality.Descriptor instead.
+func (Locality) EnumDescriptor() ([]byte, []int) {
+	return file_mapreduce_v1_types_proto_rawDescGZIP(), []int{2}
+}
+
 // Names one task within one job. Stable across retries.
 type TaskId struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -743,7 +800,12 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\x16TASK_STATE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fTASK_STATE_IDLE\x10\x01\x12\x1a\n" +
 	"\x16TASK_STATE_IN_PROGRESS\x10\x02\x12\x18\n" +
-	"\x14TASK_STATE_COMPLETED\x10\x03BGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3"
+	"\x14TASK_STATE_COMPLETED\x10\x03*_\n" +
+	"\bLocality\x12\x18\n" +
+	"\x14LOCALITY_UNSPECIFIED\x10\x00\x12\x11\n" +
+	"\rLOCALITY_HOST\x10\x01\x12\x11\n" +
+	"\rLOCALITY_ZONE\x10\x02\x12\x13\n" +
+	"\x0fLOCALITY_REMOTE\x10\x03BGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3"
 
 var (
 	file_mapreduce_v1_types_proto_rawDescOnce sync.Once
@@ -757,26 +819,27 @@ func file_mapreduce_v1_types_proto_rawDescGZIP() []byte {
 	return file_mapreduce_v1_types_proto_rawDescData
 }
 
-var file_mapreduce_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_mapreduce_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_mapreduce_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_mapreduce_v1_types_proto_goTypes = []any{
 	(TaskKind)(0),             // 0: mapreduce.v1.TaskKind
 	(TaskState)(0),            // 1: mapreduce.v1.TaskState
-	(*TaskId)(nil),            // 2: mapreduce.v1.TaskId
-	(*TaskAttemptId)(nil),     // 3: mapreduce.v1.TaskAttemptId
-	(*InputSplit)(nil),        // 4: mapreduce.v1.InputSplit
-	(*PartitionLocation)(nil), // 5: mapreduce.v1.PartitionLocation
-	(*Counters)(nil),          // 6: mapreduce.v1.Counters
-	(*JobSpec)(nil),           // 7: mapreduce.v1.JobSpec
-	(*WorkerInfo)(nil),        // 8: mapreduce.v1.WorkerInfo
-	nil,                       // 9: mapreduce.v1.Counters.ValuesEntry
-	nil,                       // 10: mapreduce.v1.JobSpec.ParamsEntry
+	(Locality)(0),             // 2: mapreduce.v1.Locality
+	(*TaskId)(nil),            // 3: mapreduce.v1.TaskId
+	(*TaskAttemptId)(nil),     // 4: mapreduce.v1.TaskAttemptId
+	(*InputSplit)(nil),        // 5: mapreduce.v1.InputSplit
+	(*PartitionLocation)(nil), // 6: mapreduce.v1.PartitionLocation
+	(*Counters)(nil),          // 7: mapreduce.v1.Counters
+	(*JobSpec)(nil),           // 8: mapreduce.v1.JobSpec
+	(*WorkerInfo)(nil),        // 9: mapreduce.v1.WorkerInfo
+	nil,                       // 10: mapreduce.v1.Counters.ValuesEntry
+	nil,                       // 11: mapreduce.v1.JobSpec.ParamsEntry
 }
 var file_mapreduce_v1_types_proto_depIdxs = []int32{
 	0,  // 0: mapreduce.v1.TaskId.kind:type_name -> mapreduce.v1.TaskKind
-	2,  // 1: mapreduce.v1.TaskAttemptId.task:type_name -> mapreduce.v1.TaskId
-	9,  // 2: mapreduce.v1.Counters.values:type_name -> mapreduce.v1.Counters.ValuesEntry
-	10, // 3: mapreduce.v1.JobSpec.params:type_name -> mapreduce.v1.JobSpec.ParamsEntry
+	3,  // 1: mapreduce.v1.TaskAttemptId.task:type_name -> mapreduce.v1.TaskId
+	10, // 2: mapreduce.v1.Counters.values:type_name -> mapreduce.v1.Counters.ValuesEntry
+	11, // 3: mapreduce.v1.JobSpec.params:type_name -> mapreduce.v1.JobSpec.ParamsEntry
 	4,  // [4:4] is the sub-list for method output_type
 	4,  // [4:4] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -795,7 +858,7 @@ func file_mapreduce_v1_types_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mapreduce_v1_types_proto_rawDesc), len(file_mapreduce_v1_types_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,

@@ -1176,9 +1176,13 @@ type GetJobStatusResponse struct {
 	// Job-wide counter totals (§4.9).
 	Counters *Counters `protobuf:"bytes,7,opt,name=counters,proto3" json:"counters,omitempty"`
 	// Set when state is JOB_STATE_FAILED.
-	Error         string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	// Completed map tasks whose accepted attempt ran on a host, or else in a
+	// zone, that holds their split (§3.4).
+	MapTasksHostLocal uint32 `protobuf:"varint,9,opt,name=map_tasks_host_local,json=mapTasksHostLocal,proto3" json:"map_tasks_host_local,omitempty"`
+	MapTasksZoneLocal uint32 `protobuf:"varint,10,opt,name=map_tasks_zone_local,json=mapTasksZoneLocal,proto3" json:"map_tasks_zone_local,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GetJobStatusResponse) Reset() {
@@ -1267,6 +1271,20 @@ func (x *GetJobStatusResponse) GetError() string {
 	return ""
 }
 
+func (x *GetJobStatusResponse) GetMapTasksHostLocal() uint32 {
+	if x != nil {
+		return x.MapTasksHostLocal
+	}
+	return 0
+}
+
+func (x *GetJobStatusResponse) GetMapTasksZoneLocal() uint32 {
+	if x != nil {
+		return x.MapTasksZoneLocal
+	}
+	return 0
+}
+
 var File_mapreduce_v1_coordinator_proto protoreflect.FileDescriptor
 
 const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
@@ -1335,7 +1353,7 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\x11SubmitJobResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\",\n" +
 	"\x13GetJobStatusRequest\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\xe1\x02\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\xc3\x03\n" +
 	"\x14GetJobStatusResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12,\n" +
 	"\x05state\x18\x02 \x01(\x0e2\x16.mapreduce.v1.JobStateR\x05state\x12&\n" +
@@ -1344,7 +1362,10 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\x12reduce_tasks_total\x18\x05 \x01(\rR\x10reduceTasksTotal\x124\n" +
 	"\x16reduce_tasks_completed\x18\x06 \x01(\rR\x14reduceTasksCompleted\x122\n" +
 	"\bcounters\x18\a \x01(\v2\x16.mapreduce.v1.CountersR\bcounters\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error*\x9a\x01\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x12/\n" +
+	"\x14map_tasks_host_local\x18\t \x01(\rR\x11mapTasksHostLocal\x12/\n" +
+	"\x14map_tasks_zone_local\x18\n" +
+	" \x01(\rR\x11mapTasksZoneLocal*\x9a\x01\n" +
 	"\bJobState\x12\x19\n" +
 	"\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11JOB_STATE_PENDING\x10\x01\x12\x15\n" +

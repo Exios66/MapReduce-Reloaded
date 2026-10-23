@@ -19,6 +19,13 @@ class TaskState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     TASK_STATE_IDLE: _ClassVar[TaskState]
     TASK_STATE_IN_PROGRESS: _ClassVar[TaskState]
     TASK_STATE_COMPLETED: _ClassVar[TaskState]
+
+class Locality(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LOCALITY_UNSPECIFIED: _ClassVar[Locality]
+    LOCALITY_HOST: _ClassVar[Locality]
+    LOCALITY_ZONE: _ClassVar[Locality]
+    LOCALITY_REMOTE: _ClassVar[Locality]
 TASK_KIND_UNSPECIFIED: TaskKind
 TASK_KIND_MAP: TaskKind
 TASK_KIND_REDUCE: TaskKind
@@ -26,6 +33,10 @@ TASK_STATE_UNSPECIFIED: TaskState
 TASK_STATE_IDLE: TaskState
 TASK_STATE_IN_PROGRESS: TaskState
 TASK_STATE_COMPLETED: TaskState
+LOCALITY_UNSPECIFIED: Locality
+LOCALITY_HOST: Locality
+LOCALITY_ZONE: Locality
+LOCALITY_REMOTE: Locality
 
 class TaskId(_message.Message):
     __slots__ = ("job_id", "kind", "index")

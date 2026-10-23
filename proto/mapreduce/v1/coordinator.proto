@@ -217,4 +217,8 @@ message GetJobStatusResponse {
   Counters counters = 7;
   // Set when state is JOB_STATE_FAILED.
   string error = 8;
+  // Completed map tasks whose accepted attempt ran on a host, or else in a
+  // zone, that holds their split (§3.4).
+  uint32 map_tasks_host_local = 9;
+  uint32 map_tasks_zone_local = 10;
 }

@@ -34,6 +34,9 @@ message JobSubmitted {
 message TaskAssigned {
   TaskAttemptId attempt = 1;
   string worker_id = 2;
+  // Logged rather than worked out again, since worker IDs, and so the
+  // hosts they name, do not survive a restart.
+  Locality locality = 3;
 }
 
 // A worker was declared dead.
