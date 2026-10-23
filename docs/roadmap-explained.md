@@ -52,7 +52,7 @@ identical bytes, which gives a second, independent correctness check.
   For example, send `("the", 5000)` once instead of `("the", 1)` five
   thousand times. See [explainers/10-combiner.md](explainers/10-combiner.md).
 - **#12 `mr run --local`:** the whole pipeline in one process. **This is the
-  oracle.**
+  oracle.** See [explainers/11-local-mode.md](explainers/11-local-mode.md).
 
 ### Phase 2 — Make it distributed (#13–#21)
 *Open several kitchens, with a head chef handing out tickets.*

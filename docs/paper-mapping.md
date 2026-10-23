@@ -8,7 +8,7 @@ Status: `planned` → `in progress` → `done`.
 
 | ID  | Feature | Paper § | Phase | Go | Python | Test | Status |
 |-----|---------|---------|-------|----|--------|------|--------|
-| F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | `Example_wordCount`, `test_api.py` | done |
+| F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | `Example_wordCount`, `test_api.py`, word count golden tests | done |
 | F2  | Input splitting (16–64 MB) | §3.1 | 2 | | | | planned |
 | F3  | Master + M map / R reduce tasks | §3.1 | 2 | | | | planned |
 | F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition` | `mapreduce_reloaded/partition` | `testdata/hash/vectors.json` | in progress (hash done; spill is #17) |
@@ -27,7 +27,7 @@ Status: `planned` → `in progress` → `done`.
 | F17 | Pluggable input/output types | §4.4 | 1 | `go/internal/formats` | `mapreduce_reloaded/formats` | `FuzzTextSplits`, `test_formats.py` | done |
 | F18 | Atomic side-effect files | §4.5 | 3 | | | | planned |
 | F19 | Skipping bad records | §4.6 | 3 | | | | planned |
-| F20 | Local execution mode | §4.7 | 1 | | | | planned |
+| F20 | Local execution mode | §4.7 | 1 | `go/internal/local`, `go/cmd/mr` | `mapreduce_reloaded/local.py`, `__main__.py` | `TestWordCountGolden`, `test_local.py` | done |
 | F21 | HTTP status pages | §4.8 | 4 | | | | planned |
 | F22 | Counters (de-duplicated) | §4.9 | 3 | | | | planned |
 | F23 | Paper example programs | §2.3, §5 | 4 | | | | planned |
