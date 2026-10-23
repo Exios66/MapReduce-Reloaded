@@ -19,8 +19,9 @@ slowing down the whole VM.
 |---|---|---|
 | coordinator | 256 MB | Holds only task state and partition locations, never data (§3.2) |
 | worker (× 4) | 768 MB each | 256 MB sort buffer (#10 spills beyond that), the rest for the Go runtime, gRPC and file buffers |
+| mr (on demand) | 128 MB | Submits jobs and polls status; workers process the data |
 | MinIO (#41) | 512 MB | Object storage for input and output |
-| **Total** | **≈ 3.8 GB** | Leaves about 4 GB for the OS, Docker and coursework containers |
+| **Total** | **≈ 3.9 GB** | Leaves about 4 GB for the OS, Docker and coursework containers |
 
 - Scaling up (`docker compose up --scale worker=N`) costs 768 MB per worker.
   About 6 workers is the practical ceiling.
@@ -79,10 +80,22 @@ make cluster-down    # stop and remove only this project's containers and volume
 ```
 
 Run any `mr` command on the cluster with
-`docker compose -f deploy/compose/compose.yaml run --rm mr ...`, for example
+`docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr ...`, for example
 `mr status -coordinator coordinator:7070 job-1`. Every container sees the
 test corpus at `/corpus` and job output in the `output` volume at `/out`.
 MinIO joins the Compose file with #41.
+
+The coordinator is also available to a host CLI at `127.0.0.1:18770`, bound
+only to loopback. For example, on the VM run
+`mr status -coordinator 127.0.0.1:18770 job-1`. To use a local CLI from your
+laptop, forward the same address through SSH:
+
+```sh
+ssh -L 18770:127.0.0.1:18770 mr-vm
+# in another terminal: mr status -coordinator 127.0.0.1:18770 job-1
+```
+
+Containers continue to use `coordinator:7070`.
 
 Web pages (the status UI from #32, MinIO's console) are reached through an
 SSH tunnel, so no port is opened to the network:

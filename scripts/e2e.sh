@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-compose=(docker compose -f deploy/compose/compose.yaml)
+compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
 job=/out/e2e-$(date +%s)
 got=$(mktemp -d)
 trap 'rm -rf "$got"' EXIT
@@ -16,7 +16,18 @@ trap 'rm -rf "$got"' EXIT
 "${compose[@]}" cp "coordinator:$job" "$got/out"
 diff -r testdata/corpus/expected "$got/out"
 
-oom=$(docker inspect -f '{{.Name}} {{.State.OOMKilled}}' $("${compose[@]}" ps -aq) | grep ' true$' || true)
+containers=$("${compose[@]}" ps -aq)
+if [ -z "$containers" ]; then
+    echo "e2e: no cluster containers to inspect" >&2
+    exit 1
+fi
+mapfile -t container_ids <<< "$containers"
+inspection=$(docker inspect -f '{{.Name}} {{.State.OOMKilled}}' "${container_ids[@]}")
+if [ -z "$inspection" ]; then
+    echo "e2e: container inspection returned no output" >&2
+    exit 1
+fi
+oom=$(printf '%s\n' "$inspection" | grep ' true$' || true)
 if [ -n "$oom" ]; then
     echo "e2e: killed for exceeding the memory limit: $oom" >&2
     exit 1

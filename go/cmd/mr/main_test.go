@@ -32,6 +32,36 @@ func TestRunLocal(t *testing.T) {
 	}
 }
 
+// Submission waits through an initial connection failure while the coordinator starts.
+func TestSubmitWaitsForCoordinator(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lis.Close() }()
+
+	gs := grpc.NewServer()
+	pb.RegisterCoordinatorServiceServer(gs, coordinator.NewServer(coordinator.Config{}))
+	defer gs.Stop()
+	go func() {
+		// Reject the first connection before serving, as during a cold start.
+		conn, err := lis.Accept()
+		if err != nil {
+			return
+		}
+		_ = conn.Close()
+		_ = gs.Serve(lis)
+	}()
+
+	var stdout strings.Builder
+	if err := submit([]string{"-coordinator", lis.Addr().String(), "-r", "1", "wordcount", filepath.Join(t.TempDir(), "out"), raven}, &stdout, new(strings.Builder)); err != nil {
+		t.Fatal(err)
+	}
+	if stdout.String() != "job-1\n" {
+		t.Fatalf("submit printed %q", stdout.String())
+	}
+}
+
 // submit -wait runs a job on a cluster, and status reports it.
 func TestSubmitAndStatus(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

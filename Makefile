@@ -26,7 +26,7 @@ vm-check:
 
 # The Compose cluster (deploy/compose, docs/cluster-vm.md). Its project is
 # named mapreduce, so cluster-down removes only this project's containers.
-COMPOSE = docker compose -f deploy/compose/compose.yaml
+COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
 
 cluster-up:
 	$(COMPOSE) up -d --build
