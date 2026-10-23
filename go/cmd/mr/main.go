@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 
-	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
+	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/local"
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"

@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
+	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 	"github.com/exios66/mapreduce-reloaded/go/internal/statusweb"

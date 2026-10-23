@@ -147,7 +147,7 @@ func TestErrors(t *testing.T) {
 		{[]string{"nope"}, "usage"},
 		{[]string{"run", "wordcount", "out", "in"}, "needs -local"},
 		{[]string{"run", "-local", "wordcount", "out"}, "usage"},
-		{[]string{"run", "-local", "nope", "out", raven}, `unknown program "nope"; registered: test.param, wordcount`},
+		{[]string{"run", "-local", "nope", "out", raven}, `unknown program "nope"; registered: grep, test.param, wordcount`},
 		{[]string{"run", "-local", "-param", "novalue", "wordcount", "out", raven}, "not name=value"},
 		{[]string{"submit", "-param", "=v", "wordcount", "out", raven}, "not name=value"},
 		{[]string{"run", "-local", "-r", "4294967296", "wordcount", "out", "in"}, "too large"},
