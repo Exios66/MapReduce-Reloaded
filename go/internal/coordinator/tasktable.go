@@ -70,29 +70,43 @@ func NewTaskTable(m, r int) *TaskTable {
 }
 
 // Next returns an idle task to run: a map task, or a reduce task once every
-// map task has completed (§3.1). It returns false if there is none.
-func (t *TaskTable) Next() (Task, bool) {
-	return t.find(func(ts *task) bool { return ts.state == pb.TaskState_TASK_STATE_IDLE })
+// map task has completed (§3.1). If rank is not nil, it is the map task that
+// rank ranks lowest, the first one if several tie. It returns false if there
+// is none.
+func (t *TaskTable) Next(rank func(index uint32) int) (Task, bool) {
+	return t.find(func(ts *task) bool { return ts.state == pb.TaskState_TASK_STATE_IDLE }, rank)
 }
 
 // Backup returns an in-progress task of the current phase that may get a
 // backup attempt on worker (§3.6). It returns false if there is none.
 func (t *TaskTable) Backup(worker string) (Task, bool) {
-	return t.find(func(ts *task) bool { return ts.canBackUp(worker) })
+	return t.find(func(ts *task) bool { return ts.canBackUp(worker) }, nil)
 }
 
-// find returns the first task of the current phase that ok accepts.
-func (t *TaskTable) find(ok func(*task) bool) (Task, bool) {
+// find returns the task of the current phase that ok accepts and rank, for
+// map tasks, ranks lowest: the first such task if there are ties, or if rank
+// is nil.
+func (t *TaskTable) find(ok func(*task) bool, rank func(uint32) int) (Task, bool) {
 	kind, tasks := pb.TaskKind_TASK_KIND_MAP, t.maps
 	if t.mapsDone == len(t.maps) {
-		kind, tasks = pb.TaskKind_TASK_KIND_REDUCE, t.reduces
+		kind, tasks, rank = pb.TaskKind_TASK_KIND_REDUCE, t.reduces, nil
 	}
+	best, bestRank := -1, 0
 	for i := range tasks {
-		if ok(&tasks[i]) {
+		if !ok(&tasks[i]) {
+			continue
+		}
+		if rank == nil {
 			return Task{kind, uint32(i)}, true
 		}
+		if r := rank(uint32(i)); best < 0 || r < bestRank {
+			best, bestRank = i, r
+		}
 	}
-	return Task{}, false
+	if best < 0 {
+		return Task{}, false
+	}
+	return Task{kind, uint32(best)}, true
 }
 
 // Assign starts a new attempt on worker of an idle task, or a backup

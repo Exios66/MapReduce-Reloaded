@@ -3,6 +3,7 @@ package coordinator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -120,6 +121,59 @@ func TestRequestTask(t *testing.T) {
 	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w}); resp.GetShutdown() == nil {
 		t.Fatalf("got %v; want shutdown", resp)
 	}
+}
+
+// A map task goes to a worker on a host, or else in a zone, that holds its
+// split (§3.4); the status counts where accepted attempts ran, and so does
+// a recovered coordinator.
+func TestLocality(t *testing.T) {
+	dir := t.TempDir()
+	where := map[string][]string{"0": {"host-a"}, "1": {"host-b"}, "2": {"zone-b"}}
+	var inputs []string
+	for name := range 3 {
+		in := filepath.Join(dir, fmt.Sprint(name))
+		if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		inputs = append(inputs, in)
+	}
+	log := filepath.Join(dir, "log")
+	s, l, err := Recover(Config{Locate: func(sp *pb.InputSplit) []string { return where[filepath.Base(sp.GetUri())] }}, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := func(host, zone string) string {
+		reg, _ := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{Host: host, Zone: zone}})
+		return reg.GetWorkerId()
+	}
+	a, b := at("host-a", "zone-a"), at("host-b", "zone-b")
+	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: inputs, Output: t.TempDir(), NumReduceTasks: 1,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		worker string
+		want   uint32
+	}{{b, 1}, {b, 2}, {a, 0}} {
+		attempt := next(t, s, c.worker)
+		if got := attempt.GetTask().GetIndex(); got != c.want {
+			t.Fatalf("%s got map %d, want %d", c.worker, got, c.want)
+		}
+		succeed(t, s, c.worker, attempt, []*pb.PartitionLocation{{MapIndex: c.want, Uri: "file:///map-output"}})
+	}
+	want := func(s *Server) {
+		t.Helper()
+		if st := jobStatus(t, s, sub.GetJobId()); st.GetMapTasksHostLocal() != 2 || st.GetMapTasksZoneLocal() != 1 {
+			t.Fatalf("status %v; want 2 maps host-local, 1 zone-local", st)
+		}
+	}
+	want(s)
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	want(recoverServer(t, Config{}, log))
 }
 
 func TestReportTask(t *testing.T) {
