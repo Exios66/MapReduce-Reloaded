@@ -182,6 +182,9 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	if err := mrtask.CheckOutput(spec.Output); err != nil { // under the lock, so no job finishes in between
 		return nil, status.Error(codes.AlreadyExists, err.Error())
 	}
+	if err := mrtask.Setup(spec.Output); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
 	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}); err != nil {
 		return nil, err

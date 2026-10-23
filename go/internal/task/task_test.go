@@ -19,7 +19,8 @@ import (
 var errBoom = errors.New("boom")
 
 // setup writes an input file and returns a word count spec over it, with
-// output in a new directory, and the input's single split.
+// output in a new directory set up for the job, and the input's single
+// split.
 func setup(t *testing.T, text string) (api.JobSpec, formats.Split) {
 	t.Helper()
 	in := filepath.Join(t.TempDir(), "in.txt")
@@ -31,6 +32,9 @@ func setup(t *testing.T, text string) (api.JobSpec, formats.Split) {
 		Inputs:  []string{in},
 		Output:  filepath.Join(t.TempDir(), "out"),
 		R:       2,
+	}
+	if err := Setup(spec.Output); err != nil {
+		t.Fatal(err)
 	}
 	return spec, formats.Split{Path: in, End: int64(len(text))}
 }
@@ -89,6 +93,11 @@ func TestMapThenReduce(t *testing.T) {
 	}
 	if want := []string{"part-r-00000", "part-r-00001"}; total != 3 || read != 3 || !slices.Equal(dirNames(t, spec.Output), want) {
 		t.Fatalf("%d records read, %d in %v; want 3 in %v", read, total, dirNames(t, spec.Output), want)
+	}
+	// An attempt that runs after the job has finished fails, and leaves
+	// nothing behind.
+	if _, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask, Attempt: 1}, nil, nil); err == nil || len(dirNames(t, spec.Output)) != 2 {
+		t.Fatalf("late attempt: %v; output %v", err, dirNames(t, spec.Output))
 	}
 }
 
@@ -278,7 +287,8 @@ func TestSideOutput(t *testing.T) {
 }
 
 func TestSideOutputNames(t *testing.T) {
-	ctx := newContext(api.JobSpec{Output: t.TempDir()}, api.TaskID{Kind: api.MapTask}, nil)
+	spec, _ := setup(t, "")
+	ctx := newContext(spec, api.TaskID{Kind: api.MapTask}, nil)
 	for _, name := range []string{"", ".", "..", ".hidden", "_SUCCESS", "part-r-00000", "a/b", "../x"} {
 		if _, err := ctx.SideOutput(name); err == nil {
 			t.Errorf("SideOutput(%q) succeeded", name)
