@@ -9,16 +9,18 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class LogRecord(_message.Message):
-    __slots__ = ("job_submitted", "task_assigned", "task_reported", "worker_lost")
+    __slots__ = ("job_submitted", "task_assigned", "task_reported", "worker_lost", "restarted")
     JOB_SUBMITTED_FIELD_NUMBER: _ClassVar[int]
     TASK_ASSIGNED_FIELD_NUMBER: _ClassVar[int]
     TASK_REPORTED_FIELD_NUMBER: _ClassVar[int]
     WORKER_LOST_FIELD_NUMBER: _ClassVar[int]
+    RESTARTED_FIELD_NUMBER: _ClassVar[int]
     job_submitted: JobSubmitted
     task_assigned: TaskAssigned
     task_reported: _coordinator_pb2.ReportTaskRequest
     worker_lost: WorkerLost
-    def __init__(self, job_submitted: _Optional[_Union[JobSubmitted, _Mapping]] = ..., task_assigned: _Optional[_Union[TaskAssigned, _Mapping]] = ..., task_reported: _Optional[_Union[_coordinator_pb2.ReportTaskRequest, _Mapping]] = ..., worker_lost: _Optional[_Union[WorkerLost, _Mapping]] = ...) -> None: ...
+    restarted: Restarted
+    def __init__(self, job_submitted: _Optional[_Union[JobSubmitted, _Mapping]] = ..., task_assigned: _Optional[_Union[TaskAssigned, _Mapping]] = ..., task_reported: _Optional[_Union[_coordinator_pb2.ReportTaskRequest, _Mapping]] = ..., worker_lost: _Optional[_Union[WorkerLost, _Mapping]] = ..., restarted: _Optional[_Union[Restarted, _Mapping]] = ...) -> None: ...
 
 class JobSubmitted(_message.Message):
     __slots__ = ("job_id", "job", "splits")
@@ -43,3 +45,7 @@ class WorkerLost(_message.Message):
     WORKER_ID_FIELD_NUMBER: _ClassVar[int]
     worker_id: str
     def __init__(self, worker_id: _Optional[str] = ...) -> None: ...
+
+class Restarted(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
