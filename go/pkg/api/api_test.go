@@ -178,6 +178,7 @@ type testContext struct{}
 
 func (testContext) Task() api.TaskID                     { return api.TaskID{Kind: api.MapTask} }
 func (testContext) Param(string) string                  { return "" }
+func (testContext) Input() string                        { return "" }
 func (testContext) Count(string, int64)                  {}
 func (testContext) Logger() *slog.Logger                 { return slog.New(slog.DiscardHandler) }
 func (testContext) SideOutput(string) (io.Writer, error) { return io.Discard, nil }

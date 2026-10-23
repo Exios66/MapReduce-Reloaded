@@ -89,7 +89,7 @@ class _Job:
     def run_map(self, i: int, in_format: InputFormat, split: Split) -> None:
         """Maps one split and writes one sorted, combined file per reduce task."""
         p, r = self.spec.program, self.spec.r
-        with self._context("map", i) as ctx, ExitStack() as stack:
+        with self._context("map", i, split.path) as ctx, ExitStack() as stack:
             combine_fn = combine.func(ctx, p.combiner) if p.combiner is not None else None
             sorters = [
                 stack.enter_context(Sorter(self.work_dir, DEFAULT_BUDGET // r, combine_fn))
@@ -134,11 +134,12 @@ class _Job:
         return os.path.join(self.work_dir, f"map-{i:05d}-r-{r:05d}.kv")
 
     @contextmanager
-    def _context(self, kind: str, index: int) -> Iterator[Context]:
+    def _context(self, kind: str, index: int, input: str = "") -> Iterator[Context]:
         with _SideFiles(self.spec.output, f"{kind}-{index}") as side:
             yield Context(
                 TaskID(kind, index),
                 params=self.spec.params,
+                input=input,
                 on_count=self._count,
                 on_side_output=side.open,
             )

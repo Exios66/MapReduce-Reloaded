@@ -49,6 +49,7 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 		return nil, nil, err
 	}
 	ctx := newContext(spec, id, skip)
+	ctx.input = split.Path
 	defer ctx.commitSide(&err)
 	defer recovered(&err)
 	p := spec.Program
@@ -243,6 +244,7 @@ func (e *CrashError) Error() string {
 type taskContext struct {
 	task   api.TaskID
 	params map[string]string
+	input  string // the split's file, in a map task
 	counts map[string]int64
 	logger *slog.Logger
 	output string
@@ -292,6 +294,7 @@ func recovered(err *error) {
 
 func (c *taskContext) Task() api.TaskID               { return c.task }
 func (c *taskContext) Param(name string) string       { return c.params[name] }
+func (c *taskContext) Input() string                  { return c.input }
 func (c *taskContext) Count(name string, delta int64) { c.counts[name] += delta }
 func (c *taskContext) Logger() *slog.Logger           { return c.logger }
 

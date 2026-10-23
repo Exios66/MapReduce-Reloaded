@@ -159,6 +159,7 @@ func newContext() *testContext { return &testContext{counts: map[string]int64{}}
 
 func (c *testContext) Task() api.TaskID                     { return api.TaskID{Kind: api.MapTask} }
 func (c *testContext) Param(string) string                  { return "" }
+func (c *testContext) Input() string                        { return "" }
 func (c *testContext) Count(name string, delta int64)       { c.counts[name] += delta }
 func (c *testContext) Logger() *slog.Logger                 { return slog.New(slog.DiscardHandler) }
 func (c *testContext) SideOutput(string) (io.Writer, error) { return io.Discard, nil }

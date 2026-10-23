@@ -48,12 +48,14 @@ class Context:
         task: TaskID,
         *,
         params: Mapping[str, str] | None = None,
+        input: str = "",
         logger: logging.Logger | None = None,
         on_count: Callable[[str, int], None] | None = None,
         on_side_output: Callable[[str], BinaryIO] | None = None,
     ):
         self.task = task
         self.params = dict(params or {})
+        self.input = input  # the path of a map task's split's file; "" in a reduce task
         self.logger = logger or logging.getLogger("mapreduce_reloaded.user")
         self._on_count = on_count
         self._on_side_output = on_side_output

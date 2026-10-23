@@ -150,7 +150,7 @@ func TestContext(t *testing.T) {
 	spec.Params = map[string]string{"k": "v"}
 	id := api.TaskID{Kind: api.MapTask, Attempt: 2}
 	spec.Program.Mapper = api.MapFunc(func(ctx api.Context, _, _ []byte, _ api.Emitter) error {
-		if ctx.Param("k") != "v" || ctx.Task() != id || ctx.Logger() == nil {
+		if ctx.Param("k") != "v" || ctx.Input() != split.Path || ctx.Task() != id || ctx.Logger() == nil {
 			return errBoom
 		}
 		ctx.Count("user", 5)
