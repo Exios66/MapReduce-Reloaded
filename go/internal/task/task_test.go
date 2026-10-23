@@ -2,6 +2,8 @@ package task
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"iter"
 	"os"
@@ -144,6 +146,80 @@ func TestContext(t *testing.T) {
 	_, counts, err := Map(spec, id, split, t.TempDir())
 	if err != nil || counts["user"] != 5 {
 		t.Fatalf("counts %v, err %v", counts, err)
+	}
+}
+
+// A side output appears once, with one attempt's content, however many
+// attempts fail or succeed (§4.5).
+func TestSideOutput(t *testing.T) {
+	spec, split := setup(t, "a b a\n")
+	spec.R = 1
+	dir := t.TempDir()
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir); err != nil {
+		t.Fatal(err)
+	}
+	reduce := func(attempt uint32, fail bool) error {
+		spec := spec
+		spec.Program.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, _ iter.Seq[[]byte], _ api.Emitter) error {
+			w, err := ctx.SideOutput(fmt.Sprintf("keys-%d", ctx.Task().Index))
+			if err == nil {
+				_, err = fmt.Fprintf(w, "%s\n", key)
+			}
+			if fail {
+				err = errors.Join(err, errBoom)
+			}
+			return err
+		})
+		sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, 0)})
+		if err != nil {
+			return err
+		}
+		_, err = Reduce(spec, api.TaskID{Kind: api.ReduceTask, Attempt: attempt}, sources)
+		return errors.Join(err, closeSources())
+	}
+
+	if err := reduce(0, true); !errors.Is(err, errBoom) {
+		t.Fatalf("failing attempt: %v", err)
+	}
+	if names := dirNames(t, spec.Output); !slices.Equal(names, []string{TempDir}) {
+		t.Fatalf("failed attempt left %v in the output", names)
+	}
+	if names := dirNames(t, filepath.Join(spec.Output, TempDir)); len(names) != 0 {
+		t.Fatalf("failed attempt left %v", names)
+	}
+	for attempt := range uint32(2) { // a duplicate attempt writes the same bytes
+		if err := reduce(1+attempt, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Cleanup(spec.Output); err != nil {
+		t.Fatal(err)
+	}
+	if names := dirNames(t, spec.Output); !slices.Equal(names, []string{"keys-0", "part-r-00000"}) {
+		t.Fatalf("output is %v", names)
+	}
+	if data, err := os.ReadFile(filepath.Join(spec.Output, "keys-0")); err != nil || string(data) != "a\nb\n" {
+		t.Fatalf("keys-0 = %q (%v)", data, err)
+	}
+}
+
+func TestSideOutputNames(t *testing.T) {
+	ctx := newContext(api.JobSpec{Output: t.TempDir()}, api.TaskID{Kind: api.MapTask})
+	for _, name := range []string{"", ".", "..", ".hidden", "_SUCCESS", "part-r-00000", "a/b", "../x"} {
+		if _, err := ctx.SideOutput(name); err == nil {
+			t.Errorf("SideOutput(%q) succeeded", name)
+		}
+	}
+	w, err := ctx.SideOutput("ok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(w, "x"); err != nil {
+		t.Fatal(err)
+	}
+	ctx.commitSide(new(error))
+	if data, err := os.ReadFile(filepath.Join(ctx.output, "ok")); err != nil || string(data) != "x" {
+		t.Fatalf("ok = %q (%v)", data, err)
 	}
 }
 

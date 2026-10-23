@@ -23,6 +23,7 @@ import functools
 import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
+from typing import BinaryIO
 
 from mapreduce_reloaded.partition import partition
 
@@ -49,16 +50,28 @@ class Context:
         params: Mapping[str, str] | None = None,
         logger: logging.Logger | None = None,
         on_count: Callable[[str, int], None] | None = None,
+        on_side_output: Callable[[str], BinaryIO] | None = None,
     ):
         self.task = task
         self.params = dict(params or {})
         self.logger = logger or logging.getLogger("mapreduce_reloaded.user")
         self._on_count = on_count
+        self._on_side_output = on_side_output
 
     def count(self, name: str, delta: int = 1) -> None:
         """Adds delta to a named counter (§4.9)."""
         if self._on_count:
             self._on_count(name, delta)
+
+    def side_output(self, name: str) -> BinaryIO:
+        """Returns a binary file called name in the job's output directory
+        (§4.5); later calls in the same task return the same file. It
+        appears only if the task succeeds. name is a plain file name not
+        starting with ".", "_" or "part-"; include the task index in it, so
+        tasks don't overwrite each other's files. The framework closes it."""
+        if self._on_side_output is None:
+            raise RuntimeError("side outputs are not available in this context")
+        return self._on_side_output(name)
 
 
 class _UserFunction:

@@ -113,6 +113,70 @@ def test_failed_reduce_leaves_no_part(tmp_path):
     assert not list(out.rglob("part-r-*"))
 
 
+def test_side_output(tmp_path):
+    @reducer
+    def keys(ctx, key, values):
+        ctx.side_output(f"keys-{ctx.task.index}").write(key + b"\n")
+        yield key, b""
+
+    def run(reduce):
+        out = tmp_path / "out"
+        spec = JobSpec(
+            program=Program(mapper=program.mapper, reducer=reduce),
+            inputs=(RAVEN,),
+            output=str(out),
+            r=2,
+        )
+        local.run(spec, str(tmp_path))
+        return out
+
+    out = run(keys)
+    assert sorted(p.name for p in out.iterdir()) == [
+        "keys-0",
+        "keys-1",
+        "part-r-00000",
+        "part-r-00001",
+    ]
+    for r in range(2):
+        want = b"".join(
+            line.split(b"\t")[0] + b"\n"
+            for line in (out / f"part-r-0000{r}").read_bytes().splitlines(True)
+        )
+        assert (out / f"keys-{r}").read_bytes() == want
+
+
+def test_failed_side_output_leaves_nothing(tmp_path):
+    @reducer
+    def fail(ctx, key, values):
+        ctx.side_output("keys").write(key)
+        raise RuntimeError("boom")
+
+    out = tmp_path / "out"
+    spec = JobSpec(
+        program=dataclasses.replace(program, reducer=fail), inputs=(RAVEN,), output=str(out), r=1
+    )
+    with pytest.raises(RuntimeError, match="boom"):
+        local.run(spec, str(tmp_path))
+    assert not (out / "keys").exists()
+    assert not list((out / local.TEMP_DIR).iterdir())
+
+
+@pytest.mark.parametrize("name", ["", ".", "..", ".hidden", "_SUCCESS", "part-r-00000", "a/b"])
+def test_side_output_bad_name(tmp_path, name):
+    @mapper
+    def bad(ctx, key, value):
+        ctx.side_output(name)
+
+    spec = JobSpec(
+        program=dataclasses.replace(program, mapper=bad),
+        inputs=(RAVEN,),
+        output=str(tmp_path / "out"),
+        r=1,
+    )
+    with pytest.raises(ValueError, match="bad side output name"):
+        local.run(spec, str(tmp_path))
+
+
 def test_error_names_task(tmp_path):
     @mapper
     def fail(ctx, key, value):

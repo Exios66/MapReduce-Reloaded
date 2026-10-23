@@ -7,12 +7,14 @@
 package task
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/combine"
 	"github.com/exios66/mapreduce-reloaded/go/internal/extsort"
@@ -42,6 +44,7 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string) (size
 		return nil, nil, err
 	}
 	ctx := newContext(spec, id)
+	defer ctx.commitSide(&err)
 	p := spec.Program
 	partitioner := p.Partitioner
 	if partitioner == nil {
@@ -117,6 +120,7 @@ func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records) (counts 
 	defer commit(&err, w, tmp, path)
 
 	ctx := newContext(spec, id)
+	defer ctx.commitSide(&err) // before the part file, which marks the task done
 	emit := emitter(func(key, value []byte) error {
 		ctx.Count(ReduceOutputRecords, 1)
 		return w.Write(key, value)
@@ -214,12 +218,16 @@ type taskContext struct {
 	params map[string]string
 	counts map[string]int64
 	logger *slog.Logger
+	output string
+	side   map[string]*sideFile
 }
 
 func newContext(spec api.JobSpec, id api.TaskID) *taskContext {
 	return &taskContext{
 		task:   id,
 		params: spec.Params,
+		output: spec.Output,
+		side:   map[string]*sideFile{},
 		counts: map[string]int64{},
 		logger: slog.Default().With("task", fmt.Sprintf("%v-%d.%d", id.Kind, id.Index, id.Attempt)),
 	}
@@ -229,6 +237,45 @@ func (c *taskContext) Task() api.TaskID               { return c.task }
 func (c *taskContext) Param(name string) string       { return c.params[name] }
 func (c *taskContext) Count(name string, delta int64) { c.counts[name] += delta }
 func (c *taskContext) Logger() *slog.Logger           { return c.logger }
+
+func (c *taskContext) SideOutput(name string) (io.Writer, error) {
+	if name != filepath.Base(name) || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") ||
+		strings.HasPrefix(name, "part-") {
+		return nil, fmt.Errorf("task: bad side output name %q", name)
+	}
+	if s := c.side[name]; s != nil {
+		return s, nil
+	}
+	dir := filepath.Join(c.output, TempDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	tmp := attemptPath(filepath.Join(dir, fmt.Sprintf("%s.%v-%d", name, c.task.Kind, c.task.Index)), c.task.Attempt)
+	f, err := os.Create(tmp)
+	if err != nil {
+		return nil, err
+	}
+	s := &sideFile{Writer: bufio.NewWriter(f), f: f, tmp: tmp, path: filepath.Join(c.output, name)}
+	c.side[name] = s
+	return s, nil
+}
+
+// commitSide commits the attempt's side files if *err is nil, and removes
+// them otherwise. Use it with defer.
+func (c *taskContext) commitSide(err *error) {
+	for _, s := range c.side {
+		commit(err, s, s.tmp, s.path)
+	}
+}
+
+// sideFile is a side output being written under its temporary name.
+type sideFile struct {
+	*bufio.Writer
+	f         *os.File
+	tmp, path string
+}
+
+func (s *sideFile) Close() error { return errors.Join(s.Flush(), s.f.Close()) }
 
 type emitter func(key, value []byte) error
 
