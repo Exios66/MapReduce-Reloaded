@@ -26,7 +26,10 @@ import (
 // Framework counters, reported alongside the user's.
 const (
 	MapInputRecords     = "map.input.records"
+	MapInputBytes       = "map.input.bytes" // the split's size
 	MapOutputRecords    = "map.output.records"
+	MapOutputBytes      = "map.output.bytes" // after combining
+	ReduceInputRecords  = "reduce.input.records"
 	ReduceOutputRecords = "reduce.output.records"
 	SkippedRecords      = "skipped.records"
 )
@@ -68,6 +71,7 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 		return nil, nil, err
 	}
 	defer closeJoin(&err, records)
+	ctx.Count(MapInputBytes, split.End-split.Start)
 	emit := emitter(func(key, value []byte) error {
 		ctx.Count(MapOutputRecords, 1)
 		return sorters[partitioner.Partition(key, spec.R)].Add(key, value)
@@ -91,6 +95,7 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 		if sizes[r], err = writeKV(MapOutput(dir, int(id.Index), r), id.Attempt, sorted); err != nil {
 			return nil, nil, err
 		}
+		ctx.Count(MapOutputBytes, sizes[r])
 	}
 	return sizes, ctx.counts, nil
 }
@@ -129,7 +134,7 @@ func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []u
 	})
 	merged := extsort.Merge(sources...) // in map task order, so equal keys stay in input order
 	n := uint64(0)
-	for key, values := range extsort.Groups(merged) {
+	for key, values := range extsort.Groups(counted{merged, ctx}) {
 		if err := ctx.call(n, func() error { return spec.Program.Reducer.Reduce(ctx, key, values, emit) }); err != nil {
 			return nil, err
 		}
@@ -313,6 +318,20 @@ type sideFile struct {
 }
 
 func (s *sideFile) Close() error { return errors.Join(s.Flush(), s.f.Close()) }
+
+// counted counts the records read through it as ReduceInputRecords.
+type counted struct {
+	extsort.Records
+	ctx *taskContext
+}
+
+func (c counted) Next() bool {
+	if !c.Records.Next() {
+		return false
+	}
+	c.ctx.Count(ReduceInputRecords, 1)
+	return true
+}
 
 type emitter func(key, value []byte) error
 
