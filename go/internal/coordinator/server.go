@@ -226,6 +226,10 @@ func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) 
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	skip, err := j.tasks.Skip(t)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	id := &pb.TaskAttemptId{Task: &pb.TaskId{JobId: j.id, Kind: t.Kind, Index: t.Index}, Attempt: attempt}
 	rec := &pb.TaskAssigned{Attempt: id, WorkerId: worker}
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}); err != nil {
@@ -233,11 +237,11 @@ func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) 
 	}
 	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_MapTask{
-			MapTask: &pb.MapTask{Attempt: id, Job: j.spec, Split: j.splits[t.Index]},
+			MapTask: &pb.MapTask{Attempt: id, Job: j.spec, Split: j.splits[t.Index], SkipRecords: skip},
 		}}, nil
 	}
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_ReduceTask{
-		ReduceTask: &pb.ReduceTask{Attempt: id, Job: j.spec, Sources: j.tasks.Sources(t.Index)},
+		ReduceTask: &pb.ReduceTask{Attempt: id, Job: j.spec, Sources: j.tasks.Sources(t.Index), SkipRecords: skip},
 	}}, nil
 }
 
@@ -266,7 +270,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest) (accepted bool, err e
 	id := req.GetAttempt()
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 	if f := req.GetFailure(); f != nil {
-		return false, j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f.GetLostOutput())
+		return false, j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
 	}
 	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
 	if accepted {

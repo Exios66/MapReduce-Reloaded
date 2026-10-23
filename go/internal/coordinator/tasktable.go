@@ -26,7 +26,14 @@ type task struct {
 	running  map[uint32]string       // worker of each running attempt
 	worker   string                  // worker of the accepted attempt, once completed
 	outputs  []*pb.PartitionLocation // map tasks: one per partition, once completed
+	crashes  map[uint64]int          // attempts that crashed on each record
+	skip     []uint64                // records later attempts skip
 }
+
+// SkipAfter is how many attempts must crash on a record before later
+// attempts skip it: more than one, so that one crash with another cause
+// loses no record (§4.6).
+const SkipAfter = 2
 
 // TaskTable tracks the state of a job's M map and R reduce tasks:
 //
@@ -115,11 +122,12 @@ func (t *TaskTable) Complete(id Task, attempt uint32, worker string, outputs []*
 	return true, nil
 }
 
-// Fail records that an attempt on worker failed. The task becomes idle again
-// unless another attempt is still running. If the attempt failed because it
-// could not fetch lost, a map output, that map task runs again (§3.3).
-// Reports for attempts that are not running on worker are ignored.
-func (t *TaskTable) Fail(id Task, attempt uint32, worker string, lost *pb.PartitionLocation) error {
+// Fail records that an attempt on worker failed as f says. The task becomes
+// idle again unless another attempt is still running. If the attempt could
+// not fetch a map output, that map task runs again (§3.3); if it crashed on
+// a record, later attempts may skip that record (§4.6). Reports for attempts
+// that are not running on worker are ignored.
+func (t *TaskTable) Fail(id Task, attempt uint32, worker string, f *pb.TaskFailure) error {
 	ts, err := t.task(id)
 	if err != nil {
 		return err
@@ -127,9 +135,22 @@ func (t *TaskTable) Fail(id Task, attempt uint32, worker string, lost *pb.Partit
 	if ts.runsOn(attempt, worker) {
 		delete(ts.running, attempt)
 		ts.idleIfStopped()
-		t.lose(lost)
+		t.lose(f.GetLostOutput())
+		if f != nil && f.FailedRecord != nil {
+			ts.crashed(f.GetFailedRecord())
+		}
 	}
 	return nil
+}
+
+// Skip returns the records that attempts of a task skip, in the order they
+// were added.
+func (t *TaskTable) Skip(id Task) ([]uint64, error) {
+	ts, err := t.task(id)
+	if err != nil {
+		return nil, err
+	}
+	return ts.skip, nil
 }
 
 // lose makes a completed map task idle if its output for lost's partition
@@ -255,6 +276,17 @@ func (ts *task) stopAttemptsOn(worker string) bool {
 		}
 	}
 	return stopped && ts.idleIfStopped()
+}
+
+// crashed counts an attempt that crashed on record n, and skips n once
+// SkipAfter attempts have.
+func (ts *task) crashed(n uint64) {
+	if ts.crashes == nil {
+		ts.crashes = map[uint64]int{}
+	}
+	if ts.crashes[n]++; ts.crashes[n] == SkipAfter {
+		ts.skip = append(ts.skip, n)
+	}
 }
 
 // idleIfStopped makes an in-progress task with no running attempt idle, and
