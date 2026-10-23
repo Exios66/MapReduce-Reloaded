@@ -88,7 +88,8 @@ failing, and jobs still finish correctly.*
 - **#25** Backup tasks: near the end of a job, start duplicates of the slow
   tasks. In the paper, turning this off made jobs 44% slower.
 - **#26** Bad-record skipping: if user code crashes on the same record
-  twice, skip that record.
+  twice, skip that record. See
+  [explainers/19-bad-records.md](explainers/19-bad-records.md).
 - **#27** Counters that don't double-count re-run tasks.
 - **#28** Safe extra output files. See
   [explainers/17-side-outputs.md](explainers/17-side-outputs.md).

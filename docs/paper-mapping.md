@@ -26,7 +26,7 @@ Status: `planned` → `in progress` → `done`.
 | F16 | Combiner | §4.3 | 1 | `go/internal/combine` | `mapreduce_reloaded/combine.py` | `TestCombinerPreservesOutput`, `test_combine.py` | done |
 | F17 | Pluggable input/output types | §4.4 | 1 | `go/internal/formats` | `mapreduce_reloaded/formats` | `FuzzTextSplits`, `test_formats.py` | done |
 | F18 | Atomic side-effect files | §4.5 | 3 | `go/internal/task` | `mapreduce_reloaded/local.py` | `TestSideOutput`, `test_side_output` | done |
-| F19 | Skipping bad records | §4.6 | 3 | | | | planned |
+| F19 | Skipping bad records | §4.6 | 3 | `go/internal/task`, `go/internal/coordinator` | | `TestBadRecords`, `TestFailWithCrash`, `TestClusterSkipsBadRecords` | done |
 | F20 | Local execution mode | §4.7 | 1 | `go/internal/local`, `go/cmd/mr` | `mapreduce_reloaded/local.py`, `__main__.py` | `TestWordCountGolden`, `test_local.py` | done |
 | F21 | HTTP status pages | §4.8 | 4 | | | | planned |
 | F22 | Counters (de-duplicated) | §4.9 | 3 | | | | planned |
