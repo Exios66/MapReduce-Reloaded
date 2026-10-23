@@ -46,7 +46,8 @@ identical bytes, which gives a second, independent correctness check.
   [explainers/06-kv-reader-writer.md](explainers/06-kv-reader-writer.md) and
   [explainers/08-formats.md](explainers/08-formats.md).
 - **#10 Sorting data bigger than memory:** sort chunks that fit in memory,
-  save them to disk, then merge the sorted chunks.
+  save them to disk, then merge the sorted chunks. See
+  [explainers/09-external-sort.md](explainers/09-external-sort.md).
 - **#11 The combiner:** add up counts on the map side before sending them.
   For example, send `("the", 5000)` once instead of `("the", 1)` five
   thousand times.
