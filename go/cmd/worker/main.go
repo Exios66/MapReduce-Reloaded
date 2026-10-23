@@ -1,6 +1,6 @@
 // Command worker runs tasks for a coordinator until it says to exit.
 //
-//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-http :8081]
+//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-http :8081] [-log-format text|json]
 //
 // It keeps map output in its work directory and serves it to reducers on
 // -listen; other workers reach it at -advertise. Without -work-dir it uses a
@@ -28,12 +28,13 @@ import (
 
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
 	"github.com/exios66/mapreduce-reloaded/go/internal/shuffle"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
 )
 
 type config struct {
-	coordinator, listen, advertise, workDir, http string
+	coordinator, listen, advertise, workDir, http, logFormat string
 }
 
 func main() {
@@ -43,8 +44,13 @@ func main() {
 	flag.StringVar(&c.advertise, "advertise", "", "address other workers fetch map output from (default: this host and the -listen port)")
 	flag.StringVar(&c.workDir, "work-dir", "", "directory for map output (default: a temporary directory)")
 	flag.StringVar(&c.http, "http", "", "address to serve /metrics on (default: none)")
+	flag.StringVar(&c.logFormat, "log-format", "text", "log format: text or json")
 	flag.Parse()
-	if err := run(c); err != nil {
+	err := logs.Setup(c.logFormat)
+	if err == nil {
+		err = run(c)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "worker:", err)
 		os.Exit(1)
 	}

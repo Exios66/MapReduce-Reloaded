@@ -118,6 +118,14 @@ func TestTaskKindString(t *testing.T) {
 	}
 }
 
+func TestTaskIDLogValue(t *testing.T) {
+	var b bytes.Buffer
+	slog.New(slog.NewTextHandler(&b, nil)).Info("x", "task", api.TaskID{Kind: api.ReduceTask, Index: 3, Attempt: 1})
+	if want := "task.kind=reduce task.index=3 task.attempt=1\n"; !strings.HasSuffix(b.String(), want) {
+		t.Fatalf("got %q, want suffix %q", b.String(), want)
+	}
+}
+
 // run executes p on lines in memory, sequentially: map, group by key, reduce.
 // It returns "key value" lines in key order.
 func run(p api.Program, lines ...string) ([]string, error) {

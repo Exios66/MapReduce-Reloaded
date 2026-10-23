@@ -29,6 +29,17 @@ workers' are on port 8081 inside the Compose network, not published, since
 there are several. `make e2e` checks that the coordinator's `/metrics` shows
 the job's reduce tasks completed.
 
+## Logs
+
+`-log-format json` makes the coordinator and worker log one JSON object per
+line; the default is text. A worker tags every message about an attempt,
+its own and those of the attempt's user code (`Context.Logger`), with
+`worker`, `job` and `task`, a group of the task's kind, index and attempt:
+
+```json
+{"level":"WARN","msg":"task failed","worker":"…","job":"job-1","task":{"kind":"map","index":4,"attempt":1},"err":"..."}
+```
+
 ## Choices
 
 - **No dependencies.** The metrics are a few gauges and counters, and the text format
@@ -46,4 +57,5 @@ the job's reduce tasks completed.
 
 - The status page shows no bytes or rates: workers count them in their own
   `/metrics`, but do not report them to the coordinator.
-- Per-attempt logs are not shown either.
+- Per-attempt logs are not shown either: they are in each worker's log,
+  found by `job` and `task`.

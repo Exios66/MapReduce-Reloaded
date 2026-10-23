@@ -8,6 +8,7 @@ package local
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"
@@ -47,7 +48,8 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 		}
 	}
 	for i, s := range splits {
-		_, c, err := task.Map(spec, api.TaskID{Kind: api.MapTask, Index: uint32(i)}, s, workDir, nil)
+		id := api.TaskID{Kind: api.MapTask, Index: uint32(i)}
+		_, c, err := task.Map(spec, id, s, workDir, nil, slog.Default().With("task", id))
 		if err != nil {
 			return nil, fmt.Errorf("map task %d: %w", i, err)
 		}
@@ -73,6 +75,7 @@ func reduce(spec api.JobSpec, r uint32, m int, dir string) (map[string]int64, er
 	if err != nil {
 		return nil, err
 	}
-	counts, err := task.Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources, nil)
+	id := api.TaskID{Kind: api.ReduceTask, Index: r}
+	counts, err := task.Reduce(spec, id, sources, nil, slog.Default().With("task", id))
 	return counts, errors.Join(err, closeSources())
 }

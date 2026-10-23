@@ -130,3 +130,12 @@ type TaskID struct {
 	Index   uint32 // 0..M-1 for map tasks, 0..R-1 for reduce tasks
 	Attempt uint32
 }
+
+// LogValue logs id as a group of its kind, index and attempt.
+func (id TaskID) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("kind", id.Kind.String()),
+		slog.Uint64("index", uint64(id.Index)),
+		slog.Uint64("attempt", uint64(id.Attempt)),
+	)
+}

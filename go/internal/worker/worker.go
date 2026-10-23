@@ -106,15 +106,15 @@ func (w *Worker) session(ctx context.Context) error {
 		var report *pb.ReportTaskRequest
 		switch a := resp.GetAssignment().(type) {
 		case *pb.RequestTaskResponse_MapTask:
-			done := w.stats.start(mapKind)
-			outputs, counts, err := w.runMap(a.MapTask)
+			log, done := w.attemptLogger(a.MapTask.GetAttempt()), w.stats.start(mapKind)
+			outputs, counts, err := w.runMap(a.MapTask, log)
 			done(err)
-			report = w.report(a.MapTask.GetAttempt(), outputs, counts, err)
+			report = w.report(a.MapTask.GetAttempt(), log, outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
-			done := w.stats.start(reduceKind)
-			counts, err := w.runReduce(ctx, a.ReduceTask)
+			log, done := w.attemptLogger(a.ReduceTask.GetAttempt()), w.stats.start(reduceKind)
+			counts, err := w.runReduce(ctx, a.ReduceTask, log)
 			done(err)
-			report = w.report(a.ReduceTask.GetAttempt(), nil, counts, err)
+			report = w.report(a.ReduceTask.GetAttempt(), log, nil, counts, err)
 		case *pb.RequestTaskResponse_Shutdown:
 			return nil
 		default:
@@ -155,8 +155,18 @@ func (w *Worker) heartbeat(ctx context.Context, id string, interval time.Duratio
 	}
 }
 
+// attemptLogger returns the worker's logger tagged with attempt's job and
+// task, for the attempt's user code and the worker's own messages about it.
+func (w *Worker) attemptLogger(attempt *pb.TaskAttemptId) *slog.Logger {
+	log := w.logger.With("job", attempt.GetTask().GetJobId())
+	if id, err := wire.TaskID(attempt); err == nil { // else the attempt fails with err
+		log = log.With("task", id)
+	}
+	return log
+}
+
 // runMap runs a map task and returns where its output partitions are.
-func (w *Worker) runMap(m *pb.MapTask) ([]*pb.PartitionLocation, map[string]int64, error) {
+func (w *Worker) runMap(m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, nil, err
@@ -173,7 +183,7 @@ func (w *Worker) runMap(m *pb.MapTask) ([]*pb.PartitionLocation, map[string]int6
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	sizes, counts, err := task.Map(spec, id, split, dir, m.GetSkipRecords())
+	sizes, counts, err := task.Map(spec, id, split, dir, m.GetSkipRecords(), log)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -195,7 +205,7 @@ func (w *Worker) runMap(m *pb.MapTask) ([]*pb.PartitionLocation, map[string]int6
 }
 
 // runReduce runs a reduce task over the map outputs it lists.
-func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask) (counts map[string]int64, err error) {
+func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logger) (counts map[string]int64, err error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, err
@@ -213,7 +223,7 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask) (counts map[st
 		defer func() { err = errors.Join(err, r.Close()) }()
 		sources[i] = kv.NewReader(r)
 	}
-	return task.Reduce(spec, id, sources, m.GetSkipRecords())
+	return task.Reduce(spec, id, sources, m.GetSkipRecords(), log)
 }
 
 // open opens one map output: from the worker that holds it, or from shared
@@ -237,11 +247,11 @@ func (w *Worker) open(ctx context.Context, job string, src *pb.PartitionLocation
 }
 
 // report builds the report of an attempt that returned outputs and counts,
-// or failed with err.
-func (w *Worker) report(id *pb.TaskAttemptId, outputs []*pb.PartitionLocation, counts map[string]int64, err error) *pb.ReportTaskRequest {
+// or failed with err, which it logs to log.
+func (w *Worker) report(id *pb.TaskAttemptId, log *slog.Logger, outputs []*pb.PartitionLocation, counts map[string]int64, err error) *pb.ReportTaskRequest {
 	req := &pb.ReportTaskRequest{WorkerId: w.id, Attempt: id}
 	if err != nil {
-		w.logger.Warn("task failed", "task", id.GetTask(), "attempt", id.GetAttempt(), "err", err)
+		log.Warn("task failed", "err", err)
 		failure := &pb.TaskFailure{Message: err.Error()}
 		var lost *lostOutput
 		if errors.As(err, &lost) {
