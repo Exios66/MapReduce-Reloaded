@@ -21,9 +21,10 @@ append takes milliseconds, and something has to order the appends.
    - a worker lost.
 
    The registry is not logged: workers register again with a restarted
-   coordinator. Replay will call the same code as the live handlers
+   coordinator. Replay calls the same code as the live handlers
    (`submit`, `Assign`, `report`, `ResetWorker`), so the two cannot drift
-   apart.
+   apart. A restart is logged too (`Restarted`), so a second restart
+   replays the first.
 2. **Appends happen under the lock, before the reply.** A handler changes
    the state, appends the decision, and only then replies. No one sees the
    change before the log holds it, because no one can read the state until

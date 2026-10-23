@@ -83,7 +83,8 @@ failing, and jobs still finish correctly.*
   worker's disk. See
   [explainers/16-worker-failure.md](explainers/16-worker-failure.md).
 - **#24** Coordinator crash recovery: a log of every decision, replayed on
-  restart. The 2004 system simply aborted the job in this case.
+  restart. The 2004 system simply aborted the job in this case. See
+  [explainers/18-coordinator-recovery.md](explainers/18-coordinator-recovery.md).
 - **#25** Backup tasks: near the end of a job, start duplicates of the slow
   tasks. In the paper, turning this off made jobs 44% slower.
 - **#26** Bad-record skipping: if user code crashes on the same record
