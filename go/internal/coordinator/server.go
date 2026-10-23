@@ -35,7 +35,7 @@ type Config struct {
 // submitted while another runs is rejected.
 //
 // All state is guarded by mu (ADR 0006). Nothing slow runs under it:
-// SubmitJob plans the input splits before locking.
+// SubmitJob plans the input splits and checks the output before locking.
 type Server struct {
 	pb.UnimplementedCoordinatorServiceServer
 	cfg Config

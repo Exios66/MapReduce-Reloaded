@@ -40,6 +40,7 @@ owns the state and receives requests on a channel.
 
 - Handlers are easy to read and to test: the table and registry are tested
   directly, with no goroutines, and the race detector checks the handlers.
-- All RPCs are serialised. At this project's scale (a handful of workers,
-  thousands of tasks), each critical section takes microseconds, so this
-  is not a bottleneck. The paper's master is also a single process (§3.2).
+- All changes to the state are serialised; only SubmitJob's checks of
+  the file system run outside the lock. At this project's scale (a handful
+  of workers, thousands of tasks), each critical section takes
+  microseconds, so this is not a bottleneck. The paper's master is also a single process (§3.2).

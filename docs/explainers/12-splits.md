@@ -8,8 +8,8 @@ A split is a byte range of one input file: the work of one map task
 `split.Plan` (Go) and `split.plan` (Python) expand the job's file names and
 globs, then ask the input format to cut each file into pieces of about
 `SplitSize` bytes (64 MiB by default; the paper uses 16 to 64 MB). Local
-mode uses it now, and the coordinator will use it in #16, so both cut the
-same input the same way.
+mode and the coordinator (#16) both use it, so both cut the same input the
+same way.
 
 ## Record boundaries
 
@@ -24,8 +24,8 @@ each file's size, never its contents.
   gives about m splits, which is what `mr run -m` uses.
 - **R:** the paper makes R "a small multiple of the number of worker
   machines" (§3.5). `DefaultR(workers)` is 2 per worker. The coordinator
-  applies it in #16, when it knows how many workers there are; until then
-  R is set explicitly.
+  applies it to a job submitted without R, since it knows how many workers
+  there are; local mode needs R set explicitly.
 
 ## How we know it works
 
