@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"iter"
 	"log/slog"
 
@@ -88,6 +89,16 @@ type Context interface {
 	Count(name string, delta int64)
 	// Logger returns a logger tagged with the task.
 	Logger() *slog.Logger
+	// SideOutput creates a file called name in the job's output directory
+	// and returns a writer to it (§4.5); later calls in the same attempt
+	// return the same writer. The file appears only if the
+	// attempt succeeds, so a failed attempt leaves no partial copy. name is
+	// a plain file name not starting with ".", "_" or "part-". Include the
+	// task index in it, so tasks don't overwrite each other's files. As in the
+	// paper, there is no atomicity across files: if two attempts of a task
+	// succeed, the later one's file wins, so every attempt must write the
+	// same bytes.
+	SideOutput(name string) (io.Writer, error)
 }
 
 // TaskKind says whether a task is a map or a reduce task.
