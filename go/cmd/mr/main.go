@@ -1,12 +1,13 @@
 // Command mr runs MapReduce jobs, in this process or on a cluster.
 //
-//	mr run -local [-m M] [-r R] <program> <output-dir> <inputs>
-//	mr submit [-coordinator addr] [-m M] [-r R] [-wait] <program> <output-dir> <inputs>
+//	mr run -local [-m M] [-r R] [-param name=value]... <program> <output-dir> <inputs>
+//	mr submit [-coordinator addr] [-m M] [-r R] [-param name=value]... [-wait] <program> <output-dir> <inputs>
 //	mr status [-coordinator addr] <job-id>
 //
 // program is a registered program name, such as wordcount; inputs are one or
 // more files or glob patterns. Local mode (§4.7) runs every task in this
-// process and prints the counters to standard error.
+// process and prints the counters to standard error. Each -param is passed
+// to the program's code, which reads it with Context.Param.
 package main
 
 import (
@@ -35,8 +36,8 @@ import (
 )
 
 const usage = `usage:
-  mr run -local [-m M] [-r R] <program> <output-dir> <inputs>
-  mr submit [-coordinator addr] [-m M] [-r R] [-max-skipped N] [-wait] <program> <output-dir> <inputs>
+  mr run -local [-m M] [-r R] [-param name=value]... <program> <output-dir> <inputs>
+  mr submit [-coordinator addr] [-m M] [-r R] [-param name=value]... [-max-skipped N] [-wait] <program> <output-dir> <inputs>
   mr status [-coordinator addr] <job-id>`
 
 // pollInterval is how often submit -wait checks the job's status.
@@ -70,17 +71,38 @@ type job struct {
 	inputs          []string
 	splitSize       uint64
 	r               uint32
+	params          params
 }
 
 // jobFlags are the flags that describe a job.
-type jobFlags struct{ m, r *uint }
+type jobFlags struct {
+	m, r   *uint
+	params params
+}
 
 // addJobFlags defines the job flags on fs; defaultR is the default of -r.
 func addJobFlags(fs *flag.FlagSet, defaultR uint) jobFlags {
-	return jobFlags{
-		m: fs.Uint("m", 0, "approximate number of map tasks (default: one per 64 MiB of input)"),
-		r: fs.Uint("r", defaultR, "number of reduce tasks"),
+	f := jobFlags{
+		m:      fs.Uint("m", 0, "approximate number of map tasks (default: one per 64 MiB of input)"),
+		r:      fs.Uint("r", defaultR, "number of reduce tasks"),
+		params: params{},
 	}
+	fs.Var(f.params, "param", "a `name=value` parameter for the program; may be repeated")
+	return f
+}
+
+// params is a repeatable name=value flag.
+type params map[string]string
+
+func (p params) String() string { return fmt.Sprint(map[string]string(p)) }
+
+func (p params) Set(v string) error {
+	name, value, ok := strings.Cut(v, "=")
+	if !ok || name == "" {
+		return fmt.Errorf("%q is not name=value", v)
+	}
+	p[name] = value
+	return nil
 }
 
 // job returns the job described by the flags and arguments of a parsed fs.
@@ -94,7 +116,7 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	if *f.m > math.MaxInt {
 		return job{}, fmt.Errorf("-m %d is too large", *f.m)
 	}
-	j := job{program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r)}
+	j := job{program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r), params: f.params}
 	if *f.m > 0 {
 		var err error
 		if j.splitSize, err = split.SizeFor(j.inputs, int(*f.m)); err != nil {
@@ -135,7 +157,7 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 	}
 	defer func() { err = errors.Join(err, os.RemoveAll(work)) }()
 	counts, err := local.Run(api.JobSpec{
-		Program: program, Inputs: j.inputs, Output: j.output, SplitSize: j.splitSize, R: j.r,
+		Program: program, Inputs: j.inputs, Output: j.output, SplitSize: j.splitSize, R: j.r, Params: j.params,
 	}, work)
 	if err != nil {
 		return err
@@ -158,7 +180,7 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	}
 	// Send absolute URIs, so the coordinator and workers resolve them the
 	// same way whatever their working directory.
-	spec := &pb.JobSpec{Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true}
+	spec := &pb.JobSpec{Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true, Params: j.params}
 	if *maxSkipped >= 0 {
 		spec.MaxSkippedRecords = proto.Uint64(uint64(*maxSkipped))
 	}
