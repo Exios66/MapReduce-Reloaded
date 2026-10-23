@@ -1,0 +1,148 @@
+{
+  "algorithm": "fnv1a64",
+  "vectors": [
+    {
+      "name": "empty",
+      "key_b64": "",
+      "hash": "cbf29ce484222325",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 2,
+        "64": 37,
+        "1000": 37,
+        "4294967295": 1343537162
+      }
+    },
+    {
+      "name": "a",
+      "key_b64": "YQ==",
+      "hash": "af63dc4c8601ec8c",
+      "partitions": {
+        "1": 0,
+        "2": 0,
+        "7": 5,
+        "64": 12,
+        "1000": 996,
+        "4294967295": 895863001
+      }
+    },
+    {
+      "name": "foobar",
+      "key_b64": "Zm9vYmFy",
+      "hash": "85944171f73967e8",
+      "partitions": {
+        "1": 0,
+        "2": 0,
+        "7": 6,
+        "64": 40,
+        "1000": 968,
+        "4294967295": 2093853018
+      }
+    },
+    {
+      "name": "word",
+      "key_b64": "YXBwbGU=",
+      "hash": "f74a62a458befdbf",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 1,
+        "64": 63,
+        "1000": 135,
+        "4294967295": 1342791780
+      }
+    },
+    {
+      "name": "utf8_latin",
+      "key_b64": "bmHDr3Zl",
+      "hash": "1e858bc68a6332ab",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 0,
+        "64": 43,
+        "1000": 643,
+        "4294967295": 2833825393
+      }
+    },
+    {
+      "name": "utf8_cjk",
+      "key_b64": "5pel5pys6Kqe",
+      "hash": "ee9ee2b5c854ef87",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 0,
+        "64": 7,
+        "1000": 911,
+        "4294967295": 3069432381
+      }
+    },
+    {
+      "name": "utf8_emoji",
+      "key_b64": "8J+Xuu+4jw==",
+      "hash": "dd3bcaa51c3b05cf",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 0,
+        "64": 15,
+        "1000": 311,
+        "4294967295": 4185313396
+      }
+    },
+    {
+      "name": "nul",
+      "key_b64": "AA==",
+      "hash": "af63bd4c8601b7df",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 3,
+        "64": 31,
+        "1000": 455,
+        "4294967295": 895841580
+      }
+    },
+    {
+      "name": "high_bytes",
+      "key_b64": "AP+A",
+      "hash": "d6c4781869e88da0",
+      "partitions": {
+        "1": 0,
+        "2": 0,
+        "7": 0,
+        "64": 32,
+        "1000": 392,
+        "4294967295": 1085081017
+      }
+    },
+    {
+      "name": "all_bytes",
+      "key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==",
+      "hash": "4242dc5249c33625",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 1,
+        "64": 37,
+        "1000": 213,
+        "4294967295": 2349208183
+      }
+    },
+    {
+      "name": "long",
+      "key_b64": "bWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIG1hcHJlZHVjZSBtYXByZWR1Y2UgbWFwcmVkdWNlIA==",
+      "hash": "8dd82c9b52895e45",
+      "partitions": {
+        "1": 0,
+        "2": 1,
+        "7": 0,
+        "64": 5,
+        "1000": 973,
+        "4294967295": 3764488928
+      }
+    }
+  ]
+}

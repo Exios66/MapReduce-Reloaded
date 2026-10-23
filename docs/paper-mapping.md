@@ -11,7 +11,7 @@ Status: `planned` → `in progress` → `done`.
 | F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | | planned |
 | F2  | Input splitting (16–64 MB) | §3.1 | 2 | | | | planned |
 | F3  | Master + M map / R reduce tasks | §3.1 | 2 | | | | planned |
-| F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | | | | planned |
+| F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition` | `mapreduce_reloaded/partition` | `testdata/hash/vectors.json` | in progress (hash done; spill is #17) |
 | F5  | Remote fetch, sort, group, reduce | §3.1 | 2 | | | | planned |
 | F6  | R output files | §3.1 | 2 | | | | planned |
 | F7  | Master data structures | §3.2 | 2 | | | | planned |
