@@ -1,0 +1,35 @@
+# Golden wire-format vector for mapreduce.v1.MapTask (protobuf text format).
+# Both the Go and Python tests parse this file, serialize it, and compare the
+# bytes with map_task.binpb, proving both languages agree on the wire format.
+# After editing this file, regenerate the .binpb with:
+#   python scripts/make-golden.py
+attempt {
+  task {
+    job_id: "job-0001"
+    kind: TASK_KIND_MAP
+    index: 7
+  }
+  attempt: 1
+}
+job {
+  program: "wordcount"
+  inputs: "file:///data/in/*.txt"
+  output: "file:///data/out"
+  split_size_bytes: 67108864
+  num_reduce_tasks: 4
+  input_format: "text"
+  output_format: "text"
+  use_combiner: true
+  params {
+    key: "lowercase"
+    value: "true"
+  }
+}
+split {
+  uri: "file:///data/in/pg100.txt"
+  offset: 469762048
+  length: 67108864
+  locations: "worker-a"
+}
+skip_records: 42
+skip_records: 1000000

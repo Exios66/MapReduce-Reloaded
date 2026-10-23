@@ -1,0 +1,11 @@
+# buf configuration: lint rules and breaking-change detection for proto/.
+# Code generation uses scripts/gen-proto.sh, not buf (see that file).
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

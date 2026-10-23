@@ -1,0 +1,133 @@
+// Shared data types used by both services.
+//
+// Section references (§) point to Dean & Ghemawat, "MapReduce: Simplified
+// Data Processing on Large Clusters", OSDI 2004.
+
+syntax = "proto3";
+
+package mapreduce.v1;
+
+option go_package = "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1";
+
+// Which half of the computation a task performs (§3.1).
+enum TaskKind {
+  TASK_KIND_UNSPECIFIED = 0;
+  // Reads one input split, calls the user's Map function, and writes R
+  // partitioned intermediate files to the worker's local disk.
+  TASK_KIND_MAP = 1;
+  // Fetches one partition from every map task's output, sorts and groups it
+  // by key, calls the user's Reduce function, and writes one output file.
+  TASK_KIND_REDUCE = 2;
+}
+
+// Lifecycle of a task as tracked by the coordinator (§3.2: "For each map task
+// and reduce task, it stores the state (idle, in-progress, or completed)").
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  // Waiting to be handed to a worker. Failed or lost tasks return here.
+  TASK_STATE_IDLE = 1;
+  // At least one attempt is running on a worker.
+  TASK_STATE_IN_PROGRESS = 2;
+  // One attempt finished and its output was accepted. Later reports for the
+  // same task are ignored (§3.3).
+  TASK_STATE_COMPLETED = 3;
+}
+
+// Names one task within one job. Stable across retries.
+message TaskId {
+  // The job this task belongs to.
+  string job_id = 1;
+  // Map or reduce.
+  TaskKind kind = 2;
+  // 0-based index: 0..M-1 for map tasks, 0..R-1 for reduce tasks.
+  uint32 index = 3;
+}
+
+// Names one execution of a task. A task can run several times: after a
+// worker failure (§3.3) or as a backup task (§3.6). The attempt number keeps
+// temporary files and reports from different executions apart.
+message TaskAttemptId {
+  // The task being executed.
+  TaskId task = 1;
+  // 0 for the first execution, incremented for each new attempt.
+  uint32 attempt = 2;
+}
+
+// A contiguous byte range of one input file, processed by one map task
+// (§3.1: input is split into M pieces of typically 16-64 MB).
+message InputSplit {
+  // Location of the file, e.g. "file:///data/in/part-0" or "s3://bucket/key".
+  string uri = 1;
+  // First byte of the split. The reader skips forward to the first record
+  // that starts at or after this offset.
+  uint64 offset = 2;
+  // Number of bytes in the split. The reader finishes the record that
+  // crosses the end, so no record is lost or read twice.
+  uint64 length = 3;
+  // Hosts or zones that hold this data, used for locality-aware scheduling
+  // (§3.4). Empty when unknown.
+  repeated string locations = 4;
+}
+
+// Where one map task's output for one reduce partition can be fetched
+// (§3.2: "For each completed map task, the master stores the locations and
+// sizes of the R intermediate file regions").
+message PartitionLocation {
+  // Index of the map task that produced the data.
+  uint32 map_index = 1;
+  // Reduce partition the data belongs to (0..R-1).
+  uint32 partition = 2;
+  // gRPC address of the worker serving the data via ShuffleService, e.g.
+  // "10.0.0.7:7070". Empty when the data lives in shared storage instead.
+  string worker_address = 3;
+  // Size of the data in bytes, so reducers can plan their fetches.
+  uint64 size_bytes = 4;
+  // Set when the data lives in shared storage (external shuffle mode, Phase
+  // 6) rather than on the worker's local disk.
+  string uri = 5;
+}
+
+// Named integer counters, e.g. "map.input.records" (§4.9).
+message Counters {
+  // Counter name to value.
+  map<string, int64> values = 1;
+}
+
+// Everything the coordinator and workers need to know to run one job.
+message JobSpec {
+  // Name of the registered program to run, e.g. "wordcount". Workers look the
+  // name up in their registry of compiled-in or loaded jobs.
+  string program = 1;
+  // Input files or glob patterns, as URIs.
+  repeated string inputs = 2;
+  // Output directory URI. Reduce task r writes "<output>/part-r-<r>".
+  string output = 3;
+  // Target split size in bytes; this determines M (§3.5). 0 means the
+  // default (64 MiB).
+  uint64 split_size_bytes = 4;
+  // Number of reduce tasks, R (§3.5). Also the number of output files.
+  uint32 num_reduce_tasks = 5;
+  // Name of the input format, e.g. "text" (§4.4).
+  string input_format = 6;
+  // Name of the output format, e.g. "text" or "kv" (§4.4).
+  string output_format = 7;
+  // Name of the partitioner. Empty means hash(key) mod R (§4.1).
+  string partitioner = 8;
+  // Whether to run the program's Combiner on map output (§4.3).
+  bool use_combiner = 9;
+  // Free-form parameters passed to the user's program, e.g. the pattern for
+  // distributed grep.
+  map<string, string> params = 10;
+}
+
+// Identity and capabilities of a worker.
+message WorkerInfo {
+  // Address other workers use to fetch this worker's map output.
+  string shuffle_address = 1;
+  // Host name, used for locality (§3.4).
+  string host = 2;
+  // Failure or network zone, e.g. a rack or cloud availability zone (§3.4).
+  string zone = 3;
+  // Number of tasks the worker can run at the same time.
+  uint32 slots = 4;
+}

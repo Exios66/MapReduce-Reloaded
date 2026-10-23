@@ -1,0 +1,217 @@
+// The coordinator ("master" in the paper) service.
+//
+// Workers *pull* work: an idle worker calls RequestTask, runs what it gets,
+// and calls ReportTask. Clients submit and monitor jobs with SubmitJob and
+// GetJobStatus. Section references (§) point to the OSDI 2004 paper.
+
+syntax = "proto3";
+
+package mapreduce.v1;
+
+import "google/protobuf/duration.proto";
+import "mapreduce/v1/types.proto";
+
+option go_package = "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1";
+
+// CoordinatorService is the single point of control for a cluster (§3.1).
+service CoordinatorService {
+  // A worker announces itself once at startup, and again whenever a
+  // heartbeat tells it the coordinator no longer knows it (e.g. after a
+  // coordinator restart).
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+
+  // An idle worker asks for its next task (§3.1 step 2: "The master picks
+  // idle workers and assigns each one a map task or a reduce task").
+  rpc RequestTask(RequestTaskRequest) returns (RequestTaskResponse);
+
+  // A worker reports that a task attempt finished, successfully or not.
+  rpc ReportTask(ReportTaskRequest) returns (ReportTaskResponse);
+
+  // Periodic liveness signal. A worker that misses heartbeats is marked
+  // failed and its tasks are rescheduled (§3.3: "The master pings every
+  // worker periodically").
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // A client submits a new job.
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+
+  // A client asks how a job is doing (§4.8: status information).
+  rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse);
+}
+
+message RegisterWorkerRequest {
+  // Who the worker is and what it can do.
+  WorkerInfo worker = 1;
+}
+
+message RegisterWorkerResponse {
+  // ID the worker must send with every later call.
+  string worker_id = 1;
+  // How often the worker must call Heartbeat.
+  google.protobuf.Duration heartbeat_interval = 2;
+}
+
+message RequestTaskRequest {
+  // ID from RegisterWorkerResponse.
+  string worker_id = 1;
+}
+
+message RequestTaskResponse {
+  // The coordinator always sets exactly one of these. A worker that finds
+  // none set (e.g. a newer coordinator sent a kind this worker does not know)
+  // treats it as `wait` with a default delay, so old workers keep working.
+  oneof assignment {
+    // Run this map task.
+    MapTask map_task = 1;
+    // Run this reduce task.
+    ReduceTask reduce_task = 2;
+    // Nothing to do yet (e.g. reducers waiting for maps to finish). Ask again
+    // later.
+    WaitInstruction wait = 3;
+    // The cluster is shutting down. Exit cleanly.
+    ShutdownInstruction shutdown = 4;
+  }
+}
+
+// Instructions for one map task attempt (§3.1 steps 3-4).
+message MapTask {
+  // Which task and which execution of it this is.
+  TaskAttemptId attempt = 1;
+  // The job's configuration.
+  JobSpec job = 2;
+  // The input this task reads.
+  InputSplit split = 3;
+  // Record sequence numbers to skip, because earlier attempts crashed on
+  // them (§4.6: skipping bad records).
+  repeated uint64 skip_records = 4;
+}
+
+// Instructions for one reduce task attempt (§3.1 steps 5-6).
+message ReduceTask {
+  // Which task and which execution of it this is.
+  TaskAttemptId attempt = 1;
+  // The job's configuration.
+  JobSpec job = 2;
+  // Where to fetch this partition from every map task: one entry per map
+  // task, M in total.
+  repeated PartitionLocation sources = 3;
+  // Key-group sequence numbers to skip (§4.6).
+  repeated uint64 skip_records = 4;
+}
+
+message WaitInstruction {
+  // How long to wait before calling RequestTask again.
+  google.protobuf.Duration retry_after = 1;
+}
+
+message ShutdownInstruction {}
+
+message ReportTaskRequest {
+  // ID from RegisterWorkerResponse.
+  string worker_id = 1;
+  // The attempt being reported.
+  TaskAttemptId attempt = 2;
+  // Exactly one of these is set.
+  oneof outcome {
+    // The attempt finished and its output is ready.
+    TaskSuccess success = 3;
+    // The attempt failed.
+    TaskFailure failure = 4;
+  }
+}
+
+message TaskSuccess {
+  // For map tasks: where each of the R partitions can be fetched (§3.1 step
+  // 4: "the locations of these buffered pairs ... are passed back to the
+  // master"). Empty for reduce tasks.
+  repeated PartitionLocation outputs = 1;
+  // Counter values from this attempt (§4.9). The coordinator only adds them
+  // to the job totals if this attempt's report is the one accepted.
+  Counters counters = 2;
+}
+
+message TaskFailure {
+  // Human-readable error, shown on the status page.
+  string message = 1;
+  // Sequence number of the record being processed when the user's code
+  // crashed, if known (§4.6).
+  optional uint64 failed_record = 2;
+}
+
+message ReportTaskResponse {
+  // True if this report completed the task. False if another attempt had
+  // already completed it; the worker should then discard its output (§3.3).
+  bool accepted = 1;
+}
+
+message HeartbeatRequest {
+  // ID from RegisterWorkerResponse.
+  string worker_id = 1;
+  // Progress of every attempt currently running on the worker.
+  repeated TaskProgress running = 2;
+}
+
+message TaskProgress {
+  // The running attempt.
+  TaskAttemptId attempt = 1;
+  // Fraction of the task's input processed so far, from 0.0 to 1.0. Used to
+  // spot stragglers (§3.6).
+  float fraction_done = 2;
+}
+
+message HeartbeatResponse {
+  // Attempts the worker should stop, e.g. a backup task whose twin finished
+  // first (§3.6).
+  repeated TaskAttemptId cancel = 1;
+  // True if the coordinator does not recognise this worker (e.g. it
+  // restarted, or declared the worker dead). The worker must call
+  // RegisterWorker again.
+  bool reregister = 2;
+}
+
+message SubmitJobRequest {
+  // The job to run.
+  JobSpec job = 1;
+}
+
+message SubmitJobResponse {
+  // ID for use with GetJobStatus.
+  string job_id = 1;
+}
+
+message GetJobStatusRequest {
+  // ID from SubmitJobResponse.
+  string job_id = 1;
+}
+
+// Overall state of a job.
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  // Accepted, waiting for resources.
+  JOB_STATE_PENDING = 1;
+  // Map tasks are running.
+  JOB_STATE_MAPPING = 2;
+  // All map tasks are done; reduce tasks are running.
+  JOB_STATE_REDUCING = 3;
+  // All reduce outputs are committed.
+  JOB_STATE_SUCCEEDED = 4;
+  // The job was abandoned, e.g. too many bad records.
+  JOB_STATE_FAILED = 5;
+}
+
+message GetJobStatusResponse {
+  // The job being described.
+  string job_id = 1;
+  // Overall state.
+  JobState state = 2;
+  // Map tasks: total (M) and completed so far.
+  uint32 map_tasks_total = 3;
+  uint32 map_tasks_completed = 4;
+  // Reduce tasks: total (R) and completed so far.
+  uint32 reduce_tasks_total = 5;
+  uint32 reduce_tasks_completed = 6;
+  // Job-wide counter totals (§4.9).
+  Counters counters = 7;
+  // Set when state is JOB_STATE_FAILED.
+  string error = 8;
+}
