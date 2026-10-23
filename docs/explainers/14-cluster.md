@@ -41,6 +41,11 @@ works when all workers run on one host or share a file system. The shuffle
 server (#18) will let reducers fetch output from each worker's local disk
 instead, as in the paper, using the same messages.
 
+Map task m writes partition r to `<work-dir>/<job>/map-<m>-r-<r>.kv`, the
+same name local mode uses. A test checks that the cluster's map output is
+byte for byte local mode's for the same splits, so the two runners share
+one map path (`task.Map`), not just a final answer.
+
 ## What happens when things go wrong
 
 - A task that fails is reported as failed and becomes idle again, so

@@ -147,3 +147,26 @@ func TestOpenSourcesMissing(t *testing.T) {
 		t.Fatalf("got %v, want a not-exist error", err)
 	}
 }
+
+// The program's partitioner, not the hash, decides where each key goes.
+func TestCustomPartitioner(t *testing.T) {
+	spec, split := setup(t, "a b a\nc\n")
+	spec.Program.Partitioner = api.PartitionFunc(func([]byte, uint32) uint32 { return 1 })
+	dir := t.TempDir()
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir); err != nil {
+		t.Fatal(err)
+	}
+	for r := range spec.R {
+		sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, int(r))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		counts, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources)
+		if err := errors.Join(err, closeSources()); err != nil {
+			t.Fatal(err)
+		}
+		if want := int64(3 * r); counts[ReduceOutputRecords] != want {
+			t.Errorf("partition %d has %d keys, want %d", r, counts[ReduceOutputRecords], want)
+		}
+	}
+}
