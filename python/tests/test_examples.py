@@ -8,7 +8,14 @@ import pytest
 
 from mapreduce_reloaded import local, split
 from mapreduce_reloaded.api import JobSpec
-from mapreduce_reloaded.examples import distsort, grep, invertedindex, reverselinks, urlfreq
+from mapreduce_reloaded.examples import (
+    distsort,
+    grep,
+    invertedindex,
+    reverselinks,
+    termvector,
+    urlfreq,
+)
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 INPUTS = (str(CORPUS / "*.txt"),)
@@ -78,6 +85,32 @@ def test_reverselinks(tmp_path):
     links = b"c\tx\na\tx\nno tab\nb\ty\nc\tx\nb\tx\n"
     out = run(tmp_path, reverselinks.program, 2, {}, write(tmp_path, links))
     assert (out / "part-r-00000").read_bytes() == b"x\ta,b,c\ny\tb\n"
+
+
+DOCS = (
+    b"http://a.com/x\tthe cat the\n"
+    b"http://a.com/y\tthe dog\n"
+    b"https://b.org\tcat cat\n"
+    b"no tab\n"
+    b"nohost\tword\n"
+)
+
+
+@pytest.mark.parametrize(
+    "params, want",
+    [
+        ({}, b"a.com\tthe:3\nb.org\tcat:2\n"),
+        ({"min": "1"}, b"a.com\tthe:3 cat:1 dog:1\nb.org\tcat:2\n"),
+    ],
+)
+def test_termvector(tmp_path, params, want):
+    out = run(tmp_path, termvector.program, 2, params, write(tmp_path, DOCS))
+    assert (out / "part-r-00000").read_bytes() == want
+
+
+def test_termvector_bad_min(tmp_path):
+    with pytest.raises(ValueError, match="positive integer"):
+        run(tmp_path, termvector.program, 1, {"min": "0"}, write(tmp_path, DOCS))
 
 
 def test_distsort(tmp_path):
