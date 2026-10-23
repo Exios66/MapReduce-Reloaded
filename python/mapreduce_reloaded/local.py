@@ -6,7 +6,9 @@ input order, and equal keys keep that order through the sort. That makes it
 the oracle the distributed runs are checked against.
 """
 
+import glob
 import os
+import shutil
 from collections import Counter
 from contextlib import ExitStack, contextmanager
 
@@ -28,6 +30,9 @@ MAP_INPUT_RECORDS = "map.input.records"
 MAP_OUTPUT_RECORDS = "map.output.records"
 REDUCE_OUTPUT_RECORDS = "reduce.output.records"
 
+# Where reduce tasks write under the output before committing, as in Go.
+TEMP_DIR = "_temporary"
+
 
 def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     """Executes spec and returns its counters. Intermediate files go in
@@ -36,7 +41,11 @@ def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     in_format = input_format(spec.input_format)
     out_format = output_format(spec.output_format)
     splits = plan(in_format, spec.inputs, spec.split_size)
-    os.makedirs(spec.output, exist_ok=True)
+    if not splits:
+        raise ValueError("the input is empty")
+    if glob.glob(os.path.join(glob.escape(spec.output), "part-r-*")):
+        raise FileExistsError(f"{spec.output} already holds job output")
+    os.makedirs(os.path.join(spec.output, TEMP_DIR), exist_ok=True)
 
     job = _Job(spec, work_dir)
     for i, split in enumerate(splits):
@@ -45,6 +54,7 @@ def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     for r in range(spec.r):
         with _task("reduce", r):
             job.run_reduce(r, len(splits), out_format)
+    shutil.rmtree(os.path.join(spec.output, TEMP_DIR))
     return dict(job.counts)
 
 
@@ -68,7 +78,7 @@ class _Job:
         """Maps one split and writes one sorted, combined file per reduce task."""
         ctx = self._context("map", i)
         p, r = self.spec.program, self.spec.r
-        combine_fn = combine.func(ctx, p.combiner) if p.combiner else None
+        combine_fn = combine.func(ctx, p.combiner) if p.combiner is not None else None
         with ExitStack() as stack:
             sorters = [
                 stack.enter_context(Sorter(self.work_dir, DEFAULT_BUDGET // r, combine_fn))
@@ -85,19 +95,28 @@ class _Job:
                         w.write(k, v)
 
     def run_reduce(self, r: int, m: int, out_format: OutputFormat) -> None:
-        """Reduces partition r of all m map outputs."""
+        """Reduces partition r of all m map outputs. The part file is written
+        in TEMP_DIR and renamed into place, so a failed task leaves none."""
         ctx = self._context("reduce", r)
-        with ExitStack() as stack:
-            runs = [
-                kv.read(stack.enter_context(open(self._map_output(i, r), "rb"))) for i in range(m)
-            ]
-            out = os.path.join(self.spec.output, f"part-r-{r:05d}")
-            w = stack.enter_context(out_format.create(out))
-            # In map task order, so equal keys stay in input order.
-            for key, values in groups(merge(*runs)):
-                for k, v in self.spec.program.reducer(ctx, key, values):
-                    ctx.count(REDUCE_OUTPUT_RECORDS)
-                    w.write(k, v)
+        name = f"part-r-{r:05d}"
+        tmp = os.path.join(self.spec.output, TEMP_DIR, name)
+        try:
+            with ExitStack() as stack:
+                runs = [
+                    kv.read(stack.enter_context(open(self._map_output(i, r), "rb")))
+                    for i in range(m)
+                ]
+                w = stack.enter_context(out_format.create(tmp))
+                # In map task order, so equal keys stay in input order.
+                for key, values in groups(merge(*runs)):
+                    for k, v in self.spec.program.reducer(ctx, key, values):
+                        ctx.count(REDUCE_OUTPUT_RECORDS)
+                        w.write(k, v)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
+        os.replace(tmp, os.path.join(self.spec.output, name))
 
     def _map_output(self, i: int, r: int) -> str:
         return os.path.join(self.work_dir, f"map-{i:05d}-r-{r:05d}.kv")

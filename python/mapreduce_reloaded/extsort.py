@@ -62,7 +62,7 @@ class Sorter:
 
     def sorted(self) -> Iterator[Pair]:
         """Returns all records in key order."""
-        if not self._runs and not self._combine:
+        if not self._runs and self._combine is None:
             return iter(sorted(self._buf, key=_key))
         if self._buf:
             self._spill()
@@ -85,7 +85,7 @@ class Sorter:
         records = iter(sorted(self._buf, key=_key))
         with open(path, "wb") as f:
             with kv.Writer(f) as w:
-                for key, value in self._combine(records) if self._combine else records:
+                for key, value in self._combine(records) if self._combine is not None else records:
                     w.write(key, value)
             self.spilled_bytes += f.tell()
         self._runs.append(path)

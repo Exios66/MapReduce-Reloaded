@@ -80,6 +80,39 @@ def test_no_input(tmp_path):
         local.run(spec, str(tmp_path))
 
 
+def test_empty_input(tmp_path):
+    (tmp_path / "empty.txt").touch()
+    spec = JobSpec(
+        program=program, inputs=(str(tmp_path / "empty.txt"),), output=str(tmp_path / "out"), r=1
+    )
+    with pytest.raises(ValueError, match="input is empty"):
+        local.run(spec, str(tmp_path))
+
+
+def test_output_in_use(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "part-r-00003").touch()  # from an earlier job with more reducers
+    spec = JobSpec(program=program, inputs=(RAVEN,), output=str(out), r=1)
+    with pytest.raises(FileExistsError, match="already holds job output"):
+        local.run(spec, str(tmp_path))
+
+
+def test_failed_reduce_leaves_no_part(tmp_path):
+    @reducer
+    def fail(ctx, key, values):
+        yield key, b"partial"
+        raise RuntimeError("boom")
+
+    out = tmp_path / "out"
+    spec = JobSpec(
+        program=dataclasses.replace(program, reducer=fail), inputs=(RAVEN,), output=str(out), r=1
+    )
+    with pytest.raises(RuntimeError, match="boom"):
+        local.run(spec, str(tmp_path))
+    assert not list(out.rglob("part-r-*"))
+
+
 def test_error_names_task(tmp_path):
     @mapper
     def fail(ctx, key, value):
@@ -101,6 +134,13 @@ def test_cli(tmp_path, capsys):
     main(["run", "--local", "-m", "2", "-r", "3", "wordcount", str(out), RAVEN])
     assert len(list(out.glob("part-r-*"))) == 3
     assert "map.input.records\t" in capsys.readouterr().err
+    assert not (out / local.TEMP_DIR).exists()
+
+
+def test_cli_globs_once(tmp_path):
+    (tmp_path / "[a].txt").write_bytes(Path(RAVEN).read_bytes())  # "[a]" is glob syntax
+    main(["run", "--local", "wordcount", str(tmp_path / "out"), str(tmp_path / "*.txt")])
+    assert (tmp_path / "out" / "part-r-00000").stat().st_size > 0
 
 
 @pytest.mark.parametrize(
@@ -110,6 +150,7 @@ def test_cli(tmp_path, capsys):
         (["run", "--local", "nope", "out", RAVEN], "No module named"),
         (["run", "--local", "wordcount", "out", "missing"], "no input matches"),
         (["run", "--local", "-r", "0", "wordcount", "out", RAVEN], "at least 1"),
+        (["run", "--local", "-m", "-1", "wordcount", "out", RAVEN], "m must be at least 1"),
     ],
 )
 def test_cli_errors(capsys, args, want):
