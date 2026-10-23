@@ -1,0 +1,41 @@
+// Records of the coordinator's write-ahead log (go/internal/wal). Each is
+// one decision, logged before any reply depends on it, so that a restarted
+// coordinator can replay them and resume its job (§3.3).
+
+syntax = "proto3";
+
+package mapreduce.v1;
+
+import "mapreduce/v1/coordinator.proto";
+import "mapreduce/v1/types.proto";
+
+option go_package = "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1";
+
+message LogRecord {
+  oneof record {
+    JobSubmitted job_submitted = 1;
+    TaskAssigned task_assigned = 2;
+    // A worker's report, as received.
+    ReportTaskRequest task_reported = 3;
+    WorkerLost worker_lost = 4;
+  }
+}
+
+// A job was accepted. Its splits are logged, not planned again, since the
+// input may have changed since.
+message JobSubmitted {
+  string job_id = 1;
+  JobSpec job = 2;
+  repeated InputSplit splits = 3;
+}
+
+// An attempt was started on a worker.
+message TaskAssigned {
+  TaskAttemptId attempt = 1;
+  string worker_id = 2;
+}
+
+// A worker was declared dead.
+message WorkerLost {
+  string worker_id = 1;
+}

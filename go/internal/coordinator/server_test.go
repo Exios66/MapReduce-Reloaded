@@ -2,6 +2,7 @@ package coordinator
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,8 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 
@@ -29,11 +32,16 @@ func assertCode(t *testing.T, err error, want codes.Code) {
 // input in one split, with r reduce tasks (0 for the default).
 func newJob(t *testing.T, r uint32) (*Server, string, string) {
 	t.Helper()
+	return newJobWith(t, Config{}, r)
+}
+
+func newJobWith(t *testing.T, cfg Config, r uint32) (*Server, string, string) {
+	t.Helper()
 	in := filepath.Join(t.TempDir(), "in.txt")
 	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s := NewServer(Config{})
+	s := NewServer(cfg)
 	reg, _ := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
 	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
 		Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: r,
@@ -157,6 +165,105 @@ func TestReportTask(t *testing.T) {
 	}
 	_, err = s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: "nope"})
 	assertCode(t, err, codes.NotFound)
+}
+
+// memLog keeps the records appended to it, and fails once err is set.
+type memLog struct {
+	records []*pb.LogRecord
+	err     error
+}
+
+func (l *memLog) Append(b []byte) error {
+	if l.err != nil {
+		return l.err
+	}
+	rec := &pb.LogRecord{}
+	if err := proto.Unmarshal(b, rec); err != nil {
+		return err
+	}
+	l.records = append(l.records, rec)
+	return nil
+}
+
+// kinds names the records in the log, e.g. "task_assigned".
+func (l *memLog) kinds() []string {
+	var names []string
+	for _, rec := range l.records {
+		rec.ProtoReflect().Range(func(f protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
+			names = append(names, string(f.Name()))
+			return false
+		})
+	}
+	return names
+}
+
+// Every decision of a job, and nothing else, is logged before its reply.
+func TestLog(t *testing.T) {
+	log := &memLog{}
+	s, w, id := newJobWith(t, Config{Log: log, WorkerTimeout: time.Minute}, 1)
+	run := func() *pb.TaskAttemptId {
+		resp, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attempt := resp.GetMapTask().GetAttempt()
+		if attempt == nil {
+			attempt = resp.GetReduceTask().GetAttempt()
+		}
+		return attempt
+	}
+	report := func(attempt *pb.TaskAttemptId, outputs ...*pb.PartitionLocation) {
+		if _, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: attempt, Outcome: &pb.ReportTaskRequest_Success{
+			Success: &pb.TaskSuccess{Outputs: outputs},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report(run(), outputs(0, 1)...)
+	_, _ = s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w})
+	report(run())
+	if _, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: id}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"job_submitted", "task_assigned", "task_reported", "task_assigned", "task_reported"}
+	if got := log.kinds(); !slices.Equal(got, want) {
+		t.Fatalf("log holds %v, want %v", got, want)
+	}
+
+	s, _, _ = newJobWith(t, Config{Log: log, WorkerTimeout: time.Minute}, 1)
+	if got := log.kinds()[len(want):]; !slices.Equal(got, want[:1]) {
+		t.Fatalf("second job logged %v", got)
+	}
+	s.Expire(time.Now().Add(time.Hour))
+	if got := log.kinds()[len(want)+1:]; !slices.Equal(got, []string{"worker_lost"}) {
+		t.Fatalf("expiry logged %v", got)
+	}
+}
+
+// A coordinator whose log fails makes no reply that depends on it.
+func TestLogFails(t *testing.T) {
+	log := &memLog{}
+	s, w, _ := newJobWith(t, Config{Log: log}, 1)
+	log.err = errors.New("disk full")
+	_, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	assertCode(t, err, codes.Unavailable)
+	_, err = s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: &pb.TaskAttemptId{
+		Task: &pb.TaskId{JobId: "job-1", Kind: pb.TaskKind_TASK_KIND_MAP},
+	}, Outcome: &pb.ReportTaskRequest_Failure{Failure: &pb.TaskFailure{}}})
+	assertCode(t, err, codes.Unavailable)
+
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s = NewServer(Config{Log: log})
+	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+	}})
+	assertCode(t, err, codes.Unavailable)
+	if len(s.jobs) != 0 {
+		t.Fatal("a job whose submission was not logged was kept")
+	}
 }
 
 func TestHeartbeat(t *testing.T) {
