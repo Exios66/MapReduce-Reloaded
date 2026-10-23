@@ -89,7 +89,8 @@ failing, and jobs still finish correctly.*
 - **#26** Bad-record skipping: if user code crashes on the same record
   twice, skip that record.
 - **#27** Counters that don't double-count re-run tasks.
-- **#28** Safe extra output files.
+- **#28** Safe extra output files. See
+  [explainers/17-side-outputs.md](explainers/17-side-outputs.md).
 - **#29 Chaos testing:** randomly kill and freeze machines during a job, 50
   runs in a row, and check the output still matches the oracle. This is the
   strongest demo.
