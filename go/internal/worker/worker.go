@@ -239,6 +239,10 @@ func (w *Worker) report(id *pb.TaskAttemptId, outputs []*pb.PartitionLocation, c
 		if errors.As(err, &lost) {
 			failure.LostOutput = lost.src
 		}
+		var crash *task.CrashError
+		if errors.As(err, &crash) {
+			failure.FailedRecord = &crash.Record
+		}
 		req.Outcome = &pb.ReportTaskRequest_Failure{Failure: failure}
 	} else {
 		req.Outcome = &pb.ReportTaskRequest_Success{Success: &pb.TaskSuccess{
