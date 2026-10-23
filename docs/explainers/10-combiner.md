@@ -25,7 +25,9 @@ values. So it must:
   not, unless it carries a count);
 - **emit only the key it was given**. Changing it would break the sorted
   order of the run, so the framework rejects it with an error;
-- emit values the reducer accepts as input.
+- **leave the result unchanged**: reducing its output must give what
+  reducing its input would. Its values are the reducer's input, so they must
+  be in the form the reducer reads.
 
 ## How we know it works
 
