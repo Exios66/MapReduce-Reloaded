@@ -63,6 +63,7 @@ type job struct {
 	splits []*pb.InputSplit
 	tasks  *TaskTable
 	counts map[Task]map[string]int64 // of each task's accepted attempt
+	err    string                    // why the job failed, if it did
 }
 
 // NewServer returns a coordinator with no workers and no jobs.
@@ -270,18 +271,33 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest) (accepted bool, err e
 	id := req.GetAttempt()
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 	if f := req.GetFailure(); f != nil {
-		return false, j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
+		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
+		if limit := j.spec.MaxSkippedRecords; limit != nil && uint64(j.tasks.Skipped()) > *limit {
+			s.end(j, fmt.Sprintf("more than %d bad records to skip", *limit))
+		}
+		return false, err
 	}
 	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
 	if accepted {
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
-		if j.tasks.Done() && s.active == j {
-			j.cleanup()
-			s.active = nil
+		if j.tasks.Done() {
+			s.end(j, "")
 		}
 	}
 	return accepted, err
+}
+
+// end ends j if it is the active job: it failed with err, or succeeded if
+// err is empty. Attempts still running may report, but its state no longer
+// changes.
+func (s *Server) end(j *job, err string) {
+	if s.active != j {
+		return
+	}
+	j.err = err
+	j.cleanup()
+	s.active = nil
 }
 
 func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {
@@ -294,6 +310,8 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 	mapsDone, reducesDone := j.tasks.Progress()
 	state := pb.JobState_JOB_STATE_MAPPING
 	switch {
+	case j.err != "":
+		state = pb.JobState_JOB_STATE_FAILED
 	case j.tasks.Done():
 		state = pb.JobState_JOB_STATE_SUCCEEDED
 	case mapsDone == len(j.splits):
@@ -307,6 +325,7 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 		ReduceTasksTotal:     j.spec.GetNumReduceTasks(),
 		ReduceTasksCompleted: uint32(reducesDone),
 		Counters:             &pb.Counters{Values: j.total()},
+		Error:                j.err,
 	}, nil
 }
 
@@ -340,7 +359,7 @@ func (s *Server) record(rec *pb.LogRecord) error {
 // cleanup removes what dead or failed reduce attempts left in the job's
 // output. It runs under the lock, once per job, so that the job is never
 // reported done before its output is clean; the directory holds at most R
-// files. The output is already committed, so an error is only logged.
+// files. The job's outcome is already decided, so an error is only logged.
 func (j *job) cleanup() {
 	path, err := wire.Path(j.spec.GetOutput())
 	if err == nil {

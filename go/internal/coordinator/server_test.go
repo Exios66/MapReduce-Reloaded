@@ -188,6 +188,35 @@ func TestSkipRecords(t *testing.T) {
 	}
 }
 
+// A job fails once it would skip more records than its limit.
+func TestSkipLimit(t *testing.T) {
+	s, w, id := newJob(t, 1)
+	s.jobs[id].spec.MaxSkippedRecords = proto.Uint64(1)
+	crash := func(n uint64) *pb.MapTask {
+		t.Helper()
+		resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+		if _, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: resp.GetMapTask().GetAttempt(), Outcome: &pb.ReportTaskRequest_Failure{
+			Failure: &pb.TaskFailure{FailedRecord: &n},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		return resp.GetMapTask()
+	}
+	crash(0)
+	crash(0)
+	crash(3)
+	if m := crash(3); !slices.Equal(m.GetSkipRecords(), []uint64{0}) {
+		t.Fatalf("map task %v; want it to skip record 0", m)
+	}
+	st, _ := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: id})
+	if st.GetState() != pb.JobState_JOB_STATE_FAILED || st.GetError() != "more than 1 bad records to skip" {
+		t.Fatalf("status %v; want failed", st)
+	}
+	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w}); resp.GetWait() == nil {
+		t.Fatalf("got %v; want wait once the job has failed", resp)
+	}
+}
+
 // memLog keeps the records appended to it, and fails once err is set.
 type memLog struct {
 	records []*pb.LogRecord
