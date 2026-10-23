@@ -80,7 +80,8 @@ failing, and jobs still finish correctly.*
 
 - **#23** Detect dead workers and re-run their work. This includes map tasks
   that had already *finished*, because their output was on the dead
-  worker's disk.
+  worker's disk. See
+  [explainers/16-worker-failure.md](explainers/16-worker-failure.md).
 - **#24** Coordinator crash recovery: a log of every decision, replayed on
   restart. The 2004 system simply aborted the job in this case.
 - **#25** Backup tasks: near the end of a job, start duplicates of the slow

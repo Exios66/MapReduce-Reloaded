@@ -37,12 +37,17 @@ func run(addr string) error {
 	if err != nil {
 		return err
 	}
-	srv := coordinator.NewServer(coordinator.Config{HeartbeatInterval: 3 * time.Second, RetryAfter: time.Second})
+	srv := coordinator.NewServer(coordinator.Config{
+		HeartbeatInterval: 3 * time.Second,
+		WorkerTimeout:     10 * time.Second, // three missed heartbeats
+		RetryAfter:        time.Second,
+	})
 	gs := grpc.NewServer()
 	pb.RegisterCoordinatorServiceServer(gs, srv)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go srv.Monitor(ctx)
 	go func() {
 		<-ctx.Done()
 		srv.Shutdown()

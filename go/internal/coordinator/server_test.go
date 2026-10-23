@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -150,4 +152,56 @@ func TestHeartbeat(t *testing.T) {
 			t.Errorf("Heartbeat(%q).Reregister = %v", id, resp.GetReregister())
 		}
 	}
+}
+
+// A worker that goes quiet is declared dead, and its completed map task is
+// run again (§3.3).
+func TestExpire(t *testing.T) {
+	s, w, id := newJob(t, 1)
+	if dead := s.Expire(time.Now().Add(time.Hour)); dead != nil {
+		t.Fatalf("expired %v with no timeout set", dead)
+	}
+	s.cfg.WorkerTimeout = time.Minute
+	resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	_, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: resp.GetMapTask().GetAttempt(), Outcome: &pb.ReportTaskRequest_Success{
+		Success: &pb.TaskSuccess{Outputs: []*pb.PartitionLocation{{MapIndex: 0, Partition: 0}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if dead := s.Expire(time.Now()); dead != nil {
+		t.Fatalf("expired %v too early", dead)
+	}
+	if dead := s.Expire(time.Now().Add(2 * time.Minute)); !slices.Equal(dead, []string{w}) {
+		t.Fatalf("expired %v, want [%s]", dead, w)
+	}
+	if st, _ := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: id}); st.GetMapTasksCompleted() != 0 {
+		t.Fatalf("status %v; want the lost map output to be redone", st)
+	}
+	_, err = s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	assertCode(t, err, codes.NotFound)
+	if hb, _ := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w}); !hb.GetReregister() {
+		t.Fatal("a dead worker's heartbeat should ask it to register again")
+	}
+	reg, _ := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
+	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: reg.GetWorkerId()}); resp.GetMapTask().GetAttempt().GetAttempt() != 1 {
+		t.Fatalf("got %v; want attempt 1 of the map task", resp)
+	}
+}
+
+func TestMonitor(t *testing.T) {
+	s, w, _ := newJob(t, 1)
+	s.cfg.HeartbeatInterval, s.cfg.WorkerTimeout = time.Millisecond, time.Millisecond
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { s.Monitor(ctx); close(done) }()
+	for {
+		if hb, _ := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w}); hb.GetReregister() {
+			break
+		}
+		time.Sleep(5 * time.Millisecond) // longer than the timeout
+	}
+	cancel()
+	<-done
 }

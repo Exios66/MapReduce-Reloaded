@@ -51,7 +51,7 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 		}
 		add(c)
 	}
-	return counts, nil
+	return counts, task.Cleanup(spec.Output)
 }
 
 // reduce runs reduce task r over the outputs of all m map tasks in dir.

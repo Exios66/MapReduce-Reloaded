@@ -21,7 +21,10 @@ owns the state and receives requests on a channel.
    data structures, documented as such; the coordinator owns the lock.
    With only one lock there is no lock order to get wrong.
 3. **Nothing slow happens under the lock**: no I/O, no RPCs, no waiting.
-   Every operation is a few map and slice updates.
+   Every operation is a few map and slice updates. The one exception is
+   removing a finished job's `_temporary` directory (#23): it runs once per
+   job, on at most R files, and doing it under the lock means the job is
+   never reported done before its output is clean.
 
 ## Alternatives rejected
 

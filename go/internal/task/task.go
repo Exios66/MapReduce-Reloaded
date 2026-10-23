@@ -90,19 +90,26 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string) (size
 	return sizes, ctx.counts, nil
 }
 
+// TempDir is the directory under a job's output where reduce attempts write
+// before committing. Readers of the output skip it, as they skip every name
+// starting with "_".
+const TempDir = "_temporary"
+
 // Reduce runs a reduce task attempt over partition id.Index of every map
 // task's output, given in map task order, and writes
-// <spec.Output>/part-r-<id.Index>. It returns the attempt's counters.
+// <spec.Output>/part-r-<id.Index> through a file in TempDir. It returns the
+// attempt's counters.
 func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records) (counts map[string]int64, err error) {
 	out, err := formats.Output(spec.OutputFormat)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(spec.Output, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(spec.Output, TempDir), 0o755); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(spec.Output, fmt.Sprintf("part-r-%05d", id.Index))
-	tmp := attemptPath(path, id.Attempt)
+	name := fmt.Sprintf("part-r-%05d", id.Index)
+	path := filepath.Join(spec.Output, name)
+	tmp := attemptPath(filepath.Join(spec.Output, TempDir, name), id.Attempt)
 	w, err := out.Create(tmp)
 	if err != nil {
 		return nil, err
@@ -164,6 +171,12 @@ func writeKV(path string, attempt uint32, records extsort.Records) (size int64, 
 		return 0, err
 	}
 	return f.Seek(0, io.SeekCurrent)
+}
+
+// Cleanup removes what reduce attempts left in a finished job's output: the
+// files of attempts that failed or died before committing.
+func Cleanup(output string) error {
+	return os.RemoveAll(filepath.Join(output, TempDir))
 }
 
 func attemptPath(path string, attempt uint32) string {

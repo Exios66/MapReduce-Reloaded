@@ -15,7 +15,7 @@ Status: `planned` → `in progress` → `done`.
 | F5  | Remote fetch, sort, group, reduce | §3.1 | 2 | `go/internal/shuffle`, `go/internal/task` | — | `shuffle_test.go`, `TestClusterWordCount` | done |
 | F6  | R output files | §3.1 | 2 | | | | planned |
 | F7  | Master data structures | §3.2 | 2 | `go/internal/coordinator` | — | `TestInvariants`, `TestResetWorker` | done |
-| F8  | Worker failure + map re-execution | §3.3 | 3 | | | | planned |
+| F8  | Worker failure + map re-execution | §3.3 | 3 | `go/internal/coordinator`, `go/internal/worker` | — | `TestExpire`, `TestClusterSurvivesWorkerLoss` | done |
 | F9  | Master checkpoint / recovery | §3.3 | 3 | | | | planned |
 | F10 | Atomic commits | §3.3 | 2 | | | | planned |
 | F11 | Locality-aware scheduling | §3.4 | 4 | | | | planned |
