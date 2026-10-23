@@ -105,7 +105,8 @@ failing, and jobs still finish correctly.*
 
 - **#31** Locality: run each map task on the machine that already holds its
   data. See [explainers/23-locality.md](explainers/23-locality.md).
-- **#32** A live status web page and metrics, as in the paper (§4.8).
+- **#32** A live status web page and metrics, as in the paper (§4.8). See
+  [explainers/24-status.md](explainers/24-status.md).
 - **#33** The paper's example programs: grep, word count, inverted index,
   sort, and others.
 - **#34** The paper-to-code table filled in: every paper feature linked to
