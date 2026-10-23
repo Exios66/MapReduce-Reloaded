@@ -43,7 +43,8 @@ identical bytes, which gives a second, independent correctness check.
   functions is the paper's whole point. See
   [explainers/07-programming-api.md](explainers/07-programming-api.md).
 - **#8–#9 Reading and writing files:** plain text and our own format. See
-  [explainers/06-kv-reader-writer.md](explainers/06-kv-reader-writer.md).
+  [explainers/06-kv-reader-writer.md](explainers/06-kv-reader-writer.md) and
+  [explainers/08-formats.md](explainers/08-formats.md).
 - **#10 Sorting data bigger than memory:** sort chunks that fit in memory,
   save them to disk, then merge the sorted chunks.
 - **#11 The combiner:** add up counts on the map side before sending them.
