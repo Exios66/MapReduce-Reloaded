@@ -16,7 +16,7 @@ piece of every map output.
 
 ```
 coordinator -addr :7070
-worker -coordinator host:7070 -work-dir /shared/mr     # as many as you like
+worker -coordinator host:7070     # as many as you like
 mr submit -coordinator host:7070 -wait wordcount out/ 'in/*.txt'
 mr status -coordinator host:7070 job-1
 ```
@@ -32,14 +32,12 @@ mr status -coordinator host:7070 job-1
 The coordinator accepts the first successful report for a task and rejects
 later ones; only accepted attempts' counters count (§3.3, §4.9).
 
-## Where map output lives, for now
+## Where map output lives
 
-Every worker writes map output to the same shared directory, and reducers
-read it from there by `file://` URI. This is the `uri` field of
-`PartitionLocation`, which the contract reserves for shared storage. It
-works when all workers run on one host or share a file system. The shuffle
-server (#18) will let reducers fetch output from each worker's local disk
-instead, as in the paper, using the same messages.
+Each worker keeps its map output on its own disk and serves it to reducers;
+see [15-shuffle.md](15-shuffle.md). Workers started with `-listen ""` and
+one shared `-work-dir` skip the network: reducers read map output from the
+shared directory by the `uri` field of `PartitionLocation`.
 
 Map task m writes partition r to `<work-dir>/<job>/map-<m>-r-<r>.kv`, the
 same name local mode uses. A test checks that the cluster's map output is
@@ -53,7 +51,7 @@ one map path (`task.Map`), not just a final answer.
 - Workers may start before the coordinator; they wait for it.
 - Workers may join at any time, and leave between tasks.
 - A worker that dies *during* a task is not detected yet: heartbeat expiry
-  and re-execution are #22.
+  and re-execution are #23.
 
 ## How we know it works
 
