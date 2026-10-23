@@ -38,6 +38,10 @@ type Config struct {
 	// map tasks then prefer to run on (§3.4). It runs once per split, when
 	// the job is submitted.
 	Locate func(*pb.InputSplit) []string
+	// LocalityWait is how long the job may hold back its map tasks from
+	// workers not on a host that holds their split, in the hope that one
+	// that is asks first (delay scheduling). Zero means never.
+	LocalityWait time.Duration
 	// Log, if set, is the write-ahead log: every change to a job or its
 	// tasks is appended to it before any reply depends on it (§3.3).
 	Log Log
@@ -74,6 +78,7 @@ type job struct {
 	counts map[Task]map[string]int64 // of each task's accepted attempt
 	placed map[Task][]pb.Locality    // of each attempt, by number
 	ran    map[Task]pb.Locality      // of each task's accepted attempt
+	since  time.Time                 // when the job began holding back tasks, if it has
 	err    string                    // why the job failed, if it did
 }
 
@@ -223,8 +228,8 @@ func (s *Server) submit(rec *pb.JobSubmitted) {
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	worker := req.GetWorkerId()
-	if !s.workers.Heartbeat(worker, time.Now()) {
+	worker, now := req.GetWorkerId(), time.Now()
+	if !s.workers.Heartbeat(worker, now) {
 		return nil, status.Errorf(codes.NotFound, "unknown worker %q: register again", worker)
 	}
 	if s.stopping {
@@ -233,7 +238,10 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	if s.active != nil {
 		info := s.workerInfo(worker)
 		t, ok := s.active.tasks.Next(func(i uint32) int { return int(locality(s.active.splits[i], info)) })
-		if !ok && s.cfg.Backups {
+		switch {
+		case ok && s.holdBack(t, info, now):
+			ok = false
+		case !ok && s.cfg.Backups:
 			t, ok = s.active.tasks.Backup(worker)
 		}
 		if ok {
@@ -273,6 +281,28 @@ func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) 
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_ReduceTask{
 		ReduceTask: &pb.ReduceTask{Attempt: id, Job: j.spec, Sources: j.tasks.Sources(t.Index), SkipRecords: skip},
 	}}, nil
+}
+
+// holdBack reports whether a worker should wait rather than run t, the
+// nearest task to it, because t is a map task whose split is on other hosts.
+// The job holds such tasks back for at most LocalityWait at a time, so that
+// none waits for ever for a host that is not there: the wait starts when it
+// first holds one back, and ends when it starts one on a host that holds its
+// split.
+func (s *Server) holdBack(t Task, info *pb.WorkerInfo, now time.Time) bool {
+	j := s.active
+	if t.Kind != pb.TaskKind_TASK_KIND_MAP || s.cfg.LocalityWait == 0 {
+		return false
+	}
+	switch locality(j.splits[t.Index], info) {
+	case pb.Locality_LOCALITY_UNSPECIFIED, pb.Locality_LOCALITY_HOST:
+		j.since = time.Time{}
+		return false
+	}
+	if j.since.IsZero() {
+		j.since = now
+	}
+	return now.Sub(j.since) < s.cfg.LocalityWait
 }
 
 // workerInfo returns what a live worker said about itself when it
