@@ -29,5 +29,5 @@ Status: `planned` → `in progress` → `done`.
 | F19 | Skipping bad records | §4.6 | 3 | `go/internal/task`, `go/internal/coordinator` | | `TestBadRecords`, `TestFailWithCrash`, `TestClusterSkipsBadRecords` | done |
 | F20 | Local execution mode | §4.7 | 1 | `go/internal/local`, `go/cmd/mr` | `mapreduce_reloaded/local.py`, `__main__.py` | `TestWordCountGolden`, `test_local.py` | done |
 | F21 | HTTP status pages | §4.8 | 4 | | | | planned |
-| F22 | Counters (de-duplicated) | §4.9 | 3 | | | | planned |
+| F22 | Counters (de-duplicated) | §4.9 | 3 | `go/internal/coordinator`, `go/internal/task` | `mapreduce_reloaded/local.py` | `TestClusterCountersMatchLocal`, `test_wordcount_golden` | done |
 | F23 | Paper example programs | §2.3, §5 | 4 | | | | planned |

@@ -58,17 +58,20 @@ func TestMapThenReduce(t *testing.T) {
 	if want := []string{"map-00000-r-00000.kv", "map-00000-r-00001.kv"}; !slices.Equal(dirNames(t, dir), want) {
 		t.Fatalf("map wrote %v, want %v", dirNames(t, dir), want)
 	}
+	written := int64(0)
 	for r, size := range sizes {
 		info, err := os.Stat(MapOutput(dir, 0, r))
 		if err != nil || info.Size() != size {
 			t.Fatalf("partition %d: reported %d bytes, file has %v (%v)", r, size, info.Size(), err)
 		}
+		written += size
 	}
-	if counts[MapInputRecords] != 2 || counts[MapOutputRecords] != 4 {
+	if counts[MapInputRecords] != 2 || counts[MapInputBytes] != 8 || counts[MapOutputRecords] != 4 ||
+		counts[MapOutputBytes] != written {
 		t.Fatalf("map counters %v", counts)
 	}
 
-	total := int64(0)
+	total, read := int64(0), int64(0) // the combiner leaves a, b and c
 	for r := range spec.R {
 		sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, int(r))})
 		if err != nil {
@@ -79,12 +82,13 @@ func TestMapThenReduce(t *testing.T) {
 			t.Fatal(err)
 		}
 		total += counts[ReduceOutputRecords]
+		read += counts[ReduceInputRecords]
 	}
 	if err := Cleanup(spec.Output); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"part-r-00000", "part-r-00001"}; total != 3 || !slices.Equal(dirNames(t, spec.Output), want) {
-		t.Fatalf("%d records in %v, want 3 in %v", total, dirNames(t, spec.Output), want)
+	if want := []string{"part-r-00000", "part-r-00001"}; total != 3 || read != 3 || !slices.Equal(dirNames(t, spec.Output), want) {
+		t.Fatalf("%d records read, %d in %v; want 3 in %v", read, total, dirNames(t, spec.Output), want)
 	}
 }
 

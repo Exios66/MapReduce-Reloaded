@@ -91,7 +91,8 @@ failing, and jobs still finish correctly.*
 - **#26** Bad-record skipping: if user code crashes on the same record
   twice, skip that record. See
   [explainers/19-bad-records.md](explainers/19-bad-records.md).
-- **#27** Counters that don't double-count re-run tasks.
+- **#27** Counters that don't double-count re-run tasks. See
+  [explainers/21-counters.md](explainers/21-counters.md).
 - **#28** Safe extra output files. See
   [explainers/17-side-outputs.md](explainers/17-side-outputs.md).
 - **#29 Chaos testing:** randomly kill and freeze machines during a job, 50

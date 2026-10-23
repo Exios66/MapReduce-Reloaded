@@ -29,7 +29,10 @@ from mapreduce_reloaded.split import plan
 
 # Framework counters, reported alongside the user's.
 MAP_INPUT_RECORDS = "map.input.records"
+MAP_INPUT_BYTES = "map.input.bytes"  # the split's size
 MAP_OUTPUT_RECORDS = "map.output.records"
+MAP_OUTPUT_BYTES = "map.output.bytes"  # after combining
+REDUCE_INPUT_RECORDS = "reduce.input.records"
 REDUCE_OUTPUT_RECORDS = "reduce.output.records"
 
 # Where reduce tasks write under the output before committing, as in Go.
@@ -60,6 +63,13 @@ def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     return dict(job.counts)
 
 
+def _counted(ctx: Context, records: Iterator[tuple[bytes, bytes]]) -> Iterator[tuple[bytes, bytes]]:
+    """Counts the records read through it as REDUCE_INPUT_RECORDS."""
+    for record in records:
+        ctx.count(REDUCE_INPUT_RECORDS)
+        yield record
+
+
 @contextmanager
 def _task(kind: str, index: int):
     """Notes the failing task on any exception raised inside it."""
@@ -85,6 +95,7 @@ class _Job:
                 stack.enter_context(Sorter(self.work_dir, DEFAULT_BUDGET // r, combine_fn))
                 for _ in range(r)
             ]
+            ctx.count(MAP_INPUT_BYTES, split.end - split.start)
             for key, value in in_format.read(split):
                 ctx.count(MAP_INPUT_RECORDS)
                 for k, v in p.mapper(ctx, key, value):
@@ -94,6 +105,7 @@ class _Job:
                 with open(self._map_output(i, part), "wb") as f, kv.Writer(f) as w:
                     for k, v in sorter.sorted():
                         w.write(k, v)
+                ctx.count(MAP_OUTPUT_BYTES, os.path.getsize(self._map_output(i, part)))
 
     def run_reduce(self, r: int, m: int, out_format: OutputFormat) -> None:
         """Reduces partition r of all m map outputs. The part file is written
@@ -108,7 +120,7 @@ class _Job:
                 ]
                 w = stack.enter_context(out_format.create(tmp))
                 # In map task order, so equal keys stay in input order.
-                for key, values in groups(merge(*runs)):
+                for key, values in groups(_counted(ctx, merge(*runs))):
                     for k, v in self.spec.program.reducer(ctx, key, values):
                         ctx.count(REDUCE_OUTPUT_RECORDS)
                         w.write(k, v)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mapreduce_reloaded import local, split
+from mapreduce_reloaded import combine, local, split
 from mapreduce_reloaded.__main__ import load, main
 from mapreduce_reloaded.api import JobSpec, Program, mapper, reducer
 from mapreduce_reloaded.examples.wordcount import program
@@ -34,7 +34,9 @@ def test_wordcount_golden(tmp_path, m):
     )
     counts = local.run(spec, str(tmp_path))
     assert_same_files(CORPUS / "expected", tmp_path / "out")
+    assert counts[local.MAP_INPUT_BYTES] == 337637  # the corpus size
     assert counts[local.MAP_OUTPUT_RECORDS] == 59372
+    assert counts[local.REDUCE_INPUT_RECORDS] == counts[combine.OUTPUT_RECORDS]
     assert counts[local.REDUCE_OUTPUT_RECORDS] == 11786
 
 
