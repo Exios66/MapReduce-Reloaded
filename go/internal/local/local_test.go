@@ -11,6 +11,7 @@ import (
 
 	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"
+	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
@@ -41,7 +42,7 @@ func TestWordCountGolden(t *testing.T) {
 	for _, m := range []int{1, 3, 7} {
 		out, counts := runJob(t, wordcount.Program, m, 4)
 		assertSameFiles(t, filepath.Join(corpus, "expected"), out)
-		if counts[MapOutputRecords] != 59372 || counts[ReduceOutputRecords] != 11786 {
+		if counts[task.MapOutputRecords] != 59372 || counts[task.ReduceOutputRecords] != 11786 {
 			t.Errorf("M=%d: counters %v", m, counts)
 		}
 	}
