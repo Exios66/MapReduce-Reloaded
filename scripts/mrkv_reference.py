@@ -19,11 +19,13 @@ class MRKVError(Exception):
     """A spec violation. `kind` is one of the error kinds in the spec."""
 
     def __init__(self, kind, detail=""):
+        """Stores the error kind and appends nonempty detail to the exception message."""
         super().__init__(f"{kind}: {detail}" if detail else kind)
         self.kind = kind
 
 
 def _crc32c_table():
+    """Returns the 256-entry lookup table for reflected CRC-32C (Castagnoli)."""
     table = []
     for byte in range(256):
         crc = byte
@@ -45,6 +47,10 @@ def crc32c(data):
 
 
 def _uvarint(n):
+    """Encodes a nonnegative integer as unsigned LEB128 bytes.
+
+    Raises ValueError for a negative integer. No 64-bit limit is enforced.
+    """
     out = bytearray()
     while n >= 0x80:
         out.append((n & 0x7F) | 0x80)
@@ -54,6 +60,12 @@ def _uvarint(n):
 
 
 def _read_uvarint(buf, pos):
+    """Returns an unsigned LEB128 value and the byte offset immediately after it.
+
+    Reads from the zero-based byte offset pos. Raises MRKVError with kind
+    'bad_block' if the buffer ends before a terminating byte or no terminating
+    byte occurs within 10 bytes. No 64-bit value limit is enforced.
+    """
     result = shift = 0
     for i in range(10):
         if pos + i >= len(buf):
@@ -67,7 +79,16 @@ def _read_uvarint(buf, pos):
 
 
 def encode(records, block_target=DEFAULT_BLOCK_TARGET):
-    """Encodes (key, value) byte pairs into an MRKV file."""
+    """Returns an uncompressed MRKV file as bytes from (key, value) byte pairs.
+
+    Preserves input order without sorting. block_target is the payload size
+    threshold in bytes, checked after each complete record, so blocks may
+    exceed it. A nonpositive target puts each record in its own block. Empty
+    input produces a header and footer with no blocks.
+
+    Raises struct.error if a block's payload length or record count exceeds
+    the format's unsigned 32-bit fields, or footer totals exceed 64-bit fields.
+    """
     out = bytearray(MAGIC + bytes([VERSION, CODEC_NONE, 0, 0]))
     blocks = []
     payload, count = bytearray(), 0
@@ -88,9 +109,16 @@ def encode(records, block_target=DEFAULT_BLOCK_TARGET):
 
 
 def decode(data):
-    """Decodes an MRKV file into a list of (key, value) pairs.
+    """Decodes MRKV file bytes into a list of (key, value) byte pairs in file order.
 
-    Raises MRKVError with the spec's error kind on any violation.
+    Supports version 1 with no compression and returns only after validating
+    the footer. A valid file with no blocks returns an empty list. Key order
+    is not validated.
+
+    Raises MRKVError for invalid or unsupported headers, truncated data,
+    checksum mismatches, malformed block records, footer count mismatches,
+    or bytes after the footer. Its kind attribute identifies the error using
+    the spec's error kinds, including 'bad_block' from varint decoding.
     """
     if len(data) < 8:
         raise MRKVError("truncated", "shorter than header")

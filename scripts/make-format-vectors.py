@@ -16,6 +16,7 @@ OUT = Path(__file__).resolve().parent.parent / "testdata" / "format"
 
 
 def b64(data):
+    """Returns the bytes as an ASCII base64 string for the JSON manifest."""
     return base64.b64encode(data).decode("ascii")
 
 
