@@ -1,25 +1,26 @@
 """Tests for the example programs other than word count, mirroring the tests
 in go/examples."""
 
+import random
 from pathlib import Path
 
 import pytest
 
 from mapreduce_reloaded import local, split
 from mapreduce_reloaded.api import JobSpec
-from mapreduce_reloaded.examples import grep, reverselinks, urlfreq
+from mapreduce_reloaded.examples import distsort, grep, reverselinks, urlfreq
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 INPUTS = (str(CORPUS / "*.txt"),)
 
 
-def run(tmp_path, program, m, params, inputs=INPUTS):
+def run(tmp_path, program, m, params, inputs=INPUTS, r=1):
     out = tmp_path / "out"
     spec = JobSpec(
         program=program,
         inputs=inputs,
         output=str(out),
-        r=1,
+        r=r,
         split_size=split.size_for(inputs, m),
         params=params,
     )
@@ -66,3 +67,21 @@ def test_reverselinks(tmp_path):
     links = b"c\tx\na\tx\nno tab\nb\ty\nc\tx\nb\tx\n"
     out = run(tmp_path, reverselinks.program, 2, {}, write(tmp_path, links))
     assert (out / "part-r-00000").read_bytes() == b"x\ta,b,c\ny\tb\n"
+
+
+def test_distsort(tmp_path):
+    alphabet = bytes(c for c in range(256) if c not in b"\n\r")
+    rng = random.Random(1)
+    lines = [bytes(rng.choices(alphabet, k=rng.randint(1, 12))) for _ in range(2000)]
+    out = run(tmp_path, distsort.program, 5, {}, write(tmp_path, b"\n".join(lines) + b"\n"), r=4)
+    parts = [p.read_bytes() for p in sorted(out.glob("part-r-*"))]
+    assert all(parts), "the ranges should spread the keys"
+    assert b"".join(parts) == b"".join(line + b"\t\n" for line in sorted(lines))
+
+
+@pytest.mark.parametrize(
+    "key, want",
+    [(b"", 0), (b"\x00", 0), (b"\x3f\xff", 0), (b"\x40", 1), (b"\xbf", 2), (b"\xff", 3)],
+)
+def test_range_partition(key, want):
+    assert distsort.range_partition(key, 4) == want
