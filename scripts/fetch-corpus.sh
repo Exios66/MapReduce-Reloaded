@@ -9,11 +9,14 @@ set -eu
 
 out=$(dirname "$0")/../testdata/corpus
 base=https://raw.githubusercontent.com/GITenberg
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
 
 fetch() { # name repo/file
-    curl -fsS "$base/$2" |
-        awk '/^\*\*\* *START OF/ { on = 1; next } /^End of .*Project Gutenberg/ { on = 0 } on' \
-            >"$out/$1"
+    # Download first: in a pipeline, sh would only see awk's exit status.
+    curl -fsS -o "$tmp" "$base/$2"
+    awk '/^\*\*\* *START OF/ { on = 1; next } /^End of .*Project Gutenberg/ { on = 0 } on' \
+        "$tmp" >"$out/$1"
 }
 
 fetch alice.txt Alice-s-Adventures-in-Wonderland_11/master/11.txt
