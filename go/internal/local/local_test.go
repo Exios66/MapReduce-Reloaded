@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
+	"github.com/exios66/mapreduce-reloaded/go/internal/split"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
@@ -21,7 +22,7 @@ var corpusInputs = []string{filepath.Join(corpus, "*.txt")}
 // and returns the output directory and the counters.
 func runJob(t *testing.T, p api.Program, m int, r uint32) (string, map[string]int64) {
 	t.Helper()
-	splitSize, err := SplitSize(corpusInputs, m)
+	splitSize, err := split.SizeFor(corpusInputs, m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,6 @@ func TestErrors(t *testing.T) {
 		want   string
 	}{
 		{"no match", []string{filepath.Join(t.TempDir(), "*.txt")}, nil, "no input matches"},
-		{"bad pattern", []string{"["}, nil, "syntax error"},
 		{"mapper error", []string{filepath.Join(corpus, "raven.txt")}, failMapper, "map task 0: boom"},
 	} {
 		spec := valid

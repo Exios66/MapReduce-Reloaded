@@ -6,24 +6,20 @@
 package local
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/combine"
 	"github.com/exios66/mapreduce-reloaded/go/internal/extsort"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
+	"github.com/exios66/mapreduce-reloaded/go/internal/split"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
-
-// DefaultSplitSize is the split size used when JobSpec.SplitSize is 0.
-const DefaultSplitSize = 64 << 20
 
 // Framework counters, reported alongside the user's.
 const (
@@ -47,17 +43,9 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := expand(spec.Inputs)
+	splits, err := split.Plan(in, spec.Inputs, spec.SplitSize)
 	if err != nil {
 		return nil, err
-	}
-	var splits []formats.Split
-	for _, f := range files {
-		s, err := in.Splits(f, int64(cmp.Or(spec.SplitSize, DefaultSplitSize)))
-		if err != nil {
-			return nil, err
-		}
-		splits = append(splits, s...)
 	}
 	if err := os.MkdirAll(spec.Output, 0o755); err != nil {
 		return nil, err
@@ -75,40 +63,6 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 		}
 	}
 	return j.counts, nil
-}
-
-// SplitSize returns the split size that cuts the input into about m splits.
-func SplitSize(inputs []string, m int) (uint64, error) {
-	files, err := expand(inputs)
-	if err != nil {
-		return 0, err
-	}
-	var total int64
-	for _, f := range files {
-		info, err := os.Stat(f)
-		if err != nil {
-			return 0, err
-		}
-		total += info.Size()
-	}
-	return uint64(max((total+int64(m)-1)/int64(m), 1)), nil
-}
-
-// expand resolves input patterns to files, in sorted order per pattern.
-func expand(patterns []string) ([]string, error) {
-	var files []string
-	for _, p := range patterns {
-		matches, err := filepath.Glob(p)
-		if err != nil {
-			return nil, err
-		}
-		if len(matches) == 0 {
-			return nil, fmt.Errorf("no input matches %q", p)
-		}
-		slices.Sort(matches)
-		files = append(files, matches...)
-	}
-	return files, nil
 }
 
 type job struct {
