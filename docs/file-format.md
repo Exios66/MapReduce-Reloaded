@@ -60,8 +60,11 @@ record := uvarint(len(key)) key uvarint(len(value)) value
 Rules:
 - Keys and values are arbitrary bytes. Either may be empty.
 - **A record never spans two blocks.**
-- Writers should close a block once its decompressed payload reaches about
-  64 KiB. A single record larger than that gets a block to itself.
+- Writers append each record to the current block, then close the block once
+  its decompressed payload is at least 64 KiB (65,536 bytes). If a record
+  would take the payload past 64 MiB, they close the current block before
+  appending it. The Go and Python writers follow this rule exactly, so they
+  write identical bytes; readers must not rely on it.
 - A block's payload is at most **64 MiB** (`stored_len` ≤ 67,108,864).
   Readers reject a larger block as `bad_block` without allocating it, so a
   corrupt length field cannot exhaust memory. Writers refuse a record that
