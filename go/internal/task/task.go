@@ -173,6 +173,16 @@ func writeKV(path string, attempt uint32, records extsort.Records) (size int64, 
 	return f.Seek(0, io.SeekCurrent)
 }
 
+// CheckOutput returns an error if output already holds part files, so that
+// a job's output is never mixed with an earlier job's.
+func CheckOutput(output string) error {
+	parts, err := filepath.Glob(filepath.Join(output, "part-r-*"))
+	if err == nil && len(parts) > 0 {
+		err = fmt.Errorf("task: %s already holds job output", output)
+	}
+	return err
+}
+
 // Cleanup removes what reduce attempts left in a finished job's output: the
 // files of attempts that failed or died before committing.
 func Cleanup(output string) error {

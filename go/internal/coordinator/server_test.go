@@ -69,6 +69,16 @@ func TestSubmitJob(t *testing.T) {
 	assertCode(t, err, codes.InvalidArgument)
 	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{})
 	assertCode(t, err, codes.InvalidArgument)
+
+	used := t.TempDir() // an earlier job's output
+	in := filepath.Join(used, "part-r-00000")
+	if err := os.WriteFile(in, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: []string{in}, Output: used, NumReduceTasks: 1,
+	}})
+	assertCode(t, err, codes.AlreadyExists)
 }
 
 func TestOneJobAtATime(t *testing.T) {

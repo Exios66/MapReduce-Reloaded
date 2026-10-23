@@ -30,6 +30,12 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(splits) == 0 {
+		return nil, errors.New("local: the input is empty")
+	}
+	if err := task.CheckOutput(spec.Output); err != nil {
+		return nil, err
+	}
 
 	counts := map[string]int64{}
 	add := func(c map[string]int64) {

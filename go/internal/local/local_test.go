@@ -105,18 +105,31 @@ func assertSameFiles(t *testing.T, wantDir, gotDir string) {
 }
 
 func TestErrors(t *testing.T) {
+	raven := []string{filepath.Join(corpus, "raven.txt")}
+	empty, used := filepath.Join(t.TempDir(), "empty.txt"), t.TempDir()
+	for _, f := range []string{empty, filepath.Join(used, "part-r-00000")} {
+		if err := os.WriteFile(f, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	valid := api.JobSpec{Program: wordcount.Program, Output: t.TempDir(), R: 1}
 	for _, tc := range []struct {
 		name   string
 		inputs []string
+		output string
 		mapper api.Mapper
 		want   string
 	}{
-		{"no match", []string{filepath.Join(t.TempDir(), "*.txt")}, nil, "no input matches"},
-		{"mapper error", []string{filepath.Join(corpus, "raven.txt")}, failMapper, "map task 0: boom"},
+		{"no match", []string{filepath.Join(t.TempDir(), "*.txt")}, "", nil, "no input matches"},
+		{"empty input", []string{empty}, "", nil, "input is empty"},
+		{"output in use", raven, used, nil, "already holds job output"},
+		{"mapper error", raven, "", failMapper, "map task 0: boom"},
 	} {
 		spec := valid
 		spec.Inputs = tc.inputs
+		if tc.output != "" {
+			spec.Output = tc.output
+		}
 		if tc.mapper != nil {
 			spec.Program.Mapper = tc.mapper
 		}

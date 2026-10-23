@@ -149,6 +149,9 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	if len(plan) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "the input is empty")
 	}
+	if err := mrtask.CheckOutput(spec.Output); err != nil {
+		return nil, status.Error(codes.AlreadyExists, err.Error())
+	}
 	splits := make([]*pb.InputSplit, len(plan))
 	for i, sp := range plan {
 		if splits[i], err = wire.InputSplit(sp); err != nil {
