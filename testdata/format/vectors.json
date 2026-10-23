@@ -1,10 +1,12 @@
 {
   "empty": {
     "file": "empty.mrkv",
+    "block_target": 65536,
     "records": []
   },
   "one_record": {
     "file": "one_record.mrkv",
+    "block_target": 65536,
     "records": [
       [
         "aGVsbG8=",
@@ -14,6 +16,7 @@
   },
   "many_records": {
     "file": "many_records.mrkv",
+    "block_target": 64,
     "records": [
       [
         "a2V5LTAwMA==",
@@ -219,6 +222,7 @@
   },
   "binary_keys": {
     "file": "binary_keys.mrkv",
+    "block_target": 64,
     "records": [
       [
         "",
