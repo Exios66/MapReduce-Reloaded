@@ -57,7 +57,8 @@ identical bytes, which gives a second, independent correctness check.
 ### Phase 2 — Make it distributed (#13–#21)
 *Open several kitchens, with a head chef handing out tickets.*
 
-- **#14** Split the input into M pieces.
+- **#14** Split the input into M pieces. See
+  [explainers/12-splits.md](explainers/12-splits.md).
 - **#15** The coordinator's notebook: every task's state, and where every
   output lives.
 - **#16** The ask-for-work loop, using the messages from #3.

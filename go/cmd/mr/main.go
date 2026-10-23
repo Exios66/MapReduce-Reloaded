@@ -20,6 +20,7 @@ import (
 
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	"github.com/exios66/mapreduce-reloaded/go/internal/local"
+	"github.com/exios66/mapreduce-reloaded/go/internal/split"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
@@ -60,7 +61,7 @@ func run(args []string, stderr io.Writer) (err error) {
 	}
 	spec := api.JobSpec{Program: program, Inputs: inputs, Output: fs.Arg(1), R: uint32(*r)}
 	if *m > 0 {
-		if spec.SplitSize, err = local.SplitSize(inputs, int(*m)); err != nil {
+		if spec.SplitSize, err = split.SizeFor(inputs, int(*m)); err != nil {
 			return err
 		}
 	}

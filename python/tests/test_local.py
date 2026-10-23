@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mapreduce_reloaded import local
+from mapreduce_reloaded import local, split
 from mapreduce_reloaded.__main__ import load, main
 from mapreduce_reloaded.api import JobSpec, Program, mapper, reducer
 from mapreduce_reloaded.examples.wordcount import program
@@ -30,7 +30,7 @@ def test_wordcount_golden(tmp_path, m):
         inputs=INPUTS,
         output=str(tmp_path / "out"),
         r=4,
-        split_size=local.split_size(INPUTS, m),
+        split_size=split.size_for(INPUTS, m),
     )
     counts = local.run(spec, str(tmp_path))
     assert_same_files(CORPUS / "expected", tmp_path / "out")
@@ -66,7 +66,7 @@ def test_value_order_independent_of_m(tmp_path):
             inputs=INPUTS,
             output=str(out),
             r=2,
-            split_size=local.split_size(INPUTS, m),
+            split_size=split.size_for(INPUTS, m),
         )
         local.run(spec, str(tmp_path))
         outputs.append(out)

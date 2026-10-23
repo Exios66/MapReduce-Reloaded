@@ -6,7 +6,6 @@ input order, and equal keys keep that order through the sort. That makes it
 the oracle the distributed runs are checked against.
 """
 
-import glob
 import os
 from collections import Counter
 from contextlib import ExitStack, contextmanager
@@ -22,8 +21,7 @@ from mapreduce_reloaded.formats import (
     kv,
     output_format,
 )
-
-DEFAULT_SPLIT_SIZE = 64 << 20
+from mapreduce_reloaded.split import plan
 
 # Framework counters, reported alongside the user's.
 MAP_INPUT_RECORDS = "map.input.records"
@@ -37,8 +35,7 @@ def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     <output>/part-r-<r>."""
     in_format = input_format(spec.input_format)
     out_format = output_format(spec.output_format)
-    split_size = spec.split_size or DEFAULT_SPLIT_SIZE
-    splits = [s for path in expand(spec.inputs) for s in in_format.splits(path, split_size)]
+    splits = plan(in_format, spec.inputs, spec.split_size)
     os.makedirs(spec.output, exist_ok=True)
 
     job = _Job(spec, work_dir)
@@ -49,23 +46,6 @@ def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
         with _task("reduce", r):
             job.run_reduce(r, len(splits), out_format)
     return dict(job.counts)
-
-
-def split_size(inputs: list[str], m: int) -> int:
-    """Returns the split size that cuts the input into about m splits."""
-    total = sum(os.path.getsize(path) for path in expand(inputs))
-    return max(-(-total // m), 1)
-
-
-def expand(patterns) -> list[str]:
-    """Resolves input patterns to files, in sorted order per pattern."""
-    files = []
-    for pattern in patterns:
-        matches = sorted(glob.glob(pattern))
-        if not matches:
-            raise FileNotFoundError(f"no input matches {pattern!r}")
-        files += matches
-    return files
 
 
 @contextmanager
