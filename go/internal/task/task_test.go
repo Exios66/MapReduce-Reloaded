@@ -201,6 +201,28 @@ func TestBadRecords(t *testing.T) {
 	}
 }
 
+// A panic outside any one record, here in the combiner, fails the attempt
+// and leaves no side output.
+func TestCombinerPanic(t *testing.T) {
+	spec, split := setup(t, "a b a\n")
+	mapper := spec.Program.Mapper
+	spec.Program.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if _, err := ctx.SideOutput("seen"); err != nil {
+			return err
+		}
+		return mapper.Map(ctx, key, value, out)
+	})
+	spec.Program.Combiner = api.ReduceFunc(func(api.Context, []byte, iter.Seq[[]byte], api.Emitter) error {
+		panic("bad combiner")
+	})
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, t.TempDir(), nil); err == nil {
+		t.Fatal("map succeeded")
+	}
+	if names := dirNames(t, spec.Output); slices.Contains(names, "seen") {
+		t.Fatalf("failed attempt committed its side output: %v", names)
+	}
+}
+
 // A side output appears once, with one attempt's content, however many
 // attempts fail or succeed (§4.5).
 func TestSideOutput(t *testing.T) {
