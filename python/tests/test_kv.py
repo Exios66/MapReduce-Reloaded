@@ -159,3 +159,37 @@ def test_corruption_matches_reference(recs, data):
     i = data.draw(st.integers(0, len(raw) - 1))
     raw[i] ^= data.draw(st.integers(1, 255))
     assert outcome(read_all, bytes(raw)) == outcome(mrkv.decode, bytes(raw))
+
+
+class Trickle(io.RawIOBase):
+    """An unbuffered stream that moves at most 3 bytes per call."""
+
+    def __init__(self, data=b""):
+        self.data, self.pos = bytearray(data), 0
+
+    def readable(self):
+        return True
+
+    def writable(self):
+        return True
+
+    def readinto(self, b):
+        n = min(3, len(b), len(self.data) - self.pos)
+        b[:n] = self.data[self.pos : self.pos + n]
+        self.pos += n
+        return n
+
+    def write(self, b):
+        n = min(3, len(b))
+        self.data += bytes(b[:n])
+        return n
+
+
+def test_short_reads_and_writes():
+    records = [(b"key", b"value"), (b"", b"x" * 100)]
+    out = Trickle()
+    with kv.Writer(out) as w:
+        for key, value in records:
+            w.write(key, value)
+    assert out.data == write_all(records)
+    assert list(kv.read(Trickle(out.data))) == records
