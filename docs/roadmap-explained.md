@@ -62,8 +62,9 @@ identical bytes, which gives a second, independent correctness check.
 - **#19** Reducers fetch, merge and reduce.
 - **#20** Safe commits: write to a temporary file, then rename it in one
   step, so a half-written output file can never be seen.
-- **#21** Docker: one command starts 1 coordinator and 4 workers. A test
-  checks that the output matches the oracle.
+- **#21** Docker: one command starts 1 coordinator and 4 workers on the
+  CS544 VM (8 GB RAM; see [cluster-vm.md](cluster-vm.md)). A test checks
+  that the output matches the oracle.
 
 ### Phase 3 — Survive failures (#22–#29)
 *The paper's famous result: thousands of cheap machines, some always
@@ -144,7 +145,7 @@ appear in the report as future work.
 | 1 | #4 file format, #5 hash, #7 API, #8 reader/writer | Contract complete in both languages |
 | 2 | #9 formats, #10 external sort, #11 combiner, #12 local mode | `mr run --local wordcount` works (the oracle) |
 | 3 | #14 splitting, #15 task table, #16 scheduling, #17 map spill, #18 shuffle | Map side runs distributed |
-| 4 | #19 reduce, #20 commit, #21 Docker cluster, #23 worker failure | Full distributed job on Compose matches the oracle |
+| 4 | #19 reduce, #20 commit, #21 Docker cluster, #23 worker failure | Full distributed job on Compose, on the CS544 VM, matches the oracle |
 | 5 | #24 recovery, #25 backup tasks, #26 bad records, #27 counters, #28 side files, #29 chaos | Chaos runs pass |
 | 6 | #31 locality, #32 status, #33 examples, #34 mapping, #41 S3, #42 compression, #57/#58 benchmarks, #60 report | All paper features done, report written |
 
