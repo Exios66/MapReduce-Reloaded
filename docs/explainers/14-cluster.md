@@ -50,8 +50,8 @@ one map path (`task.Map`), not just a final answer.
   another attempt runs it.
 - Workers may start before the coordinator; they wait for it.
 - Workers may join at any time, and leave between tasks.
-- A worker that dies *during* a task is not detected yet: heartbeat expiry
-  and re-execution are #23.
+- A worker that dies is declared dead when its heartbeats stop, and its
+  work runs again elsewhere; see [16-worker-failure.md](16-worker-failure.md).
 
 ## How we know it works
 
