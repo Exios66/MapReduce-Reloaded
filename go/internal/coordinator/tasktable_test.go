@@ -103,12 +103,12 @@ func TestFailReturnsToIdle(t *testing.T) {
 		attempt uint32
 		worker  string
 	}{{a + 1, "w1"}, {a, "w2"}} { // not running on that worker: ignored
-		if err := tt.Fail(m0, report.attempt, report.worker); err != nil {
+		if err := tt.Fail(m0, report.attempt, report.worker, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	assertState(t, tt, m0, inProgress)
-	if err := tt.Fail(m0, a, "w1"); err != nil {
+	if err := tt.Fail(m0, a, "w1", nil); err != nil {
 		t.Fatal(err)
 	}
 	assertState(t, tt, m0, idle)
@@ -151,12 +151,46 @@ func TestResetWorker(t *testing.T) {
 	}
 }
 
+// A reduce that cannot fetch a map output sends that map task back to idle,
+// unless it has already run again elsewhere (§3.3).
+func TestFailWithLostOutput(t *testing.T) {
+	tt := NewTaskTable(1, 1)
+	m0, r0 := Task{mapKind, 0}, Task{reduceKind, 0}
+	a := mustAssign(t, tt, m0, "w1")
+	outs := outputs(0, 1)
+	outs[0].WorkerAddress = "w1:7000"
+	if _, err := tt.Complete(m0, a, "w1", outs); err != nil {
+		t.Fatal(err)
+	}
+	lost := tt.Sources(0)[0]
+	stale := &pb.PartitionLocation{MapIndex: 0, WorkerAddress: "w9:7000"}
+	for _, l := range []*pb.PartitionLocation{nil, stale} {
+		if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", l); err != nil {
+			t.Fatal(err)
+		}
+		assertState(t, tt, m0, completed)
+	}
+	if err := tt.Fail(r0, 99, "w2", lost); err != nil { // not a running attempt
+		t.Fatal(err)
+	}
+	assertState(t, tt, m0, completed)
+	if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", lost); err != nil {
+		t.Fatal(err)
+	}
+	assertState(t, tt, m0, idle)
+	assertState(t, tt, r0, idle)
+	if _, ok := tt.Next(); !ok {
+		t.Fatal("no task to run")
+	}
+	checkCounts(t, tt)
+}
+
 func TestErrors(t *testing.T) {
 	tt := NewTaskTable(1, 2)
 	m0 := Task{mapKind, 0}
 	for name, err := range map[string]error{
-		"unknown task": tt.Fail(Task{reduceKind, 2}, 0, "w1"),
-		"no kind":      tt.Fail(Task{Index: 0}, 0, "w1"),
+		"unknown task": tt.Fail(Task{reduceKind, 2}, 0, "w1", nil),
+		"no kind":      tt.Fail(Task{Index: 0}, 0, "w1", nil),
 	} {
 		if err == nil || !strings.Contains(err.Error(), "no task") {
 			t.Errorf("%s: got %v", name, err)
@@ -214,7 +248,7 @@ func TestInvariants(t *testing.T) {
 					t.Fatalf("seed %d: %v completed from %v", seed, id, before)
 				}
 			case 2:
-				if err := tt.Fail(id, uint32(rng.IntN(3)), workers[rng.IntN(len(workers))]); err != nil {
+				if err := tt.Fail(id, uint32(rng.IntN(3)), workers[rng.IntN(len(workers))], nil); err != nil {
 					t.Fatal(err)
 				}
 				if after, _ := tt.State(id); before == completed && after != completed {

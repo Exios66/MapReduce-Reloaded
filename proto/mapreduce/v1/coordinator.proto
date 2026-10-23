@@ -136,6 +136,9 @@ message TaskFailure {
   // Sequence number of the record being processed when the user's code
   // crashed, if known (§4.6).
   optional uint64 failed_record = 2;
+  // The map output a reduce task could not fetch, if that is why it
+  // failed. The coordinator runs that map task again (§3.3).
+  PartitionLocation lost_output = 3;
 }
 
 message ReportTaskResponse {

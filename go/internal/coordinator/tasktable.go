@@ -36,7 +36,8 @@ type task struct {
 //
 // A task returns to IDLE when its last running attempt fails or its worker
 // is lost. A completed map task also returns to IDLE when its worker is
-// lost, since its output was on that worker's disk; a completed reduce
+// lost or a reduce task cannot fetch its output, since that output was on
+// the worker's disk; a completed reduce
 // task's output is in the global file system, so it stays done (§3.3).
 // The first attempt to complete wins; later reports are rejected.
 type TaskTable struct {
@@ -115,9 +116,10 @@ func (t *TaskTable) Complete(id Task, attempt uint32, worker string, outputs []*
 }
 
 // Fail records that an attempt on worker failed. The task becomes idle again
-// unless another attempt is still running. Reports for attempts that are not
-// running on worker are ignored.
-func (t *TaskTable) Fail(id Task, attempt uint32, worker string) error {
+// unless another attempt is still running. If the attempt failed because it
+// could not fetch lost, a map output, that map task runs again (§3.3).
+// Reports for attempts that are not running on worker are ignored.
+func (t *TaskTable) Fail(id Task, attempt uint32, worker string, lost *pb.PartitionLocation) error {
 	ts, err := t.task(id)
 	if err != nil {
 		return err
@@ -125,8 +127,22 @@ func (t *TaskTable) Fail(id Task, attempt uint32, worker string) error {
 	if ts.runsOn(attempt, worker) {
 		delete(ts.running, attempt)
 		ts.idleIfStopped()
+		t.lose(lost)
 	}
 	return nil
+}
+
+// lose makes a completed map task idle if its output for lost's partition
+// is still where lost says. One already run again elsewhere is kept.
+func (t *TaskTable) lose(lost *pb.PartitionLocation) {
+	i, p, addr := lost.GetMapIndex(), lost.GetPartition(), lost.GetWorkerAddress()
+	if addr == "" || int(i) >= len(t.maps) {
+		return
+	}
+	if ts := &t.maps[i]; int(p) < len(ts.outputs) && ts.outputs[p].GetWorkerAddress() == addr {
+		ts.state, ts.worker, ts.outputs = pb.TaskState_TASK_STATE_IDLE, "", nil
+		t.mapsDone--
+	}
 }
 
 // ResetWorker handles the loss of a worker (§3.3): its running attempts
