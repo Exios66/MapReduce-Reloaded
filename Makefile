@@ -30,7 +30,7 @@ lint: go-lint py-lint
 
 fmt:
 	cd go && gofmt -w .
-	cd python && ruff format . ../scripts && ruff check --fix . ../scripts
+	cd python && $(PYTHON) -m ruff format . ../scripts && $(PYTHON) -m ruff check --fix . ../scripts
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
@@ -75,4 +75,4 @@ py-test:
 	cd python && $(PYTHON) -m pytest -q
 
 py-lint:
-	cd python && ruff format --check . ../scripts && ruff check . ../scripts
+	cd python && $(PYTHON) -m ruff format --check . ../scripts && $(PYTHON) -m ruff check . ../scripts

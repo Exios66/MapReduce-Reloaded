@@ -78,7 +78,7 @@ class Writer:
         self._payload = bytearray()
         self._count = self._records = self._blocks = 0
         self._closed = False
-        f.write(_MAGIC + bytes([_VERSION, _CODEC_NONE, 0, 0]))
+        _write_all(f, _MAGIC + bytes([_VERSION, _CODEC_NONE, 0, 0]))
 
     def write(self, key: bytes, value: bytes) -> None:
         if self._closed:
@@ -100,12 +100,12 @@ class Writer:
         if self._count:
             self._flush()
         totals = _TOTALS.pack(self._records, self._blocks)
-        self._f.write(_U32.pack(0) + totals + _U32.pack(crc32c(totals)))
+        _write_all(self._f, _U32.pack(0) + totals + _U32.pack(crc32c(totals)))
         self._closed = True
 
     def _flush(self) -> None:
         payload = bytes(self._payload)
-        self._f.write(_BLOCK.pack(len(payload), self._count, crc32c(payload)) + payload)
+        _write_all(self._f, _BLOCK.pack(len(payload), self._count, crc32c(payload)) + payload)
         self._records += self._count
         self._blocks += 1
         self._payload.clear()
@@ -187,7 +187,22 @@ def _field(buf: bytes, pos: int, block: int) -> tuple[bytes, int]:
 
 
 def _read_exact(f: BinaryIO, n: int) -> bytes:
-    data = f.read(n)
-    if len(data) != n:
-        raise FormatError("truncated")
-    return data
+    """Reads n bytes, however many calls it takes: unbuffered files and pipes
+    may return fewer than asked before the end."""
+    data = bytearray()
+    while len(data) < n:
+        chunk = f.read(n - len(data))
+        if not chunk:
+            raise FormatError("truncated")
+        data += chunk
+    return bytes(data)
+
+
+def _write_all(f: BinaryIO, data: bytes) -> None:
+    """Writes all of data: unbuffered files may accept only part of it."""
+    view = memoryview(data)
+    while view:
+        n = f.write(view)
+        if not n:
+            raise OSError("write accepted no bytes")
+        view = view[n:]

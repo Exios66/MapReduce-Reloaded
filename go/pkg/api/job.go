@@ -1,6 +1,9 @@
 package api
 
-import "errors"
+import (
+	"errors"
+	"reflect"
+)
 
 // Program is a user's MapReduce code: what runs, as opposed to the data it
 // runs on.
@@ -37,11 +40,17 @@ type JobSpec struct {
 // Validate reports every problem with the spec, or nil if it can run.
 func (s *JobSpec) Validate() error {
 	var errs []error
-	if s.Program.Mapper == nil {
+	if isNil(s.Program.Mapper) {
 		errs = append(errs, errors.New("no Mapper"))
 	}
-	if s.Program.Reducer == nil {
+	if isNil(s.Program.Reducer) {
 		errs = append(errs, errors.New("no Reducer"))
+	}
+	if s.Program.Combiner != nil && isNil(s.Program.Combiner) {
+		errs = append(errs, errors.New("the Combiner is a nil function"))
+	}
+	if s.Program.Partitioner != nil && isNil(s.Program.Partitioner) {
+		errs = append(errs, errors.New("the Partitioner is a nil function"))
 	}
 	if len(s.Inputs) == 0 {
 		errs = append(errs, errors.New("no Inputs"))
@@ -53,4 +62,14 @@ func (s *JobSpec) Validate() error {
 		errs = append(errs, errors.New("number of reduce tasks R must be at least 1"))
 	}
 	return errors.Join(errs...)
+}
+
+// isNil reports whether v is nil, or a nil function wrapped in an interface,
+// such as MapFunc(nil), which would panic when called.
+func isNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	f := reflect.ValueOf(v)
+	return f.Kind() == reflect.Func && f.IsNil()
 }
