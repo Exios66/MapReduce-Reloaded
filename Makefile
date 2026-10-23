@@ -78,8 +78,10 @@ proto-check: proto-lint proto-breaking proto
 	@test -z "$$(git ls-files --others --exclude-standard -- go/gen python/mapreduce_reloaded/gen)" || \
 		(echo "generated code has new files: git add them" && exit 1)
 
+# papermap reads docs and Python tests, outside the Go module, which the test
+# cache does not track; -count=1 runs it every time.
 go-test:
-	cd go && go test -race ./...
+	cd go && go test -race ./... && go test -count=1 ./internal/papermap
 
 go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
