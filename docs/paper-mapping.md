@@ -8,7 +8,7 @@ Status: `planned` → `in progress` → `done`.
 
 | ID  | Feature | Paper § | Phase | Go | Python | Test | Status |
 |-----|---------|---------|-------|----|--------|------|--------|
-| F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | | planned |
+| F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | `Example_wordCount`, `test_api.py` | done |
 | F2  | Input splitting (16–64 MB) | §3.1 | 2 | | | | planned |
 | F3  | Master + M map / R reduce tasks | §3.1 | 2 | | | | planned |
 | F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition` | `mapreduce_reloaded/partition` | `testdata/hash/vectors.json` | in progress (hash done; spill is #17) |
