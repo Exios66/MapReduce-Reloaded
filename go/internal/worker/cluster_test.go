@@ -5,11 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"iter"
 	"maps"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,6 +149,7 @@ type cluster struct {
 	stop    func() // stops the coordinator
 	client  pb.CoordinatorServiceClient
 	workDir string
+	workers []*worker.Worker
 	live    []chan error // Run results of the workers not killed
 	gates   []*gate      // of each worker
 }
@@ -228,12 +234,11 @@ func (c *cluster) addWorkerOn(host string) (kill func()) {
 	}
 	c.t.Cleanup(func() { _ = conn.Close() })
 	ctx, cancel := context.WithCancel(c.ctx)
+	w := worker.New(pb.NewCoordinatorServiceClient(conn), dir, &pb.WorkerInfo{ShuffleAddress: addr, Host: host})
 	done := make(chan error, 1)
-	go func() {
-		done <- worker.New(pb.NewCoordinatorServiceClient(conn), dir, &pb.WorkerInfo{ShuffleAddress: addr, Host: host}).Run(ctx)
-	}()
+	go func() { done <- w.Run(ctx) }()
 	i := len(c.live)
-	c.live, c.gates = append(c.live, done), append(c.gates, g)
+	c.workers, c.live, c.gates = append(c.workers, w), append(c.live, done), append(c.gates, g)
 	return func() {
 		cancel()
 		stopShuffle()
@@ -302,6 +307,39 @@ func TestClusterWordCount(t *testing.T) {
 // With a free worker on every host that holds a split, nearly every map
 // task runs on one, and the output does not change (§3.4). With fewer, the
 // job still finishes: no task waits for ever for a missing host.
+// A worker's /metrics counts the tasks it ran, and the map output it wrote
+// and then fetched back for the reduce tasks.
+func TestClusterWorkerMetrics(t *testing.T) {
+	c, _, status := runJob(t, "wordcount", 1)
+	srv := httptest.NewServer(c.workers[0].MetricsHandler())
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		fmt.Sprintf(`mr_worker_tasks_total{kind="map",result="ok"} %d`, status.GetMapTasksTotal()),
+		`mr_worker_tasks_total{kind="reduce",result="ok"} 4`,
+		`mr_worker_tasks_total{kind="map",result="failed"} 0`,
+		`mr_worker_task_running{kind="map"} 0`,
+		"mr_worker_registrations_total 1",
+	} {
+		if !strings.Contains(string(body), want+"\n") {
+			t.Errorf("metrics lack %q:\n%s", want, body)
+		}
+	}
+	written := regexp.MustCompile(`mr_worker_map_output_bytes_total (\d+)`).FindSubmatch(body)
+	fetched := regexp.MustCompile(`mr_worker_shuffle_fetched_bytes_total (\d+)`).FindSubmatch(body)
+	if written == nil || fetched == nil || string(written[1]) == "0" || string(written[1]) != string(fetched[1]) {
+		t.Errorf("map output written %q, fetched %q; want equal and nonzero", written, fetched)
+	}
+}
+
 func TestClusterLocality(t *testing.T) {
 	for _, workers := range []int{8, 3} {
 		t.Run(fmt.Sprint(workers, " workers"), func(t *testing.T) {

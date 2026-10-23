@@ -27,7 +27,7 @@ services:
 
   worker:
     <<: *node
-    command: [worker, -coordinator, "coordinator:7070"]
+    command: [worker, -coordinator, "coordinator:7070", -http, ":8081"] # /metrics inside the network
     mem_limit: 768m
     deploy:
       replicas: 4
