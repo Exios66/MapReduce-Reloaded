@@ -16,6 +16,7 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
+	"github.com/exios66/mapreduce-reloaded/go/internal/local"
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"
 	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
@@ -59,8 +60,9 @@ func startCoordinator(t *testing.T) (*coordinator.Server, pb.CoordinatorServiceC
 }
 
 // runJob runs program over the corpus on n workers, which join one after
-// another, and returns the output directory and the job's final status.
-func runJob(t *testing.T, program string, n int) (string, *pb.GetJobStatusResponse) {
+// another. It returns the output directory, the directory holding the map
+// output, and the job's final status.
+func runJob(t *testing.T, program string, n int) (out, mapDir string, status *pb.GetJobStatusResponse) {
 	t.Helper()
 	srv, client := startCoordinator(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -71,7 +73,7 @@ func runJob(t *testing.T, program string, n int) (string, *pb.GetJobStatusRespon
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := filepath.Join(t.TempDir(), "out")
+	out = filepath.Join(t.TempDir(), "out")
 	sub, err := client.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
 		Program: program, Inputs: inputs, Output: out,
 		SplitSizeBytes: splitSize, NumReduceTasks: 4, UseCombiner: true,
@@ -89,7 +91,6 @@ func runJob(t *testing.T, program string, n int) (string, *pb.GetJobStatusRespon
 		}()
 	}
 
-	var status *pb.GetJobStatusResponse
 	for status.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
 		time.Sleep(10 * time.Millisecond)
 		if status, err = client.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: sub.GetJobId()}); err != nil {
@@ -102,11 +103,11 @@ func runJob(t *testing.T, program string, n int) (string, *pb.GetJobStatusRespon
 			t.Fatalf("worker: %v", err)
 		}
 	}
-	return out, status
+	return out, filepath.Join(workDir, sub.GetJobId()), status
 }
 
 func TestClusterWordCount(t *testing.T) {
-	out, status := runJob(t, "wordcount", 3)
+	out, _, status := runJob(t, "wordcount", 3)
 	assertGolden(t, out)
 	if status.GetMapTasksTotal() < 7 || status.GetReduceTasksCompleted() != 4 ||
 		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 11786 {
@@ -116,25 +117,50 @@ func TestClusterWordCount(t *testing.T) {
 
 // Failed attempts are retried, and only accepted attempts count.
 func TestClusterRetriesFailedTasks(t *testing.T) {
-	out, status := runJob(t, "test.flaky", 2)
+	out, _, status := runJob(t, "test.flaky", 2)
 	assertGolden(t, out)
 	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 59372 {
 		t.Fatalf("map.output.records = %d, want 59372", got)
 	}
 }
 
+// The cluster's map output is byte for byte what local mode writes for the
+// same splits, however the tasks were spread over the workers.
+func TestClusterMapOutputMatchesLocal(t *testing.T) {
+	_, mapDir, _ := runJob(t, "wordcount", 3)
+	inputs := []string{filepath.Join(corpus, "*.txt")}
+	splitSize, err := split.SizeFor(inputs, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localDir := t.TempDir()
+	if _, err := local.Run(api.JobSpec{
+		Program: wordcount.Program, Inputs: inputs, Output: filepath.Join(t.TempDir(), "out"),
+		SplitSize: splitSize, R: 4,
+	}, localDir); err != nil {
+		t.Fatal(err)
+	}
+	assertSameFiles(t, mapDir, localDir)
+}
+
 func assertGolden(t *testing.T, out string) {
 	t.Helper()
-	want, _ := filepath.Glob(filepath.Join(corpus, "expected", "*"))
-	got, _ := filepath.Glob(filepath.Join(out, "*"))
-	if len(got) != len(want) {
-		t.Fatalf("output has %d files, want %d: %v", len(got), len(want), got)
+	assertSameFiles(t, out, filepath.Join(corpus, "expected"))
+}
+
+// assertSameFiles checks that dirs got and want hold the same files.
+func assertSameFiles(t *testing.T, got, want string) {
+	t.Helper()
+	wantFiles, _ := filepath.Glob(filepath.Join(want, "*"))
+	gotFiles, _ := filepath.Glob(filepath.Join(got, "*"))
+	if len(wantFiles) == 0 || len(gotFiles) != len(wantFiles) {
+		t.Fatalf("%s has %d files, want %d: %v", got, len(gotFiles), len(wantFiles), gotFiles)
 	}
-	for _, w := range want {
+	for _, w := range wantFiles {
 		wb, _ := os.ReadFile(w)
-		gb, err := os.ReadFile(filepath.Join(out, filepath.Base(w)))
+		gb, err := os.ReadFile(filepath.Join(got, filepath.Base(w)))
 		if err != nil || !bytes.Equal(gb, wb) {
-			t.Errorf("%s differs from the expected output (%v)", filepath.Base(w), err)
+			t.Errorf("%s differs from %s (%v)", filepath.Base(w), w, err)
 		}
 	}
 }
