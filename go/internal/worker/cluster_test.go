@@ -306,18 +306,44 @@ func TestClusterSkipsBadRecords(t *testing.T) {
 // same splits, however the tasks were spread over the workers.
 func TestClusterMapOutputMatchesLocal(t *testing.T) {
 	c, job, _ := runJob(t, "wordcount", 3)
+	localDir, _ := runLocal(t)
+	assertSameFiles(t, c.mapFiles(job), localDir)
+}
+
+// Counters count each task once, however many attempts it had: with a
+// backup that wins and an attempt that fails late, they match local mode
+// (§4.9).
+func TestClusterCountersMatchLocal(t *testing.T) {
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Backups = true })
+	job := c.submit("test.pause-map")
+	c.addWorker()
+	c.addWorker()
+	<-mapStuck
+	c.succeeded(job)
+	resume <- struct{}{}
+	got := c.wait(job).GetCounters().GetValues()
+	if _, want := runLocal(t); !maps.Equal(got, want) {
+		t.Fatalf("counters %v, want %v", got, want)
+	}
+}
+
+// runLocal runs word count in local mode over the splits c.submit uses. It
+// returns the directory of the map output, and the counters.
+func runLocal(t *testing.T) (string, map[string]int64) {
+	t.Helper()
 	splitSize, err := split.SizeFor(inputs, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	localDir := t.TempDir()
-	if _, err := local.Run(api.JobSpec{
+	dir := t.TempDir()
+	counts, err := local.Run(api.JobSpec{
 		Program: wordcount.Program, Inputs: inputs, Output: filepath.Join(t.TempDir(), "out"),
 		SplitSize: splitSize, R: 4,
-	}, localDir); err != nil {
+	}, dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	assertSameFiles(t, c.mapFiles(job), localDir)
+	return dir, counts
 }
 
 // A worker that dies is detected, and its work is done again elsewhere
