@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"iter"
 	"log/slog"
 
@@ -95,6 +96,16 @@ const (
 	MapTask TaskKind = iota + 1
 	ReduceTask
 )
+
+func (k TaskKind) String() string {
+	switch k {
+	case MapTask:
+		return "map"
+	case ReduceTask:
+		return "reduce"
+	}
+	return fmt.Sprintf("TaskKind(%d)", uint8(k))
+}
 
 // TaskID identifies one attempt at one task. A task may be attempted more
 // than once, after a failure or as a backup (§3.6).

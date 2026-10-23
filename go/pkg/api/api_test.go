@@ -78,6 +78,32 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestRegister(t *testing.T) {
+	api.Register("test.wordcount", wordCount)
+	if _, ok := api.Lookup("test.wordcount"); !ok {
+		t.Fatal("registered program not found")
+	}
+	if !slices.Contains(api.Programs(), "test.wordcount") {
+		t.Fatalf("Programs() = %v", api.Programs())
+	}
+	for _, name := range []string{"test.wordcount", ""} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("Register(%q) did not panic", name)
+				}
+			}()
+			api.Register(name, wordCount)
+		}()
+	}
+}
+
+func TestTaskKindString(t *testing.T) {
+	if got := fmt.Sprint(api.MapTask, api.ReduceTask, api.TaskKind(9)); got != "map reduce TaskKind(9)" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 // run executes p on lines in memory, sequentially: map, group by key, reduce.
 // It returns "key value" lines in key order.
 func run(p api.Program, lines ...string) ([]string, error) {
