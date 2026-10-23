@@ -23,7 +23,7 @@ Status: `planned` → `in progress` → `done`.
 | F13 | Backup tasks for stragglers | §3.6 | 3 | | | | planned |
 | F14 | Custom partitioning function | §4.1 | 2 | | | | planned |
 | F15 | Sorted keys within a partition | §4.2 | 1 | `go/internal/extsort` | `mapreduce_reloaded/extsort.py` | `TestSort`, `TestGroups`, `test_extsort.py` | done |
-| F16 | Combiner | §4.3 | 1 | | | | planned |
+| F16 | Combiner | §4.3 | 1 | `go/internal/combine` | `mapreduce_reloaded/combine.py` | `TestCombinerPreservesOutput`, `test_combine.py` | done |
 | F17 | Pluggable input/output types | §4.4 | 1 | `go/internal/formats` | `mapreduce_reloaded/formats` | `FuzzTextSplits`, `test_formats.py` | done |
 | F18 | Atomic side-effect files | §4.5 | 3 | | | | planned |
 | F19 | Skipping bad records | §4.6 | 3 | | | | planned |
