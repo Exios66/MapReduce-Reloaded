@@ -19,9 +19,10 @@ services:
     build:
       context: ../../go
       dockerfile: ../deploy/docker/Dockerfile
-    command: [coordinator, -addr, ":7070"]
+    command: [coordinator, -addr, ":7070", -http, ":8080"]
     ports:
       - "127.0.0.1:18770:7070"
+      - "127.0.0.1:18780:8080" # status page and /metrics
     mem_limit: 256m
 
   worker:

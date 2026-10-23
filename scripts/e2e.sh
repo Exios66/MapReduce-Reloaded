@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end test (#21) on the running Compose cluster: word count over the
 # test corpus must match the golden output, which local mode also produces,
-# byte for byte, and no container may have been killed for exceeding its
-# memory limit.
+# byte for byte, no container may have been killed for exceeding its memory
+# limit, and the coordinator's /metrics must show the job done (#32).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,4 +39,10 @@ if [ "$submitted" -ne 0 ]; then
 fi
 "${compose[@]}" cp "coordinator:$job" "$got/out"
 diff -r testdata/corpus/expected "$got/out"
+# Jobs are listed in the order submitted, so the last one is this job.
+done_reduces=$(curl -fsS http://127.0.0.1:18780/metrics | grep 'kind="reduce",state="completed"}' | tail -1)
+if [ "${done_reduces##* }" != 4 ]; then
+    echo "e2e: /metrics does not show the job's 4 reduce tasks completed" >&2
+    exit 1
+fi
 echo "e2e: output matches the golden output"
