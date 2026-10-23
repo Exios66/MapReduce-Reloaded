@@ -61,7 +61,8 @@ identical bytes, which gives a second, independent correctness check.
   [explainers/12-splits.md](explainers/12-splits.md).
 - **#15** The coordinator's notebook: every task's state, and where every
   output lives. See [explainers/13-task-table.md](explainers/13-task-table.md).
-- **#16** The ask-for-work loop, using the messages from #3.
+- **#16** The ask-for-work loop, using the messages from #3. See
+  [explainers/14-cluster.md](explainers/14-cluster.md).
 - **#17** Map tasks write R sorted output files.
 - **#18** The shuffle server: reducers download their share of each map
   task's output.
