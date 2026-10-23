@@ -8,7 +8,7 @@ import pytest
 
 from mapreduce_reloaded import local
 from mapreduce_reloaded.__main__ import load, main
-from mapreduce_reloaded.api import JobSpec, mapper
+from mapreduce_reloaded.api import JobSpec, Program, mapper, reducer
 from mapreduce_reloaded.examples.wordcount import program
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
@@ -43,6 +43,35 @@ def test_without_combiner(tmp_path):
     spec = JobSpec(program=no_combiner, inputs=INPUTS, output=str(tmp_path / "out"), r=4)
     local.run(spec, str(tmp_path))
     assert_same_files(CORPUS / "expected", tmp_path / "out")
+
+
+def test_value_order_independent_of_m(tmp_path):
+    """A key's values reach the reducer in input order, whatever M is. The
+    reducer concatenates them, so any reordering changes the output."""
+
+    @mapper
+    def first_byte(ctx, offset, line):
+        if line:
+            yield line[:1], offset
+
+    @reducer
+    def join(ctx, key, values):
+        yield key, b" ".join(values)
+
+    outputs = []
+    for m in [1, 3, 7]:
+        out = tmp_path / f"m{m}"
+        spec = JobSpec(
+            program=Program(mapper=first_byte, reducer=join),
+            inputs=INPUTS,
+            output=str(out),
+            r=2,
+            split_size=local.split_size(INPUTS, m),
+        )
+        local.run(spec, str(tmp_path))
+        outputs.append(out)
+    assert_same_files(outputs[0], outputs[1])
+    assert_same_files(outputs[0], outputs[2])
 
 
 def test_no_input(tmp_path):

@@ -3,6 +3,7 @@ package local
 import (
 	"bytes"
 	"errors"
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,30 +15,67 @@ import (
 
 const corpus = "../../../testdata/corpus"
 
+var corpusInputs = []string{filepath.Join(corpus, "*.txt")}
+
+// runJob runs p over the corpus with about m map tasks and r reduce tasks,
+// and returns the output directory and the counters.
+func runJob(t *testing.T, p api.Program, m int, r uint32) (string, map[string]int64) {
+	t.Helper()
+	splitSize, err := SplitSize(corpusInputs, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	spec := api.JobSpec{Program: p, Inputs: corpusInputs, Output: out, SplitSize: splitSize, R: r}
+	counts, err := Run(spec, t.TempDir())
+	if err != nil {
+		t.Fatalf("M=%d: %v", m, err)
+	}
+	return out, counts
+}
+
 // Word count over the corpus must match the expected files from
 // scripts/make-corpus-expected.py byte for byte, whatever M is.
 func TestWordCountGolden(t *testing.T) {
-	inputs := []string{filepath.Join(corpus, "*.txt")}
 	for _, m := range []int{1, 3, 7} {
-		splitSize, err := SplitSize(inputs, m)
-		if err != nil {
-			t.Fatal(err)
-		}
-		out := t.TempDir()
-		counts, err := Run(api.JobSpec{
-			Program:   wordcount.Program,
-			Inputs:    inputs,
-			Output:    out,
-			SplitSize: splitSize,
-			R:         4,
-		}, t.TempDir())
-		if err != nil {
-			t.Fatalf("M=%d: %v", m, err)
-		}
+		out, counts := runJob(t, wordcount.Program, m, 4)
 		assertSameFiles(t, filepath.Join(corpus, "expected"), out)
 		if counts[MapOutputRecords] != 59372 || counts[ReduceOutputRecords] != 11786 {
 			t.Errorf("M=%d: counters %v", m, counts)
 		}
+	}
+}
+
+// Without a combiner the output is the same; only the map output is larger.
+func TestWithoutCombiner(t *testing.T) {
+	p := wordcount.Program
+	p.Combiner = nil
+	out, _ := runJob(t, p, 3, 4)
+	assertSameFiles(t, filepath.Join(corpus, "expected"), out)
+}
+
+// A key's values reach the reducer in input order, whatever M is. The
+// reducer here concatenates them, so any reordering changes the output.
+func TestValueOrderIndependentOfM(t *testing.T) {
+	p := api.Program{
+		Mapper: api.MapFunc(func(_ api.Context, offset, line []byte, out api.Emitter) error {
+			if len(line) == 0 {
+				return nil
+			}
+			return out.Emit(line[:1], offset)
+		}),
+		Reducer: api.ReduceFunc(func(_ api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
+			var joined []byte
+			for v := range values {
+				joined = append(append(joined, v...), ' ')
+			}
+			return out.Emit(key, joined)
+		}),
+	}
+	want, _ := runJob(t, p, 1, 2)
+	for _, m := range []int{3, 7} {
+		got, _ := runJob(t, p, m, 2)
+		assertSameFiles(t, want, got)
 	}
 }
 
@@ -62,23 +100,6 @@ func assertSameFiles(t *testing.T, wantDir, gotDir string) {
 			t.Errorf("%s differs from the expected output", name)
 		}
 	}
-}
-
-// Without a combiner the output is the same; only the map output is larger.
-func TestWithoutCombiner(t *testing.T) {
-	p := wordcount.Program
-	p.Combiner = nil
-	out := t.TempDir()
-	_, err := Run(api.JobSpec{
-		Program: p,
-		Inputs:  []string{filepath.Join(corpus, "*.txt")},
-		Output:  out,
-		R:       4,
-	}, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertSameFiles(t, filepath.Join(corpus, "expected"), out)
 }
 
 func TestErrors(t *testing.T) {

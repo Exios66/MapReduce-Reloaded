@@ -30,7 +30,8 @@ the scheduling changes.
 Each sort is stable, and the reduce merges map outputs in map task order.
 So the values of a key always reach the reducer in input order, however
 the input was split. The golden tests run M = 1, 3 and 7 and expect the
-same bytes.
+same bytes. A second test uses a reducer that concatenates values, so any
+reordering would change its output.
 
 ## Programs by name
 
