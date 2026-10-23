@@ -24,7 +24,10 @@ append takes milliseconds, and something has to order the appends.
    coordinator. Replay calls the same code as the live handlers
    (`submit`, `Assign`, `report`, `ResetWorker`), so the two cannot drift
    apart. A restart is logged too (`Restarted`), so a second restart
-   replays the first.
+   replays the first. Only decisions are replayed, never the policy that
+   made them: a backup attempt is logged as an ordinary assignment, and
+   `Assign` accepts it on replay even if the restarted coordinator makes no
+   backups.
 2. **Appends happen under the lock, before the reply.** A handler changes
    the state, appends the decision, and only then replies. No one sees the
    change before the log holds it, because no one can read the state until
