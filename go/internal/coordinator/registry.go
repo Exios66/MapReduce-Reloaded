@@ -20,16 +20,20 @@ type Worker struct {
 // under a new ID, so nothing it reports under the old one is trusted.
 type Registry struct {
 	workers map[string]*Worker
+	prefix  string
 	next    int
 }
 
-// NewRegistry returns an empty registry.
-func NewRegistry() *Registry { return &Registry{workers: map[string]*Worker{}} }
+// NewRegistry returns an empty registry whose worker IDs are prefix
+// followed by a number.
+func NewRegistry(prefix string) *Registry {
+	return &Registry{workers: map[string]*Worker{}, prefix: prefix}
+}
 
 // Register adds a worker seen at now and returns its new ID.
 func (r *Registry) Register(info *pb.WorkerInfo, now time.Time) string {
 	r.next++
-	id := fmt.Sprintf("w%d", r.next)
+	id := fmt.Sprintf("%s%d", r.prefix, r.next)
 	r.workers[id] = &Worker{ID: id, Info: info, LastSeen: now}
 	return id
 }

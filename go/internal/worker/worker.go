@@ -56,12 +56,22 @@ func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.Worke
 var errForgotten = errors.New("the coordinator forgot this worker")
 
 // Run registers and runs tasks until the coordinator says to shut down, or
-// ctx is done, or an RPC fails. If the coordinator forgets the worker, it
-// registers again under a new ID.
+// ctx is done, or an RPC fails. If the coordinator forgets the worker, or
+// cannot be reached, as while it restarts, the worker registers again
+// under a new ID.
 func (w *Worker) Run(ctx context.Context) (err error) {
 	defer func() { err = errors.Join(err, w.shuffle.Close()) }()
 	for {
-		if err = w.session(ctx); !errors.Is(err, errForgotten) {
+		err = w.session(ctx)
+		switch {
+		case errors.Is(err, errForgotten):
+		case status.Code(err) == codes.Unavailable:
+			select { // registering waits for the coordinator, but it may fail again at once
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(defaultWait):
+			}
+		default:
 			return err
 		}
 		w.logger.Warn("registering again", "err", err)

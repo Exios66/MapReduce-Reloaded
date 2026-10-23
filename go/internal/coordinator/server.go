@@ -67,7 +67,7 @@ type job struct {
 
 // NewServer returns a coordinator with no workers and no jobs.
 func NewServer(cfg Config) *Server {
-	return &Server{cfg: cfg, workers: NewRegistry(), jobs: map[string]*job{}}
+	return &Server{cfg: cfg, workers: NewRegistry("w"), jobs: map[string]*job{}}
 }
 
 // Shutdown makes every worker's next RequestTask tell it to exit.

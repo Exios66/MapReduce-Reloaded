@@ -33,6 +33,7 @@ type LogRecord struct {
 	//	*LogRecord_TaskAssigned
 	//	*LogRecord_TaskReported
 	//	*LogRecord_WorkerLost
+	//	*LogRecord_Restarted
 	Record        isLogRecord_Record `protobuf_oneof:"record"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -111,6 +112,15 @@ func (x *LogRecord) GetWorkerLost() *WorkerLost {
 	return nil
 }
 
+func (x *LogRecord) GetRestarted() *Restarted {
+	if x != nil {
+		if x, ok := x.Record.(*LogRecord_Restarted); ok {
+			return x.Restarted
+		}
+	}
+	return nil
+}
+
 type isLogRecord_Record interface {
 	isLogRecord_Record()
 }
@@ -132,6 +142,10 @@ type LogRecord_WorkerLost struct {
 	WorkerLost *WorkerLost `protobuf:"bytes,4,opt,name=worker_lost,json=workerLost,proto3,oneof"`
 }
 
+type LogRecord_Restarted struct {
+	Restarted *Restarted `protobuf:"bytes,5,opt,name=restarted,proto3,oneof"`
+}
+
 func (*LogRecord_JobSubmitted) isLogRecord_Record() {}
 
 func (*LogRecord_TaskAssigned) isLogRecord_Record() {}
@@ -139,6 +153,8 @@ func (*LogRecord_TaskAssigned) isLogRecord_Record() {}
 func (*LogRecord_TaskReported) isLogRecord_Record() {}
 
 func (*LogRecord_WorkerLost) isLogRecord_Record() {}
+
+func (*LogRecord_Restarted) isLogRecord_Record() {}
 
 // A job was accepted. Its splits are logged, not planned again, since the
 // input may have changed since.
@@ -300,17 +316,56 @@ func (x *WorkerLost) GetWorkerId() string {
 	return ""
 }
 
+// The coordinator restarted. The attempts that were running are lost with
+// its old worker IDs.
+type Restarted struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Restarted) Reset() {
+	*x = Restarted{}
+	mi := &file_mapreduce_v1_log_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Restarted) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Restarted) ProtoMessage() {}
+
+func (x *Restarted) ProtoReflect() protoreflect.Message {
+	mi := &file_mapreduce_v1_log_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Restarted.ProtoReflect.Descriptor instead.
+func (*Restarted) Descriptor() ([]byte, []int) {
+	return file_mapreduce_v1_log_proto_rawDescGZIP(), []int{4}
+}
+
 var File_mapreduce_v1_log_proto protoreflect.FileDescriptor
 
 const file_mapreduce_v1_log_proto_rawDesc = "" +
 	"\n" +
-	"\x16mapreduce/v1/log.proto\x12\fmapreduce.v1\x1a\x1emapreduce/v1/coordinator.proto\x1a\x18mapreduce/v1/types.proto\"\xa0\x02\n" +
+	"\x16mapreduce/v1/log.proto\x12\fmapreduce.v1\x1a\x1emapreduce/v1/coordinator.proto\x1a\x18mapreduce/v1/types.proto\"\xd9\x02\n" +
 	"\tLogRecord\x12A\n" +
 	"\rjob_submitted\x18\x01 \x01(\v2\x1a.mapreduce.v1.JobSubmittedH\x00R\fjobSubmitted\x12A\n" +
 	"\rtask_assigned\x18\x02 \x01(\v2\x1a.mapreduce.v1.TaskAssignedH\x00R\ftaskAssigned\x12F\n" +
 	"\rtask_reported\x18\x03 \x01(\v2\x1f.mapreduce.v1.ReportTaskRequestH\x00R\ftaskReported\x12;\n" +
 	"\vworker_lost\x18\x04 \x01(\v2\x18.mapreduce.v1.WorkerLostH\x00R\n" +
-	"workerLostB\b\n" +
+	"workerLost\x127\n" +
+	"\trestarted\x18\x05 \x01(\v2\x17.mapreduce.v1.RestartedH\x00R\trestartedB\b\n" +
 	"\x06record\"\x80\x01\n" +
 	"\fJobSubmitted\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12'\n" +
@@ -321,7 +376,8 @@ const file_mapreduce_v1_log_proto_rawDesc = "" +
 	"\tworker_id\x18\x02 \x01(\tR\bworkerId\")\n" +
 	"\n" +
 	"WorkerLost\x12\x1b\n" +
-	"\tworker_id\x18\x01 \x01(\tR\bworkerIdBGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3"
+	"\tworker_id\x18\x01 \x01(\tR\bworkerId\"\v\n" +
+	"\tRestartedBGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3"
 
 var (
 	file_mapreduce_v1_log_proto_rawDescOnce sync.Once
@@ -335,30 +391,32 @@ func file_mapreduce_v1_log_proto_rawDescGZIP() []byte {
 	return file_mapreduce_v1_log_proto_rawDescData
 }
 
-var file_mapreduce_v1_log_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_mapreduce_v1_log_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_mapreduce_v1_log_proto_goTypes = []any{
 	(*LogRecord)(nil),         // 0: mapreduce.v1.LogRecord
 	(*JobSubmitted)(nil),      // 1: mapreduce.v1.JobSubmitted
 	(*TaskAssigned)(nil),      // 2: mapreduce.v1.TaskAssigned
 	(*WorkerLost)(nil),        // 3: mapreduce.v1.WorkerLost
-	(*ReportTaskRequest)(nil), // 4: mapreduce.v1.ReportTaskRequest
-	(*JobSpec)(nil),           // 5: mapreduce.v1.JobSpec
-	(*InputSplit)(nil),        // 6: mapreduce.v1.InputSplit
-	(*TaskAttemptId)(nil),     // 7: mapreduce.v1.TaskAttemptId
+	(*Restarted)(nil),         // 4: mapreduce.v1.Restarted
+	(*ReportTaskRequest)(nil), // 5: mapreduce.v1.ReportTaskRequest
+	(*JobSpec)(nil),           // 6: mapreduce.v1.JobSpec
+	(*InputSplit)(nil),        // 7: mapreduce.v1.InputSplit
+	(*TaskAttemptId)(nil),     // 8: mapreduce.v1.TaskAttemptId
 }
 var file_mapreduce_v1_log_proto_depIdxs = []int32{
 	1, // 0: mapreduce.v1.LogRecord.job_submitted:type_name -> mapreduce.v1.JobSubmitted
 	2, // 1: mapreduce.v1.LogRecord.task_assigned:type_name -> mapreduce.v1.TaskAssigned
-	4, // 2: mapreduce.v1.LogRecord.task_reported:type_name -> mapreduce.v1.ReportTaskRequest
+	5, // 2: mapreduce.v1.LogRecord.task_reported:type_name -> mapreduce.v1.ReportTaskRequest
 	3, // 3: mapreduce.v1.LogRecord.worker_lost:type_name -> mapreduce.v1.WorkerLost
-	5, // 4: mapreduce.v1.JobSubmitted.job:type_name -> mapreduce.v1.JobSpec
-	6, // 5: mapreduce.v1.JobSubmitted.splits:type_name -> mapreduce.v1.InputSplit
-	7, // 6: mapreduce.v1.TaskAssigned.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	4, // 4: mapreduce.v1.LogRecord.restarted:type_name -> mapreduce.v1.Restarted
+	6, // 5: mapreduce.v1.JobSubmitted.job:type_name -> mapreduce.v1.JobSpec
+	7, // 6: mapreduce.v1.JobSubmitted.splits:type_name -> mapreduce.v1.InputSplit
+	8, // 7: mapreduce.v1.TaskAssigned.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_mapreduce_v1_log_proto_init() }
@@ -373,6 +431,7 @@ func file_mapreduce_v1_log_proto_init() {
 		(*LogRecord_TaskAssigned)(nil),
 		(*LogRecord_TaskReported)(nil),
 		(*LogRecord_WorkerLost)(nil),
+		(*LogRecord_Restarted)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -380,7 +439,7 @@ func file_mapreduce_v1_log_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mapreduce_v1_log_proto_rawDesc), len(file_mapreduce_v1_log_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

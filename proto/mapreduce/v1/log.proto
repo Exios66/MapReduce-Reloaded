@@ -18,6 +18,7 @@ message LogRecord {
     // A worker's report, as received.
     ReportTaskRequest task_reported = 3;
     WorkerLost worker_lost = 4;
+    Restarted restarted = 5;
   }
 }
 
@@ -39,3 +40,7 @@ message TaskAssigned {
 message WorkerLost {
   string worker_id = 1;
 }
+
+// The coordinator restarted. The attempts that were running are lost with
+// its old worker IDs.
+message Restarted {}
