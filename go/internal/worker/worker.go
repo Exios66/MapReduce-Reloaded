@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"google.golang.org/grpc"
+
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
@@ -42,7 +44,8 @@ func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.Worke
 // Run registers and runs tasks until the coordinator says to shut down, or
 // ctx is done, or an RPC fails.
 func (w *Worker) Run(ctx context.Context) error {
-	reg, err := w.coordinator.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: w.info})
+	// Wait for the coordinator to come up: workers may start before it.
+	reg, err := w.coordinator.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: w.info}, grpc.WaitForReady(true))
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
 	}
