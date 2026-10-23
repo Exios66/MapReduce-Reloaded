@@ -3,7 +3,7 @@ package coordinator
 import (
 	"context"
 	"fmt"
-	"maps"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"
+	mrtask "github.com/exios66/mapreduce-reloaded/go/internal/task"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
 )
 
@@ -22,6 +23,9 @@ import (
 type Config struct {
 	// HeartbeatInterval is how often workers must send heartbeats.
 	HeartbeatInterval time.Duration
+	// WorkerTimeout is how long a worker may go unheard before it is
+	// declared dead (§3.3). Zero means never.
+	WorkerTimeout time.Duration
 	// RetryAfter is how long a worker with nothing to do waits before
 	// asking again.
 	RetryAfter time.Duration
@@ -48,7 +52,7 @@ type job struct {
 	spec   *pb.JobSpec // sent with every task
 	splits []*pb.InputSplit
 	tasks  *TaskTable
-	counts map[string]int64
+	counts map[Task]map[string]int64 // of each task's accepted attempt
 }
 
 // NewServer returns a coordinator with no workers and no jobs.
@@ -61,6 +65,46 @@ func (s *Server) Shutdown() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stopping = true
+}
+
+// Expire declares dead every worker not heard from within WorkerTimeout of
+// now, and returns their IDs. Their running tasks and completed map tasks
+// become idle again, since map output lives on the worker's disk; their
+// completed reduce tasks stay done, since that output is in the job's
+// output directory (§3.3). A dead worker that calls again is told to
+// register anew.
+func (s *Server) Expire(now time.Time) []string {
+	if s.cfg.WorkerTimeout == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dead := s.workers.Expire(now, s.cfg.WorkerTimeout)
+	for _, w := range dead {
+		var reset []Task
+		if s.active != nil {
+			reset = s.active.tasks.ResetWorker(w)
+		}
+		slog.Warn("worker lost", "worker", w, "tasks reset", len(reset))
+	}
+	return dead
+}
+
+// Monitor calls Expire every HeartbeatInterval until ctx is done.
+func (s *Server) Monitor(ctx context.Context) {
+	if s.cfg.WorkerTimeout == 0 || s.cfg.HeartbeatInterval == 0 {
+		return
+	}
+	tick := time.NewTicker(s.cfg.HeartbeatInterval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-tick.C:
+			s.Expire(now)
+		}
+	}
 }
 
 func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
@@ -119,7 +163,7 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 		spec:   m,
 		splits: splits,
 		tasks:  NewTaskTable(len(splits), int(m.GetNumReduceTasks())),
-		counts: map[string]int64{},
+		counts: map[Task]map[string]int64{},
 	}
 	s.jobs[j.id], s.active = j, j
 	return &pb.SubmitJobResponse{JobId: j.id}, nil
@@ -186,10 +230,10 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if accepted {
-		for name, n := range req.GetSuccess().GetCounters().GetValues() {
-			j.counts[name] += n
-		}
+		// A map task run again after its worker died replaces its counts.
+		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
 		if j.tasks.Done() && s.active == j {
+			j.cleanup()
 			s.active = nil
 		}
 	}
@@ -218,6 +262,31 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 		MapTasksCompleted:    uint32(mapsDone),
 		ReduceTasksTotal:     j.spec.GetNumReduceTasks(),
 		ReduceTasksCompleted: uint32(reducesDone),
-		Counters:             &pb.Counters{Values: maps.Clone(j.counts)},
+		Counters:             &pb.Counters{Values: j.total()},
 	}, nil
+}
+
+// total sums the counters of every task's accepted attempt.
+func (j *job) total() map[string]int64 {
+	sum := map[string]int64{}
+	for _, counts := range j.counts {
+		for name, n := range counts {
+			sum[name] += n
+		}
+	}
+	return sum
+}
+
+// cleanup removes what dead or failed reduce attempts left in the job's
+// output. It runs under the lock, once per job, so that the job is never
+// reported done before its output is clean; the directory holds at most R
+// files. The output is already committed, so an error is only logged.
+func (j *job) cleanup() {
+	path, err := wire.Path(j.spec.GetOutput())
+	if err == nil {
+		err = mrtask.Cleanup(path)
+	}
+	if err != nil {
+		slog.Warn("cleaning up job output", "job", j.id, "err", err)
+	}
 }
