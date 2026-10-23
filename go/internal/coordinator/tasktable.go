@@ -51,6 +51,7 @@ type TaskTable struct {
 	maps, reduces []task
 	mapsDone      int
 	reducesDone   int
+	skipped       int // records on every task's skip list
 }
 
 // NewTaskTable returns a table of m idle map tasks and r idle reduce tasks.
@@ -136,8 +137,8 @@ func (t *TaskTable) Fail(id Task, attempt uint32, worker string, f *pb.TaskFailu
 		delete(ts.running, attempt)
 		ts.idleIfStopped()
 		t.lose(f.GetLostOutput())
-		if f != nil && f.FailedRecord != nil {
-			ts.crashed(f.GetFailedRecord())
+		if f != nil && f.FailedRecord != nil && ts.crashed(f.GetFailedRecord()) {
+			t.skipped++
 		}
 	}
 	return nil
@@ -224,6 +225,9 @@ func (t *TaskTable) State(id Task) (pb.TaskState, error) {
 // Progress returns the number of completed map and reduce tasks.
 func (t *TaskTable) Progress() (maps, reduces int) { return t.mapsDone, t.reducesDone }
 
+// Skipped returns the number of records on every task's skip list.
+func (t *TaskTable) Skipped() int { return t.skipped }
+
 // Done reports whether every task has completed.
 func (t *TaskTable) Done() bool {
 	return t.mapsDone == len(t.maps) && t.reducesDone == len(t.reduces)
@@ -279,14 +283,17 @@ func (ts *task) stopAttemptsOn(worker string) bool {
 }
 
 // crashed counts an attempt that crashed on record n, and skips n once
-// SkipAfter attempts have.
-func (ts *task) crashed(n uint64) {
+// SkipAfter attempts have. It reports whether it added n to the skip list.
+func (ts *task) crashed(n uint64) bool {
 	if ts.crashes == nil {
 		ts.crashes = map[uint64]int{}
 	}
-	if ts.crashes[n]++; ts.crashes[n] == SkipAfter {
-		ts.skip = append(ts.skip, n)
+	ts.crashes[n]++
+	if ts.crashes[n] != SkipAfter {
+		return false
 	}
+	ts.skip = append(ts.skip, n)
+	return true
 }
 
 // idleIfStopped makes an in-progress task with no running attempt idle, and

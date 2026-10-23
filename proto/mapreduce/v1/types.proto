@@ -119,6 +119,9 @@ message JobSpec {
   // Free-form parameters passed to the user's program, e.g. the pattern for
   // distributed grep.
   map<string, string> params = 10;
+  // The most bad records the job may skip (§4.6). Once more would be
+  // skipped, the job fails. Unset means no limit, as in the paper.
+  optional uint64 max_skipped_records = 11;
 }
 
 // Identity and capabilities of a worker.

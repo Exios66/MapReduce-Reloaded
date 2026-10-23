@@ -202,8 +202,8 @@ func TestFailWithCrash(t *testing.T) {
 	if skip, err := tt.Skip(m0); err != nil || !slices.Equal(skip, []uint64{5}) {
 		t.Fatalf("Skip = %v, %v; want [5]", skip, err)
 	}
-	if skip, _ := tt.Skip(Task{reduceKind, 0}); len(skip) != 0 {
-		t.Fatalf("reduce task skips %v", skip)
+	if skip, _ := tt.Skip(Task{reduceKind, 0}); len(skip) != 0 || tt.Skipped() != 1 {
+		t.Fatalf("reduce task skips %v; %d records skipped in all, want 1", skip, tt.Skipped())
 	}
 }
 

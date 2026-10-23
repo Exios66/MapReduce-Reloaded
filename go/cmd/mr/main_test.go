@@ -55,7 +55,7 @@ func TestSubmitAndStatus(t *testing.T) {
 
 	out := filepath.Join(t.TempDir(), "out")
 	var stdout strings.Builder
-	if err := run([]string{"submit", "-coordinator", addr, "-wait", "wordcount", out, raven}, &stdout, new(strings.Builder)); err != nil {
+	if err := run([]string{"submit", "-coordinator", addr, "-max-skipped", "0", "-wait", "wordcount", out, raven}, &stdout, new(strings.Builder)); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(stdout.String(), "job-1\tSUCCEEDED\nmap\t1/1\nreduce\t2/2\n") {

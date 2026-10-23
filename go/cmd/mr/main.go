@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
@@ -35,7 +36,7 @@ import (
 
 const usage = `usage:
   mr run -local [-m M] [-r R] <program> <output-dir> <inputs>
-  mr submit [-coordinator addr] [-m M] [-r R] [-wait] <program> <output-dir> <inputs>
+  mr submit [-coordinator addr] [-m M] [-r R] [-max-skipped N] [-wait] <program> <output-dir> <inputs>
   mr status [-coordinator addr] <job-id>`
 
 // pollInterval is how often submit -wait checks the job's status.
@@ -146,6 +147,7 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	fs := newFlagSet("submit", stderr)
 	addr := fs.String("coordinator", "localhost:7070", "coordinator address")
 	wait := fs.Bool("wait", false, "wait for the job to finish, then print its status")
+	maxSkipped := fs.Int64("max-skipped", -1, "fail the job if it would skip more bad records than this (negative: no limit)")
 	flags := addJobFlags(fs, 0) // 0: the coordinator picks R from its worker count
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -157,6 +159,9 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	// Send absolute URIs, so the coordinator and workers resolve them the
 	// same way whatever their working directory.
 	spec := &pb.JobSpec{Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true}
+	if *maxSkipped >= 0 {
+		spec.MaxSkippedRecords = proto.Uint64(uint64(*maxSkipped))
+	}
 	for _, in := range j.inputs {
 		uri, err := wire.URI(in)
 		if err != nil {
