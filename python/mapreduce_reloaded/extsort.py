@@ -8,7 +8,7 @@ import heapq
 import os
 import shutil
 import tempfile
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from itertools import groupby
 from operator import itemgetter
 
@@ -21,18 +21,29 @@ _RECORD_OVERHEAD = 100  # approximate memory per buffered tuple
 
 _key = itemgetter(0)
 
+CombineFunc = Callable[[Iterator[Pair]], Iterable[Pair]]
+
 
 class Sorter:
     """Accepts records in any order and returns them sorted by key.
 
     Keeps about `budget` bytes in memory, spilling sorted runs to a
-    temporary directory under `dir` and merging them at the end. Use as a
-    context manager, or call close(), to remove the runs.
+    temporary directory under `dir` and merging them at the end. If
+    `combine` is set, it is applied to each sorted buffer as it is spilled
+    (§4.3), and sorted() always spills. Use as a context manager, or call
+    close(), to remove the runs.
     """
 
-    def __init__(self, dir: str | None = None, budget: int = DEFAULT_BUDGET):
+    def __init__(
+        self,
+        dir: str | None = None,
+        budget: int = DEFAULT_BUDGET,
+        combine: CombineFunc | None = None,
+    ):
         self._parent = dir
         self._budget = budget
+        self._combine = combine
+        self.spilled_bytes = 0
         self._buf: list[Pair] = []
         self._used = 0
         self._dir: str | None = None
@@ -51,7 +62,7 @@ class Sorter:
 
     def sorted(self) -> Iterator[Pair]:
         """Returns all records in key order."""
-        if not self._runs:
+        if not self._runs and not self._combine:
             return iter(sorted(self._buf, key=_key))
         if self._buf:
             self._spill()
@@ -71,9 +82,12 @@ class Sorter:
         if self._dir is None:
             self._dir = tempfile.mkdtemp(prefix="extsort-", dir=self._parent)
         path = os.path.join(self._dir, f"run-{len(self._runs):05d}.kv")
-        with open(path, "wb") as f, kv.Writer(f) as w:
-            for key, value in sorted(self._buf, key=_key):
-                w.write(key, value)
+        records = iter(sorted(self._buf, key=_key))
+        with open(path, "wb") as f:
+            with kv.Writer(f) as w:
+                for key, value in self._combine(records) if self._combine else records:
+                    w.write(key, value)
+            self.spilled_bytes += f.tell()
         self._runs.append(path)
         self._buf, self._used = [], 0
 

@@ -1,0 +1,241 @@
+// Command mr runs MapReduce jobs, in this process or on a cluster.
+//
+//	mr run -local [-m M] [-r R] <program> <output-dir> <inputs>
+//	mr submit [-coordinator addr] [-m M] [-r R] [-wait] <program> <output-dir> <inputs>
+//	mr status [-coordinator addr] <job-id>
+//
+// program is a registered program name, such as wordcount; inputs are one or
+// more files or glob patterns. Local mode (§4.7) runs every task in this
+// process and prints the counters to standard error.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"maps"
+	"math"
+	"os"
+	"slices"
+	"strings"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	_ "github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/local"
+	"github.com/exios66/mapreduce-reloaded/go/internal/split"
+	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
+	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
+)
+
+const usage = `usage:
+  mr run -local [-m M] [-r R] <program> <output-dir> <inputs>
+  mr submit [-coordinator addr] [-m M] [-r R] [-wait] <program> <output-dir> <inputs>
+  mr status [-coordinator addr] <job-id>`
+
+// pollInterval is how often submit -wait checks the job's status.
+const pollInterval = 500 * time.Millisecond
+
+func main() {
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, "mr:", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New(usage)
+	}
+	switch args[0] {
+	case "run":
+		return runLocal(args[1:], stderr)
+	case "submit":
+		return submit(args[1:], stdout, stderr)
+	case "status":
+		return jobStatus(args[1:], stdout, stderr)
+	}
+	return errors.New(usage)
+}
+
+// job is a job as given on the command line.
+type job struct {
+	program, output string
+	inputs          []string
+	splitSize       uint64
+	r               uint32
+}
+
+// jobFlags are the flags that describe a job.
+type jobFlags struct{ m, r *uint }
+
+// addJobFlags defines the job flags on fs; defaultR is the default of -r.
+func addJobFlags(fs *flag.FlagSet, defaultR uint) jobFlags {
+	return jobFlags{
+		m: fs.Uint("m", 0, "approximate number of map tasks (default: one per 64 MiB of input)"),
+		r: fs.Uint("r", defaultR, "number of reduce tasks"),
+	}
+}
+
+// job returns the job described by the flags and arguments of a parsed fs.
+func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
+	if fs.NArg() < 3 {
+		return job{}, errors.New(usage)
+	}
+	if *f.r > math.MaxUint32 {
+		return job{}, fmt.Errorf("-r %d is too large", *f.r)
+	}
+	j := job{program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r)}
+	if *f.m > 0 {
+		var err error
+		if j.splitSize, err = split.SizeFor(j.inputs, int(*f.m)); err != nil {
+			return job{}, err
+		}
+	}
+	return j, nil
+}
+
+func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	return fs
+}
+
+func runLocal(args []string, stderr io.Writer) (err error) {
+	fs := newFlagSet("run", stderr)
+	isLocal := fs.Bool("local", false, "run every task in this process")
+	flags := addJobFlags(fs, 1)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if !*isLocal {
+		return errors.New("mr run needs -local; use mr submit to run on a cluster")
+	}
+	j, err := flags.job(fs)
+	if err != nil {
+		return err
+	}
+	program, ok := api.Lookup(j.program)
+	if !ok {
+		return fmt.Errorf("unknown program %q; registered: %s", j.program, strings.Join(api.Programs(), ", "))
+	}
+
+	work, err := os.MkdirTemp("", "mr-")
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, os.RemoveAll(work)) }()
+	counts, err := local.Run(api.JobSpec{
+		Program: program, Inputs: j.inputs, Output: j.output, SplitSize: j.splitSize, R: j.r,
+	}, work)
+	if err != nil {
+		return err
+	}
+	return printCounters(stderr, counts)
+}
+
+func submit(args []string, stdout, stderr io.Writer) error {
+	fs := newFlagSet("submit", stderr)
+	addr := fs.String("coordinator", "localhost:7070", "coordinator address")
+	wait := fs.Bool("wait", false, "wait for the job to finish, then print its status")
+	flags := addJobFlags(fs, 0) // 0: the coordinator picks R from its worker count
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	j, err := flags.job(fs)
+	if err != nil {
+		return err
+	}
+	// Send absolute URIs, so the coordinator and workers resolve them the
+	// same way whatever their working directory.
+	spec := &pb.JobSpec{Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true}
+	for _, in := range j.inputs {
+		uri, err := wire.URI(in)
+		if err != nil {
+			return err
+		}
+		spec.Inputs = append(spec.Inputs, uri)
+	}
+	if spec.Output, err = wire.URI(j.output); err != nil {
+		return err
+	}
+
+	client, closeConn, err := dial(*addr)
+	if err != nil {
+		return err
+	}
+	defer closeConn()
+	ctx := context.Background()
+	resp, err := client.SubmitJob(ctx, &pb.SubmitJobRequest{Job: spec})
+	if err != nil {
+		return err
+	}
+	if !*wait {
+		_, err := fmt.Fprintln(stdout, resp.GetJobId())
+		return err
+	}
+	for {
+		st, err := client.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: resp.GetJobId()})
+		if err != nil {
+			return err
+		}
+		switch st.GetState() {
+		case pb.JobState_JOB_STATE_SUCCEEDED:
+			return printStatus(stdout, st)
+		case pb.JobState_JOB_STATE_FAILED:
+			return errors.Join(printStatus(stdout, st), fmt.Errorf("job %s failed: %s", st.GetJobId(), st.GetError()))
+		}
+		time.Sleep(pollInterval)
+	}
+}
+
+func jobStatus(args []string, stdout, stderr io.Writer) error {
+	fs := newFlagSet("status", stderr)
+	addr := fs.String("coordinator", "localhost:7070", "coordinator address")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New(usage)
+	}
+	client, closeConn, err := dial(*addr)
+	if err != nil {
+		return err
+	}
+	defer closeConn()
+	st, err := client.GetJobStatus(context.Background(), &pb.GetJobStatusRequest{JobId: fs.Arg(0)})
+	if err != nil {
+		return err
+	}
+	return printStatus(stdout, st)
+}
+
+func dial(addr string) (pb.CoordinatorServiceClient, func(), error) {
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, err
+	}
+	return pb.NewCoordinatorServiceClient(conn), func() { _ = conn.Close() }, nil
+}
+
+func printStatus(w io.Writer, st *pb.GetJobStatusResponse) error {
+	_, err := fmt.Fprintf(w, "%s\t%s\nmap\t%d/%d\nreduce\t%d/%d\n",
+		st.GetJobId(), strings.TrimPrefix(st.GetState().String(), "JOB_STATE_"),
+		st.GetMapTasksCompleted(), st.GetMapTasksTotal(),
+		st.GetReduceTasksCompleted(), st.GetReduceTasksTotal())
+	return errors.Join(err, printCounters(w, st.GetCounters().GetValues()))
+}
+
+func printCounters(w io.Writer, counts map[string]int64) error {
+	for _, name := range slices.Sorted(maps.Keys(counts)) {
+		if _, err := fmt.Fprintf(w, "%s\t%d\n", name, counts[name]); err != nil {
+			return err
+		}
+	}
+	return nil
+}

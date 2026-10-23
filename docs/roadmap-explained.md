@@ -50,21 +50,24 @@ identical bytes, which gives a second, independent correctness check.
   [explainers/09-external-sort.md](explainers/09-external-sort.md).
 - **#11 The combiner:** add up counts on the map side before sending them.
   For example, send `("the", 5000)` once instead of `("the", 1)` five
-  thousand times.
+  thousand times. See [explainers/10-combiner.md](explainers/10-combiner.md).
 - **#12 `mr run --local`:** the whole pipeline in one process. **This is the
-  oracle.**
+  oracle.** See [explainers/11-local-mode.md](explainers/11-local-mode.md).
 
 ### Phase 2 — Make it distributed (#13–#21)
 *Open several kitchens, with a head chef handing out tickets.*
 
-- **#14** Split the input into M pieces.
+- **#14** Split the input into M pieces. See
+  [explainers/12-splits.md](explainers/12-splits.md).
 - **#15** The coordinator's notebook: every task's state, and where every
-  output lives.
-- **#16** The ask-for-work loop, using the messages from #3.
+  output lives. See [explainers/13-task-table.md](explainers/13-task-table.md).
+- **#16** The ask-for-work loop, using the messages from #3. See
+  [explainers/14-cluster.md](explainers/14-cluster.md).
 - **#17** Map tasks write R sorted output files.
 - **#18** The shuffle server: reducers download their share of each map
-  task's output.
-- **#19** Reducers fetch, merge and reduce.
+  task's output. See [explainers/15-shuffle.md](explainers/15-shuffle.md).
+- **#19** Reducers fetch, merge and reduce. Done by #18 plus `task.Reduce`;
+  see [explainers/15-shuffle.md](explainers/15-shuffle.md).
 - **#20** Safe commits: write to a temporary file, then rename it in one
   step, so a half-written output file can never be seen.
 - **#21** Docker: one command starts 1 coordinator and 4 workers on the
@@ -77,7 +80,8 @@ failing, and jobs still finish correctly.*
 
 - **#23** Detect dead workers and re-run their work. This includes map tasks
   that had already *finished*, because their output was on the dead
-  worker's disk.
+  worker's disk. See
+  [explainers/16-worker-failure.md](explainers/16-worker-failure.md).
 - **#24** Coordinator crash recovery: a log of every decision, replayed on
   restart. The 2004 system simply aborted the job in this case.
 - **#25** Backup tasks: near the end of a job, start duplicates of the slow

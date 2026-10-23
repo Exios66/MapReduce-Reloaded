@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"iter"
 	"log/slog"
 
@@ -33,7 +34,11 @@ type Reducer interface {
 
 // Combiner partially merges a map task's output before it is sent to
 // reducers (§4.3). It has the same signature as a Reducer and is typically
-// the same code; it must be safe to apply zero or more times.
+// the same code. The framework may apply it zero, one or more times to any
+// subset of a key's values, so it must:
+//   - be commutative and associative, like a sum or a maximum;
+//   - emit only the key it was given;
+//   - emit values the Reducer accepts as input.
 type Combiner = Reducer
 
 // Partitioner chooses the reduce task, in 0..r-1, for an intermediate key
@@ -91,6 +96,16 @@ const (
 	MapTask TaskKind = iota + 1
 	ReduceTask
 )
+
+func (k TaskKind) String() string {
+	switch k {
+	case MapTask:
+		return "map"
+	case ReduceTask:
+		return "reduce"
+	}
+	return fmt.Sprintf("TaskKind(%d)", uint8(k))
+}
 
 // TaskID identifies one attempt at one task. A task may be attempted more
 // than once, after a failure or as a backup (§3.6).
