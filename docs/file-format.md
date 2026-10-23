@@ -62,6 +62,10 @@ Rules:
 - **A record never spans two blocks.**
 - Writers should close a block once its decompressed payload reaches about
   64 KiB. A single record larger than that gets a block to itself.
+- A block's payload is at most **64 MiB** (`stored_len` ≤ 67,108,864).
+  Readers reject a larger block as `bad_block` without allocating it, so a
+  corrupt length field cannot exhaust memory. Writers refuse a record that
+  would not fit.
 - Readers must not assume any particular block size.
 - The decompressed payload must contain exactly `record_count` records, with
   no leftover bytes.
@@ -147,6 +151,9 @@ feature F14).
 | `truncated` | The file ends before a complete footer |
 | `count_mismatch` | The footer's totals differ from the blocks actually read |
 | `trailing_data` | Bytes follow the footer |
+
+Checks run in file order, so the first problem found is the one reported.
+Within a block, the checksum is verified before the records are decoded.
 
 A reader may return a block's records only after its checksum has been
 verified. A streaming reader can therefore pass along records from good
