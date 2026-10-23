@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2">
+<title>MapReduce status</title>
+<style>
+body { font: 14px system-ui, sans-serif; margin: 2em; }
+table { border-collapse: collapse; margin-bottom: 2em; }
+th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+progress { width: 8em; }
+</style>
+</head>
+<body>
+<h1>MapReduce status</h1>
+
+<h2>Jobs</h2>
+<table>
+<tr><th>Job</th><th>State</th><th>Map</th><th>Reduce</th><th>Counters</th><th>Error</th></tr>
+{{range .Jobs}}
+<tr>
+<td>{{.JobId}}</td>
+<td>{{.State}}</td>
+<td><progress max="{{.MapTasksTotal}}" value="{{.MapTasksCompleted}}"></progress> {{.MapTasksCompleted}}/{{.MapTasksTotal}}</td>
+<td><progress max="{{.ReduceTasksTotal}}" value="{{.ReduceTasksCompleted}}"></progress> {{.ReduceTasksCompleted}}/{{.ReduceTasksTotal}}</td>
+<td>{{range $name, $n := .Counters.Values}}{{$name}}: {{$n}}<br>{{end}}</td>
+<td>{{.Error}}</td>
+</tr>
+{{else}}
+<tr><td colspan="6">No jobs yet.</td></tr>
+{{end}}
+</table>
+
+<h2>Workers</h2>
+<table>
+<tr><th>Worker</th><th>Host</th><th>Last seen</th><th>Running</th></tr>
+{{range .Workers}}
+<tr><td>{{.ID}}</td><td>{{.Info.GetHost}}</td><td>{{.LastSeen.Format "15:04:05"}}</td><td>{{range .Running}}{{.}}<br>{{end}}</td></tr>
+{{else}}
+<tr><td colspan="4">No workers.</td></tr>
+{{end}}
+</table>
+
+<h2>Lost workers</h2>
+<table>
+<tr><th>Worker</th><th>Lost at</th><th>Tasks run again</th></tr>
+{{range .Lost}}
+<tr><td>{{.ID}}</td><td>{{.At.Format "15:04:05"}}</td><td>{{range .Tasks}}{{.}}<br>{{end}}</td></tr>
+{{else}}
+<tr><td colspan="3">None.</td></tr>
+{{end}}
+</table>
+</body>
+</html>
