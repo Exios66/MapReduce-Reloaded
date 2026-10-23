@@ -251,6 +251,22 @@ func (t *TaskTable) State(id Task) (pb.TaskState, error) {
 	return ts.state, nil
 }
 
+// Running returns the tasks each worker is running an attempt of, in
+// order: map tasks, then reduce tasks.
+func (t *TaskTable) Running() map[string][]Task {
+	running := map[string][]Task{}
+	add := func(kind pb.TaskKind, ts []task) {
+		for i := range ts {
+			for _, w := range ts[i].running {
+				running[w] = append(running[w], Task{kind, uint32(i)})
+			}
+		}
+	}
+	add(pb.TaskKind_TASK_KIND_MAP, t.maps)
+	add(pb.TaskKind_TASK_KIND_REDUCE, t.reduces)
+	return running
+}
+
 // Progress returns the number of completed map and reduce tasks.
 func (t *TaskTable) Progress() (maps, reduces int) { return t.mapsDone, t.reducesDone }
 

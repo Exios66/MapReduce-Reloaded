@@ -1,8 +1,10 @@
 package coordinator
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
@@ -55,6 +57,17 @@ func (r *Registry) Lookup(id string) (Worker, bool) {
 		return Worker{}, false
 	}
 	return *w, true
+}
+
+// All returns the live workers, in the order they registered.
+func (r *Registry) All() []Worker {
+	all := make([]Worker, 0, len(r.workers))
+	for _, w := range r.workers {
+		all = append(all, *w)
+	}
+	// IDs share the prefix, so a shorter one has a smaller number.
+	slices.SortFunc(all, func(a, b Worker) int { return cmp.Or(cmp.Compare(len(a.ID), len(b.ID)), strings.Compare(a.ID, b.ID)) })
+	return all
 }
 
 // Expire removes the workers not seen for longer than timeout and returns
