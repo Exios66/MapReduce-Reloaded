@@ -1,0 +1,223 @@
+package coordinator
+
+import (
+	"context"
+	"fmt"
+	"maps"
+	"sync"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
+	"github.com/exios66/mapreduce-reloaded/go/internal/split"
+	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
+)
+
+// Config configures a Server.
+type Config struct {
+	// HeartbeatInterval is how often workers must send heartbeats.
+	HeartbeatInterval time.Duration
+	// RetryAfter is how long a worker with nothing to do waits before
+	// asking again.
+	RetryAfter time.Duration
+}
+
+// Server implements CoordinatorService. It runs one job at a time; a job
+// submitted while another runs is rejected.
+//
+// All state is guarded by mu (ADR 0006). Nothing slow runs under it:
+// SubmitJob plans the input splits before locking.
+type Server struct {
+	pb.UnimplementedCoordinatorServiceServer
+	cfg Config
+
+	mu       sync.Mutex
+	workers  *Registry
+	jobs     map[string]*job
+	active   *job // the running job, or nil
+	stopping bool
+}
+
+type job struct {
+	id     string
+	spec   *pb.JobSpec // sent with every task
+	splits []*pb.InputSplit
+	tasks  *TaskTable
+	counts map[string]int64
+}
+
+// NewServer returns a coordinator with no workers and no jobs.
+func NewServer(cfg Config) *Server {
+	return &Server{cfg: cfg, workers: NewRegistry(), jobs: map[string]*job{}}
+}
+
+// Shutdown makes every worker's next RequestTask tell it to exit.
+func (s *Server) Shutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stopping = true
+}
+
+func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return &pb.RegisterWorkerResponse{
+		WorkerId:          s.workers.Register(req.GetWorker(), time.Now()),
+		HeartbeatInterval: durationpb.New(s.cfg.HeartbeatInterval),
+	}, nil
+}
+
+func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return &pb.HeartbeatResponse{Reregister: !s.workers.Heartbeat(req.GetWorkerId(), time.Now())}, nil
+}
+
+// SubmitJob validates the job, defaulting R to a multiple of the number of
+// workers (§3.5), and plans its map tasks.
+func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
+	m := proto.CloneOf(req.GetJob())
+	if m.GetNumReduceTasks() == 0 {
+		s.mu.Lock()
+		m.NumReduceTasks = split.DefaultR(s.workers.Len())
+		s.mu.Unlock()
+	}
+	spec, err := wire.JobSpec(m)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	in, err := formats.Input(spec.InputFormat)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	plan, err := split.Plan(in, spec.Inputs, spec.SplitSize)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if len(plan) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "the input is empty")
+	}
+	splits := make([]*pb.InputSplit, len(plan))
+	for i, sp := range plan {
+		if splits[i], err = wire.InputSplit(sp); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "job %s is still running", s.active.id)
+	}
+	j := &job{
+		id:     fmt.Sprintf("job-%d", len(s.jobs)+1),
+		spec:   m,
+		splits: splits,
+		tasks:  NewTaskTable(len(splits), int(m.GetNumReduceTasks())),
+		counts: map[string]int64{},
+	}
+	s.jobs[j.id], s.active = j, j
+	return &pb.SubmitJobResponse{JobId: j.id}, nil
+}
+
+// RequestTask hands an idle worker its next task: map tasks first, reduce
+// tasks once every map task has completed (§3.1).
+func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	worker := req.GetWorkerId()
+	if !s.workers.Heartbeat(worker, time.Now()) {
+		return nil, status.Errorf(codes.NotFound, "unknown worker %q: register again", worker)
+	}
+	if s.stopping {
+		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Shutdown{Shutdown: &pb.ShutdownInstruction{}}}, nil
+	}
+	if s.active != nil {
+		if t, ok := s.active.tasks.Next(); ok {
+			return s.active.assign(t, worker)
+		}
+	}
+	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Wait{
+		Wait: &pb.WaitInstruction{RetryAfter: durationpb.New(s.cfg.RetryAfter)},
+	}}, nil
+}
+
+func (j *job) assign(t Task, worker string) (*pb.RequestTaskResponse, error) {
+	attempt, err := j.tasks.Assign(t, worker)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	id := &pb.TaskAttemptId{Task: &pb.TaskId{JobId: j.id, Kind: t.Kind, Index: t.Index}, Attempt: attempt}
+	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
+		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_MapTask{
+			MapTask: &pb.MapTask{Attempt: id, Job: j.spec, Split: j.splits[t.Index]},
+		}}, nil
+	}
+	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_ReduceTask{
+		ReduceTask: &pb.ReduceTask{Attempt: id, Job: j.spec, Sources: j.tasks.Sources(t.Index)},
+	}}, nil
+}
+
+// ReportTask records the outcome of an attempt. The first successful attempt
+// of a task is accepted, and only its counters are kept (§3.3, §4.9).
+func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := req.GetAttempt()
+	j, ok := s.jobs[id.GetTask().GetJobId()]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "unknown job %q", id.GetTask().GetJobId())
+	}
+	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
+
+	if req.GetFailure() != nil {
+		if err := j.tasks.Fail(t, id.GetAttempt()); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		return &pb.ReportTaskResponse{}, nil
+	}
+	accepted, err := j.tasks.Complete(t, id.GetAttempt(), req.GetSuccess().GetOutputs())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if accepted {
+		for name, n := range req.GetSuccess().GetCounters().GetValues() {
+			j.counts[name] += n
+		}
+		if j.tasks.Done() && s.active == j {
+			s.active = nil
+		}
+	}
+	return &pb.ReportTaskResponse{Accepted: accepted}, nil
+}
+
+func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j, ok := s.jobs[req.GetJobId()]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetJobId())
+	}
+	mapsDone, reducesDone := j.tasks.Progress()
+	state := pb.JobState_JOB_STATE_MAPPING
+	switch {
+	case j.tasks.Done():
+		state = pb.JobState_JOB_STATE_SUCCEEDED
+	case mapsDone == len(j.splits):
+		state = pb.JobState_JOB_STATE_REDUCING
+	}
+	return &pb.GetJobStatusResponse{
+		JobId:                j.id,
+		State:                state,
+		MapTasksTotal:        uint32(len(j.splits)),
+		MapTasksCompleted:    uint32(mapsDone),
+		ReduceTasksTotal:     j.spec.GetNumReduceTasks(),
+		ReduceTasksCompleted: uint32(reducesDone),
+		Counters:             &pb.Counters{Values: maps.Clone(j.counts)},
+	}, nil
+}
