@@ -51,7 +51,7 @@ func dirNames(t *testing.T, dir string) []string {
 func TestMapThenReduce(t *testing.T) {
 	spec, split := setup(t, "a b a\nc\n")
 	dir := t.TempDir()
-	sizes, counts, err := Map(spec, api.TaskID{Kind: api.MapTask, Attempt: 3}, split, dir)
+	sizes, counts, err := Map(spec, api.TaskID{Kind: api.MapTask, Attempt: 3}, split, dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestMapThenReduce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		counts, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources)
+		counts, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources, nil)
 		if err := errors.Join(err, closeSources()); err != nil {
 			t.Fatal(err)
 		}
@@ -95,7 +95,7 @@ func TestFailedAttemptLeavesNoFiles(t *testing.T) {
 	dir := t.TempDir()
 	failing := spec
 	failing.Program.Mapper = api.MapFunc(func(api.Context, []byte, []byte, api.Emitter) error { return errBoom })
-	if _, _, err := Map(failing, api.TaskID{Kind: api.MapTask}, split, dir); !errors.Is(err, errBoom) {
+	if _, _, err := Map(failing, api.TaskID{Kind: api.MapTask}, split, dir, nil); !errors.Is(err, errBoom) {
 		t.Fatalf("Map error = %v", err)
 	}
 	if names := dirNames(t, dir); len(names) != 0 {
@@ -104,10 +104,10 @@ func TestFailedAttemptLeavesNoFiles(t *testing.T) {
 
 	// The first reduce attempt succeeds; a failing retry must leave its
 	// output in place.
-	if _, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask}, nil); err != nil {
+	if _, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir); err != nil {
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir, nil); err != nil {
 		t.Fatal(err)
 	}
 	sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, 0)})
@@ -118,7 +118,7 @@ func TestFailedAttemptLeavesNoFiles(t *testing.T) {
 	failing.Program.Reducer = api.ReduceFunc(func(_ api.Context, key []byte, _ iter.Seq[[]byte], out api.Emitter) error {
 		return errors.Join(out.Emit(key, nil), errBoom) // a partial output, then failure
 	})
-	if _, err := Reduce(failing, api.TaskID{Kind: api.ReduceTask, Attempt: 1}, sources); !errors.Is(err, errBoom) {
+	if _, err := Reduce(failing, api.TaskID{Kind: api.ReduceTask, Attempt: 1}, sources, nil); !errors.Is(err, errBoom) {
 		t.Fatalf("Reduce error = %v", err)
 	}
 	if names := dirNames(t, spec.Output); !slices.Equal(names, []string{TempDir, "part-r-00000"}) {
@@ -143,9 +143,57 @@ func TestContext(t *testing.T) {
 		ctx.Count("user", 5)
 		return nil
 	})
-	_, counts, err := Map(spec, id, split, t.TempDir())
+	_, counts, err := Map(spec, id, split, t.TempDir(), nil)
 	if err != nil || counts["user"] != 5 {
 		t.Fatalf("counts %v, err %v", counts, err)
+	}
+}
+
+// User code that panics on a record fails the attempt with the record's
+// number; an attempt told to skip that record succeeds without it (§4.6).
+func TestBadRecords(t *testing.T) {
+	spec, split := setup(t, "a\nbad\nc\n")
+	spec.R = 1
+	mapper := spec.Program.Mapper
+	spec.Program.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if string(value) == "bad" {
+			panic("bad line")
+		}
+		return mapper.Map(ctx, key, value, out)
+	})
+	spec.Program.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
+		if string(key) == "c" {
+			panic("bad key")
+		}
+		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)
+	})
+	dir := t.TempDir()
+	var crash *CrashError
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir, nil); !errors.As(err, &crash) || crash.Record != 1 {
+		t.Fatalf("map: got %v, want a crash on record 1", err)
+	}
+	_, counts, err := Map(spec, api.TaskID{Kind: api.MapTask, Attempt: 1}, split, dir, []uint64{1})
+	if err != nil || counts[SkippedRecords] != 1 || counts[MapOutputRecords] != 2 {
+		t.Fatalf("map skipping record 1: counts %v, err %v", counts, err)
+	}
+
+	// The map output holds the keys a and c, so c is group 1.
+	reduce := func(attempt uint32, skip []uint64) (map[string]int64, error) {
+		sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, 0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = closeSources() }()
+		return Reduce(spec, api.TaskID{Kind: api.ReduceTask, Attempt: attempt}, sources, skip)
+	}
+	if _, err := reduce(0, nil); !errors.As(err, &crash) || crash.Record != 1 {
+		t.Fatalf("reduce: got %v, want a crash on record 1", err)
+	}
+	if counts, err := reduce(1, []uint64{1}); err != nil || counts[SkippedRecords] != 1 || counts[ReduceOutputRecords] != 1 {
+		t.Fatalf("reduce skipping record 1: counts %v, err %v", counts, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(spec.Output, "part-r-00000")); err != nil || string(data) != "a\t1\n" {
+		t.Fatalf("output %q (%v)", data, err)
 	}
 }
 
@@ -155,7 +203,7 @@ func TestSideOutput(t *testing.T) {
 	spec, split := setup(t, "a b a\n")
 	spec.R = 1
 	dir := t.TempDir()
-	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir); err != nil {
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir, nil); err != nil {
 		t.Fatal(err)
 	}
 	reduce := func(attempt uint32, fail bool) error {
@@ -174,7 +222,7 @@ func TestSideOutput(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = Reduce(spec, api.TaskID{Kind: api.ReduceTask, Attempt: attempt}, sources)
+		_, err = Reduce(spec, api.TaskID{Kind: api.ReduceTask, Attempt: attempt}, sources, nil)
 		return errors.Join(err, closeSources())
 	}
 
@@ -204,7 +252,7 @@ func TestSideOutput(t *testing.T) {
 }
 
 func TestSideOutputNames(t *testing.T) {
-	ctx := newContext(api.JobSpec{Output: t.TempDir()}, api.TaskID{Kind: api.MapTask})
+	ctx := newContext(api.JobSpec{Output: t.TempDir()}, api.TaskID{Kind: api.MapTask}, nil)
 	for _, name := range []string{"", ".", "..", ".hidden", "_SUCCESS", "part-r-00000", "a/b", "../x"} {
 		if _, err := ctx.SideOutput(name); err == nil {
 			t.Errorf("SideOutput(%q) succeeded", name)
@@ -235,7 +283,7 @@ func TestCustomPartitioner(t *testing.T) {
 	spec, split := setup(t, "a b a\nc\n")
 	spec.Program.Partitioner = api.PartitionFunc(func([]byte, uint32) uint32 { return 1 })
 	dir := t.TempDir()
-	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir); err != nil {
+	if _, _, err := Map(spec, api.TaskID{Kind: api.MapTask}, split, dir, nil); err != nil {
 		t.Fatal(err)
 	}
 	for r := range spec.R {
@@ -243,7 +291,7 @@ func TestCustomPartitioner(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		counts, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources)
+		counts, err := Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources, nil)
 		if err := errors.Join(err, closeSources()); err != nil {
 			t.Fatal(err)
 		}

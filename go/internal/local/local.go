@@ -44,7 +44,7 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 		}
 	}
 	for i, s := range splits {
-		_, c, err := task.Map(spec, api.TaskID{Kind: api.MapTask, Index: uint32(i)}, s, workDir)
+		_, c, err := task.Map(spec, api.TaskID{Kind: api.MapTask, Index: uint32(i)}, s, workDir, nil)
 		if err != nil {
 			return nil, fmt.Errorf("map task %d: %w", i, err)
 		}
@@ -70,6 +70,6 @@ func reduce(spec api.JobSpec, r uint32, m int, dir string) (map[string]int64, er
 	if err != nil {
 		return nil, err
 	}
-	counts, err := task.Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources)
+	counts, err := task.Reduce(spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources, nil)
 	return counts, errors.Join(err, closeSources())
 }
