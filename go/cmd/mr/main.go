@@ -179,7 +179,7 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	}
 	defer closeConn()
 	ctx := context.Background()
-	resp, err := client.SubmitJob(ctx, &pb.SubmitJobRequest{Job: spec})
+	resp, err := client.SubmitJob(ctx, &pb.SubmitJobRequest{Job: spec}, grpc.WaitForReady(true))
 	if err != nil {
 		return err
 	}

@@ -71,8 +71,9 @@ identical bytes, which gives a second, independent correctness check.
 - **#20** Safe commits: write to a temporary file, then rename it in one
   step, so a half-written output file can never be seen.
 - **#21** Docker: one command starts 1 coordinator and 4 workers on the
-  CS544 VM (8 GB RAM; see [cluster-vm.md](cluster-vm.md)). A test checks
-  that the output matches the oracle.
+  CS544 VM (8 GB RAM; see [cluster-vm.md](cluster-vm.md)). `make e2e`
+  checks that the output matches the oracle; see
+  [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml).
 
 ### Phase 3 — Survive failures (#22–#29)
 *The paper's famous result: thousands of cheap machines, some always
