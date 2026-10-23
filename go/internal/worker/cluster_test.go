@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"net"
 	"os"
 	"path/filepath"
@@ -27,108 +28,177 @@ import (
 
 const corpus = "../../../testdata/corpus"
 
-// flaky is word count whose map tasks fail on their first attempt.
+var inputs = []string{filepath.Join(corpus, "*.txt")}
+
+// The first attempt of map task 0 of test.hang-map, and of reduce task 0 of
+// test.hang-reduce, never returns, like a task on a machine that died. Each
+// closes its channel when it gets there.
+var mapStuck, reduceStuck = make(chan struct{}), make(chan struct{})
+
 func init() {
-	p := wordcount.Program
-	p.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+	first := func(ctx api.Context, kind api.TaskKind) bool {
+		id := ctx.Task()
+		return id.Kind == kind && id.Index == 0 && id.Attempt == 0
+	}
+
+	flaky := wordcount.Program // map tasks fail on their first attempt
+	flaky.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
 		if ctx.Task().Attempt == 0 {
 			return errors.New("first attempts fail")
 		}
 		return wordcount.Map(ctx, key, value, out)
 	})
-	api.Register("test.flaky", p)
+	api.Register("test.flaky", flaky)
+
+	hangMap := wordcount.Program
+	hangMap.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if first(ctx, api.MapTask) {
+			close(mapStuck)
+			select {}
+		}
+		return wordcount.Map(ctx, key, value, out)
+	})
+	api.Register("test.hang-map", hangMap)
+
+	hangReduce := wordcount.Program
+	hangReduce.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
+		if first(ctx, api.ReduceTask) {
+			close(reduceStuck)
+			select {}
+		}
+		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)
+	})
+	api.Register("test.hang-reduce", hangReduce)
 }
 
-// startCoordinator serves a coordinator on a free localhost port and returns
-// it with a client.
-func startCoordinator(t *testing.T) (*coordinator.Server, pb.CoordinatorServiceClient) {
+// listen serves the services that register adds on a free localhost port.
+// It returns the address, and stop, which closes the port at once.
+func listen(t *testing.T, register func(*grpc.Server)) (addr string, stop func()) {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := coordinator.NewServer(coordinator.Config{HeartbeatInterval: time.Second, RetryAfter: 10 * time.Millisecond})
 	gs := grpc.NewServer()
-	pb.RegisterCoordinatorServiceServer(gs, srv)
+	register(gs)
 	go func() { _ = gs.Serve(lis) }()
 	t.Cleanup(gs.Stop)
+	return lis.Addr().String(), gs.Stop
+}
 
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+// cluster is a coordinator that declares a worker dead after 100 ms of
+// silence. Tests add workers to it, each with its own work directory and
+// shuffle server, and may kill them.
+type cluster struct {
+	t       *testing.T
+	ctx     context.Context
+	srv     *coordinator.Server
+	client  pb.CoordinatorServiceClient
+	workDir string
+	live    []chan error // Run results of the workers not killed
+}
+
+func newCluster(t *testing.T) *cluster {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	srv := coordinator.NewServer(coordinator.Config{
+		HeartbeatInterval: 10 * time.Millisecond,
+		WorkerTimeout:     100 * time.Millisecond,
+		RetryAfter:        10 * time.Millisecond,
+	})
+	go srv.Monitor(ctx)
+	addr, _ := listen(t, func(gs *grpc.Server) { pb.RegisterCoordinatorServiceServer(gs, srv) })
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return srv, pb.NewCoordinatorServiceClient(conn)
+	return &cluster{t: t, ctx: ctx, srv: srv, client: pb.NewCoordinatorServiceClient(conn), workDir: t.TempDir()}
 }
 
-// startShuffle serves the map output under dir on a free localhost port and
-// returns the address.
-func startShuffle(t *testing.T, dir string) string {
-	t.Helper()
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	gs := grpc.NewServer()
-	pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir))
-	go func() { _ = gs.Serve(lis) }()
-	t.Cleanup(gs.Stop)
-	return lis.Addr().String()
-}
-
-// runJob runs program over the corpus on n workers, which join one after
-// another, each with its own work directory and shuffle server. It returns
-// the output directory, the map output files, and the job's final status.
-func runJob(t *testing.T, program string, n int) (out string, mapFiles []string, status *pb.GetJobStatusResponse) {
-	t.Helper()
-	srv, client := startCoordinator(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	inputs := []string{filepath.Join(corpus, "*.txt")}
+// submit submits program over the corpus with about 7 map tasks and 4
+// reduce tasks, and returns the job ID.
+func (c *cluster) submit(program string) string {
+	c.t.Helper()
 	splitSize, err := split.SizeFor(inputs, 7)
 	if err != nil {
-		t.Fatal(err)
+		c.t.Fatal(err)
 	}
-	out = filepath.Join(t.TempDir(), "out")
-	sub, err := client.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
-		Program: program, Inputs: inputs, Output: out,
+	sub, err := c.client.SubmitJob(c.ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: program, Inputs: inputs, Output: c.output(),
 		SplitSizeBytes: splitSize, NumReduceTasks: 4, UseCombiner: true,
 	}})
 	if err != nil {
-		t.Fatal(err)
+		c.t.Fatal(err)
 	}
+	return sub.GetJobId()
+}
 
-	workDir := t.TempDir()
-	done := make(chan error, n)
-	for i := range n {
-		dir := filepath.Join(workDir, fmt.Sprint(i))
-		info := &pb.WorkerInfo{ShuffleAddress: startShuffle(t, dir)}
-		go func() {
-			time.Sleep(time.Duration(i) * 20 * time.Millisecond)
-			done <- worker.New(client, dir, info).Run(ctx)
-		}()
+func (c *cluster) output() string { return filepath.Join(c.workDir, "out") }
+
+// addWorker starts a worker. kill stops it as if its machine died: its
+// heartbeats stop, and its map output can no longer be fetched.
+func (c *cluster) addWorker() (kill func()) {
+	dir := filepath.Join(c.workDir, fmt.Sprint(len(c.live)))
+	addr, stopShuffle := listen(c.t, func(gs *grpc.Server) { pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir)) })
+	ctx, cancel := context.WithCancel(c.ctx)
+	done := make(chan error, 1)
+	go func() { done <- worker.New(c.client, dir, &pb.WorkerInfo{ShuffleAddress: addr}).Run(ctx) }()
+	i := len(c.live)
+	c.live = append(c.live, done)
+	return func() {
+		cancel()
+		stopShuffle()
+		c.live[i] = nil
 	}
+}
 
+// wait waits for job to succeed, then shuts the cluster down and returns the
+// job's final status.
+func (c *cluster) wait(job string) *pb.GetJobStatusResponse {
+	c.t.Helper()
+	var status *pb.GetJobStatusResponse
 	for status.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
 		time.Sleep(10 * time.Millisecond)
-		if status, err = client.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: sub.GetJobId()}); err != nil {
-			t.Fatal(err)
+		var err error
+		if status, err = c.client.GetJobStatus(c.ctx, &pb.GetJobStatusRequest{JobId: job}); err != nil {
+			c.t.Fatal(err)
 		}
 	}
-	srv.Shutdown()
-	for range n {
+	c.srv.Shutdown()
+	for _, done := range c.live {
+		if done == nil {
+			continue
+		}
 		if err := <-done; err != nil {
-			t.Fatalf("worker: %v", err)
+			c.t.Fatalf("worker: %v", err)
 		}
 	}
-	mapFiles, _ = filepath.Glob(filepath.Join(workDir, "*", sub.GetJobId(), "*"))
-	return out, mapFiles, status
+	return status
+}
+
+// mapFiles returns the map output files of job on every worker.
+func (c *cluster) mapFiles(job string) []string {
+	files, _ := filepath.Glob(filepath.Join(c.workDir, "*", job, "*"))
+	return files
+}
+
+// runJob runs program on n workers, which join one after another.
+func runJob(t *testing.T, program string, n int) (*cluster, string, *pb.GetJobStatusResponse) {
+	t.Helper()
+	c := newCluster(t)
+	job := c.submit(program)
+	for range n {
+		c.addWorker()
+		time.Sleep(20 * time.Millisecond)
+	}
+	return c, job, c.wait(job)
 }
 
 func TestClusterWordCount(t *testing.T) {
-	out, _, status := runJob(t, "wordcount", 3)
-	assertGolden(t, out)
+	c, _, status := runJob(t, "wordcount", 3)
+	assertGolden(t, c.output())
 	if status.GetMapTasksTotal() < 7 || status.GetReduceTasksCompleted() != 4 ||
 		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 11786 {
 		t.Fatalf("status %v", status)
@@ -137,18 +207,15 @@ func TestClusterWordCount(t *testing.T) {
 
 // Failed attempts are retried, and only accepted attempts count.
 func TestClusterRetriesFailedTasks(t *testing.T) {
-	out, _, status := runJob(t, "test.flaky", 2)
-	assertGolden(t, out)
-	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 59372 {
-		t.Fatalf("map.output.records = %d, want 59372", got)
-	}
+	c, _, status := runJob(t, "test.flaky", 2)
+	assertGolden(t, c.output())
+	assertMapOutputRecords(t, status)
 }
 
 // The cluster's map output is byte for byte what local mode writes for the
 // same splits, however the tasks were spread over the workers.
 func TestClusterMapOutputMatchesLocal(t *testing.T) {
-	_, mapFiles, _ := runJob(t, "wordcount", 3)
-	inputs := []string{filepath.Join(corpus, "*.txt")}
+	c, job, _ := runJob(t, "wordcount", 3)
 	splitSize, err := split.SizeFor(inputs, 7)
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +227,47 @@ func TestClusterMapOutputMatchesLocal(t *testing.T) {
 	}, localDir); err != nil {
 		t.Fatal(err)
 	}
-	assertSameFiles(t, mapFiles, localDir)
+	assertSameFiles(t, c.mapFiles(job), localDir)
+}
+
+// A worker that dies is detected, and its work is done again elsewhere
+// (§3.3).
+func TestClusterSurvivesWorkerLoss(t *testing.T) {
+	t.Run("mid-map", func(t *testing.T) {
+		// The worker dies running map task 0; another runs it again.
+		c := newCluster(t)
+		job := c.submit("test.hang-map")
+		kill := c.addWorker()
+		<-mapStuck
+		kill()
+		c.addWorker()
+		status := c.wait(job)
+		assertGolden(t, c.output())
+		assertMapOutputRecords(t, status)
+	})
+	t.Run("after map, mid-reduce", func(t *testing.T) {
+		// The worker runs every map task, then dies running reduce task 0.
+		// Its map output is gone with it, so the map tasks run again, and
+		// reduce tasks that were reading it fail and run again too.
+		c := newCluster(t)
+		job := c.submit("test.hang-reduce")
+		kill := c.addWorker()
+		<-reduceStuck
+		kill()
+		c.addWorker()
+		status := c.wait(job)
+		assertGolden(t, c.output())
+		assertMapOutputRecords(t, status)
+	})
+}
+
+// assertMapOutputRecords checks that each map task's records counted once,
+// however many times it ran.
+func assertMapOutputRecords(t *testing.T, status *pb.GetJobStatusResponse) {
+	t.Helper()
+	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 59372 {
+		t.Fatalf("%s = %d, want 59372", task.MapOutputRecords, got)
+	}
 }
 
 func assertGolden(t *testing.T, out string) {
