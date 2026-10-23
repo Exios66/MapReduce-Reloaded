@@ -24,7 +24,7 @@ Status: `planned` → `in progress` → `done`.
 | F14 | Custom partitioning function | §4.1 | 2 | | | | planned |
 | F15 | Sorted keys within a partition | §4.2 | 1 | | | | planned |
 | F16 | Combiner | §4.3 | 1 | | | | planned |
-| F17 | Pluggable input/output types | §4.4 | 1 | | | | planned |
+| F17 | Pluggable input/output types | §4.4 | 1 | `go/internal/formats` | `mapreduce_reloaded/formats` | `FuzzTextSplits`, `test_formats.py` | done |
 | F18 | Atomic side-effect files | §4.5 | 3 | | | | planned |
 | F19 | Skipping bad records | §4.6 | 3 | | | | planned |
 | F20 | Local execution mode | §4.7 | 1 | | | | planned |
