@@ -49,11 +49,11 @@ func TestLifecycle(t *testing.T) {
 	m0, m1, r0 := Task{mapKind, 0}, Task{mapKind, 1}, Task{reduceKind, 0}
 
 	a := mustAssign(t, tt, m0, "w1")
-	if next, _ := tt.Next(); next != m1 {
+	if next, _ := tt.Next(nil); next != m1 {
 		t.Fatalf("Next = %v, want %v", next, m1)
 	}
 	b := mustAssign(t, tt, m1, "w2")
-	if _, ok := tt.Next(); ok {
+	if _, ok := tt.Next(nil); ok {
 		t.Fatal("a reduce task was offered before the maps completed")
 	}
 	for _, c := range []struct {
@@ -65,7 +65,7 @@ func TestLifecycle(t *testing.T) {
 			t.Fatalf("Complete(%v) = %v, %v", c.id, ok, err)
 		}
 	}
-	if next, _ := tt.Next(); next != r0 {
+	if next, _ := tt.Next(nil); next != r0 {
 		t.Fatalf("Next = %v, want %v", next, r0)
 	}
 	if src := tt.Sources(0); len(src) != 2 || src[1].GetMapIndex() != 1 {
@@ -74,6 +74,33 @@ func TestLifecycle(t *testing.T) {
 	c := mustAssign(t, tt, r0, "w1")
 	if ok, _ := tt.Complete(r0, c, "w1", nil); !ok || !tt.Done() {
 		t.Fatal("job not done after its last reduce completed")
+	}
+}
+
+// Next offers the idle map task that ranks lowest, the first of any tie,
+// and ignores the rank for reduce tasks.
+func TestNextRank(t *testing.T) {
+	tt := NewTaskTable(3, 2)
+	ranks := []int{2, 1, 1}
+	rank := func(i uint32) int { return ranks[i] }
+	if next, _ := tt.Next(rank); next != (Task{mapKind, 1}) {
+		t.Fatalf("Next = %v, want map 1", next)
+	}
+	mustAssign(t, tt, Task{mapKind, 1}, "w1")
+	if next, _ := tt.Next(rank); next != (Task{mapKind, 2}) {
+		t.Fatalf("Next = %v, want map 2", next)
+	}
+	for i, id := range []Task{{mapKind, 0}, {mapKind, 1}, {mapKind, 2}} {
+		a := uint32(0)
+		if i != 1 {
+			a = mustAssign(t, tt, id, "w1")
+		}
+		if ok, err := tt.Complete(id, a, "w1", outputs(id.Index, 2)); !ok || err != nil {
+			t.Fatalf("Complete(%v) = %v, %v", id, ok, err)
+		}
+	}
+	if next, _ := tt.Next(func(uint32) int { panic("ranked a reduce task") }); next != (Task{reduceKind, 0}) {
+		t.Fatalf("Next = %v, want reduce 0", next)
 	}
 }
 
@@ -179,7 +206,7 @@ func TestFailWithLostOutput(t *testing.T) {
 	}
 	assertState(t, tt, m0, idle)
 	assertState(t, tt, r0, idle)
-	if _, ok := tt.Next(); !ok {
+	if _, ok := tt.Next(nil); !ok {
 		t.Fatal("no task to run")
 	}
 	checkCounts(t, tt)
@@ -302,7 +329,7 @@ func TestInvariants(t *testing.T) {
 			switch rng.IntN(4) {
 			case 0:
 				w := workers[rng.IntN(len(workers))]
-				next, ok := tt.Next()
+				next, ok := tt.Next(nil)
 				if !ok {
 					next, ok = tt.Backup(w)
 				}

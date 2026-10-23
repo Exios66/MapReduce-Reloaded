@@ -101,9 +101,11 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 	return sizes, ctx.counts, nil
 }
 
-// TempDir is the directory under a job's output where reduce attempts write
+// TempDir is the directory under a job's output where attempts write
 // before committing. Readers of the output skip it, as they skip every name
-// starting with "_".
+// starting with "_". The job creates it with Setup and removes it with
+// Cleanup; attempts never create it, so one that runs after the job has
+// finished fails and leaves nothing behind.
 const TempDir = "_temporary"
 
 // Reduce runs a reduce task attempt over partition id.Index of every map
@@ -113,9 +115,6 @@ const TempDir = "_temporary"
 func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64) (counts map[string]int64, err error) {
 	out, err := formats.Output(spec.OutputFormat)
 	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(filepath.Join(spec.Output, TempDir), 0o755); err != nil {
 		return nil, err
 	}
 	name := fmt.Sprintf("part-r-%05d", id.Index)
@@ -198,8 +197,13 @@ func CheckOutput(output string) error {
 	return err
 }
 
-// Cleanup removes what reduce attempts left in a finished job's output: the
-// files of attempts that failed or died before committing.
+// Setup creates the job's TempDir.
+func Setup(output string) error {
+	return os.MkdirAll(filepath.Join(output, TempDir), 0o755)
+}
+
+// Cleanup removes a finished job's TempDir, with the files of attempts that
+// failed or died before committing.
 func Cleanup(output string) error {
 	return os.RemoveAll(filepath.Join(output, TempDir))
 }
@@ -299,11 +303,7 @@ func (c *taskContext) SideOutput(name string) (io.Writer, error) {
 	if s := c.side[name]; s != nil {
 		return s, nil
 	}
-	dir := filepath.Join(c.output, TempDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	tmp := attemptPath(filepath.Join(dir, fmt.Sprintf("%s.%v-%d", name, c.task.Kind, c.task.Index)), c.task.Attempt)
+	tmp := attemptPath(filepath.Join(c.output, TempDir, fmt.Sprintf("%s.%v-%d", name, c.task.Kind, c.task.Index)), c.task.Attempt)
 	f, err := os.Create(tmp)
 	if err != nil {
 		return nil, err

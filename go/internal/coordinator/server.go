@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -33,6 +34,10 @@ type Config struct {
 	// idle, a worker that asks for work gets a second attempt of a task
 	// still running elsewhere (§3.6).
 	Backups bool
+	// Locate, if set, returns the hosts or zones that hold a split, which
+	// map tasks then prefer to run on (§3.4). It runs once per split, when
+	// the job is submitted.
+	Locate func(*pb.InputSplit) []string
 	// Log, if set, is the write-ahead log: every change to a job or its
 	// tasks is appended to it before any reply depends on it (§3.3).
 	Log Log
@@ -67,6 +72,8 @@ type job struct {
 	splits []*pb.InputSplit
 	tasks  *TaskTable
 	counts map[Task]map[string]int64 // of each task's accepted attempt
+	placed map[Task][]pb.Locality    // of each attempt, by number
+	ran    map[Task]pb.Locality      // of each task's accepted attempt
 	err    string                    // why the job failed, if it did
 }
 
@@ -172,6 +179,9 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 		if splits[i], err = wire.InputSplit(sp); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		if s.cfg.Locate != nil {
+			splits[i].Locations = s.cfg.Locate(splits[i])
+		}
 	}
 
 	s.mu.Lock()
@@ -181,6 +191,9 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	}
 	if err := mrtask.CheckOutput(spec.Output); err != nil { // under the lock, so no job finishes in between
 		return nil, status.Error(codes.AlreadyExists, err.Error())
+	}
+	if err := mrtask.Setup(spec.Output); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}); err != nil {
@@ -198,13 +211,15 @@ func (s *Server) submit(rec *pb.JobSubmitted) {
 		splits: rec.GetSplits(),
 		tasks:  NewTaskTable(len(rec.GetSplits()), int(rec.GetJob().GetNumReduceTasks())),
 		counts: map[Task]map[string]int64{},
+		placed: map[Task][]pb.Locality{},
+		ran:    map[Task]pb.Locality{},
 	}
 	s.jobs[j.id], s.active = j, j
 }
 
-// RequestTask hands an idle worker its next task: map tasks first, reduce
-// tasks once every map task has completed (§3.1), then backup attempts if
-// enabled (§3.6).
+// RequestTask hands an idle worker its next task: map tasks first, the
+// nearest to their input (§3.4), reduce tasks once every map task has
+// completed (§3.1), then backup attempts if enabled (§3.6).
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,7 +231,8 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Shutdown{Shutdown: &pb.ShutdownInstruction{}}}, nil
 	}
 	if s.active != nil {
-		t, ok := s.active.tasks.Next()
+		info := s.workerInfo(worker)
+		t, ok := s.active.tasks.Next(func(i uint32) int { return int(locality(s.active.splits[i], info)) })
 		if !ok && s.cfg.Backups {
 			t, ok = s.active.tasks.Backup(worker)
 		}
@@ -242,6 +258,10 @@ func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) 
 	}
 	id := &pb.TaskAttemptId{Task: &pb.TaskId{JobId: j.id, Kind: t.Kind, Index: t.Index}, Attempt: attempt}
 	rec := &pb.TaskAssigned{Attempt: id, WorkerId: worker}
+	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
+		rec.Locality = locality(j.splits[t.Index], s.workerInfo(worker))
+	}
+	j.placed[t] = append(j.placed[t], rec.GetLocality())
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}); err != nil {
 		return nil, err
 	}
@@ -253,6 +273,28 @@ func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) 
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_ReduceTask{
 		ReduceTask: &pb.ReduceTask{Attempt: id, Job: j.spec, Sources: j.tasks.Sources(t.Index), SkipRecords: skip},
 	}}, nil
+}
+
+// workerInfo returns what a live worker said about itself when it
+// registered, or nil.
+func (s *Server) workerInfo(id string) *pb.WorkerInfo {
+	w, _ := s.workers.Lookup(id)
+	return w.Info
+}
+
+// locality says how close a worker is to a split. A location matches the
+// worker's host or its zone; an empty one matches neither.
+func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
+	at := func(place string) bool { return place != "" && slices.Contains(split.GetLocations(), place) }
+	switch {
+	case len(split.GetLocations()) == 0:
+		return pb.Locality_LOCALITY_UNSPECIFIED
+	case at(w.GetHost()):
+		return pb.Locality_LOCALITY_HOST
+	case at(w.GetZone()):
+		return pb.Locality_LOCALITY_ZONE
+	}
+	return pb.Locality_LOCALITY_REMOTE
 }
 
 // ReportTask records the outcome of an attempt, from the worker it was
@@ -290,6 +332,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest) (accepted bool, err e
 	if accepted {
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
+		j.ran[t] = j.placed[t][id.GetAttempt()]
 		if j.tasks.Done() {
 			s.end(j, "")
 		}
@@ -326,6 +369,12 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 	case mapsDone == len(j.splits):
 		state = pb.JobState_JOB_STATE_REDUCING
 	}
+	near := map[pb.Locality]uint32{}
+	for t, l := range j.ran {
+		if st, _ := j.tasks.State(t); st == pb.TaskState_TASK_STATE_COMPLETED {
+			near[l]++
+		}
+	}
 	return &pb.GetJobStatusResponse{
 		JobId:                j.id,
 		State:                state,
@@ -335,6 +384,8 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 		ReduceTasksCompleted: uint32(reducesDone),
 		Counters:             &pb.Counters{Values: j.total()},
 		Error:                j.err,
+		MapTasksHostLocal:    near[pb.Locality_LOCALITY_HOST],
+		MapTasksZoneLocal:    near[pb.Locality_LOCALITY_ZONE],
 	}, nil
 }
 

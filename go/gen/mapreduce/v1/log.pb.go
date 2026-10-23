@@ -220,9 +220,12 @@ func (x *JobSubmitted) GetSplits() []*InputSplit {
 
 // An attempt was started on a worker.
 type TaskAssigned struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Attempt       *TaskAttemptId         `protobuf:"bytes,1,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Attempt  *TaskAttemptId         `protobuf:"bytes,1,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	WorkerId string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	// Logged rather than worked out again, since worker IDs, and so the
+	// hosts they name, do not survive a restart.
+	Locality      Locality `protobuf:"varint,3,opt,name=locality,proto3,enum=mapreduce.v1.Locality" json:"locality,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -269,6 +272,13 @@ func (x *TaskAssigned) GetWorkerId() string {
 		return x.WorkerId
 	}
 	return ""
+}
+
+func (x *TaskAssigned) GetLocality() Locality {
+	if x != nil {
+		return x.Locality
+	}
+	return Locality_LOCALITY_UNSPECIFIED
 }
 
 // A worker was declared dead.
@@ -370,10 +380,11 @@ const file_mapreduce_v1_log_proto_rawDesc = "" +
 	"\fJobSubmitted\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12'\n" +
 	"\x03job\x18\x02 \x01(\v2\x15.mapreduce.v1.JobSpecR\x03job\x120\n" +
-	"\x06splits\x18\x03 \x03(\v2\x18.mapreduce.v1.InputSplitR\x06splits\"b\n" +
+	"\x06splits\x18\x03 \x03(\v2\x18.mapreduce.v1.InputSplitR\x06splits\"\x96\x01\n" +
 	"\fTaskAssigned\x125\n" +
 	"\aattempt\x18\x01 \x01(\v2\x1b.mapreduce.v1.TaskAttemptIdR\aattempt\x12\x1b\n" +
-	"\tworker_id\x18\x02 \x01(\tR\bworkerId\")\n" +
+	"\tworker_id\x18\x02 \x01(\tR\bworkerId\x122\n" +
+	"\blocality\x18\x03 \x01(\x0e2\x16.mapreduce.v1.LocalityR\blocality\")\n" +
 	"\n" +
 	"WorkerLost\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\"\v\n" +
@@ -402,6 +413,7 @@ var file_mapreduce_v1_log_proto_goTypes = []any{
 	(*JobSpec)(nil),           // 6: mapreduce.v1.JobSpec
 	(*InputSplit)(nil),        // 7: mapreduce.v1.InputSplit
 	(*TaskAttemptId)(nil),     // 8: mapreduce.v1.TaskAttemptId
+	(Locality)(0),             // 9: mapreduce.v1.Locality
 }
 var file_mapreduce_v1_log_proto_depIdxs = []int32{
 	1, // 0: mapreduce.v1.LogRecord.job_submitted:type_name -> mapreduce.v1.JobSubmitted
@@ -412,11 +424,12 @@ var file_mapreduce_v1_log_proto_depIdxs = []int32{
 	6, // 5: mapreduce.v1.JobSubmitted.job:type_name -> mapreduce.v1.JobSpec
 	7, // 6: mapreduce.v1.JobSubmitted.splits:type_name -> mapreduce.v1.InputSplit
 	8, // 7: mapreduce.v1.TaskAssigned.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	9, // 8: mapreduce.v1.TaskAssigned.locality:type_name -> mapreduce.v1.Locality
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_mapreduce_v1_log_proto_init() }
