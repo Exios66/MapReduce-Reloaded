@@ -104,7 +104,7 @@ failing, and jobs still finish correctly.*
 ### Phase 4 — Finish the paper's features (#30–#34)
 
 - **#31** Locality: run each map task on the machine that already holds its
-  data.
+  data. See [explainers/23-locality.md](explainers/23-locality.md).
 - **#32** A live status web page and metrics, as in the paper (§4.8).
 - **#33** The paper's example programs: grep, word count, inverted index,
   sort, and others.

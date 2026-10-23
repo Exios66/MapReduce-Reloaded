@@ -176,6 +176,23 @@ func TestLocality(t *testing.T) {
 	want(recoverServer(t, Config{}, log))
 }
 
+// A map task is held back from a worker on another host for LocalityWait,
+// then given to it.
+func TestLocalityWait(t *testing.T) {
+	const wait = 50 * time.Millisecond
+	cfg := Config{LocalityWait: wait, Locate: func(*pb.InputSplit) []string { return []string{"host-a"} }}
+	s, _, _ := newJobWith(t, cfg, 1)
+	reg, _ := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{Host: "host-b"}})
+	b := reg.GetWorkerId()
+	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: b}); resp.GetWait() == nil {
+		t.Fatalf("got %v; want wait for a worker on host-a", resp)
+	}
+	time.Sleep(wait)
+	if resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: b}); resp.GetMapTask() == nil {
+		t.Fatalf("got %v; want the map task after the wait", resp)
+	}
+}
+
 func TestReportTask(t *testing.T) {
 	s, w, id := newJob(t, 1)
 	resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})

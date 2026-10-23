@@ -214,7 +214,10 @@ func (c *cluster) output() string { return filepath.Join(c.workDir, "out") }
 // heartbeats stop, and its map output can no longer be fetched. The
 // worker's RPCs, to the coordinator and to its shuffle server, pass
 // through c.gates[i], where i is its index in c.live.
-func (c *cluster) addWorker() (kill func()) {
+func (c *cluster) addWorker() (kill func()) { return c.addWorkerOn("") }
+
+// addWorkerOn starts a worker that says it runs on host.
+func (c *cluster) addWorkerOn(host string) (kill func()) {
 	dir := filepath.Join(c.workDir, fmt.Sprint(len(c.live)))
 	g := new(gate)
 	addr, stopShuffle := listen(c.t, "", func(gs *grpc.Server) { pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir)) },
@@ -227,7 +230,7 @@ func (c *cluster) addWorker() (kill func()) {
 	ctx, cancel := context.WithCancel(c.ctx)
 	done := make(chan error, 1)
 	go func() {
-		done <- worker.New(pb.NewCoordinatorServiceClient(conn), dir, &pb.WorkerInfo{ShuffleAddress: addr}).Run(ctx)
+		done <- worker.New(pb.NewCoordinatorServiceClient(conn), dir, &pb.WorkerInfo{ShuffleAddress: addr, Host: host}).Run(ctx)
 	}()
 	i := len(c.live)
 	c.live, c.gates = append(c.live, done), append(c.gates, g)
@@ -293,6 +296,32 @@ func TestClusterWordCount(t *testing.T) {
 	if status.GetMapTasksTotal() < 7 || status.GetReduceTasksCompleted() != 4 ||
 		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 11786 {
 		t.Fatalf("status %v", status)
+	}
+}
+
+// With a free worker on every host that holds a split, nearly every map
+// task runs on one, and the output does not change (§3.4). With fewer, the
+// job still finishes: no task waits for ever for a missing host.
+func TestClusterLocality(t *testing.T) {
+	for _, workers := range []int{8, 3} {
+		t.Run(fmt.Sprint(workers, " workers"), func(t *testing.T) {
+			splits := 0
+			c := newCluster(t, func(cfg *coordinator.Config) {
+				cfg.LocalityWait = time.Second
+				cfg.Locate = func(*pb.InputSplit) []string {
+					splits++
+					return []string{fmt.Sprint("host-", splits%8)}
+				}
+			})
+			for i := range workers {
+				c.addWorkerOn(fmt.Sprint("host-", i))
+			}
+			status := c.wait(c.submit("wordcount"))
+			assertGolden(t, c.output())
+			if local := status.GetMapTasksHostLocal(); workers == 8 && float64(local) < 0.9*float64(status.GetMapTasksTotal()) {
+				t.Fatalf("%d of %d map tasks ran on their split's host; want 90%%", local, status.GetMapTasksTotal())
+			}
+		})
 	}
 }
 
