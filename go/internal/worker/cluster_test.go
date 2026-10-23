@@ -56,6 +56,17 @@ func init() {
 	})
 	api.Register("test.flaky", flaky)
 
+	// Every corpus file starts with an empty line, so skipping those lines
+	// leaves the word counts unchanged.
+	badRecord := wordcount.Program // crashes on each file's first line
+	badRecord.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if string(key) == "0" {
+			panic("bad record")
+		}
+		return wordcount.Map(ctx, key, value, out)
+	})
+	api.Register("test.bad-record", badRecord)
+
 	hangMap := wordcount.Program
 	hangMap.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
 		if first(ctx, api.MapTask) {
@@ -252,6 +263,17 @@ func TestClusterRetriesFailedTasks(t *testing.T) {
 	c, _, status := runJob(t, "test.flaky", 2)
 	assertGolden(t, c.output())
 	assertMapOutputRecords(t, status)
+}
+
+// A job whose mapper crashes on a few records completes without them
+// (§4.6).
+func TestClusterSkipsBadRecords(t *testing.T) {
+	c, _, status := runJob(t, "test.bad-record", 2)
+	assertGolden(t, c.output())
+	assertMapOutputRecords(t, status)
+	if n := status.GetCounters().GetValues()[task.SkippedRecords]; n != 3 {
+		t.Fatalf("skipped %d records, want 3, one per input file", n)
+	}
 }
 
 // The cluster's map output is byte for byte what local mode writes for the
