@@ -32,7 +32,8 @@ identical bytes, which gives a second, independent correctness check.
   [explainers/04-file-format.md](explainers/04-file-format.md).
 - **#5 Partition hash:** the formula that decides which reducer each key
   goes to (for example, "apple" goes to reducer 3). Go and Python must give
-  the same answer, or data ends up at the wrong reducer.
+  the same answer, or data ends up at the wrong reducer. See
+  [explainers/05-partition-hash.md](explainers/05-partition-hash.md).
 
 ### Phase 1 — Single-computer version (#6–#12)
 *Before running a restaurant chain, cook the dish perfectly in one kitchen.*
