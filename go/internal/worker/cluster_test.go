@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -87,11 +88,15 @@ func init() {
 	api.Register("test.pause-reduce", pauseReduce)
 }
 
-// listen serves the services that register adds on a free localhost port.
-// It returns the address, and stop, which closes the port at once.
-func listen(t *testing.T, register func(*grpc.Server)) (addr string, stop func()) {
+// listen serves the services that register adds on addr, or on a free
+// localhost port if addr is "". It returns the address, and stop, which
+// closes the port at once.
+func listen(t *testing.T, addr string, register func(*grpc.Server)) (string, func()) {
 	t.Helper()
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if addr == "" {
+		addr = "127.0.0.1:0"
+	}
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,12 +108,15 @@ func listen(t *testing.T, register func(*grpc.Server)) (addr string, stop func()
 }
 
 // cluster is a coordinator that declares a worker dead after 100 ms of
-// silence. Tests add workers to it, each with its own work directory and
-// shuffle server, and may kill them.
+// silence and logs to a write-ahead log. Tests add workers to it, each with
+// its own work directory and shuffle server, and may kill them, or restart
+// the coordinator.
 type cluster struct {
 	t       *testing.T
 	ctx     context.Context
 	srv     *coordinator.Server
+	addr    string
+	stop    func() // stops the coordinator
 	client  pb.CoordinatorServiceClient
 	workDir string
 	live    []chan error // Run results of the workers not killed
@@ -118,19 +126,37 @@ func newCluster(t *testing.T) *cluster {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	srv := coordinator.NewServer(coordinator.Config{
-		HeartbeatInterval: 10 * time.Millisecond,
-		WorkerTimeout:     100 * time.Millisecond,
-		RetryAfter:        10 * time.Millisecond,
-	})
-	go srv.Monitor(ctx)
-	addr, _ := listen(t, func(gs *grpc.Server) { pb.RegisterCoordinatorServiceServer(gs, srv) })
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	c := &cluster{t: t, ctx: ctx, workDir: t.TempDir()}
+	c.start()
+	conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return &cluster{t: t, ctx: ctx, srv: srv, client: pb.NewCoordinatorServiceClient(conn), workDir: t.TempDir()}
+	c.client = pb.NewCoordinatorServiceClient(conn)
+	return c
+}
+
+// start starts the coordinator from its log, on c.addr once it has one.
+func (c *cluster) start() {
+	srv, log, err := coordinator.Recover(coordinator.Config{
+		HeartbeatInterval: 10 * time.Millisecond,
+		WorkerTimeout:     100 * time.Millisecond,
+		RetryAfter:        10 * time.Millisecond,
+	}, filepath.Join(c.workDir, "coordinator.log"))
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(c.ctx)
+	go srv.Monitor(ctx)
+	addr, stop := listen(c.t, c.addr, func(gs *grpc.Server) { pb.RegisterCoordinatorServiceServer(gs, srv) })
+	c.srv, c.addr = srv, addr
+	c.stop = func() {
+		stop()
+		cancel()
+		_ = log.Close()
+	}
+	c.t.Cleanup(c.stop)
 }
 
 // submit submits program over the corpus with about 7 map tasks and 4
@@ -157,7 +183,7 @@ func (c *cluster) output() string { return filepath.Join(c.workDir, "out") }
 // heartbeats stop, and its map output can no longer be fetched.
 func (c *cluster) addWorker() (kill func()) {
 	dir := filepath.Join(c.workDir, fmt.Sprint(len(c.live)))
-	addr, stopShuffle := listen(c.t, func(gs *grpc.Server) { pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir)) })
+	addr, stopShuffle := listen(c.t, "", func(gs *grpc.Server) { pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(dir)) })
 	ctx, cancel := context.WithCancel(c.ctx)
 	done := make(chan error, 1)
 	go func() { done <- worker.New(c.client, dir, &pb.WorkerInfo{ShuffleAddress: addr}).Run(ctx) }()
@@ -178,7 +204,7 @@ func (c *cluster) wait(job string) *pb.GetJobStatusResponse {
 	for status.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
 		time.Sleep(10 * time.Millisecond)
 		var err error
-		if status, err = c.client.GetJobStatus(c.ctx, &pb.GetJobStatusRequest{JobId: job}); err != nil {
+		if status, err = c.client.GetJobStatus(c.ctx, &pb.GetJobStatusRequest{JobId: job}, grpc.WaitForReady(true)); err != nil {
 			c.t.Fatal(err)
 		}
 	}
@@ -275,6 +301,40 @@ func TestClusterSurvivesWorkerLoss(t *testing.T) {
 		assertGolden(t, c.output())
 		assertMapOutputRecords(t, status)
 	})
+}
+
+// A restarted coordinator resumes the job from its log: its workers
+// register again once it is back, completed map tasks are not run again,
+// and the reduce task that was running is (§3.3).
+func TestClusterSurvivesCoordinatorRestart(t *testing.T) {
+	c := newCluster(t)
+	job := c.submit("test.pause-reduce")
+	c.addWorker()
+	<-reduceStuck
+	before := modTimes(t, c.mapFiles(job))
+	c.stop()
+	resume <- struct{}{}               // the paused reduce fails, and cannot report it
+	time.Sleep(100 * time.Millisecond) // while the coordinator is down
+	c.start()
+	status := c.wait(job)
+	assertGolden(t, c.output())
+	assertMapOutputRecords(t, status)
+	if after := modTimes(t, c.mapFiles(job)); !maps.Equal(after, before) {
+		t.Fatal("map tasks ran again after the restart")
+	}
+}
+
+func modTimes(t *testing.T, files []string) map[string]time.Time {
+	t.Helper()
+	times := map[string]time.Time{}
+	for _, f := range files {
+		info, err := os.Stat(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		times[f] = info.ModTime()
+	}
+	return times
 }
 
 // A reduce that cannot fetch a map output reports it, and the map task runs
