@@ -167,9 +167,6 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	if len(plan) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "the input is empty")
 	}
-	if err := mrtask.CheckOutput(spec.Output); err != nil {
-		return nil, status.Error(codes.AlreadyExists, err.Error())
-	}
 	splits := make([]*pb.InputSplit, len(plan))
 	for i, sp := range plan {
 		if splits[i], err = wire.InputSplit(sp); err != nil {
@@ -181,6 +178,9 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	defer s.mu.Unlock()
 	if s.active != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "job %s is still running", s.active.id)
+	}
+	if err := mrtask.CheckOutput(spec.Output); err != nil { // under the lock, so no job finishes in between
+		return nil, status.Error(codes.AlreadyExists, err.Error())
 	}
 	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}); err != nil {
