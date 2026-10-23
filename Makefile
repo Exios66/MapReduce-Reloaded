@@ -37,7 +37,7 @@ tools:
 
 # Regenerate Go and Python code from proto/.
 proto:
-	scripts/gen-proto.sh
+	PYTHON=$(PYTHON) scripts/gen-proto.sh
 
 proto-lint:
 	$(TOOLS)/buf lint

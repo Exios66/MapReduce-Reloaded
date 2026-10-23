@@ -13,6 +13,7 @@ set -eu
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 TOOLS="$ROOT/.tools/bin"
+PYTHON=${PYTHON:-python3}
 GO_OUT="$ROOT/go/gen"
 PY_OUT="$ROOT/python/mapreduce_reloaded/gen"
 PROTOS=$(find proto -name '*.proto' | sort)
@@ -30,7 +31,7 @@ mkdir -p "$GO_OUT" "$PY_OUT"
 # Go: protoc-gen-go writes the message types, protoc-gen-go-grpc the
 # service interfaces. paths=source_relative puts files under go/gen/
 # mirroring proto/ instead of under the full Go import path.
-python -m grpc_tools.protoc -I proto \
+"$PYTHON" -m grpc_tools.protoc -I proto \
   --plugin=protoc-gen-go="$TOOLS/protoc-gen-go" \
   --plugin=protoc-gen-go-grpc="$TOOLS/protoc-gen-go-grpc" \
   --go_out="$GO_OUT" --go_opt=paths=source_relative \
@@ -39,7 +40,7 @@ python -m grpc_tools.protoc -I proto \
 
 # Python: messages (_pb2.py), type stubs for editors (_pb2.pyi), and gRPC
 # stubs (_pb2_grpc.py).
-python -m grpc_tools.protoc -I proto \
+"$PYTHON" -m grpc_tools.protoc -I proto \
   --python_out="$PY_OUT" --pyi_out="$PY_OUT" --grpc_python_out="$PY_OUT" \
   $PROTOS
 
