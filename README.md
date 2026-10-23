@@ -16,8 +16,8 @@ the Go coordinator and workers run them over gRPC, re-running the work of
 workers that die (§3.3). See the [roadmap](docs/roadmap.md) for the full
 plan, [the roadmap explained](docs/roadmap-explained.md) for a plain-language
 walkthrough and the 6-week schedule, and the [paper mapping](docs/paper-mapping.md) for feature-by-feature
-progress against the paper. From #21 the cluster runs in containers on a
-single 8 GB VM; see [cluster VM](docs/cluster-vm.md) for setup.
+progress against the paper. The cluster runs in Docker Compose on a single
+8 GB VM (`make cluster-up`, `make e2e`); see [cluster VM](docs/cluster-vm.md) for setup.
 
 ## Repository layout
 

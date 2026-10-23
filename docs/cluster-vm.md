@@ -11,8 +11,8 @@ This page covers the memory budget, one-time setup, and daily use.
 ## Memory budget
 
 The VM is shared with CS544 coursework, so the cluster has to fit in about
-half of it. Each service gets a hard memory limit (`mem_limit` in the #21
-Compose file). A container that exceeds its limit is killed instead of
+half of it. Each service gets a hard memory limit (`mem_limit` in
+[`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml)). A container that exceeds its limit is killed instead of
 slowing down the whole VM.
 
 | Service | Limit | Why this much |
@@ -73,10 +73,16 @@ every line says `OK`.
 ```sh
 ssh mr-vm
 cd MapReduce-Reloaded && git pull
-make cluster-up      # from #21: start coordinator, workers, MinIO
-make e2e             # from #21: run word count and compare with local mode
-make cluster-down    # stop and remove only this project's containers
+make cluster-up      # build the image, start the coordinator and 4 workers
+make e2e             # run word count and compare with the golden output
+make cluster-down    # stop and remove only this project's containers and volume
 ```
+
+Run any `mr` command on the cluster with
+`docker compose -f deploy/compose/compose.yaml run --rm mr ...`, for example
+`mr status -coordinator coordinator:7070 job-1`. Every container sees the
+test corpus at `/corpus` and job output in the `output` volume at `/out`.
+MinIO joins the Compose file with #41.
 
 Web pages (the status UI from #32, MinIO's console) are reached through an
 SSH tunnel, so no port is opened to the network:
