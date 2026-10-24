@@ -111,12 +111,12 @@ func (s *Server) Expire(now time.Time) []string {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	recordAt := time.Now()
 	dead := s.workers.Expire(now, s.cfg.WorkerTimeout)
+	at := time.Now() // now may predate a record logged while we waited for the lock
 	for _, w := range dead {
 		var reset []Task
 		if s.active != nil {
-			if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_WorkerLost{WorkerLost: &pb.WorkerLost{WorkerId: w}}}, recordAt); err != nil {
+			if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_WorkerLost{WorkerLost: &pb.WorkerLost{WorkerId: w}}}, at); err != nil {
 				slog.Error("logging a lost worker", "worker", w, "err", err)
 			}
 			reset = s.active.tasks.ResetWorker(w)
