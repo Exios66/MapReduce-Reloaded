@@ -51,7 +51,9 @@ is needed.
 
 - Crash reports are in the write-ahead log, so a restarted coordinator
   rebuilds the same skip lists (ADR 0007).
-- A panic outside any record, such as in a combiner's final spill, fails
-  the attempt without a record, and is never skipped.
+- A panic outside any record, such as in the combiner during the final
+  spill, fails the attempt without a record, and is never skipped. A
+  combiner panic during an earlier spill happens inside the mapper's call,
+  so it is blamed on the record being emitted.
 - Output depends on which records were skipped. The `skipped.records`
   counter shows the job's owner that it happened.

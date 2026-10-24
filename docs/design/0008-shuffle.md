@@ -18,7 +18,8 @@ a slow or dead worker without a reducer waiting forever.
 1. **Map output stays on the disk of the worker that ran the map task.**
    Only locations go through the coordinator, as `PartitionLocation`
    messages in the map report and in each reduce assignment. No data does.
-2. **Every worker runs `shuffle.Server`, and reducers pull.** The
+2. **Each worker runs `shuffle.Server` (unless `-listen ""`), and reducers
+   pull.** The
    server-streaming RPC `FetchPartition(job, map, partition, offset)` sends
    the file from `offset` in `ChunkSize` (64 KiB) messages. `shuffle.Reader`
    is an `io.Reader` over that stream, so `kv.NewReader` reads from it

@@ -42,7 +42,7 @@ system can scrape, and logs it can parse.
 
 - **The Prometheus client library.** It would help with histograms, which
   we do not have. For a handful of metrics it adds a dependency
-  to replace a writer of about 30 lines.
+  to replace a writer of about ten lines.
 - **Counters for job counters.** A Prometheus counter that falls looks like
   a reset, and breaks `rate()`.
 - **A page that updates with JavaScript.** It would need a script, an

@@ -21,8 +21,8 @@ no need to dial back into them.
    sets the interval to 3 s and `WorkerTimeout` to 10 s, three missed
    beats.
 2. **`Server.Monitor` calls `Expire` every interval.** `Registry.Expire`
-   removes workers not seen for longer than the timeout. For each one, the
-   coordinator logs `WorkerLost` (ADR 0007) and calls
+   removes workers not seen for longer than the timeout. If a job is active,
+   the coordinator logs `WorkerLost` (ADR 0007) for each one and calls
    `TaskTable.ResetWorker`:
    - its running attempts stop, and their tasks become idle;
    - its completed map tasks become idle;
