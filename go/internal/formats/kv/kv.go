@@ -10,7 +10,6 @@ import (
 const (
 	magic        = "MRKV"
 	version      = 1
-	codecNone    = 0
 	headerSize   = 8
 	blockHdrSize = 12
 	footerSize   = 24

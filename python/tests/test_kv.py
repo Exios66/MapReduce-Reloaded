@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 import struct
+import sys
 from pathlib import Path
 
 import pytest
@@ -32,9 +33,9 @@ def read_all(data):
     return list(kv.read(io.BytesIO(data)))
 
 
-def write_all(records, block_target=kv.BLOCK_TARGET):
+def write_all(records, block_target=kv.BLOCK_TARGET, codec=kv.CODEC_NONE):
     buf = io.BytesIO()
-    with kv.Writer(buf, block_target=block_target) as w:
+    with kv.Writer(buf, block_target=block_target, codec=codec) as w:
         for key, value in records:
             w.write(key, value)
     return buf.getvalue()
@@ -51,7 +52,18 @@ def test_golden_vector(name):
         return
     records = [(base64.b64decode(k), base64.b64decode(v)) for k, v in entry["records"]]
     assert read_all(data) == records
-    assert write_all(records, entry["block_target"]) == data
+    if "block_target" in entry:  # compressed vectors are not byte-reproducible
+        assert write_all(records, entry["block_target"]) == data
+
+
+@pytest.mark.parametrize("name", [n for n in sorted(MANIFEST) if "codec" in MANIFEST[n]])
+def test_reads_go_compressed_vectors(name):
+    # testdata/format/go/ holds the same records compressed by the Go writer.
+    data = (VECTORS_DIR / "go" / MANIFEST[name]["file"]).read_bytes()
+    records = [(base64.b64decode(k), base64.b64decode(v)) for k, v in MANIFEST[name]["records"]]
+    assert data[5] == MANIFEST[name]["codec"]
+    assert read_all(data) == records
+    assert mrkv.decode(data) == records
 
 
 # Builders for hand-made malformed files.
@@ -78,7 +90,7 @@ MALFORMED = {
     "short header": (b"MRKV", "truncated"),
     "short non-MRKV": (b"PK\x03\x04\x14", "bad_magic"),
     "version 2": (header(version=2) + footer(0, 0), "unsupported_version"),
-    "zstd codec": (header(codec=1) + footer(0, 0), "unsupported_codec"),
+    "unknown codec": (header(codec=3) + footer(0, 0), "unsupported_codec"),
     "reserved set": (header(reserved=b"\x00\x01") + footer(0, 0), "bad_header"),
     "no footer": (OK, "truncated"),
     "zero record count": (OK + block(0, REC) + footer(0, 1), "bad_block"),
@@ -100,6 +112,49 @@ def test_malformed(name):
     with pytest.raises(kv.FormatError) as err:
         read_all(data)
     assert err.value.kind == kind
+
+
+CODECS = [kv.CODEC_NONE, kv.CODEC_ZSTD, kv.CODEC_SNAPPY]
+
+
+@pytest.mark.parametrize("codec", CODECS)
+def test_codec_round_trip(codec):
+    assert read_all(write_all([], codec=codec)) == []
+    # Repetitive records spanning many blocks.
+    recs = [(f"key-{i:05d}".encode(), b"v" * 50) for i in range(2000)]
+    data = write_all(recs, block_target=1024, codec=codec)
+    assert data[5] == codec
+    assert read_all(data) == recs
+    assert mrkv.decode(data) == recs  # the reference decoder agrees
+    if codec != kv.CODEC_NONE:
+        assert len(data) < len(write_all(recs, block_target=1024)) / 2
+
+
+def test_zstd_cross_checks_with_reference():
+    recs = [(b"k%d" % i, b"value" * 10) for i in range(100)]
+    assert mrkv.decode(write_all(recs, 256, kv.CODEC_ZSTD)) == recs
+    assert read_all(mrkv.encode(recs, block_target=256, codec=1)) == recs
+
+
+def test_unknown_writer_codec():
+    with pytest.raises(ValueError):
+        kv.Writer(io.BytesIO(), codec=9)
+
+
+def test_missing_package(monkeypatch):
+    monkeypatch.setitem(sys.modules, "zstandard", None)  # makes import fail
+    with pytest.raises(ValueError, match="zstd needs the zstandard package"):
+        kv.Writer(io.BytesIO(), codec=kv.CODEC_ZSTD)
+    with pytest.raises(kv.FormatError, match="unsupported_codec: zstd needs the zstandard"):
+        read_all(header(codec=1) + footer(0, 0))
+
+
+def test_checksum_checked_before_decompression():
+    bad = bytearray(block(1, b"not zstd"))
+    bad[-1] ^= 1
+    with pytest.raises(kv.FormatError) as err:
+        read_all(header(codec=1) + bytes(bad) + footer(1, 1))
+    assert err.value.kind == "checksum_mismatch"
 
 
 def test_checksum_checked_before_record_count():

@@ -9,8 +9,14 @@ go/internal/formats/kv. Both are tested against testdata/format/.
     with open(path, "rb") as f:
         for key, value in kv.read(f):
             ...
+
+Blocks can be compressed with CODEC_ZSTD or CODEC_SNAPPY (Writer's `codec`
+argument; readers detect the codec from the header). These need the optional
+`zstandard` and `python-snappy` packages (the `compression` extra), which are
+imported only when a file uses them.
 """
 
+import importlib
 import struct
 from collections.abc import Iterator
 from typing import BinaryIO
@@ -20,7 +26,14 @@ MAX_BLOCK_SIZE = 64 * 1024 * 1024
 
 _MAGIC = b"MRKV"
 _VERSION = 1
-_CODEC_NONE = 0
+CODEC_NONE = 0
+CODEC_ZSTD = 1
+CODEC_SNAPPY = 2
+# codec -> (module to import, pip package, name used in messages)
+_COMPRESSORS = {
+    CODEC_ZSTD: ("zstandard", "zstandard", "zstd"),
+    CODEC_SNAPPY: ("snappy", "python-snappy", "snappy"),
+}
 _U32 = struct.Struct("<I")
 _BLOCK = struct.Struct("<III")  # stored_len, record_count, checksum
 _TOTALS = struct.Struct("<QQ")  # total_records, block_count
@@ -55,6 +68,18 @@ def crc32c(data: bytes) -> int:
     return crc ^ 0xFFFFFFFF
 
 
+def _load(codec: int):
+    """Returns the module that implements a compressed codec.
+
+    Raises ImportError, with a message naming the package, if it is missing.
+    """
+    module, package, name = _COMPRESSORS[codec]
+    try:
+        return importlib.import_module(module)
+    except ImportError:
+        raise ImportError(f"{name} needs the {package} package") from None
+
+
 def _uvarint(n: int) -> bytes:
     out = bytearray()
     while n >= 0x80:
@@ -70,15 +95,31 @@ class Writer:
     Used as a context manager, the footer is written on a clean exit and
     omitted if an exception escapes, so a half-written file reads as
     truncated. Neither close() nor the context manager closes the file.
+
+    `block_target` applies to the uncompressed payload. With a compressed
+    `codec`, each block is compressed on its own. Raises ValueError for an
+    unknown codec or a missing compression package.
     """
 
-    def __init__(self, f: BinaryIO, *, block_target: int = BLOCK_TARGET):
+    def __init__(self, f: BinaryIO, *, block_target: int = BLOCK_TARGET, codec: int = CODEC_NONE):
+        if codec != CODEC_NONE and codec not in _COMPRESSORS:
+            raise ValueError(f"unknown codec {codec}")
+        self._codec = codec
+        self._compress = None
+        if codec != CODEC_NONE:
+            try:
+                module = _load(codec)
+            except ImportError as err:
+                raise ValueError(str(err)) from None
+            self._compress = (
+                module.ZstdCompressor().compress if codec == CODEC_ZSTD else module.compress
+            )
         self._f = f
         self._target = block_target
         self._payload = bytearray()
         self._count = self._records = self._blocks = 0
         self._closed = False
-        _write_all(f, _MAGIC + bytes([_VERSION, _CODEC_NONE, 0, 0]))
+        _write_all(f, _MAGIC + bytes([_VERSION, codec, 0, 0]))
 
     def write(self, key: bytes, value: bytes) -> None:
         if self._closed:
@@ -105,6 +146,10 @@ class Writer:
 
     def _flush(self) -> None:
         payload = bytes(self._payload)
+        if self._compress:
+            payload = self._compress(payload)
+            if len(payload) > MAX_BLOCK_SIZE:
+                raise ValueError(f"compressed block of {len(payload)} bytes exceeds MAX_BLOCK_SIZE")
         _write_all(self._f, _BLOCK.pack(len(payload), self._count, crc32c(payload)) + payload)
         self._records += self._count
         self._blocks += 1
@@ -133,10 +178,17 @@ def read(f: BinaryIO) -> Iterator[tuple[bytes, bytes]]:
     header = _MAGIC + _read_exact(f, 4)
     if header[4] != _VERSION:
         raise FormatError("unsupported_version", str(header[4]))
-    if header[5] != _CODEC_NONE:
-        raise FormatError("unsupported_codec", str(header[5]))
+    codec = header[5]
+    if codec != CODEC_NONE and codec not in _COMPRESSORS:
+        raise FormatError("unsupported_codec", str(codec))
     if header[6:] != b"\x00\x00":
         raise FormatError("bad_header", "reserved bytes not zero")
+    module = None
+    if codec != CODEC_NONE:
+        try:
+            module = _load(codec)
+        except ImportError as err:
+            raise FormatError("unsupported_codec", str(err)) from None
 
     records = blocks = 0
     while size := _U32.unpack(_read_exact(f, 4))[0]:
@@ -148,6 +200,8 @@ def read(f: BinaryIO) -> Iterator[tuple[bytes, bytes]]:
             raise FormatError("checksum_mismatch", f"block {blocks}")
         if count == 0:
             raise FormatError("bad_block", f"block {blocks} has record_count 0")
+        if module:
+            payload = _decompress(codec, module, payload, blocks)
         yield from _records(payload, count, blocks)
         records += count
         blocks += 1
@@ -159,6 +213,35 @@ def read(f: BinaryIO) -> Iterator[tuple[bytes, bytes]]:
         raise FormatError("count_mismatch", f"read {records} records in {blocks} blocks")
     if f.read(1):
         raise FormatError("trailing_data")
+
+
+def _decompress(codec: int, module, payload: bytes, block: int) -> bytes:
+    """Decompresses a block whose checksum has been verified.
+
+    Any failure, or a declared size over MAX_BLOCK_SIZE, is a bad_block.
+    The declared size is checked before anything is allocated for it.
+    """
+    decode_error = module.ZstdError if codec == CODEC_ZSTD else module.UncompressError
+    try:
+        if codec == CODEC_ZSTD:
+            size = module.frame_content_size(payload)  # -1 if the frame omits it
+            if not 0 <= size <= MAX_BLOCK_SIZE:
+                raise FormatError("bad_block", f"block {block} declares {size} bytes")
+            return module.ZstdDecompressor().decompress(payload, allow_extra_data=False)
+        # Snappy's block starts with the decoded length as a uvarint.
+        size = shift = 0
+        for byte in payload[:10]:
+            size |= (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        else:
+            raise FormatError("bad_block", f"block {block}: bad snappy length prefix")
+        if size > MAX_BLOCK_SIZE:
+            raise FormatError("bad_block", f"block {block} declares {size} bytes")
+        return module.decompress(payload)
+    except decode_error as err:
+        raise FormatError("bad_block", f"block {block}: {err}") from None
 
 
 def _records(payload: bytes, count: int, block: int) -> Iterator[tuple[bytes, bytes]]:

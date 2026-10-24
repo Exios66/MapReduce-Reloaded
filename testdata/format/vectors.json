@@ -261,5 +261,253 @@
   "trailing_data": {
     "file": "trailing_data.mrkv",
     "error": "trailing_data"
+  },
+  "zstd_records": {
+    "file": "zstd_records.mrkv",
+    "codec": 1,
+    "records": [
+      [
+        "a2V5LTAwMA==",
+        "dmFsdWUtMA=="
+      ],
+      [
+        "a2V5LTAwMQ==",
+        "dmFsdWUtMQ=="
+      ],
+      [
+        "a2V5LTAwMg==",
+        "dmFsdWUtMg=="
+      ],
+      [
+        "a2V5LTAwMw==",
+        "dmFsdWUtMw=="
+      ],
+      [
+        "a2V5LTAwNA==",
+        "dmFsdWUtNA=="
+      ],
+      [
+        "a2V5LTAwNQ==",
+        "dmFsdWUtNQ=="
+      ],
+      [
+        "a2V5LTAwNg==",
+        "dmFsdWUtNg=="
+      ],
+      [
+        "a2V5LTAwNw==",
+        "dmFsdWUtNw=="
+      ],
+      [
+        "a2V5LTAwOA==",
+        "dmFsdWUtOA=="
+      ],
+      [
+        "a2V5LTAwOQ==",
+        "dmFsdWUtOQ=="
+      ],
+      [
+        "a2V5LTAxMA==",
+        "dmFsdWUtMTA="
+      ],
+      [
+        "a2V5LTAxMQ==",
+        "dmFsdWUtMTE="
+      ],
+      [
+        "a2V5LTAxMg==",
+        "dmFsdWUtMTI="
+      ],
+      [
+        "a2V5LTAxMw==",
+        "dmFsdWUtMTM="
+      ],
+      [
+        "a2V5LTAxNA==",
+        "dmFsdWUtMTQ="
+      ],
+      [
+        "a2V5LTAxNQ==",
+        "dmFsdWUtMTU="
+      ],
+      [
+        "a2V5LTAxNg==",
+        "dmFsdWUtMTY="
+      ],
+      [
+        "a2V5LTAxNw==",
+        "dmFsdWUtMTc="
+      ],
+      [
+        "a2V5LTAxOA==",
+        "dmFsdWUtMTg="
+      ],
+      [
+        "a2V5LTAxOQ==",
+        "dmFsdWUtMTk="
+      ],
+      [
+        "a2V5LTAyMA==",
+        "dmFsdWUtMjA="
+      ],
+      [
+        "a2V5LTAyMQ==",
+        "dmFsdWUtMjE="
+      ],
+      [
+        "a2V5LTAyMg==",
+        "dmFsdWUtMjI="
+      ],
+      [
+        "a2V5LTAyMw==",
+        "dmFsdWUtMjM="
+      ],
+      [
+        "a2V5LTAyNA==",
+        "dmFsdWUtMjQ="
+      ],
+      [
+        "a2V5LTAyNQ==",
+        "dmFsdWUtMjU="
+      ],
+      [
+        "a2V5LTAyNg==",
+        "dmFsdWUtMjY="
+      ],
+      [
+        "a2V5LTAyNw==",
+        "dmFsdWUtMjc="
+      ],
+      [
+        "a2V5LTAyOA==",
+        "dmFsdWUtMjg="
+      ],
+      [
+        "a2V5LTAyOQ==",
+        "dmFsdWUtMjk="
+      ],
+      [
+        "a2V5LTAzMA==",
+        "dmFsdWUtMzA="
+      ],
+      [
+        "a2V5LTAzMQ==",
+        "dmFsdWUtMzE="
+      ],
+      [
+        "a2V5LTAzMg==",
+        "dmFsdWUtMzI="
+      ],
+      [
+        "a2V5LTAzMw==",
+        "dmFsdWUtMzM="
+      ],
+      [
+        "a2V5LTAzNA==",
+        "dmFsdWUtMzQ="
+      ],
+      [
+        "a2V5LTAzNQ==",
+        "dmFsdWUtMzU="
+      ],
+      [
+        "a2V5LTAzNg==",
+        "dmFsdWUtMzY="
+      ],
+      [
+        "a2V5LTAzNw==",
+        "dmFsdWUtMzc="
+      ],
+      [
+        "a2V5LTAzOA==",
+        "dmFsdWUtMzg="
+      ],
+      [
+        "a2V5LTAzOQ==",
+        "dmFsdWUtMzk="
+      ],
+      [
+        "a2V5LTA0MA==",
+        "dmFsdWUtNDA="
+      ],
+      [
+        "a2V5LTA0MQ==",
+        "dmFsdWUtNDE="
+      ],
+      [
+        "a2V5LTA0Mg==",
+        "dmFsdWUtNDI="
+      ],
+      [
+        "a2V5LTA0Mw==",
+        "dmFsdWUtNDM="
+      ],
+      [
+        "a2V5LTA0NA==",
+        "dmFsdWUtNDQ="
+      ],
+      [
+        "a2V5LTA0NQ==",
+        "dmFsdWUtNDU="
+      ],
+      [
+        "a2V5LTA0Ng==",
+        "dmFsdWUtNDY="
+      ],
+      [
+        "a2V5LTA0Nw==",
+        "dmFsdWUtNDc="
+      ],
+      [
+        "a2V5LTA0OA==",
+        "dmFsdWUtNDg="
+      ],
+      [
+        "a2V5LTA0OQ==",
+        "dmFsdWUtNDk="
+      ]
+    ]
+  },
+  "snappy_records": {
+    "file": "snappy_records.mrkv",
+    "codec": 2,
+    "records": [
+      [
+        "",
+        "ZW1wdHkga2V5"
+      ],
+      [
+        "AAE=",
+        ""
+      ],
+      [
+        "5pel5pys",
+        "//4="
+      ],
+      [
+        "enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6eno=",
+        "a2V5IGxvbmdlciB0aGFuIHRoZSBibG9jayB0YXJnZXQ="
+      ]
+    ]
+  },
+  "zstd_bad_payload": {
+    "file": "zstd_bad_payload.mrkv",
+    "error": "bad_block"
+  },
+  "zstd_two_frames": {
+    "file": "zstd_two_frames.mrkv",
+    "error": "bad_block"
+  },
+  "zstd_no_content_size": {
+    "file": "zstd_no_content_size.mrkv",
+    "error": "bad_block"
+  },
+  "snappy_too_large": {
+    "file": "snappy_too_large.mrkv",
+    "error": "bad_block"
+  },
+  "unknown_codec": {
+    "file": "unknown_codec.mrkv",
+    "error": "unsupported_codec"
   }
 }

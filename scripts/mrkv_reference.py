@@ -4,7 +4,8 @@ This is a deliberately small, literal transcription of the spec. It exists to
 generate and check the golden vectors in testdata/format/. The production
 readers and writers (issue #8) are written separately and tested against the
 same vectors, so a misreading of the spec in one place cannot hide in the
-other. Only codec 0 (no compression) is supported.
+other. Codecs 0 (none), 1 (zstd) and 2 (snappy) are supported; the last two
+import their packages (zstandard, python-snappy) only when used.
 """
 
 import struct
@@ -12,6 +13,8 @@ import struct
 MAGIC = b"MRKV"
 VERSION = 1
 CODEC_NONE = 0
+CODEC_ZSTD = 1
+CODEC_SNAPPY = 2
 DEFAULT_BLOCK_TARGET = 64 * 1024
 MAX_BLOCK_SIZE = 64 * 1024 * 1024
 
@@ -79,8 +82,53 @@ def _read_uvarint(buf, pos):
     raise MRKVError("bad_block", "varint longer than 10 bytes")
 
 
-def encode(records, block_target=DEFAULT_BLOCK_TARGET):
-    """Returns an uncompressed MRKV file as bytes from (key, value) byte pairs.
+def _compress(codec, payload):
+    """Compresses one block payload: a single zstd frame or a raw Snappy block."""
+    if codec == CODEC_ZSTD:
+        import zstandard
+
+        return zstandard.ZstdCompressor().compress(payload)  # records content size
+    import snappy
+
+    return snappy.compress(payload)
+
+
+def _decompress(codec, payload):
+    """Returns the decompressed payload, or raises MRKVError 'bad_block'.
+
+    The size declared by the zstd frame header or the Snappy length prefix is
+    checked against MAX_BLOCK_SIZE before decompressing. A zstd payload must
+    be exactly one frame that records its content size.
+    """
+    if codec == CODEC_ZSTD:
+        import zstandard
+
+        try:
+            declared = zstandard.frame_content_size(payload)  # -1 if not recorded
+            if declared < 0 or declared > MAX_BLOCK_SIZE:
+                raise MRKVError("bad_block", f"zstd frame declares {declared} bytes")
+            # The payload must be exactly one frame.
+            return zstandard.ZstdDecompressor().decompress(payload, allow_extra_data=False)
+        except zstandard.ZstdError as err:
+            raise MRKVError("bad_block", f"zstd: {err}") from None
+    import snappy
+
+    declared, _ = _read_uvarint(payload, 0)
+    if declared > MAX_BLOCK_SIZE:
+        raise MRKVError("bad_block", f"snappy block declares {declared} bytes")
+    try:
+        return snappy.decompress(payload)
+    except snappy.UncompressError as err:
+        raise MRKVError("bad_block", f"snappy: {err}") from None
+
+
+def encode(records, block_target=DEFAULT_BLOCK_TARGET, codec=CODEC_NONE):
+    """Returns an MRKV file as bytes from (key, value) byte pairs.
+
+    codec is CODEC_NONE, CODEC_ZSTD or CODEC_SNAPPY; anything else raises
+    ValueError. A block closes by the size of its uncompressed payload, and
+    each block is then compressed on its own. Raises ValueError if a
+    compressed payload is over MAX_BLOCK_SIZE.
 
     Preserves input order without sorting. block_target is the payload size
     threshold in bytes, checked after each complete record, so blocks may
@@ -90,7 +138,9 @@ def encode(records, block_target=DEFAULT_BLOCK_TARGET):
     Raises struct.error if a block's payload length or record count exceeds
     the format's unsigned 32-bit fields, or footer totals exceed 64-bit fields.
     """
-    out = bytearray(MAGIC + bytes([VERSION, CODEC_NONE, 0, 0]))
+    if codec not in (CODEC_NONE, CODEC_ZSTD, CODEC_SNAPPY):
+        raise ValueError(f"unknown codec {codec}")
+    out = bytearray(MAGIC + bytes([VERSION, codec, 0, 0]))
     blocks = []
     payload, count = bytearray(), 0
     for key, value in records:
@@ -103,6 +153,10 @@ def encode(records, block_target=DEFAULT_BLOCK_TARGET):
         blocks.append((bytes(payload), count))
 
     for payload, count in blocks:
+        if codec != CODEC_NONE:
+            payload = _compress(codec, payload)
+            if len(payload) > MAX_BLOCK_SIZE:
+                raise ValueError("compressed block exceeds MAX_BLOCK_SIZE")
         out += struct.pack("<III", len(payload), count, crc32c(payload)) + payload
     totals = struct.pack("<QQ", sum(c for _, c in blocks), len(blocks))
     out += struct.pack("<I", 0) + totals + struct.pack("<I", crc32c(totals))
@@ -112,7 +166,7 @@ def encode(records, block_target=DEFAULT_BLOCK_TARGET):
 def decode(data):
     """Decodes MRKV file bytes into a list of (key, value) byte pairs in file order.
 
-    Supports version 1 with no compression and returns only after validating
+    Supports version 1 with codecs 0, 1 and 2 and returns only after validating
     the footer. A valid file with no blocks returns an empty list. Key order
     is not validated.
 
@@ -127,8 +181,9 @@ def decode(data):
         raise MRKVError("truncated", "shorter than header")
     if data[4] != VERSION:
         raise MRKVError("unsupported_version", str(data[4]))
-    if data[5] != CODEC_NONE:
-        raise MRKVError("unsupported_codec", str(data[5]))
+    codec = data[5]
+    if codec not in (CODEC_NONE, CODEC_ZSTD, CODEC_SNAPPY):
+        raise MRKVError("unsupported_codec", str(codec))
     if data[6:8] != b"\x00\x00":
         raise MRKVError("bad_header", "reserved bytes not zero")
 
@@ -149,6 +204,8 @@ def decode(data):
             raise MRKVError("checksum_mismatch", f"block at offset {pos}")
         if count == 0:
             raise MRKVError("bad_block", "record_count is 0")
+        if codec != CODEC_NONE:
+            payload = _decompress(codec, payload)
         p = 0
         for _ in range(count):
             key_len, p = _read_uvarint(payload, p)

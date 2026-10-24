@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"flag"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,6 +17,10 @@ import (
 )
 
 const formatDir = "../../../../testdata/format"
+
+// -update rewrites testdata/format/go/, the compressed vectors as this
+// package writes them, which the Python tests read.
+var update = flag.Bool("update", false, "rewrite testdata/format/go")
 
 // kinds maps the spec's error kinds, as named in vectors.json, to errors.
 var kinds = map[string]error{
@@ -34,6 +40,7 @@ type record struct{ key, value []byte }
 type vector struct {
 	File        string     `json:"file"`
 	BlockTarget int        `json:"block_target"`
+	Codec       Codec      `json:"codec"`
 	Records     [][]string `json:"records"`
 	Error       string     `json:"error"`
 }
@@ -75,10 +82,10 @@ func readAll(r io.Reader) ([]record, error) {
 	return out, kr.Err()
 }
 
-func writeAll(t *testing.T, recs []record, blockTarget int) []byte {
+func writeAll(t *testing.T, recs []record, blockTarget int, c Codec) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	w := NewWriter(&buf)
+	w := NewWriterCodec(&buf, c)
 	w.blockTarget = blockTarget
 	for _, r := range recs {
 		if err := w.Write(r.key, r.value); err != nil {
@@ -118,7 +125,21 @@ func TestGoldenVectors(t *testing.T) {
 			if !equalRecords(got, want) {
 				t.Fatalf("read %d records, want %d (or contents differ)", len(got), len(want))
 			}
-			if out := writeAll(t, want, v.BlockTarget); !bytes.Equal(out, data) {
+			if v.Codec != CodecNone {
+				// Compressed bytes are not canonical, so the writer need
+				// only produce a file that reads back to the same records.
+				out := writeAll(t, want, 64, v.Codec)
+				if got, err := readAll(bytes.NewReader(out)); err != nil || !equalRecords(got, want) {
+					t.Fatalf("rewritten with %s: %d records, %v", v.Codec, len(got), err)
+				}
+				if *update {
+					if err := os.WriteFile(filepath.Join(formatDir, "go", v.File), out, 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return
+			}
+			if out := writeAll(t, want, v.BlockTarget, CodecNone); !bytes.Equal(out, data) {
 				t.Fatalf("writer output differs from %s", v.File)
 			}
 		})
@@ -160,7 +181,7 @@ func TestMalformed(t *testing.T) {
 		{"short header", []byte("MRKV"), ErrTruncated},
 		{"short non-MRKV", []byte("PK\x03\x04\x14"), ErrBadMagic},
 		{"version 2", file(header(2, 0, 0, 0), footer(0, 0)), ErrUnsupportedVersion},
-		{"zstd codec", file(header(1, 1, 0, 0), footer(0, 0)), ErrUnsupportedCodec},
+		{"unknown codec", file(header(1, 3, 0, 0), footer(0, 0)), ErrUnsupportedCodec},
 		{"reserved set", file(header(1, 0, 0, 1), footer(0, 0)), ErrBadHeader},
 		{"no footer", ok, ErrTruncated},
 		{"zero record count", file(ok, block(0, rec), footer(0, 1)), ErrBadBlock},
@@ -196,7 +217,7 @@ func TestCorruptBlockCheckedBeforeCount(t *testing.T) {
 // before a later problem is reported, and that the error is sticky.
 func TestStreamsGoodBlocks(t *testing.T) {
 	recs := []record{{[]byte("a"), []byte("1")}, {[]byte("b"), []byte("2")}}
-	data := writeAll(t, recs, 1) // one record per block
+	data := writeAll(t, recs, 1, CodecNone) // one record per block
 	r := NewReader(bytes.NewReader(data[:len(data)-1]))
 	n := 0
 	for r.Next() {
@@ -220,7 +241,7 @@ func TestReadErrorPassesThrough(t *testing.T) {
 func TestWriterBlocks(t *testing.T) {
 	big := bytes.Repeat([]byte("x"), BlockTarget+1)
 	recs := []record{{[]byte("a"), nil}, {[]byte("big"), big}, {nil, nil}}
-	data := writeAll(t, recs, BlockTarget)
+	data := writeAll(t, recs, BlockTarget, CodecNone)
 	got, err := readAll(bytes.NewReader(data))
 	if err != nil || !equalRecords(got, recs) {
 		t.Fatalf("round trip failed: %v", err)
@@ -268,7 +289,7 @@ func FuzzRoundTrip(f *testing.F) {
 			recs = append(recs, record{data[:n], data[n:min(2*n, len(data))]})
 			data = data[min(2*n+1, len(data)):]
 		}
-		got, err := readAll(bytes.NewReader(writeAll(t, recs, int(target)+1)))
+		got, err := readAll(bytes.NewReader(writeAll(t, recs, int(target)+1, CodecNone)))
 		if err != nil || !equalRecords(got, recs) {
 			t.Fatalf("round trip of %d records failed: %v", len(recs), err)
 		}
@@ -291,9 +312,52 @@ func FuzzReader(f *testing.F) {
 		if err != nil {
 			return
 		}
-		got, err := readAll(bytes.NewReader(writeAll(t, recs, BlockTarget)))
+		got, err := readAll(bytes.NewReader(writeAll(t, recs, BlockTarget, CodecNone)))
 		if err != nil || !equalRecords(got, recs) {
 			t.Fatalf("accepted file does not round-trip: %v", err)
 		}
 	})
+}
+
+func TestCodecs(t *testing.T) {
+	var recs []record
+	for i := range 5000 {
+		recs = append(recs, record{fmt.Appendf(nil, "key-%05d", i), bytes.Repeat([]byte("v"), i%100)})
+	}
+	plain := writeAll(t, recs, BlockTarget, CodecNone)
+	for _, c := range []Codec{CodecZstd, CodecSnappy} {
+		t.Run(c.String(), func(t *testing.T) {
+			for _, in := range [][]record{nil, recs} {
+				data := writeAll(t, in, BlockTarget, c)
+				if data[5] != byte(c) {
+					t.Fatalf("header codec = %d, want %d", data[5], c)
+				}
+				got, err := readAll(iotest.HalfReader(bytes.NewReader(data)))
+				if err != nil || !equalRecords(got, in) {
+					t.Fatalf("read %d of %d records, %v", len(got), len(in), err)
+				}
+			}
+			if data := writeAll(t, recs, BlockTarget, c); len(data) >= len(plain)/2 {
+				t.Errorf("%s file is %d bytes, uncompressed %d", c, len(data), len(plain))
+			}
+		})
+	}
+}
+
+func TestCodecLimits(t *testing.T) {
+	if err := NewWriterCodec(io.Discard, 3).Write(nil, nil); !errors.Is(err, ErrUnsupportedCodec) {
+		t.Errorf("Write with codec 3 = %v, want unsupported_codec", err)
+	}
+	if c, err := ParseCodec("snappy"); c != CodecSnappy || err != nil {
+		t.Errorf("ParseCodec(snappy) = %v, %v", c, err)
+	}
+	if _, err := ParseCodec("gzip"); !errors.Is(err, ErrUnsupportedCodec) {
+		t.Errorf("ParseCodec(gzip) = %v, want unsupported_codec", err)
+	}
+	// A small frame that decompresses past the limit is refused.
+	big := zstdEncoder().EncodeAll(make([]byte, MaxBlockSize+1), nil)
+	data := file(header(1, byte(CodecZstd), 0, 0), block(1, big), footer(1, 1))
+	if _, err := readAll(bytes.NewReader(data)); !errors.Is(err, ErrBadBlock) {
+		t.Errorf("oversized zstd block: error = %v, want bad_block", err)
+	}
 }

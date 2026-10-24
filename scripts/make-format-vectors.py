@@ -11,6 +11,7 @@ import struct
 from pathlib import Path
 
 import mrkv_reference as mrkv
+import zstandard
 
 OUT = Path(__file__).resolve().parent.parent / "testdata" / "format"
 
@@ -33,6 +34,9 @@ BINARY = [
 SMALL_TARGET = 64
 BLOCK_TARGETS = {"many_records": SMALL_TARGET, "binary_keys": SMALL_TARGET}
 
+# Compressed files are not byte-reproducible, so these have no block target.
+CODECS = {"zstd_records": mrkv.CODEC_ZSTD, "snappy_records": mrkv.CODEC_SNAPPY}
+
 one_bytes = mrkv.encode(ONE)
 many_bytes = mrkv.encode(MANY, block_target=SMALL_TARGET)
 
@@ -44,6 +48,29 @@ second = 8 + 12 + first_block_len
 second_len = struct.unpack_from("<I", many_bytes, second)[0]
 missing_block = many_bytes[:second] + many_bytes[second + 12 + second_len :]
 
+
+def raw_file(codec, payload, count=1):
+    """A one-block file with the given stored payload and a valid checksum and footer."""
+    totals = struct.pack("<QQ", count, 1)
+    return (
+        b"MRKV"
+        + bytes([1, codec, 0, 0])
+        + struct.pack("<III", len(payload), count, mrkv.crc32c(payload))
+        + payload
+        + struct.pack("<I", 0)
+        + totals
+        + struct.pack("<I", mrkv.crc32c(totals))
+    )
+
+
+# zstd payloads that are not exactly one frame with its content size.
+hello = b"\x05hello\x011"  # the record ("hello", "1")
+two_frames = zstandard.ZstdCompressor().compress(hello) * 2
+no_size = zstandard.ZstdCompressor(write_content_size=False).compress(hello)
+
+# A snappy block that declares 64 MiB + 1 decoded bytes.
+too_large = mrkv._uvarint(mrkv.MAX_BLOCK_SIZE + 1) + b"junk"
+
 VECTORS = {
     "empty": (mrkv.encode([]), []),
     "one_record": (one_bytes, ONE),
@@ -54,6 +81,19 @@ VECTORS = {
     "missing_block": (missing_block, "count_mismatch"),
     "bad_magic": (b"MRKX" + one_bytes[4:], "bad_magic"),
     "trailing_data": (one_bytes + b"\x00", "trailing_data"),
+    "zstd_records": (
+        mrkv.encode(MANY, block_target=SMALL_TARGET, codec=mrkv.CODEC_ZSTD),
+        MANY,
+    ),
+    "snappy_records": (
+        mrkv.encode(BINARY, block_target=SMALL_TARGET, codec=mrkv.CODEC_SNAPPY),
+        BINARY,
+    ),
+    "zstd_bad_payload": (raw_file(mrkv.CODEC_ZSTD, b"not zstd"), "bad_block"),
+    "zstd_two_frames": (raw_file(mrkv.CODEC_ZSTD, two_frames, count=2), "bad_block"),
+    "zstd_no_content_size": (raw_file(mrkv.CODEC_ZSTD, no_size), "bad_block"),
+    "snappy_too_large": (raw_file(mrkv.CODEC_SNAPPY, too_large), "bad_block"),
+    "unknown_codec": (one_bytes[:5] + b"\x03" + one_bytes[6:], "unsupported_codec"),
 }
 
 manifest = {}
@@ -63,8 +103,11 @@ for name, (data, expected) in VECTORS.items():
     if isinstance(expected, str):
         entry["error"] = expected
     else:
-        # Writers given this block target must reproduce the file exactly.
-        entry["block_target"] = BLOCK_TARGETS.get(name, mrkv.DEFAULT_BLOCK_TARGET)
+        if name in CODECS:
+            entry["codec"] = CODECS[name]
+        else:
+            # Writers given this block target must reproduce the file exactly.
+            entry["block_target"] = BLOCK_TARGETS.get(name, mrkv.DEFAULT_BLOCK_TARGET)
         entry["records"] = [[b64(k), b64(v)] for k, v in expected]
     manifest[name] = entry
 

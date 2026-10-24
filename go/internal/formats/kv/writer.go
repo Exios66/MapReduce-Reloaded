@@ -3,6 +3,7 @@ package kv
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -19,6 +20,8 @@ type Writer struct {
 	records     uint64
 	blocks      uint64
 	blockTarget int // BlockTarget; tests lower it to reproduce the golden files
+	codec       Codec
+	out         []byte // block header followed by the compressed payload
 	started     bool
 	err         error
 }
@@ -26,8 +29,18 @@ type Writer struct {
 var errClosed = errors.New("mrkv: write after Close")
 
 // NewWriter returns a Writer that writes an uncompressed MRKV file to w.
-func NewWriter(w io.Writer) *Writer {
-	return &Writer{w: w, buf: make([]byte, blockHdrSize, blockHdrSize+BlockTarget), blockTarget: BlockTarget}
+func NewWriter(w io.Writer) *Writer { return NewWriterCodec(w, CodecNone) }
+
+// NewWriterCodec returns a Writer that compresses each block with c.
+func NewWriterCodec(w io.Writer, c Codec) *Writer {
+	wr := &Writer{w: w, buf: make([]byte, blockHdrSize, blockHdrSize+BlockTarget), blockTarget: BlockTarget, codec: c}
+	switch {
+	case !c.valid():
+		wr.err = fmt.Errorf("%w: %d", ErrUnsupportedCodec, c)
+	case c != CodecNone:
+		wr.out = make([]byte, blockHdrSize)
+	}
+	return wr
 }
 
 // Write appends one record. Keys and values may be empty.
@@ -76,12 +89,21 @@ func (w *Writer) Close() error {
 
 // flush writes the buffered block and resets the buffer.
 func (w *Writer) flush() {
-	payload := w.buf[blockHdrSize:]
-	binary.LittleEndian.PutUint32(w.buf[0:], uint32(len(payload)))
-	binary.LittleEndian.PutUint32(w.buf[4:], w.count)
-	binary.LittleEndian.PutUint32(w.buf[8:], checksum(payload))
+	block := w.buf
+	if w.codec != CodecNone {
+		w.out = compress(w.codec, w.out[:blockHdrSize], w.buf[blockHdrSize:])
+		block = w.out
+	}
+	payload := block[blockHdrSize:]
+	if len(payload) > MaxBlockSize {
+		w.err = fmt.Errorf("%w: block %d compresses to %d bytes", ErrRecordTooLarge, w.blocks, len(payload))
+		return
+	}
+	binary.LittleEndian.PutUint32(block[0:], uint32(len(payload)))
+	binary.LittleEndian.PutUint32(block[4:], w.count)
+	binary.LittleEndian.PutUint32(block[8:], checksum(payload))
 	w.start()
-	w.write(w.buf)
+	w.write(block)
 	w.records += uint64(w.count)
 	w.blocks++
 	w.buf, w.count = w.buf[:blockHdrSize], 0
@@ -91,7 +113,7 @@ func (w *Writer) flush() {
 func (w *Writer) start() {
 	if !w.started {
 		w.started = true
-		w.write(append([]byte(magic), version, codecNone, 0, 0))
+		w.write(append([]byte(magic), version, byte(w.codec), 0, 0))
 	}
 }
 

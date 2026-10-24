@@ -38,8 +38,10 @@ the format of the *messages*, this is the format of the *saved data*.
   `checksum_mismatch` instead of passing on wrong data.
 - **One checksum per block** means a reader can check and use a block
   without holding the whole file in memory.
-- **Blocks are also where compression will go** (#42), and a natural place
-  to resume an interrupted download.
+- **Blocks are also the unit of compression** (#42): each block's records
+  are compressed on their own, with zstd or Snappy, so a reader still needs
+  only one block in memory. Blocks are also a natural place to resume an
+  interrupted download.
 - **The footer** catches the two failures checksums can't:
   - a file that was cut short (no footer);
   - a block that went missing (the counts don't add up).

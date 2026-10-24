@@ -2,7 +2,8 @@
 
 MRKV ("MapReduce key/value") is the on-disk format for intermediate data (map
 output, sorted runs) and for key/value job output. Go and Python must read and
-write it byte-for-byte identically. Golden test files are in
+write it byte-for-byte identically when it is uncompressed; compressed files
+must read back to the same records (see [Codecs](#codecs)). Golden test files are in
 [`testdata/format/`](../testdata/format/). The design rationale is in
 [ADR 0004](design/0004-intermediate-file-format.md).
 
@@ -88,11 +89,31 @@ No bytes may follow the footer.
 
 | ID | Codec | Status |
 |---|---|---|
-| 0 | none | Version 1 |
-| 1 | zstd (one frame per block) | Reserved, issue #42 |
-| 2 | snappy (block format) | Reserved, issue #42 |
+| 0 | none | The payload is the records as they are |
+| 1 | zstd | The payload is one zstd frame ([RFC 8878](https://www.rfc-editor.org/rfc/rfc8878)) |
+| 2 | snappy | The payload is in Snappy's block format, without the framing format |
 
-Readers reject codec IDs they don't support.
+Rules:
+- One codec applies to every block in the file.
+- The block rules above apply to the decompressed payload: a block closes
+  once 64 KiB of records are in it, and holds at most 64 MiB of them.
+  `stored_len` is the compressed size, and is also at most 64 MiB.
+- The checksum covers the stored bytes and is verified before the payload
+  is decompressed.
+- A payload that does not decompress, or decompresses to more than 64 MiB,
+  is `bad_block`. Readers check the size that a zstd frame header or a
+  Snappy length prefix declares before allocating for it.
+- A zstd payload is exactly one frame, with no dictionary, that records its
+  content size in its header. A payload with no content size, or with bytes
+  after the frame, is `bad_block`.
+- Compressed bytes are not canonical: two encoders, or two levels of one,
+  produce different bytes for the same records. Writers need only produce
+  files that any reader decodes to the records written. The golden vectors
+  for codecs 1 and 2 are therefore checked by reading them, not by writing
+  them again; [`testdata/format/go/`](../testdata/format/go/) holds the
+  same records as the Go writer compresses them, which Python must read.
+
+Readers reject codec IDs they don't support as `unsupported_codec`.
 
 ## Ordering
 
@@ -150,7 +171,7 @@ feature F14).
 | `unsupported_codec` | `codec` is unknown or not supported |
 | `bad_header` | `reserved` is not zero |
 | `checksum_mismatch` | A block's or the footer's CRC does not match |
-| `bad_block` | Records don't exactly fill the payload, or `record_count` is 0 |
+| `bad_block` | Records don't exactly fill the payload, `record_count` is 0, or the payload does not decompress to at most 64 MiB |
 | `truncated` | The file ends before a complete footer |
 | `count_mismatch` | The footer's totals differ from the blocks actually read |
 | `trailing_data` | Bytes follow the footer |
