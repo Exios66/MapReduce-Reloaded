@@ -72,12 +72,15 @@ type job struct {
 	splitSize       uint64
 	r               uint32
 	params          params
+	// Codec and format names, checked when the job is validated.
+	intermediateCodec, outputFormat, outputCodec string
 }
 
 // jobFlags are the flags that describe a job.
 type jobFlags struct {
-	m, r   *uint
-	params params
+	m, r                                         *uint
+	params                                       params
+	intermediateCodec, outputFormat, outputCodec *string
 }
 
 // addJobFlags defines the job flags on fs; defaultR is the default of -r.
@@ -86,6 +89,10 @@ func addJobFlags(fs *flag.FlagSet, defaultR uint) jobFlags {
 		m:      fs.Uint("m", 0, "approximate number of map tasks (default: one per 64 MiB of input)"),
 		r:      fs.Uint("r", defaultR, "number of reduce tasks"),
 		params: params{},
+
+		intermediateCodec: fs.String("intermediate-codec", "none", "compression for map output: none, zstd or snappy"),
+		outputFormat:      fs.String("output-format", "text", "output format: text or kv"),
+		outputCodec:       fs.String("output-codec", "none", "compression for kv output: none, zstd or snappy"),
 	}
 	fs.Var(f.params, "param", "a `name=value` parameter for the program; may be repeated")
 	return f
@@ -116,7 +123,10 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	if *f.m > math.MaxInt {
 		return job{}, fmt.Errorf("-m %d is too large", *f.m)
 	}
-	j := job{program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r), params: f.params}
+	j := job{
+		program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r), params: f.params,
+		intermediateCodec: *f.intermediateCodec, outputFormat: *f.outputFormat, outputCodec: *f.outputCodec,
+	}
 	if *f.m > 0 {
 		var err error
 		if j.splitSize, err = split.SizeFor(context.Background(), j.inputs, int(*f.m)); err != nil {
@@ -158,6 +168,7 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 	defer func() { err = errors.Join(err, os.RemoveAll(work)) }()
 	counts, err := local.Run(api.JobSpec{
 		Program: program, Inputs: j.inputs, Output: j.output, SplitSize: j.splitSize, R: j.r, Params: j.params,
+		OutputFormat: j.outputFormat, IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
 	}, work)
 	if err != nil {
 		return err
@@ -180,7 +191,10 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	}
 	// Send absolute URIs, so the coordinator and workers resolve them the
 	// same way whatever their working directory.
-	spec := &pb.JobSpec{Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true, Params: j.params}
+	spec := &pb.JobSpec{
+		Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true, Params: j.params,
+		OutputFormat: j.outputFormat, IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
+	}
 	if *maxSkipped >= 0 {
 		spec.MaxSkippedRecords = proto.Uint64(uint64(*maxSkipped))
 	}

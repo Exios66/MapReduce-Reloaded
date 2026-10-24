@@ -86,6 +86,35 @@ func TestValueOrderIndependentOfM(t *testing.T) {
 	}
 }
 
+// A codec changes only the bytes in between: the output is the same, and
+// compression shrinks the map output.
+func TestCodecs(t *testing.T) {
+	splitSize, err := split.SizeFor(t.Context(), corpusInputs, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plain int64
+	for _, codec := range []string{"none", "zstd", "snappy"} {
+		out := t.TempDir()
+		spec := api.JobSpec{
+			Program: wordcount.Program, Inputs: corpusInputs, Output: out, SplitSize: splitSize, R: 4,
+			IntermediateCodec: codec,
+		}
+		counts, err := Run(spec, t.TempDir())
+		if err != nil {
+			t.Fatalf("%s: %v", codec, err)
+		}
+		assertSameFiles(t, filepath.Join(corpus, "expected"), out)
+		size := counts[task.MapOutputBytes]
+		t.Logf("%s: %d map output bytes", codec, size)
+		if codec == "none" {
+			plain = size
+		} else if size >= plain {
+			t.Errorf("%s: %d map output bytes, want fewer than %d", codec, size, plain)
+		}
+	}
+}
+
 func assertSameFiles(t *testing.T, wantDir, gotDir string) {
 	t.Helper()
 	want, _ := filepath.Glob(filepath.Join(wantDir, "*"))

@@ -555,8 +555,14 @@ type JobSpec struct {
 	// The most bad records the job may skip (§4.6). Once more would be
 	// skipped, the job fails. Unset means no limit, as in the paper.
 	MaxSkippedRecords *uint64 `protobuf:"varint,11,opt,name=max_skipped_records,json=maxSkippedRecords,proto3,oneof" json:"max_skipped_records,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Compression for map output and the sort's spill files: "none", "zstd"
+	// or "snappy" (docs/file-format.md). Empty means "none".
+	IntermediateCodec string `protobuf:"bytes,12,opt,name=intermediate_codec,json=intermediateCodec,proto3" json:"intermediate_codec,omitempty"`
+	// Compression for output files, with the same names. Only the "kv" output
+	// format has blocks to compress.
+	OutputCodec   string `protobuf:"bytes,13,opt,name=output_codec,json=outputCodec,proto3" json:"output_codec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JobSpec) Reset() {
@@ -666,6 +672,20 @@ func (x *JobSpec) GetMaxSkippedRecords() uint64 {
 	return 0
 }
 
+func (x *JobSpec) GetIntermediateCodec() string {
+	if x != nil {
+		return x.IntermediateCodec
+	}
+	return ""
+}
+
+func (x *JobSpec) GetOutputCodec() string {
+	if x != nil {
+		return x.OutputCodec
+	}
+	return ""
+}
+
 // Identity and capabilities of a worker.
 type WorkerInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -768,7 +788,7 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\x06values\x18\x01 \x03(\v2\".mapreduce.v1.Counters.ValuesEntryR\x06values\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xf7\x03\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xc9\x04\n" +
 	"\aJobSpec\x12\x18\n" +
 	"\aprogram\x18\x01 \x01(\tR\aprogram\x12\x16\n" +
 	"\x06inputs\x18\x02 \x03(\tR\x06inputs\x12\x16\n" +
@@ -781,7 +801,9 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\fuse_combiner\x18\t \x01(\bR\vuseCombiner\x129\n" +
 	"\x06params\x18\n" +
 	" \x03(\v2!.mapreduce.v1.JobSpec.ParamsEntryR\x06params\x123\n" +
-	"\x13max_skipped_records\x18\v \x01(\x04H\x00R\x11maxSkippedRecords\x88\x01\x01\x1a9\n" +
+	"\x13max_skipped_records\x18\v \x01(\x04H\x00R\x11maxSkippedRecords\x88\x01\x01\x12-\n" +
+	"\x12intermediate_codec\x18\f \x01(\tR\x11intermediateCodec\x12!\n" +
+	"\foutput_codec\x18\r \x01(\tR\voutputCodec\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x16\n" +

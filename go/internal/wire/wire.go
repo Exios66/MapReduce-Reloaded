@@ -45,14 +45,16 @@ func JobSpec(m *pb.JobSpec) (api.JobSpec, error) {
 		return api.JobSpec{}, err
 	}
 	spec := api.JobSpec{
-		Program:      p,
-		Inputs:       inputs,
-		Output:       output,
-		SplitSize:    m.GetSplitSizeBytes(),
-		R:            m.GetNumReduceTasks(),
-		InputFormat:  m.GetInputFormat(),
-		OutputFormat: m.GetOutputFormat(),
-		Params:       m.GetParams(),
+		Program:           p,
+		Inputs:            inputs,
+		Output:            output,
+		SplitSize:         m.GetSplitSizeBytes(),
+		R:                 m.GetNumReduceTasks(),
+		InputFormat:       m.GetInputFormat(),
+		OutputFormat:      m.GetOutputFormat(),
+		IntermediateCodec: m.GetIntermediateCodec(),
+		OutputCodec:       m.GetOutputCodec(),
+		Params:            m.GetParams(),
 	}
 	return spec, spec.Validate()
 }

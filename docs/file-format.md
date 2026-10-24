@@ -115,6 +115,14 @@ Rules:
 
 Readers reject codec IDs they don't support as `unsupported_codec`.
 
+Each job chooses its codecs (#42), by name: `none`, `zstd` or `snappy`.
+- `JobSpec.intermediate_codec` (`mr -intermediate-codec`) applies to the
+  map output and the external sort's spill files.
+- `JobSpec.output_codec` (`mr -output-codec`) applies to output files, and
+  needs the `kv` output format (`mr -output-format kv`).
+
+Readers need no setting, because each file's header names its codec.
+
 ## Ordering
 
 Intermediate files (map output and sorted runs) store records in ascending

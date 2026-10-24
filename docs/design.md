@@ -37,7 +37,7 @@ The steps follow §3.1 of the paper. Function names are in Go. RPCs belong to
 
 ### 1. Split the input
 
-`mr submit` calls `SubmitJob` (`-m` sets an approximate M through `split.SizeFor`, and `-r` sets R). The coordinator fills in R if it is zero:
+`mr submit` calls `SubmitJob` (`-m` sets an approximate M through `split.SizeFor`, and `-r` sets R; `-intermediate-codec` and `-output-codec` choose compression, as in [the file format](file-format.md#codecs)). The coordinator fills in R if it is zero:
 `split.DefaultR` returns twice the number of registered workers (§3.5). It
 then calls `split.Plan`, which expands the input patterns and cuts each file
 into splits of `split.DefaultSize` (64 MiB) unless the job sets another

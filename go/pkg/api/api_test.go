@@ -82,6 +82,16 @@ func TestValidate(t *testing.T) {
 		Mapper: api.MapFunc(nil), Reducer: api.ReduceFunc(nil),
 		Combiner: api.ReduceFunc(nil), Partitioner: api.PartitionFunc(nil),
 	}
+	codecs := valid
+	codecs.IntermediateCodec, codecs.OutputCodec = "gzip", "zstd"
+	if err := codecs.Validate(); err == nil || !strings.Contains(err.Error(), `intermediate codec: mrkv: unsupported_codec: "gzip"`) ||
+		!strings.Contains(err.Error(), "output codec zstd needs output format kv") {
+		t.Errorf("bad codecs: got %v", err)
+	}
+	codecs.IntermediateCodec, codecs.OutputFormat = "snappy", "kv"
+	if err := codecs.Validate(); err != nil {
+		t.Errorf("valid codecs: %v", err)
+	}
 	err := nilFuncs.Validate()
 	for _, want := range []string{"no Mapper", "no Reducer", "Combiner is a nil function", "Partitioner is a nil function"} {
 		if err == nil || !strings.Contains(err.Error(), want) {

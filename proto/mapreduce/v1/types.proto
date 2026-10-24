@@ -134,6 +134,12 @@ message JobSpec {
   // The most bad records the job may skip (§4.6). Once more would be
   // skipped, the job fails. Unset means no limit, as in the paper.
   optional uint64 max_skipped_records = 11;
+  // Compression for map output and the sort's spill files: "none", "zstd"
+  // or "snappy" (docs/file-format.md). Empty means "none".
+  string intermediate_codec = 12;
+  // Compression for output files, with the same names. Only the "kv" output
+  // format has blocks to compress.
+  string output_codec = 13;
 }
 
 // Identity and capabilities of a worker.

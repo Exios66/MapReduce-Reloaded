@@ -29,8 +29,12 @@ func (c Codec) String() string {
 	return fmt.Sprintf("codec(%d)", uint8(c))
 }
 
-// ParseCodec returns the codec named s: "none", "zstd" or "snappy".
+// ParseCodec returns the codec named s: "none", "zstd" or "snappy". ""
+// means "none".
 func ParseCodec(s string) (Codec, error) {
+	if s == "" {
+		return CodecNone, nil
+	}
 	if i := slices.Index(codecNames, s); i >= 0 {
 		return Codec(i), nil
 	}

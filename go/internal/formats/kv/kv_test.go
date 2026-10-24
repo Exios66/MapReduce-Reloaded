@@ -348,6 +348,9 @@ func TestCodecLimits(t *testing.T) {
 	if err := NewWriterCodec(io.Discard, 3).Write(nil, nil); !errors.Is(err, ErrUnsupportedCodec) {
 		t.Errorf("Write with codec 3 = %v, want unsupported_codec", err)
 	}
+	if c, err := ParseCodec(""); c != CodecNone || err != nil {
+		t.Errorf(`ParseCodec("") = %v, %v`, c, err)
+	}
 	if c, err := ParseCodec("snappy"); c != CodecSnappy || err != nil {
 		t.Errorf("ParseCodec(snappy) = %v, %v", c, err)
 	}

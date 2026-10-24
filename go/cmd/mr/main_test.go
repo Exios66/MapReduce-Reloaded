@@ -152,6 +152,8 @@ func TestErrors(t *testing.T) {
 		{[]string{"submit", "-param", "=v", "wordcount", "out", raven}, "not name=value"},
 		{[]string{"run", "-local", "-r", "4294967296", "wordcount", "out", "in"}, "too large"},
 		{[]string{"run", "-local", "-m", "2", "wordcount", "out", "missing"}, "no input matches"},
+		{[]string{"run", "-local", "-intermediate-codec", "gzip", "wordcount", "out", raven}, `unsupported_codec: "gzip"`},
+		{[]string{"run", "-local", "-output-codec", "zstd", "wordcount", "out", raven}, "needs output format kv"},
 		{[]string{"run", "-bogus"}, "not defined"},
 		{[]string{"submit", "wordcount", "out"}, "usage"},
 		{[]string{"submit", "-bogus"}, "not defined"},
