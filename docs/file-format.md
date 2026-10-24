@@ -106,6 +106,9 @@ Rules:
 - A zstd payload is exactly one frame, with no dictionary, that records its
   content size in its header. A payload with no content size, or with bytes
   after the frame, is `bad_block`.
+- A Snappy payload uses only Snappy's block format. A payload that uses
+  the extensions of S2, a superset of Snappy, such as a copy with offset 0
+  for a repeated offset, is `bad_block`.
 - Compressed bytes are not canonical: two encoders, or two levels of one,
   produce different bytes for the same records. Writers need only produce
   files that any reader decodes to the records written. The golden vectors

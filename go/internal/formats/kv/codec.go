@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"slices"
@@ -110,9 +111,53 @@ func decompress(c Codec, dst, stored []byte) ([]byte, error) {
 		if n > MaxBlockSize {
 			return nil, fmt.Errorf("decodes to %d bytes, limit %d", n, MaxBlockSize)
 		}
-		return s2.Decode(slices.Grow(dst[:0], n), stored)
+		out, err := s2.Decode(slices.Grow(dst[:0], n), stored)
+		if err == nil {
+			err = snappyOnly(stored)
+		}
+		return out, err
 	}
 	return stored, nil
+}
+
+// snappyOnly reports an error if b, a block that s2 decoded, uses S2's
+// extensions to Snappy: a copy with offset 0, which S2 reads as a repeat of
+// the previous offset and Snappy rejects. Other decoders, such as Python's,
+// follow Snappy, so the format allows only what they read.
+func snappyOnly(b []byte) error {
+	_, i := binary.Uvarint(b)
+	for i < len(b) {
+		tag := b[i]
+		switch tag & 3 {
+		case 0: // literal; lengths above 60 bytes follow the tag
+			n, extra := int(tag>>2)+1, int(tag>>2)-59
+			if extra > 0 {
+				n = 1
+				for k := range extra {
+					n += int(b[i+1+k]) << (8 * k)
+				}
+			} else {
+				extra = 0
+			}
+			i += 1 + extra + n
+		case 1:
+			if tag>>5 == 0 && b[i+1] == 0 {
+				return errors.New("copy with offset 0, an S2 repeat, not Snappy")
+			}
+			i += 2
+		case 2:
+			if b[i+1] == 0 && b[i+2] == 0 {
+				return errors.New("copy with offset 0")
+			}
+			i += 3
+		case 3:
+			if b[i+1] == 0 && b[i+2] == 0 && b[i+3] == 0 && b[i+4] == 0 {
+				return errors.New("copy with offset 0")
+			}
+			i += 5
+		}
+	}
+	return nil
 }
 
 // frameLen returns the length of the zstd frame at the start of b, found by
