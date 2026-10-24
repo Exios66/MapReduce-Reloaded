@@ -63,7 +63,7 @@ func (s *Server) replay(rec *pb.LogRecord) error {
 			return fmt.Errorf("coordinator log: %v assigned outside the running job", id)
 		}
 		t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
-		attempt, err := s.active.tasks.Assign(t, r.TaskAssigned.GetWorkerId())
+		attempt, err := s.active.tasks.Assign(t, r.TaskAssigned.GetWorkerId(), at)
 		if err == nil && attempt != id.GetAttempt() {
 			err = fmt.Errorf("replayed as attempt %d", attempt)
 		}

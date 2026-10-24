@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 )
@@ -27,9 +28,14 @@ func outputs(i uint32, r int) []*pb.PartitionLocation {
 	return locs
 }
 
+// clock is when the next attempt that mustAssign starts begins: one second
+// after the last.
+var clock = time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+
 func mustAssign(t *testing.T, tt *TaskTable, id Task, worker string) uint32 {
 	t.Helper()
-	attempt, err := tt.Assign(id, worker)
+	clock = clock.Add(time.Second)
+	attempt, err := tt.Assign(id, worker, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,6 +281,35 @@ func TestBackups(t *testing.T) {
 	tt.ResetWorker("w3")
 	assertState(t, tt, m0, idle)
 	checkCounts(t, tt)
+	if started, won := tt.Backups(); started != 2 || won != 1 {
+		t.Fatalf("Backups() = %d started, %d won; want 2, 1", started, won)
+	}
+}
+
+// The task whose attempt started first, the likeliest straggler, gets the
+// first backup, whatever its index; then the next oldest (§3.6).
+func TestBackupOldestFirst(t *testing.T) {
+	for _, kind := range []pb.TaskKind{mapKind, reduceKind} {
+		tt := NewTaskTable(3, 3)
+		if kind == reduceKind {
+			for i := range uint32(3) {
+				m := Task{mapKind, i}
+				if ok, _ := tt.Complete(m, mustAssign(t, tt, m, "w0"), "w0", outputs(i, 3)); !ok {
+					t.Fatal("map task not completed")
+				}
+			}
+		}
+		for i, w := range []string{"w3", "w1", "w2"} { // task 2 first, then 0, then 1
+			mustAssign(t, tt, Task{kind, uint32((i + 2) % 3)}, w)
+		}
+		for _, want := range []uint32{2, 0, 1} {
+			next, ok := tt.Backup("w4")
+			if !ok || next != (Task{kind, want}) {
+				t.Fatalf("Backup(w4) = %v, %v; want %v", next, ok, Task{kind, want})
+			}
+			mustAssign(t, tt, next, "w4")
+		}
+	}
 }
 
 func TestErrors(t *testing.T) {
@@ -295,11 +330,11 @@ func TestErrors(t *testing.T) {
 		t.Error("Skip of an unknown task succeeded")
 	}
 	a := mustAssign(t, tt, m0, "w1")
-	if _, err := tt.Assign(m0, "w1"); err == nil {
+	if _, err := tt.Assign(m0, "w1", clock); err == nil {
 		t.Error("backed a task up on its own worker")
 	}
 	mustAssign(t, tt, m0, "w2")
-	if _, err := tt.Assign(m0, "w3"); err == nil {
+	if _, err := tt.Assign(m0, "w3", clock); err == nil {
 		t.Error("backed a task up twice")
 	}
 	nowhere := outputs(0, 2)

@@ -149,9 +149,11 @@ hold ends sooner if a worker on a host that holds a split asks first. A
 reply of `wait` carries `retry_after`.
 
 When no task of the current phase is idle and backups are on, the
-coordinator calls `TaskTable.Backup`. It offers an in-progress task that has
-one running attempt, on another worker. The backup is an ordinary attempt
-with the next number, and the log records it as an ordinary assignment.
+coordinator calls `TaskTable.Backup`. It offers the in-progress task whose
+attempt started first, of those with one running attempt on another worker.
+The backup is an ordinary attempt with the next number, and the log records
+it as an ordinary assignment. The job's status counts the backups started
+and the tasks a backup won.
 
 ### Shuffle
 
@@ -274,7 +276,7 @@ no reducer is told about them.
 | Intermediate records in files of undescribed format (§3.1) | MRKV: checksummed blocks of records with a footer, each block optionally compressed with zstd or Snappy (#42). | Go and Python must agree byte for byte (uncompressed) or record for record (compressed), corruption must be detected, and fetches must resume. | [ADR 0004](design/0004-intermediate-file-format.md), [file format](file-format.md), [explainer](explainers/04-file-format.md) |
 | Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](design/0007-write-ahead-log.md), [explainer](explainers/18-coordinator-recovery.md) |
 | Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](design/0003-rpc-contract.md), [explainer](explainers/16-worker-failure.md), [ADR 0009](design/0009-failure-detection.md) |
-| Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](explainers/20-backup-tasks.md), [ADR 0010](design/0010-backup-tasks.md) |
+| Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle, oldest attempt first. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](explainers/20-backup-tasks.md), [ADR 0010](design/0010-backup-tasks.md) |
 | A signal handler sends the bad record's number by UDP (§4.6) | The worker recovers the panic and reports the record in `ReportTask`. The coordinator skips it after two crashes. | Go can recover a panic, and the report already reaches the coordinator. | [explainer](explainers/19-bad-records.md), [ADR 0011](design/0011-bad-records.md) |
 | Master sums counters from task reports and ignores duplicates (§4.9) | Only the accepted attempt's counters are kept. A re-run map replaces its earlier counts. | A task may run more than once, and adding every attempt would over-count. | [explainer](explainers/21-counters.md) |
 | Master serves HTTP status pages (§4.8) | A status page and Prometheus `/metrics` on the coordinator, `/metrics` on workers, JSON logs, and a Grafana dashboard in the Compose monitoring profile. | These are standard tools, and per-attempt logs stay on each worker. | [explainer](explainers/24-status.md), [ADR 0012](design/0012-observability.md) |

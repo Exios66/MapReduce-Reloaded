@@ -298,7 +298,7 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 // and Unavailable for log errors. An error does not roll back the attempt.
 func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskResponse, error) {
 	j := s.active
-	attempt, err := j.tasks.Assign(t, worker)
+	attempt, err := j.tasks.Assign(t, worker, now)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -457,6 +457,7 @@ func (j *job) status() *pb.GetJobStatusResponse {
 	case mapsDone == len(j.splits):
 		state = pb.JobState_JOB_STATE_REDUCING
 	}
+	backups, won := j.tasks.Backups()
 	near := map[pb.Locality]uint32{}
 	for t, l := range j.ran {
 		if st, _ := j.tasks.State(t); st == pb.TaskState_TASK_STATE_COMPLETED {
@@ -476,6 +477,8 @@ func (j *job) status() *pb.GetJobStatusResponse {
 		MapTasksZoneLocal:    near[pb.Locality_LOCALITY_ZONE],
 		SubmittedAt:          timestamp(j.submitted),
 		FinishedAt:           timestamp(j.finished),
+		BackupAttempts:       uint32(backups),
+		BackupWins:           uint32(won),
 	}
 }
 

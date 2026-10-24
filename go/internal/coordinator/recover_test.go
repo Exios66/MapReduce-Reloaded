@@ -154,8 +154,8 @@ func TestRecoverBackup(t *testing.T) {
 	}
 
 	s = recoverServer(t, Config{}, path)
-	if st := jobStatus(t, s, sub.GetJobId()); st.GetMapTasksCompleted() != 1 {
-		t.Fatalf("recovered status %v; want the map done", st)
+	if st := jobStatus(t, s, sub.GetJobId()); st.GetMapTasksCompleted() != 1 || st.GetBackupAttempts() != 1 || st.GetBackupWins() != 1 {
+		t.Fatalf("recovered status %v; want the map done by its one backup", st)
 	}
 	if succeed(t, s, w1, original, outputs(0, 1)) {
 		t.Fatal("accepted the original's completion after the backup's")

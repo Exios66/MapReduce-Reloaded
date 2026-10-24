@@ -172,7 +172,7 @@ class GetJobStatusRequest(_message.Message):
     def __init__(self, job_id: _Optional[str] = ...) -> None: ...
 
 class GetJobStatusResponse(_message.Message):
-    __slots__ = ("job_id", "state", "map_tasks_total", "map_tasks_completed", "reduce_tasks_total", "reduce_tasks_completed", "counters", "error", "map_tasks_host_local", "map_tasks_zone_local", "submitted_at", "finished_at")
+    __slots__ = ("job_id", "state", "map_tasks_total", "map_tasks_completed", "reduce_tasks_total", "reduce_tasks_completed", "counters", "error", "map_tasks_host_local", "map_tasks_zone_local", "submitted_at", "finished_at", "backup_attempts", "backup_wins")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
     STATE_FIELD_NUMBER: _ClassVar[int]
     MAP_TASKS_TOTAL_FIELD_NUMBER: _ClassVar[int]
@@ -185,6 +185,8 @@ class GetJobStatusResponse(_message.Message):
     MAP_TASKS_ZONE_LOCAL_FIELD_NUMBER: _ClassVar[int]
     SUBMITTED_AT_FIELD_NUMBER: _ClassVar[int]
     FINISHED_AT_FIELD_NUMBER: _ClassVar[int]
+    BACKUP_ATTEMPTS_FIELD_NUMBER: _ClassVar[int]
+    BACKUP_WINS_FIELD_NUMBER: _ClassVar[int]
     job_id: str
     state: JobState
     map_tasks_total: int
@@ -197,4 +199,6 @@ class GetJobStatusResponse(_message.Message):
     map_tasks_zone_local: int
     submitted_at: _timestamp_pb2.Timestamp
     finished_at: _timestamp_pb2.Timestamp
-    def __init__(self, job_id: _Optional[str] = ..., state: _Optional[_Union[JobState, str]] = ..., map_tasks_total: _Optional[int] = ..., map_tasks_completed: _Optional[int] = ..., reduce_tasks_total: _Optional[int] = ..., reduce_tasks_completed: _Optional[int] = ..., counters: _Optional[_Union[_types_pb2.Counters, _Mapping]] = ..., error: _Optional[str] = ..., map_tasks_host_local: _Optional[int] = ..., map_tasks_zone_local: _Optional[int] = ..., submitted_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., finished_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+    backup_attempts: int
+    backup_wins: int
+    def __init__(self, job_id: _Optional[str] = ..., state: _Optional[_Union[JobState, str]] = ..., map_tasks_total: _Optional[int] = ..., map_tasks_completed: _Optional[int] = ..., reduce_tasks_total: _Optional[int] = ..., reduce_tasks_completed: _Optional[int] = ..., counters: _Optional[_Union[_types_pb2.Counters, _Mapping]] = ..., error: _Optional[str] = ..., map_tasks_host_local: _Optional[int] = ..., map_tasks_zone_local: _Optional[int] = ..., submitted_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., finished_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., backup_attempts: _Optional[int] = ..., backup_wins: _Optional[int] = ...) -> None: ...

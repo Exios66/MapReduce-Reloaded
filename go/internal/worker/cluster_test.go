@@ -473,7 +473,9 @@ func TestClusterBackupTasks(t *testing.T) {
 			c.addWorker()
 			c.addWorker()
 			<-stuck
-			c.succeeded(job)
+			if st := c.succeeded(job); st.GetBackupWins() < 1 || st.GetBackupAttempts() < st.GetBackupWins() {
+				t.Errorf("status %v; want the stuck task won by a backup", st)
+			}
 			resume <- struct{}{} // the slow attempt fails, too late to matter
 			status := c.wait(job)
 			assertGolden(t, c.output())

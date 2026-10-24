@@ -118,7 +118,7 @@ func TestSubmitAndStatus(t *testing.T) {
 	if err := run([]string{"submit", "-coordinator", addr, "-max-skipped", "0", "-wait", "wordcount", out, raven}, &stdout, new(strings.Builder)); err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`^job-1\tSUCCEEDED\nmap\t1/1\nreduce\t2/2\nseconds\t\d+\.\d{3}\n`).MatchString(stdout.String()) {
+	if !regexp.MustCompile(`^job-1\tSUCCEEDED\nmap\t1/1\nreduce\t2/2\nbackups\t0\nbackups_won\t0\nseconds\t\d+\.\d{3}\n`).MatchString(stdout.String()) {
 		t.Fatalf("submit printed %q", stdout.String())
 	}
 	if parts, _ := filepath.Glob(filepath.Join(out, "part-r-*")); len(parts) != 2 {
