@@ -1,7 +1,9 @@
 package storage_test
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -46,6 +48,9 @@ func TestLocal(t *testing.T) { testBackend(t, filepath.Join(t.TempDir(), "out"))
 func TestS3(t *testing.T) {
 	bucket := s3test.Start(t)
 	testBackend(t, bucket+"/out")
+	if err := MkdirAll(t.Context(), bucket+"/other"); err != nil {
+		t.Fatal(err)
+	}
 	w, err := Create(t.Context(), bucket+"/other/object")
 	if err != nil {
 		t.Fatal(err)
@@ -128,5 +133,14 @@ func testBackend(t *testing.T, dir string) {
 	list(Join(dir, "?"), Join(dir, "a"))
 	if err := DeleteAll(ctx, tmp); err != nil {
 		t.Errorf("DeleteAll of a missing directory = %v", err)
+	}
+	// MkdirAll creates parents, so a file can be created in one.
+	if err := MkdirAll(ctx, Join(dir, "x", "y")); err != nil {
+		t.Fatal(err)
+	}
+	write(Join(dir, "x", "f"), "in a parent")
+	// A late attempt cannot write once its job's directory is gone.
+	if _, err := Create(ctx, Join(tmp, "late")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Create in a deleted directory = %v, want fs.ErrNotExist", err)
 	}
 }

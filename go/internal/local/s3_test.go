@@ -20,6 +20,9 @@ import (
 func TestWordCountS3(t *testing.T) {
 	ctx := t.Context()
 	bucket := s3test.Start(t)
+	if err := storage.MkdirAll(ctx, storage.Join(bucket, "corpus")); err != nil {
+		t.Fatal(err)
+	}
 	files, _ := filepath.Glob(filepath.Join(corpus, "*.txt"))
 	for _, f := range files {
 		b, err := os.ReadFile(f)
