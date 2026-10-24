@@ -6,6 +6,7 @@ syntax = "proto3";
 
 package mapreduce.v1;
 
+import "google/protobuf/timestamp.proto";
 import "mapreduce/v1/coordinator.proto";
 import "mapreduce/v1/types.proto";
 
@@ -20,6 +21,9 @@ message LogRecord {
     WorkerLost worker_lost = 4;
     Restarted restarted = 5;
   }
+  // When the coordinator made the decision. Replay uses it, so a job's
+  // times survive a restart. Logs written before this field have none.
+  google.protobuf.Timestamp at = 6;
 }
 
 // A job was accepted. Its splits are logged, not planned again, since the

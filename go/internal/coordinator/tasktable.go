@@ -8,6 +8,7 @@ package coordinator
 
 import (
 	"fmt"
+	"time"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 )
@@ -23,11 +24,18 @@ func (t Task) String() string { return fmt.Sprintf("%v %d", t.Kind, t.Index) }
 type task struct {
 	state    pb.TaskState
 	attempts uint32                  // attempts started; the next one gets this number
-	running  map[uint32]string       // worker of each running attempt
+	running  map[uint32]run          // each running attempt
 	worker   string                  // worker of the accepted attempt, once completed
 	outputs  []*pb.PartitionLocation // map tasks: one per partition, once completed
 	crashes  map[uint64]int          // attempts that crashed on each record
 	skip     []uint64                // records later attempts skip
+}
+
+// run is a running attempt.
+type run struct {
+	worker  string
+	started time.Time
+	backup  bool // started while another attempt of the task was running (§3.6)
 }
 
 // SkipAfter is how many attempts must crash on a record before later
@@ -50,12 +58,14 @@ const SkipAfter = 2
 //
 // Near the end of a phase, an in-progress task may get one backup attempt
 // on another worker, so that one slow machine does not hold up the job
-// (§3.6).
+// (§3.6). The task that has run longest gets the first backup.
 type TaskTable struct {
 	maps, reduces []task
 	mapsDone      int
 	reducesDone   int
 	skipped       int // records on every task's skip list
+	backups       int // backup attempts started
+	backupWins    int // tasks completed by a backup attempt
 }
 
 // NewTaskTable returns a table of m idle map tasks and r idle reduce tasks.
@@ -63,7 +73,7 @@ func NewTaskTable(m, r int) *TaskTable {
 	t := &TaskTable{maps: make([]task, m), reduces: make([]task, r)}
 	for _, ts := range [][]task{t.maps, t.reduces} {
 		for i := range ts {
-			ts[i] = task{state: pb.TaskState_TASK_STATE_IDLE, running: map[uint32]string{}}
+			ts[i] = task{state: pb.TaskState_TASK_STATE_IDLE, running: map[uint32]run{}}
 		}
 	}
 	return t
@@ -77,19 +87,39 @@ func (t *TaskTable) Next(rank func(index uint32) int) (Task, bool) {
 	return t.find(func(ts *task) bool { return ts.state == pb.TaskState_TASK_STATE_IDLE }, rank)
 }
 
-// Backup returns an in-progress task of the current phase that may get a
-// backup attempt on worker (§3.6). It returns false if there is none.
+// Backup returns the in-progress task of the current phase that may get a
+// backup attempt on worker and whose attempt started first, so the likeliest
+// straggler is backed up first (§3.6). It returns false if there is none.
 func (t *TaskTable) Backup(worker string) (Task, bool) {
-	return t.find(func(ts *task) bool { return ts.canBackUp(worker) }, nil)
+	kind, tasks := t.phase()
+	best := -1
+	for i := range tasks {
+		if tasks[i].canBackUp(worker) && (best < 0 || tasks[i].started().Before(tasks[best].started())) {
+			best = i
+		}
+	}
+	if best < 0 {
+		return Task{}, false
+	}
+	return Task{kind, uint32(best)}, true
+}
+
+// phase returns the kind and tasks of the current phase: map tasks until
+// every one has completed, then reduce tasks (§3.1).
+func (t *TaskTable) phase() (pb.TaskKind, []task) {
+	if t.mapsDone == len(t.maps) {
+		return pb.TaskKind_TASK_KIND_REDUCE, t.reduces
+	}
+	return pb.TaskKind_TASK_KIND_MAP, t.maps
 }
 
 // find returns the task of the current phase that ok accepts and rank, for
 // map tasks, ranks lowest: the first such task if there are ties, or if rank
 // is nil.
 func (t *TaskTable) find(ok func(*task) bool, rank func(uint32) int) (Task, bool) {
-	kind, tasks := pb.TaskKind_TASK_KIND_MAP, t.maps
-	if t.mapsDone == len(t.maps) {
-		kind, tasks, rank = pb.TaskKind_TASK_KIND_REDUCE, t.reduces, nil
+	kind, tasks := t.phase()
+	if kind == pb.TaskKind_TASK_KIND_REDUCE {
+		rank = nil
 	}
 	best, bestRank := -1, 0
 	for i := range tasks {
@@ -109,19 +139,23 @@ func (t *TaskTable) find(ok func(*task) bool, rank func(uint32) int) (Task, bool
 	return Task{kind, uint32(best)}, true
 }
 
-// Assign starts a new attempt on worker of an idle task, or a backup
-// attempt of one running elsewhere, and returns its number.
-func (t *TaskTable) Assign(id Task, worker string) (uint32, error) {
+// Assign starts a new attempt on worker at started, of an idle task, or a
+// backup attempt of one running elsewhere, and returns its number.
+func (t *TaskTable) Assign(id Task, worker string, started time.Time) (uint32, error) {
 	ts, err := t.task(id)
 	if err != nil {
 		return 0, err
 	}
-	if ts.state != pb.TaskState_TASK_STATE_IDLE && !ts.canBackUp(worker) {
+	backup := ts.state != pb.TaskState_TASK_STATE_IDLE
+	if backup && !ts.canBackUp(worker) {
 		return 0, fmt.Errorf("coordinator: assign %v to %s: task is %v on %d workers", id, worker, ts.state, len(ts.running))
+	}
+	if backup {
+		t.backups++
 	}
 	attempt := ts.attempts
 	ts.attempts++
-	ts.running[attempt] = worker
+	ts.running[attempt] = run{worker: worker, started: started, backup: backup}
 	ts.state = pb.TaskState_TASK_STATE_IN_PROGRESS
 	return attempt, nil
 }
@@ -146,6 +180,9 @@ func (t *TaskTable) Complete(id Task, attempt uint32, worker string, outputs []*
 		t.mapsDone++
 	} else {
 		t.reducesDone++
+	}
+	if ts.running[attempt].backup {
+		t.backupWins++
 	}
 	clear(ts.running)
 	ts.state, ts.worker = pb.TaskState_TASK_STATE_COMPLETED, worker
@@ -257,8 +294,8 @@ func (t *TaskTable) Running() map[string][]Task {
 	running := map[string][]Task{}
 	add := func(kind pb.TaskKind, ts []task) {
 		for i := range ts {
-			for _, w := range ts[i].running {
-				running[w] = append(running[w], Task{kind, uint32(i)})
+			for _, r := range ts[i].running {
+				running[r.worker] = append(running[r.worker], Task{kind, uint32(i)})
 			}
 		}
 	}
@@ -278,6 +315,10 @@ func (t *TaskTable) Progress() (maps, reduces int) { return t.mapsDone, t.reduce
 
 // Skipped returns the number of records on every task's skip list.
 func (t *TaskTable) Skipped() int { return t.skipped }
+
+// Backups returns the number of backup attempts started, and of tasks that a
+// backup attempt completed (§3.6).
+func (t *TaskTable) Backups() (started, won int) { return t.backups, t.backupWins }
 
 // Done reports whether every task has completed.
 func (t *TaskTable) Done() bool {
@@ -320,26 +361,37 @@ func (ts *task) canBackUp(worker string) bool {
 	if ts.state != pb.TaskState_TASK_STATE_IN_PROGRESS || len(ts.running) != 1 {
 		return false
 	}
-	for _, w := range ts.running {
-		if w == worker {
+	for _, r := range ts.running {
+		if r.worker == worker {
 			return false
 		}
 	}
 	return true
 }
 
+// started returns when the task's earliest running attempt started.
+func (ts *task) started() time.Time {
+	var first time.Time
+	for _, r := range ts.running {
+		if first.IsZero() || r.started.Before(first) {
+			first = r.started
+		}
+	}
+	return first
+}
+
 // runsOn reports whether attempt is running on worker.
 func (ts *task) runsOn(attempt uint32, worker string) bool {
-	w, running := ts.running[attempt]
-	return running && w == worker
+	r, running := ts.running[attempt]
+	return running && r.worker == worker
 }
 
 // stopAttemptsOn stops the task's running attempts on worker, and reports
 // whether that made the task idle.
 func (ts *task) stopAttemptsOn(worker string) bool {
 	stopped := false
-	for attempt, w := range ts.running {
-		if w == worker {
+	for attempt, r := range ts.running {
+		if r.worker == worker {
 			delete(ts.running, attempt)
 			stopped = true
 		}
