@@ -1,4 +1,4 @@
-"""Writes SIZE bytes of text lines to stdout for the codec benchmark (#42).
+"""Writes at least SIZE bytes of whole text lines to stdout for the codec benchmark (#42).
 
 Each line is 5 to 15 words drawn at random, by frequency, from the test
 corpus. Lines are text-like but almost never repeat, unlike copies of the
