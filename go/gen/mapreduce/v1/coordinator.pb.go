@@ -16,6 +16,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -1181,8 +1182,13 @@ type GetJobStatusResponse struct {
 	// zone, that holds their split (§3.4).
 	MapTasksHostLocal uint32 `protobuf:"varint,9,opt,name=map_tasks_host_local,json=mapTasksHostLocal,proto3" json:"map_tasks_host_local,omitempty"`
 	MapTasksZoneLocal uint32 `protobuf:"varint,10,opt,name=map_tasks_zone_local,json=mapTasksZoneLocal,proto3" json:"map_tasks_zone_local,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// When the coordinator accepted the job, and when it succeeded or failed;
+	// finished_at is unset while the job runs. The job's duration is the time
+	// between them, including any time the coordinator was down.
+	SubmittedAt   *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetJobStatusResponse) Reset() {
@@ -1285,11 +1291,25 @@ func (x *GetJobStatusResponse) GetMapTasksZoneLocal() uint32 {
 	return 0
 }
 
+func (x *GetJobStatusResponse) GetSubmittedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SubmittedAt
+	}
+	return nil
+}
+
+func (x *GetJobStatusResponse) GetFinishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return nil
+}
+
 var File_mapreduce_v1_coordinator_proto protoreflect.FileDescriptor
 
 const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\n" +
-	"\x1emapreduce/v1/coordinator.proto\x12\fmapreduce.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x18mapreduce/v1/types.proto\"I\n" +
+	"\x1emapreduce/v1/coordinator.proto\x12\fmapreduce.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18mapreduce/v1/types.proto\"I\n" +
 	"\x15RegisterWorkerRequest\x120\n" +
 	"\x06worker\x18\x01 \x01(\v2\x18.mapreduce.v1.WorkerInfoR\x06worker\"\x7f\n" +
 	"\x16RegisterWorkerResponse\x12\x1b\n" +
@@ -1353,7 +1373,7 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\x11SubmitJobResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\",\n" +
 	"\x13GetJobStatusRequest\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\xc3\x03\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\xbf\x04\n" +
 	"\x14GetJobStatusResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12,\n" +
 	"\x05state\x18\x02 \x01(\x0e2\x16.mapreduce.v1.JobStateR\x05state\x12&\n" +
@@ -1365,7 +1385,10 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\x05error\x18\b \x01(\tR\x05error\x12/\n" +
 	"\x14map_tasks_host_local\x18\t \x01(\rR\x11mapTasksHostLocal\x12/\n" +
 	"\x14map_tasks_zone_local\x18\n" +
-	" \x01(\rR\x11mapTasksZoneLocal*\x9a\x01\n" +
+	" \x01(\rR\x11mapTasksZoneLocal\x12=\n" +
+	"\fsubmitted_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vsubmittedAt\x12;\n" +
+	"\vfinished_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"finishedAt*\x9a\x01\n" +
 	"\bJobState\x12\x19\n" +
 	"\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11JOB_STATE_PENDING\x10\x01\x12\x15\n" +
@@ -1424,6 +1447,7 @@ var file_mapreduce_v1_coordinator_proto_goTypes = []any{
 	(*InputSplit)(nil),             // 24: mapreduce.v1.InputSplit
 	(*PartitionLocation)(nil),      // 25: mapreduce.v1.PartitionLocation
 	(*Counters)(nil),               // 26: mapreduce.v1.Counters
+	(*timestamppb.Timestamp)(nil),  // 27: google.protobuf.Timestamp
 }
 var file_mapreduce_v1_coordinator_proto_depIdxs = []int32{
 	20, // 0: mapreduce.v1.RegisterWorkerRequest.worker:type_name -> mapreduce.v1.WorkerInfo
@@ -1451,23 +1475,25 @@ var file_mapreduce_v1_coordinator_proto_depIdxs = []int32{
 	23, // 22: mapreduce.v1.SubmitJobRequest.job:type_name -> mapreduce.v1.JobSpec
 	0,  // 23: mapreduce.v1.GetJobStatusResponse.state:type_name -> mapreduce.v1.JobState
 	26, // 24: mapreduce.v1.GetJobStatusResponse.counters:type_name -> mapreduce.v1.Counters
-	1,  // 25: mapreduce.v1.CoordinatorService.RegisterWorker:input_type -> mapreduce.v1.RegisterWorkerRequest
-	3,  // 26: mapreduce.v1.CoordinatorService.RequestTask:input_type -> mapreduce.v1.RequestTaskRequest
-	9,  // 27: mapreduce.v1.CoordinatorService.ReportTask:input_type -> mapreduce.v1.ReportTaskRequest
-	13, // 28: mapreduce.v1.CoordinatorService.Heartbeat:input_type -> mapreduce.v1.HeartbeatRequest
-	16, // 29: mapreduce.v1.CoordinatorService.SubmitJob:input_type -> mapreduce.v1.SubmitJobRequest
-	18, // 30: mapreduce.v1.CoordinatorService.GetJobStatus:input_type -> mapreduce.v1.GetJobStatusRequest
-	2,  // 31: mapreduce.v1.CoordinatorService.RegisterWorker:output_type -> mapreduce.v1.RegisterWorkerResponse
-	4,  // 32: mapreduce.v1.CoordinatorService.RequestTask:output_type -> mapreduce.v1.RequestTaskResponse
-	12, // 33: mapreduce.v1.CoordinatorService.ReportTask:output_type -> mapreduce.v1.ReportTaskResponse
-	15, // 34: mapreduce.v1.CoordinatorService.Heartbeat:output_type -> mapreduce.v1.HeartbeatResponse
-	17, // 35: mapreduce.v1.CoordinatorService.SubmitJob:output_type -> mapreduce.v1.SubmitJobResponse
-	19, // 36: mapreduce.v1.CoordinatorService.GetJobStatus:output_type -> mapreduce.v1.GetJobStatusResponse
-	31, // [31:37] is the sub-list for method output_type
-	25, // [25:31] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	27, // 25: mapreduce.v1.GetJobStatusResponse.submitted_at:type_name -> google.protobuf.Timestamp
+	27, // 26: mapreduce.v1.GetJobStatusResponse.finished_at:type_name -> google.protobuf.Timestamp
+	1,  // 27: mapreduce.v1.CoordinatorService.RegisterWorker:input_type -> mapreduce.v1.RegisterWorkerRequest
+	3,  // 28: mapreduce.v1.CoordinatorService.RequestTask:input_type -> mapreduce.v1.RequestTaskRequest
+	9,  // 29: mapreduce.v1.CoordinatorService.ReportTask:input_type -> mapreduce.v1.ReportTaskRequest
+	13, // 30: mapreduce.v1.CoordinatorService.Heartbeat:input_type -> mapreduce.v1.HeartbeatRequest
+	16, // 31: mapreduce.v1.CoordinatorService.SubmitJob:input_type -> mapreduce.v1.SubmitJobRequest
+	18, // 32: mapreduce.v1.CoordinatorService.GetJobStatus:input_type -> mapreduce.v1.GetJobStatusRequest
+	2,  // 33: mapreduce.v1.CoordinatorService.RegisterWorker:output_type -> mapreduce.v1.RegisterWorkerResponse
+	4,  // 34: mapreduce.v1.CoordinatorService.RequestTask:output_type -> mapreduce.v1.RequestTaskResponse
+	12, // 35: mapreduce.v1.CoordinatorService.ReportTask:output_type -> mapreduce.v1.ReportTaskResponse
+	15, // 36: mapreduce.v1.CoordinatorService.Heartbeat:output_type -> mapreduce.v1.HeartbeatResponse
+	17, // 37: mapreduce.v1.CoordinatorService.SubmitJob:output_type -> mapreduce.v1.SubmitJobResponse
+	19, // 38: mapreduce.v1.CoordinatorService.GetJobStatus:output_type -> mapreduce.v1.GetJobStatusResponse
+	33, // [33:39] is the sub-list for method output_type
+	27, // [27:33] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_mapreduce_v1_coordinator_proto_init() }

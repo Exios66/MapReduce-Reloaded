@@ -1,3 +1,6 @@
+import datetime
+
+from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2 as _coordinator_pb2
 from mapreduce_reloaded.gen.mapreduce.v1 import types_pb2 as _types_pb2
 from google.protobuf.internal import containers as _containers
@@ -9,18 +12,20 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class LogRecord(_message.Message):
-    __slots__ = ("job_submitted", "task_assigned", "task_reported", "worker_lost", "restarted")
+    __slots__ = ("job_submitted", "task_assigned", "task_reported", "worker_lost", "restarted", "at")
     JOB_SUBMITTED_FIELD_NUMBER: _ClassVar[int]
     TASK_ASSIGNED_FIELD_NUMBER: _ClassVar[int]
     TASK_REPORTED_FIELD_NUMBER: _ClassVar[int]
     WORKER_LOST_FIELD_NUMBER: _ClassVar[int]
     RESTARTED_FIELD_NUMBER: _ClassVar[int]
+    AT_FIELD_NUMBER: _ClassVar[int]
     job_submitted: JobSubmitted
     task_assigned: TaskAssigned
     task_reported: _coordinator_pb2.ReportTaskRequest
     worker_lost: WorkerLost
     restarted: Restarted
-    def __init__(self, job_submitted: _Optional[_Union[JobSubmitted, _Mapping]] = ..., task_assigned: _Optional[_Union[TaskAssigned, _Mapping]] = ..., task_reported: _Optional[_Union[_coordinator_pb2.ReportTaskRequest, _Mapping]] = ..., worker_lost: _Optional[_Union[WorkerLost, _Mapping]] = ..., restarted: _Optional[_Union[Restarted, _Mapping]] = ...) -> None: ...
+    at: _timestamp_pb2.Timestamp
+    def __init__(self, job_submitted: _Optional[_Union[JobSubmitted, _Mapping]] = ..., task_assigned: _Optional[_Union[TaskAssigned, _Mapping]] = ..., task_reported: _Optional[_Union[_coordinator_pb2.ReportTaskRequest, _Mapping]] = ..., worker_lost: _Optional[_Union[WorkerLost, _Mapping]] = ..., restarted: _Optional[_Union[Restarted, _Mapping]] = ..., at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class JobSubmitted(_message.Message):
     __slots__ = ("job_id", "job", "splits")
