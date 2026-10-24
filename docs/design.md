@@ -133,11 +133,14 @@ sequenceDiagram
     C-->>W2: MapTask(attempt 1, same split)
 ```
 
-A worker registers and learns its heartbeat interval. While it runs a task,
-a goroutine sends `Heartbeat` on that interval. A `RequestTask` also counts
-as a heartbeat. An unknown worker gets `NotFound` from `RequestTask` and
-registers again. `Heartbeat` also answers `reregister`, but the worker does
-not act on it yet (#121).
+A worker registers and learns its heartbeat interval. A goroutine then
+sends `Heartbeat` on that interval, naming the attempt the worker is
+running. A `RequestTask` also counts as a heartbeat. An unknown worker gets
+`NotFound` from `RequestTask`, or `reregister` from `Heartbeat`, and
+registers again. The reply's `cancel` lists any attempt the coordinator no
+longer expects from that worker: a backup's loser, an attempt of a reset
+worker, or one from a job that has ended. The worker stops it at the next
+record or group and does not report it.
 
 `RequestTask` ranks idle map tasks by locality: host, then zone, then the
 rest. If the best task is on other hosts, `holdBack` tells the worker to
