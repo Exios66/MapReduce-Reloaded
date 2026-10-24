@@ -26,6 +26,26 @@ writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 - `python/tests/test_bench_gen.py` checks the record sizes, the number of
   matches, the spread of keys and the skew.
 
+## Data rates over a job (#57)
+
+The paper's Figures 2 and 3 plot, against seconds since the job started,
+the rate at which map tasks read input, the rate at which data is shuffled
+from map to reduce tasks, and the rate at which reduce tasks write output
+(§5.3). Two scripts make the same plots from the workers' `/metrics`:
+
+- [`scrape-metrics.py`](scrape-metrics.py) `INTERVAL DURATION URL...`
+  fetches each worker's `/metrics` every INTERVAL seconds and writes its byte
+  counters to stdout as CSV.
+- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png]` sums the counters
+  over the workers and differentiates them between samples. It writes the
+  input, shuffle and output rates in MB/s as CSV, or, given `OUT.png`, draws
+  them in three panels as the paper does. Drawing needs matplotlib.
+
+Workers count input and output bytes as each task ends, so those two rates
+rise in steps of whole tasks. The shuffle is counted as it is fetched.
+`python/tests/test_bench_rates.py` tests both scripts against a fake
+`/metrics`.
+
 ## Codecs (#42)
 
 `make bench-codecs` starts the cluster and runs [`codecs.sh`](codecs.sh):
