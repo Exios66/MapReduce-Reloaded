@@ -30,7 +30,7 @@ const (
 	MapInputRecords     = "map.input.records"
 	MapInputBytes       = "map.input.bytes" // the split's size
 	MapOutputRecords    = "map.output.records"
-	MapOutputBytes      = "map.output.bytes" // after combining
+	MapOutputBytes      = "map.output.bytes" // file sizes, after combining and compression
 	ReduceInputRecords  = "reduce.input.records"
 	ReduceOutputRecords = "reduce.output.records"
 	SkippedRecords      = "skipped.records"
@@ -51,6 +51,10 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 	if err != nil {
 		return nil, nil, err
 	}
+	codec, err := kv.ParseCodec(spec.IntermediateCodec)
+	if err != nil {
+		return nil, nil, err
+	}
 	tc := newContext(ctx, spec, id, skip, log)
 	tc.input = split.Path
 	defer tc.commitSide(&err)
@@ -63,7 +67,7 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 
 	sorters := make([]*extsort.Sorter, spec.R)
 	for r := range sorters {
-		cfg := extsort.Config{Dir: dir, Budget: extsort.DefaultBudget / len(sorters)}
+		cfg := extsort.Config{Dir: dir, Budget: extsort.DefaultBudget / len(sorters), Codec: codec}
 		if p.Combiner != nil {
 			cfg.Combine = combine.Func(tc, p.Combiner)
 		}
@@ -103,7 +107,7 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 		if err != nil {
 			return nil, nil, err
 		}
-		if sizes[r], err = writeKV(MapOutput(dir, int(id.Index), r), id.Attempt, sorted); err != nil {
+		if sizes[r], err = writeKV(MapOutput(dir, int(id.Index), r), id.Attempt, codec, sorted); err != nil {
 			return nil, nil, err
 		}
 		tc.Count(MapOutputBytes, sizes[r])
@@ -125,7 +129,11 @@ const TempDir = "_temporary"
 // tags with the task. It returns the attempt's counters. It stops with ctx's
 // error when ctx is done.
 func Reduce(ctx context.Context, spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64, log *slog.Logger) (counts map[string]int64, err error) {
-	out, err := formats.Output(spec.OutputFormat)
+	codec, err := kv.ParseCodec(spec.OutputCodec)
+	if err != nil {
+		return nil, err
+	}
+	out, err := formats.Output(spec.OutputFormat, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -185,15 +193,16 @@ func OpenSources(paths []string) ([]extsort.Records, func() error, error) {
 	return sources, closeAll, nil
 }
 
-// writeKV writes records to a new MRKV file at path and returns its size.
-func writeKV(path string, attempt uint32, records extsort.Records) (size int64, err error) {
+// writeKV writes records to a new MRKV file at path, compressed with codec,
+// and returns its size.
+func writeKV(path string, attempt uint32, codec kv.Codec, records extsort.Records) (size int64, err error) {
 	tmp := attemptPath(path, attempt)
 	f, err := os.Create(tmp)
 	if err != nil {
 		return 0, err
 	}
 	defer commit(context.Background(), &err, f, tmp, path)
-	w := kv.NewWriter(f)
+	w := kv.NewWriterCodec(f, codec)
 	for records.Next() {
 		if err := w.Write(records.Key(), records.Value()); err != nil {
 			return 0, err

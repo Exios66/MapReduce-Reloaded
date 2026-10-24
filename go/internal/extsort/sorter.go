@@ -43,6 +43,8 @@ type Config struct {
 	// and its output is written instead (§4.3). With Combine set, Sorted
 	// always spills, so every record passes through it.
 	Combine CombineFunc
+	// Codec compresses the run files.
+	Codec kv.Codec
 }
 
 // CombineFunc reads sorted records and emits a combined replacement. It must
@@ -159,7 +161,7 @@ func (s *Sorter) spill() error {
 		return err
 	}
 	cw := &countingWriter{w: f}
-	w := kv.NewWriter(cw)
+	w := kv.NewWriterCodec(cw, s.cfg.Codec)
 	if s.cfg.Combine != nil {
 		err = s.cfg.Combine(&memRecords{s: s, i: -1}, w.Write)
 	} else {

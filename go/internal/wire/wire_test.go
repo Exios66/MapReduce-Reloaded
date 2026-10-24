@@ -27,6 +27,10 @@ func TestJobSpec(t *testing.T) {
 		NumReduceTasks: 4,
 		UseCombiner:    true,
 		Params:         map[string]string{"k": "v"},
+
+		OutputFormat:      "kv",
+		IntermediateCodec: "zstd",
+		OutputCodec:       "snappy",
 	}
 	spec, err := JobSpec(m)
 	if err != nil {
@@ -34,7 +38,8 @@ func TestJobSpec(t *testing.T) {
 	}
 	if spec.Inputs[0] != filepath.FromSlash("/data/a.txt") || spec.Inputs[1] != "rel/*.txt" ||
 		spec.Output != filepath.FromSlash("/out") || spec.SplitSize != 100 || spec.R != 4 ||
-		spec.Params["k"] != "v" || spec.Program.Combiner == nil {
+		spec.Params["k"] != "v" || spec.Program.Combiner == nil ||
+		spec.OutputFormat != "kv" || spec.IntermediateCodec != "zstd" || spec.OutputCodec != "snappy" {
 		t.Fatalf("got %+v", spec)
 	}
 
@@ -60,6 +65,7 @@ func TestJobSpecErrors(t *testing.T) {
 		"unknown partitioner": {Program: "wordcount", Partitioner: "range"},
 		"unsupported URI":     {Program: "wordcount", Inputs: []string{"gs://b/k"}, Output: "o", NumReduceTasks: 1},
 		"R must be":           {Program: "wordcount", Inputs: []string{"in"}, Output: "o"},
+		"unknown format":      {Program: "wordcount", Inputs: []string{"in"}, Output: "o", NumReduceTasks: 1, OutputFormat: "parquet"},
 	} {
 		if _, err := JobSpec(m); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("got %v, want an error containing %q", err, want)

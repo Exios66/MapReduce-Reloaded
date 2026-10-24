@@ -12,7 +12,11 @@ import (
 // KV reads and writes MRKV files (docs/file-format.md). Blocks cannot be
 // located without reading the file from the start, so each file is one
 // split.
-type KV struct{}
+type KV struct {
+	// Codec compresses the blocks of files it creates. Readers take the
+	// codec from each file's header.
+	Codec kv.Codec
+}
 
 // Splits returns the whole file as one split, whatever splitSize is.
 func (KV) Splits(ctx context.Context, path string, _ int64) ([]Split, error) {
@@ -43,12 +47,12 @@ type kvReader struct {
 func (r kvReader) Close() error { return r.f.Close() }
 
 // Create creates an MRKV output file at path.
-func (KV) Create(ctx context.Context, path string) (RecordWriter, error) {
+func (k KV) Create(ctx context.Context, path string) (RecordWriter, error) {
 	f, err := storage.Create(ctx, path)
 	if err != nil {
 		return nil, err
 	}
-	return &kvWriter{kv.NewWriter(f), f}, nil
+	return &kvWriter{kv.NewWriterCodec(f, k.Codec), f}, nil
 }
 
 // kvWriter needs no extra buffering: kv.Writer writes whole blocks.

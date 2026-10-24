@@ -3,11 +3,13 @@
 package formats
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 )
 
@@ -56,8 +58,20 @@ var (
 // Input returns the input format with the given name. "" means "text".
 func Input(name string) (InputFormat, error) { return lookup(inputs, name) }
 
-// Output returns the output format with the given name. "" means "text".
-func Output(name string) (OutputFormat, error) { return lookup(outputs, name) }
+// Output returns the output format with the given name, writing blocks
+// compressed with codec. "" means "text". Only "kv" takes a codec.
+func Output(name string, codec kv.Codec) (OutputFormat, error) {
+	f, err := lookup(outputs, name)
+	if err != nil || codec == kv.CodecNone {
+		return f, err
+	}
+	k, ok := f.(KV)
+	if !ok {
+		return nil, fmt.Errorf("formats: output format %q takes no codec; only kv does", cmp.Or(name, "text"))
+	}
+	k.Codec = codec
+	return k, nil
+}
 
 func lookup[F any](formats map[string]F, name string) (F, error) {
 	if name == "" {

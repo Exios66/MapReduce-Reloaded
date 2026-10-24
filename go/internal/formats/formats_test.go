@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 )
 
 type record struct{ key, value string }
@@ -103,7 +105,7 @@ func TestLookup(t *testing.T) {
 	if f, err := Input(""); err != nil || f != (Text{}) {
 		t.Fatalf(`Input("") = %v, %v; want Text`, f, err)
 	}
-	if _, err := Output("parquet"); err == nil {
+	if _, err := Output("parquet", kv.CodecNone); err == nil {
 		t.Fatal("unknown format accepted")
 	}
 }
@@ -116,7 +118,7 @@ func TestOutputRoundTrip(t *testing.T) {
 	}
 	for name, want := range tests {
 		t.Run(name, func(t *testing.T) {
-			out, _ := Output(name)
+			out, _ := Output(name, kv.CodecNone)
 			in, _ := Input(name)
 			path := filepath.Join(t.TempDir(), "part-r-00000")
 			w, err := out.Create(t.Context(), path)
@@ -135,5 +137,35 @@ func TestOutputRoundTrip(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+func TestOutputCodec(t *testing.T) {
+	out, err := Output("kv", kv.CodecZstd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "part-r-00000")
+	w, err := out.Create(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs := []record{{"apple", "3"}, {"pear", "1"}}
+	for _, r := range recs {
+		if err := w.Write([]byte(r.key), []byte(r.value)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); len(data) < 6 || kv.Codec(data[5]) != kv.CodecZstd {
+		t.Fatalf("header %x, want codec zstd", data[:min(len(data), 8)])
+	}
+	if got := readSplits(t, KV{}, path, 4); !slices.Equal(got, recs) {
+		t.Fatalf("got %q, want %q", got, recs)
+	}
+	if _, err := Output("text", kv.CodecZstd); err == nil {
+		t.Fatal("text output took a codec")
 	}
 }

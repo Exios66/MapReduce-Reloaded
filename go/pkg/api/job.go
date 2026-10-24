@@ -2,7 +2,11 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
+
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 )
 
 // Program is a user's MapReduce code: what runs, as opposed to the data it
@@ -33,6 +37,10 @@ type JobSpec struct {
 	// InputFormat and OutputFormat name the record formats (§4.4). Empty
 	// means "text".
 	InputFormat, OutputFormat string
+	// IntermediateCodec compresses the map output and the sort's spill
+	// files, and OutputCodec the output files: "none", "zstd" or "snappy".
+	// Empty means "none". Only the "kv" output format takes a codec.
+	IntermediateCodec, OutputCodec string
 	// Params are passed to user code through Context.Param.
 	Params map[string]string
 }
@@ -60,6 +68,17 @@ func (s *JobSpec) Validate() error {
 	}
 	if s.R == 0 {
 		errs = append(errs, errors.New("number of reduce tasks R must be at least 1"))
+	}
+	if _, err := formats.Input(s.InputFormat); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := kv.ParseCodec(s.IntermediateCodec); err != nil {
+		errs = append(errs, fmt.Errorf("intermediate codec: %w", err))
+	}
+	if c, err := kv.ParseCodec(s.OutputCodec); err != nil {
+		errs = append(errs, fmt.Errorf("output codec: %w", err))
+	} else if _, err := formats.Output(s.OutputFormat, c); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

@@ -96,7 +96,7 @@ class Counters(_message.Message):
     def __init__(self, values: _Optional[_Mapping[str, int]] = ...) -> None: ...
 
 class JobSpec(_message.Message):
-    __slots__ = ("program", "inputs", "output", "split_size_bytes", "num_reduce_tasks", "input_format", "output_format", "partitioner", "use_combiner", "params", "max_skipped_records")
+    __slots__ = ("program", "inputs", "output", "split_size_bytes", "num_reduce_tasks", "input_format", "output_format", "partitioner", "use_combiner", "params", "max_skipped_records", "intermediate_codec", "output_codec")
     class ParamsEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -115,6 +115,8 @@ class JobSpec(_message.Message):
     USE_COMBINER_FIELD_NUMBER: _ClassVar[int]
     PARAMS_FIELD_NUMBER: _ClassVar[int]
     MAX_SKIPPED_RECORDS_FIELD_NUMBER: _ClassVar[int]
+    INTERMEDIATE_CODEC_FIELD_NUMBER: _ClassVar[int]
+    OUTPUT_CODEC_FIELD_NUMBER: _ClassVar[int]
     program: str
     inputs: _containers.RepeatedScalarFieldContainer[str]
     output: str
@@ -126,7 +128,9 @@ class JobSpec(_message.Message):
     use_combiner: bool
     params: _containers.ScalarMap[str, str]
     max_skipped_records: int
-    def __init__(self, program: _Optional[str] = ..., inputs: _Optional[_Iterable[str]] = ..., output: _Optional[str] = ..., split_size_bytes: _Optional[int] = ..., num_reduce_tasks: _Optional[int] = ..., input_format: _Optional[str] = ..., output_format: _Optional[str] = ..., partitioner: _Optional[str] = ..., use_combiner: _Optional[bool] = ..., params: _Optional[_Mapping[str, str]] = ..., max_skipped_records: _Optional[int] = ...) -> None: ...
+    intermediate_codec: str
+    output_codec: str
+    def __init__(self, program: _Optional[str] = ..., inputs: _Optional[_Iterable[str]] = ..., output: _Optional[str] = ..., split_size_bytes: _Optional[int] = ..., num_reduce_tasks: _Optional[int] = ..., input_format: _Optional[str] = ..., output_format: _Optional[str] = ..., partitioner: _Optional[str] = ..., use_combiner: _Optional[bool] = ..., params: _Optional[_Mapping[str, str]] = ..., max_skipped_records: _Optional[int] = ..., intermediate_codec: _Optional[str] = ..., output_codec: _Optional[str] = ...) -> None: ...
 
 class WorkerInfo(_message.Message):
     __slots__ = ("shuffle_address", "host", "zone", "slots")
