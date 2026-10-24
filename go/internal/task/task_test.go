@@ -133,6 +133,35 @@ func TestCancelledAttemptStops(t *testing.T) {
 	}
 }
 
+// A reduce attempt cancelled while its last group runs still fails, and
+// commits no part or side file.
+func TestCancelledDuringLastGroup(t *testing.T) {
+	spec, split := setup(t, "a\n")
+	dir := t.TempDir()
+	if _, _, err := Map(t.Context(), spec, api.TaskID{Kind: api.MapTask}, split, dir, nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+	r := api.HashPartitioner.Partition([]byte("a"), spec.R)
+	sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, int(r))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = closeSources() }()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	spec.Program.Reducer = api.ReduceFunc(func(c api.Context, _ []byte, _ iter.Seq[[]byte], _ api.Emitter) error {
+		cancel()
+		_, err := c.SideOutput("side")
+		return err
+	})
+	if _, err := Reduce(ctx, spec, api.TaskID{Kind: api.ReduceTask, Index: r}, sources, nil, quiet); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Reduce error = %v, want %v", err, context.Canceled)
+	}
+	if names := dirNames(t, spec.Output); len(names) != 1 || names[0] != TempDir {
+		t.Fatalf("cancelled reduce left %v", names)
+	}
+}
+
 // A failed attempt leaves no files, and does not disturb the output of an
 // attempt that already succeeded.
 func TestFailedAttemptLeavesNoFiles(t *testing.T) {

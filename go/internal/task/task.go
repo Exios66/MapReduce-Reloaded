@@ -107,7 +107,7 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 		}
 		tc.Count(MapOutputBytes, sizes[r])
 	}
-	return sizes, tc.counts, nil
+	return sizes, tc.counts, ctx.Err() // a cancel during the last write commits no side files
 }
 
 // TempDir is the directory under a job's output where attempts write
@@ -155,7 +155,10 @@ func Reduce(ctx context.Context, spec api.JobSpec, id api.TaskID, sources []exts
 		}
 		n++
 	}
-	return tc.counts, merged.Err()
+	if err := merged.Err(); err != nil {
+		return nil, err
+	}
+	return tc.counts, ctx.Err() // a cancel during the last group commits nothing
 }
 
 // OpenSources opens MRKV files as reduce sources. The returned function
