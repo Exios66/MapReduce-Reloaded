@@ -297,7 +297,8 @@ func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([
 		locations[r] = loc
 		w.stats.mapOutputBytes.Add(uint64(size))
 	}
-	w.stats.mapInputBytes.Add(uint64(counts[task.MapInputBytes]))
+	// Clamped: a user program may count on a framework name too.
+	w.stats.mapInputBytes.Add(uint64(max(0, counts[task.MapInputBytes])))
 	return locations, counts, nil
 }
 
@@ -321,7 +322,7 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logg
 		sources[i] = kv.NewReader(r)
 	}
 	if counts, err = task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log); err == nil {
-		w.stats.outputBytes.Add(uint64(counts[task.ReduceOutputBytes]))
+		w.stats.outputBytes.Add(uint64(max(0, counts[task.ReduceOutputBytes])))
 	}
 	return counts, err
 }
