@@ -150,10 +150,30 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 	}, nil
 }
 
+// Heartbeat tells an unknown worker to register again, and a known one
+// which of the attempts it runs to stop: those no longer running on it, such
+// as a backup whose twin finished first (§3.6), or those of an ended job.
 func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return &pb.HeartbeatResponse{Reregister: !s.workers.Heartbeat(req.GetWorkerId(), time.Now())}, nil
+	worker := req.GetWorkerId()
+	if !s.workers.Heartbeat(worker, time.Now()) {
+		return &pb.HeartbeatResponse{Reregister: true}, nil
+	}
+	resp := &pb.HeartbeatResponse{}
+	for _, p := range req.GetRunning() {
+		if id := p.GetAttempt(); !s.runs(id, worker) {
+			resp.Cancel = append(resp.Cancel, id)
+		}
+	}
+	return resp, nil
+}
+
+// runs reports whether attempt, of the active job, is running on worker.
+func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
+	j := s.jobs[attempt.GetTask().GetJobId()]
+	t := Task{attempt.GetTask().GetKind(), attempt.GetTask().GetIndex()}
+	return j != nil && j == s.active && j.tasks.Runs(t, attempt.GetAttempt(), worker)
 }
 
 // SubmitJob validates the job, defaulting R to a multiple of the number of

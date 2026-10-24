@@ -267,6 +267,12 @@ func (t *TaskTable) Running() map[string][]Task {
 	return running
 }
 
+// Runs reports whether attempt of task id is running on worker.
+func (t *TaskTable) Runs(id Task, attempt uint32, worker string) bool {
+	ts, err := t.task(id)
+	return err == nil && ts.runsOn(attempt, worker)
+}
+
 // Progress returns the number of completed map and reduce tasks.
 func (t *TaskTable) Progress() (maps, reduces int) { return t.mapsDone, t.reducesDone }
 
