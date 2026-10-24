@@ -1,8 +1,13 @@
 # Roadmap
 
-The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F23)
+The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F24)
 are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
+
+**Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
+has a test. Next are #41 and #42 (Phase 6 Tier A), then Phase 7 (#57, #58,
+#60). Where the build departed from this plan, [design.md](design.md) lists
+the differences from the paper and why.
 
 ## Context
 
@@ -34,7 +39,7 @@ week-by-week schedule and a plain-language walkthrough, is in
 [roadmap-explained.md](roadmap-explained.md). In short:
 
 - **In scope:**
-  - Phases 0–4: every paper feature, F1–F23, in Go;
+  - Phases 0–4: every paper feature, F1–F23, in Go (done);
   - the Python halves of #5 and #8–#12: file format, hash, formats, sort,
     combiner and local mode;
   - #41 S3/MinIO storage and #42 compression;
@@ -77,7 +82,7 @@ Each item maps to a paper section and will get a test.
 | F6 | R output files, one per reduce task (§3.1) | `part-r-00000` … in the output directory or bucket |
 | F7 | Master data structures: task state (idle / in-progress / completed), worker identity, intermediate file locations (§3.2) | `TaskTable` and `WorkerRegistry` in the coordinator |
 | F8 | Worker failure detection by heartbeat; reset its tasks; **re-run completed map tasks** of a failed worker; notify reducers (§3.3) | Heartbeat timeout, task re-queue, location update pushed to reducers |
-| F9 | Master failure: periodic checkpoints and recovery (§3.3) | Coordinator state snapshot + write-ahead log (WAL); restart resumes the job |
+| F9 | Master failure: periodic checkpoints and recovery (§3.3) | Write-ahead log of coordinator decisions, replayed on restart; the job resumes (no snapshot, ADR 0007) |
 | F10 | Atomic commit semantics: map output reported to master once; reduce output via atomic rename (§3.3) | Write to temp file, `rename`/object-store commit; duplicate completions ignored |
 | F11 | Locality: schedule map tasks near their input data (§3.4) | Workers advertise a host/zone label; scheduler prefers a matching split |
 | F12 | Task granularity: M and R much larger than the number of workers (§3.5) | Configurable; defaults derived from input size and worker count |
@@ -91,7 +96,8 @@ Each item maps to a paper section and will get a test.
 | F20 | Local execution mode for debugging (§4.7) | `mr run --local`: everything in one process, sequential, deterministic |
 | F21 | Status information: HTTP status pages (§4.8) | Coordinator web UI showing progress, throughput, failures and worker list |
 | F22 | Counters, aggregated by master, de-duplicated across re-executions (§4.9) | `ctx.Counter("name").Inc()`; only counted from the winning task attempt |
-| F23 | Paper example programs (§2.3, §5) | grep, word count, URL access frequency, reverse web-link graph, term vectors, inverted index, distributed sort |
+| F23 | Paper example programs (§2.3) | grep, word count, URL access frequency, reverse web-link graph, term vectors, inverted index, distributed sort |
+| F24 | Performance experiments (§5) | Benchmark harness (#57) and the grep, sort, no-backup and killed-worker runs at small scale (#58) |
 
 ---
 
@@ -129,7 +135,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 ```
             ┌──────────── mr CLI / REST / Python SDK ────────────┐
             ▼                                                     │
-   ┌──────────────────┐  WAL + snapshots  ┌───────────────┐       │
+   ┌──────────────────┐        WAL        ┌───────────────┐       │
    │   Coordinator    │──────────────────▶│ etcd / Raft   │ (HA, tier B)
    │ scheduler, task  │                   └───────────────┘
    │ table, heartbeats│── HTTP :8080  status UI + /metrics
@@ -147,6 +153,9 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
    Storage: local FS │ S3/MinIO │ GCS        (input, output, optional shuffle)
 ```
 
+This is the target. Today storage is the local filesystem or a shared volume
+(S3 is #41), every worker is Go, and the UDF host is Phase 5 stretch work.
+
 **Pull-based scheduling** (as in MIT 6.824): idle workers call `RequestTask`. This keeps the coordinator simple and makes heartbeats piggyback naturally.
 
 ---
@@ -155,38 +164,36 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 
 ```
 MapReduce-Reloaded/
-├── proto/mapreduce/v1/          # coordinator.proto, worker.proto, records.proto  ← shared contract
+├── proto/mapreduce/v1/          # coordinator, shuffle, types, log .proto  ← shared contract
 ├── docs/
-│   ├── paper-mapping.md         # F1–F23 → code locations → tests
-│   ├── file-format.md           # intermediate/output record framing spec
-│   └── design.md
+│   ├── design.md                # one job's lifecycle; differences from the paper
+│   ├── design/                  # ADRs
+│   ├── explainers/              # one plain-language page per feature
+│   ├── paper-mapping.md         # F1–F24 → code → tests (checked by internal/papermap)
+│   └── file-format.md           # MRKV block and record format
 ├── go/
-│   ├── go.mod
-│   ├── cmd/{coordinator,worker,mr}/          # binaries
-│   ├── pkg/api/                 # public Mapper/Reducer/Combiner/Partitioner/Context
-│   ├── internal/coordinator/    # scheduler.go, tasktable.go, registry.go, wal.go, speculate.go, status/
-│   ├── internal/worker/         # mapper.go, reducer.go, spill.go, shuffle_server.go, extsort.go, udfhost/
-│   ├── internal/storage/        # local.go, s3.go, commit.go
-│   ├── internal/formats/        # text, kv (framed), jsonl, parquet
-│   ├── internal/partition/      # hash.go, range.go (sampling)
-│   └── examples/                # wordcount, grep, invertedindex, reverselinks, urlfreq, termvector, sort
+│   ├── cmd/{coordinator,worker,mr}/
+│   ├── pkg/api/                 # Mapper, Reducer, Combiner, Partitioner, Context
+│   ├── internal/coordinator/    # scheduler, task table, registry, recovery
+│   ├── internal/worker/         # task loop, heartbeats; cluster and chaos tests
+│   ├── internal/task/           # map and reduce attempts, commit
+│   ├── internal/shuffle/        # FetchPartition server and client
+│   ├── internal/wal/            # append-only, checksummed log
+│   ├── internal/{split,partition,extsort,combine,formats,local}/
+│   ├── internal/{statusweb,promtext,logs}/   # status page, /metrics, slog
+│   ├── internal/{wire,contract,papermap}/    # proto conversion and doc checks
+│   └── examples/                # wordcount, grep, urlfreq, reverselinks, termvector, invertedindex, distsort
 ├── python/
 │   ├── pyproject.toml           # package: mapreduce_reloaded
-│   ├── mapreduce_reloaded/
-│   │   ├── api.py               # @mapper/@reducer/@combiner decorators, Context, counters
-│   │   ├── coordinator/         # asyncio + grpcio reference coordinator
-│   │   ├── worker/              # reference worker, also usable as UDF host for Go workers
-│   │   ├── storage/, formats/, partition/
-│   │   ├── local.py             # local execution mode (F20)
-│   │   └── pipeline.py          # job DAG builder (tier C)
-│   ├── examples/
+│   ├── mapreduce_reloaded/      # api, split, partition, formats, extsort, combine, local, examples
 │   └── tests/
-├── deploy/{docker,compose,helm}/
-├── bench/                       # data generators, benchmark harness, results
-├── tests/interop/               # Go↔Python cross-implementation tests
-├── Makefile                     # proto gen, build, test, lint, cluster-up
-└── .github/workflows/ci.yml
+├── deploy/{docker,compose}/     # images; 1 coordinator + 4 workers, monitoring profile
+├── scripts/                     # proto generation, e2e, VM check
+├── testdata/                    # golden outputs and hash vectors
+└── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
+
+`bench/` (#57) and `tests/interop/` (Phase 5) do not exist yet.
 
 ---
 
@@ -205,17 +212,17 @@ Each phase ends in a runnable, tested state.
 
 **Phase 2 — Distributed core (F2–F7, F10, F12, F14)**
 - Coordinator task table and scheduler; workers pull tasks; map partitions spill to local disk; the shuffle server streams partitions; reducers fetch, merge and reduce; atomic rename commit.
-- Run with Docker Compose: 1 coordinator, 4 workers, MinIO.
+- Run with Docker Compose: 1 coordinator and 4 workers on a shared volume.
 
 **Phase 3 — Fault tolerance (F8, F9, F13, F18, F19, F22)**
 - Heartbeats with timeouts, map re-execution on worker loss, reducers notified of new locations.
-- Coordinator WAL and snapshot, with recovery on restart.
+- Coordinator write-ahead log, replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
-- **Chaos test harness**: kill and pause workers at random (`docker kill`, `SIGSTOP`), crash workers in the middle of a task, and assert the output still matches local mode.
+- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. Driving the same faults against the Compose cluster is #29.
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
 - Locality-aware scheduling, the status web UI, Prometheus `/metrics`, and all paper example programs.
-- `docs/paper-mapping.md` complete: every row F1–F23 linked to code and tests.
+- `docs/paper-mapping.md` complete: every row F1–F23 linked to code and tests; F24 waits on Phase 7.
 
 **Phase 5 — Python parity & interop**
 - Finish the Python coordinator and worker.
@@ -236,8 +243,8 @@ Each phase ends in a runnable, tested state.
 
 ## 6. Key technical choices
 
-- **Go libraries:** `google.golang.org/grpc`, `log/slog`, `prometheus/client_golang`, `aws-sdk-go-v2` (S3/MinIO), `klauspost/compress` (zstd), `hashicorp/raft` or `etcd/client/v3`, `bbolt` for the WAL.
-- **Python libraries:** `grpcio`, `asyncio`, `pyarrow` (Parquet), `boto3`, `zstandard`, `pytest`, `hypothesis` (property tests).
+- **Go libraries:** `google.golang.org/grpc` and the standard library so far. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `aws-sdk-go-v2` (#41), `klauspost/compress` (#42), `hashicorp/raft` or `etcd/client/v3` (Tier B).
+- **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `zstandard`, `pyarrow`.
 - **Determinism:** the hash partitioner uses a fixed, language-independent hash (FNV-1a 64 over key bytes), so Go and Python place the same key in the same partition.
 - **Exactly-once output:** a task attempt ID goes into temp filenames. The coordinator accepts only the first `ReportTask(COMPLETED)` per task; later attempts are discarded.
 
@@ -247,7 +254,7 @@ Each phase ends in a runnable, tested state.
 
 - **Unit tests:** partitioner (cross-language hash vectors), external sort, record framing round-trip, task-table state machine (property-based).
 - **Golden tests:** every example job in distributed mode must produce output identical to `--local` mode on a fixed corpus (e.g. Project Gutenberg texts and a synthetic web-link graph).
-- **Fault-injection tests:** the chaos harness from Phase 3 runs as `make chaos`, using a small Compose cluster.
+- **Fault-injection tests:** `go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). A Compose driver is #29.
 - **Interop tests:** the Phase 5 matrix.
-- **End-to-end smoke test:** `make cluster-up && mr submit examples/wordcount --input s3://bench/gutenberg --reduces 8`, then check the status UI at `localhost:8080`, the Prometheus metrics, and the output diff.
+- **End-to-end smoke test:** `make e2e` starts the Compose cluster, submits word count with `mr submit`, and compares the output with the golden output, and checks the job's reduce tasks in `/metrics`.
 - **Benchmarks** (`bench/`): throughput, job completion time, and the cost of stragglers with and without backup tasks.

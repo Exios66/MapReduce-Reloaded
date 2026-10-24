@@ -21,6 +21,9 @@ identical bytes, which gives a second, independent correctness check.
 
 ## The phases
 
+Phases 0–4 are done. Next are #41 and #42, then Phase 7. Where the build
+differs from the plan, [design.md](design.md) says how and why.
+
 ### Phase 0 — Foundations (#1–#5)
 *Agree on the language and the paperwork before anyone builds anything.*
 
@@ -96,9 +99,10 @@ failing, and jobs still finish correctly.*
   [explainers/21-counters.md](explainers/21-counters.md).
 - **#28** Safe extra output files. See
   [explainers/17-side-outputs.md](explainers/17-side-outputs.md).
-- **#29 Chaos testing:** randomly kill and freeze machines during a job, 50
-  runs in a row, and check the output still matches the oracle. This is the
-  strongest demo. See
+- **#29 Chaos testing:** randomly kill and freeze workers and restart the
+  coordinator during a job, 50 runs in a row, and check the output still
+  matches the oracle. This is the strongest demo. The harness runs in one
+  process; running it against the Docker cluster is still open. See
   [explainers/22-chaos.md](explainers/22-chaos.md).
 
 ### Phase 4 — Finish the paper's features (#30–#34)
@@ -110,8 +114,9 @@ failing, and jobs still finish correctly.*
 - **#33** The paper's example programs: grep, word count, inverted index,
   sort, and others.
 - **#34** The paper-to-code table filled in: every paper feature linked to
-  its code and its test. This makes the "faithful recreation" claim
-  checkable.
+  its code and its test, with a design walkthrough
+  ([design.md](design.md)) and decision records. This makes the "faithful
+  recreation" claim checkable.
 
 ### Phase 5 — Python catches up (#35–#39) · *stretch*
 
