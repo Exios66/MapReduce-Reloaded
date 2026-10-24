@@ -8,6 +8,7 @@ package task
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -43,15 +44,15 @@ func MapOutput(dir string, m, r int) string {
 // combined MRKV file per reduce task to dir, named by MapOutput. It skips the
 // split's records numbered in skip (§4.6). User code logs to log, which
 // the caller tags with the task. It returns the size of each file and the
-// attempt's counters.
-func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip []uint64, log *slog.Logger) (sizes []int64, counts map[string]int64, err error) {
+// attempt's counters. It stops with ctx's error when ctx is done.
+func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip []uint64, log *slog.Logger) (sizes []int64, counts map[string]int64, err error) {
 	in, err := formats.Input(spec.InputFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx := newContext(spec, id, skip, log)
-	ctx.input = split.Path
-	defer ctx.commitSide(&err)
+	tc := newContext(spec, id, skip, log)
+	tc.input = split.Path
+	defer tc.commitSide(&err)
 	defer recovered(&err)
 	p := spec.Program
 	partitioner := p.Partitioner
@@ -63,7 +64,7 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 	for r := range sorters {
 		cfg := extsort.Config{Dir: dir, Budget: extsort.DefaultBudget / len(sorters)}
 		if p.Combiner != nil {
-			cfg.Combine = combine.Func(ctx, p.Combiner)
+			cfg.Combine = combine.Func(tc, p.Combiner)
 		}
 		sorters[r] = extsort.New(cfg)
 		defer closeJoin(&err, sorters[r])
@@ -74,14 +75,17 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 		return nil, nil, err
 	}
 	defer closeJoin(&err, records)
-	ctx.Count(MapInputBytes, split.End-split.Start)
+	tc.Count(MapInputBytes, split.End-split.Start)
 	emit := emitter(func(key, value []byte) error {
-		ctx.Count(MapOutputRecords, 1)
+		tc.Count(MapOutputRecords, 1)
 		return sorters[partitioner.Partition(key, spec.R)].Add(key, value)
 	})
 	for n := uint64(0); records.Next(); n++ {
-		ctx.Count(MapInputRecords, 1)
-		if err := ctx.call(n, func() error { return p.Mapper.Map(ctx, records.Key(), records.Value(), emit) }); err != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		tc.Count(MapInputRecords, 1)
+		if err := tc.call(n, func() error { return p.Mapper.Map(tc, records.Key(), records.Value(), emit) }); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -91,6 +95,9 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 
 	sizes = make([]int64, len(sorters))
 	for r, s := range sorters {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		sorted, err := s.Sorted()
 		if err != nil {
 			return nil, nil, err
@@ -98,9 +105,9 @@ func Map(spec api.JobSpec, id api.TaskID, split formats.Split, dir string, skip 
 		if sizes[r], err = writeKV(MapOutput(dir, int(id.Index), r), id.Attempt, sorted); err != nil {
 			return nil, nil, err
 		}
-		ctx.Count(MapOutputBytes, sizes[r])
+		tc.Count(MapOutputBytes, sizes[r])
 	}
-	return sizes, ctx.counts, nil
+	return sizes, tc.counts, nil
 }
 
 // TempDir is the directory under a job's output where attempts write
@@ -114,8 +121,9 @@ const TempDir = "_temporary"
 // task's output, given in map task order, and writes
 // <spec.Output>/part-r-<id.Index> through a file in TempDir. It skips the key
 // groups numbered in skip (§4.6). User code logs to log, which the caller
-// tags with the task. It returns the attempt's counters.
-func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64, log *slog.Logger) (counts map[string]int64, err error) {
+// tags with the task. It returns the attempt's counters. It stops with ctx's
+// error when ctx is done.
+func Reduce(ctx context.Context, spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []uint64, log *slog.Logger) (counts map[string]int64, err error) {
 	out, err := formats.Output(spec.OutputFormat)
 	if err != nil {
 		return nil, err
@@ -129,22 +137,25 @@ func Reduce(spec api.JobSpec, id api.TaskID, sources []extsort.Records, skip []u
 	}
 	defer commit(&err, w, tmp, path)
 
-	ctx := newContext(spec, id, skip, log)
-	defer ctx.commitSide(&err) // before the part file, which marks the task done
+	tc := newContext(spec, id, skip, log)
+	defer tc.commitSide(&err) // before the part file, which marks the task done
 	defer recovered(&err)
 	emit := emitter(func(key, value []byte) error {
-		ctx.Count(ReduceOutputRecords, 1)
+		tc.Count(ReduceOutputRecords, 1)
 		return w.Write(key, value)
 	})
 	merged := extsort.Merge(sources...) // in map task order, so equal keys stay in input order
 	n := uint64(0)
-	for key, values := range extsort.Groups(counted{merged, ctx}) {
-		if err := ctx.call(n, func() error { return spec.Program.Reducer.Reduce(ctx, key, values, emit) }); err != nil {
+	for key, values := range extsort.Groups(counted{merged, tc}) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err := tc.call(n, func() error { return spec.Program.Reducer.Reduce(tc, key, values, emit) }); err != nil {
 			return nil, err
 		}
 		n++
 	}
-	return ctx.counts, merged.Err()
+	return tc.counts, merged.Err()
 }
 
 // OpenSources opens MRKV files as reduce sources. The returned function

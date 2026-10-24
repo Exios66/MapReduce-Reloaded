@@ -6,6 +6,7 @@
 package local
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -49,7 +50,7 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	}
 	for i, s := range splits {
 		id := api.TaskID{Kind: api.MapTask, Index: uint32(i)}
-		_, c, err := task.Map(spec, id, s, workDir, nil, slog.Default().With("task", id))
+		_, c, err := task.Map(context.Background(), spec, id, s, workDir, nil, slog.Default().With("task", id))
 		if err != nil {
 			return nil, fmt.Errorf("map task %d: %w", i, err)
 		}
@@ -76,6 +77,6 @@ func reduce(spec api.JobSpec, r uint32, m int, dir string) (map[string]int64, er
 		return nil, err
 	}
 	id := api.TaskID{Kind: api.ReduceTask, Index: r}
-	counts, err := task.Reduce(spec, id, sources, nil, slog.Default().With("task", id))
+	counts, err := task.Reduce(context.Background(), spec, id, sources, nil, slog.Default().With("task", id))
 	return counts, errors.Join(err, closeSources())
 }

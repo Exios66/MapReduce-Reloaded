@@ -107,7 +107,7 @@ func (w *Worker) session(ctx context.Context) error {
 		switch a := resp.GetAssignment().(type) {
 		case *pb.RequestTaskResponse_MapTask:
 			log, done := w.attemptLogger(a.MapTask.GetAttempt()), w.stats.start(mapKind)
-			outputs, counts, err := w.runMap(a.MapTask, log)
+			outputs, counts, err := w.runMap(ctx, a.MapTask, log)
 			done(err)
 			report = w.report(a.MapTask.GetAttempt(), log, outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
@@ -166,7 +166,7 @@ func (w *Worker) attemptLogger(attempt *pb.TaskAttemptId) *slog.Logger {
 }
 
 // runMap runs a map task and returns where its output partitions are.
-func (w *Worker) runMap(m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
+func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, nil, err
@@ -183,7 +183,7 @@ func (w *Worker) runMap(m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocatio
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	sizes, counts, err := task.Map(spec, id, split, dir, m.GetSkipRecords(), log)
+	sizes, counts, err := task.Map(ctx, spec, id, split, dir, m.GetSkipRecords(), log)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -223,7 +223,7 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logg
 		defer func() { err = errors.Join(err, r.Close()) }()
 		sources[i] = kv.NewReader(r)
 	}
-	return task.Reduce(spec, id, sources, m.GetSkipRecords(), log)
+	return task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log)
 }
 
 // open opens one map output: from the worker that holds it, or from shared
