@@ -7,7 +7,8 @@ gRPC, observability, high availability, and multi-language user code.
 
 - **Go** — primary implementation (coordinator, worker, `mr` CLI).
 - **Python** — reference implementation of the API, the file format and
-  local mode. Both languages produce the same bytes for the same job.
+  local mode, without compression. For the same uncompressed job, both
+  languages produce the same bytes.
 
 ## Status
 
