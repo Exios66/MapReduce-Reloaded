@@ -2,6 +2,7 @@
 and go/cmd/mr. The expected files come from scripts/make-corpus-expected.py."""
 
 import dataclasses
+import re
 from pathlib import Path
 
 import pytest
@@ -226,6 +227,31 @@ def test_cli_params(tmp_path, monkeypatch):
     assert specs[0].params == {"k": "a=b", "e": ""}
 
 
+def test_cli_input_format(tmp_path, capsys):
+    # --input-format kv reads what --output-format kv wrote: one record per
+    # distinct word of the first job.
+    main(
+        [
+            "run",
+            "--local",
+            "--output-format",
+            "kv",
+            "-r",
+            "2",
+            "wordcount",
+            str(tmp_path / "words"),
+            RAVEN,
+        ]
+    )
+    first = capsys.readouterr().err
+    parts = str(tmp_path / "words" / "part-r-*")
+    main(["run", "--local", "--input-format", "kv", "wordcount", str(tmp_path / "again"), parts])
+    second = capsys.readouterr().err
+    words = re.search(r"reduce\.output\.records\t(\d+)", first)
+    records = re.search(r"map\.input\.records\t(\d+)", second)
+    assert words and records and words[1] == records[1]
+
+
 def test_cli_globs_once(tmp_path):
     (tmp_path / "[a].txt").write_bytes(Path(RAVEN).read_bytes())  # "[a]" is glob syntax
     main(["run", "--local", "wordcount", str(tmp_path / "out"), str(tmp_path / "*.txt")])
@@ -241,6 +267,7 @@ def test_cli_globs_once(tmp_path):
         (["run", "--local", "-r", "0", "wordcount", "out", RAVEN], "at least 1"),
         (["run", "--local", "-m", "-1", "wordcount", "out", RAVEN], "m must be at least 1"),
         (["run", "--local", "--param", "novalue", "wordcount", "out", RAVEN], "is not NAME=VALUE"),
+        (["run", "--local", "--input-format", "csv", "wordcount", "out", RAVEN], "invalid choice"),
     ],
 )
 def test_cli_errors(capsys, args, want):

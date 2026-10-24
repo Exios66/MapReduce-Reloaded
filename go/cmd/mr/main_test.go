@@ -62,6 +62,27 @@ func TestRunLocal(t *testing.T) {
 	}
 }
 
+// -input-format kv reads what -output-format kv wrote: one record per
+// distinct word of the first job.
+func TestInputFormat(t *testing.T) {
+	dir := t.TempDir()
+	counters := func(args ...string) string {
+		t.Helper()
+		var stderr strings.Builder
+		if err := run(append([]string{"run", "-local"}, args...), new(strings.Builder), &stderr); err != nil {
+			t.Fatal(err)
+		}
+		return stderr.String()
+	}
+	first := counters("-output-format", "kv", "-r", "2", "wordcount", filepath.Join(dir, "words"), raven)
+	second := counters("-input-format", "kv", "wordcount", filepath.Join(dir, "again"), filepath.Join(dir, "words", "part-r-*"))
+	words := regexp.MustCompile(`reduce\.output\.records\t(\d+)`).FindStringSubmatch(first)
+	records := regexp.MustCompile(`map\.input\.records\t(\d+)`).FindStringSubmatch(second)
+	if words == nil || records == nil || words[1] != records[1] {
+		t.Fatalf("first job wrote %v records, second read %v", words, records)
+	}
+}
+
 // Submission waits through an initial connection failure while the coordinator starts.
 func TestSubmitWaitsForCoordinator(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -156,6 +177,7 @@ func TestErrors(t *testing.T) {
 		{[]string{"run", "-local", "-intermediate-codec", "gzip", "wordcount", "out", raven}, `unsupported_codec: "gzip"`},
 		{[]string{"run", "-local", "-output-codec", "zstd", "wordcount", "out", raven}, "takes no codec"},
 		{[]string{"run", "-local", "-output-format", "parquet", "wordcount", "out", raven}, `unknown format "parquet"`},
+		{[]string{"run", "-local", "-input-format", "csv", "wordcount", "out", raven}, `unknown format "csv"`},
 		{[]string{"run", "-bogus"}, "not defined"},
 		{[]string{"submit", "wordcount", "out"}, "usage"},
 		{[]string{"submit", "-bogus"}, "not defined"},
