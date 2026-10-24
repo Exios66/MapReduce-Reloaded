@@ -1,13 +1,18 @@
 // Command mr runs MapReduce jobs, in this process or on a cluster.
 //
-//	mr run -local [-m M] [-r R] [-param name=value]... <program> <output-dir> <inputs>
-//	mr submit [-coordinator addr] [-m M] [-r R] [-param name=value]... [-wait] <program> <output-dir> <inputs>
+//	mr run -local [job flags] <program> <output-dir> <inputs>
+//	mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program> <output-dir> <inputs>
 //	mr status [-coordinator addr] <job-id>
+//
+// The job flags are -m M, -r R, -param name=value (repeatable),
+// -input-format, -output-format, -intermediate-codec and -output-codec.
 //
 // program is a registered program name, such as wordcount; inputs are one or
 // more files or glob patterns. Local mode (§4.7) runs every task in this
-// process and prints the counters to standard error. Each -param is passed
-// to the program's code, which reads it with Context.Param.
+// process and prints the counters to standard error. It skips no bad
+// records (§3.7): the first record that makes user code fail fails the job,
+// so -max-skipped is submit's alone. Each -param is passed to the program's
+// code, which reads it with Context.Param.
 package main
 
 import (
@@ -36,9 +41,13 @@ import (
 )
 
 const usage = `usage:
-  mr run -local [-m M] [-r R] [-param name=value]... <program> <output-dir> <inputs>
-  mr submit [-coordinator addr] [-m M] [-r R] [-param name=value]... [-max-skipped N] [-wait] <program> <output-dir> <inputs>
-  mr status [-coordinator addr] <job-id>`
+  mr run -local [job flags] <program> <output-dir> <inputs>
+  mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program> <output-dir> <inputs>
+  mr status [-coordinator addr] <job-id>
+job flags:
+  -m M  -r R  -param name=value (repeatable)
+  -input-format text|kv  -output-format text|kv
+  -intermediate-codec none|zstd|snappy  -output-codec none|zstd|snappy`
 
 // pollInterval is how often submit -wait checks the job's status.
 const pollInterval = 500 * time.Millisecond
@@ -73,14 +82,14 @@ type job struct {
 	r               uint32
 	params          params
 	// Codec and format names, checked when the job is validated.
-	intermediateCodec, outputFormat, outputCodec string
+	inputFormat, intermediateCodec, outputFormat, outputCodec string
 }
 
 // jobFlags are the flags that describe a job.
 type jobFlags struct {
-	m, r                                         *uint
-	params                                       params
-	intermediateCodec, outputFormat, outputCodec *string
+	m, r                                                      *uint
+	params                                                    params
+	inputFormat, intermediateCodec, outputFormat, outputCodec *string
 }
 
 // addJobFlags defines the job flags on fs; defaultR is the default of -r.
@@ -90,6 +99,7 @@ func addJobFlags(fs *flag.FlagSet, defaultR uint) jobFlags {
 		r:      fs.Uint("r", defaultR, "number of reduce tasks"),
 		params: params{},
 
+		inputFormat:       fs.String("input-format", "text", "input format: text or kv"),
 		intermediateCodec: fs.String("intermediate-codec", "none", "compression for map output: none, zstd or snappy"),
 		outputFormat:      fs.String("output-format", "text", "output format: text or kv"),
 		outputCodec:       fs.String("output-codec", "none", "compression for kv output: none, zstd or snappy"),
@@ -125,7 +135,8 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	}
 	j := job{
 		program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r), params: f.params,
-		intermediateCodec: *f.intermediateCodec, outputFormat: *f.outputFormat, outputCodec: *f.outputCodec,
+		inputFormat: *f.inputFormat, intermediateCodec: *f.intermediateCodec, outputFormat: *f.outputFormat,
+		outputCodec: *f.outputCodec,
 	}
 	if *f.m > 0 {
 		var err error
@@ -168,7 +179,8 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 	defer func() { err = errors.Join(err, os.RemoveAll(work)) }()
 	counts, err := local.Run(api.JobSpec{
 		Program: program, Inputs: j.inputs, Output: j.output, SplitSize: j.splitSize, R: j.r, Params: j.params,
-		OutputFormat: j.outputFormat, IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
+		InputFormat: j.inputFormat, OutputFormat: j.outputFormat,
+		IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
 	}, work)
 	if err != nil {
 		return err
@@ -193,7 +205,8 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	// same way whatever their working directory.
 	spec := &pb.JobSpec{
 		Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true, Params: j.params,
-		OutputFormat: j.outputFormat, IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
+		InputFormat: j.inputFormat, OutputFormat: j.outputFormat,
+		IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
 	}
 	if *maxSkipped >= 0 {
 		spec.MaxSkippedRecords = proto.Uint64(uint64(*maxSkipped))

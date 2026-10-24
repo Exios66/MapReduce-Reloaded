@@ -119,7 +119,8 @@ Rules:
 Readers reject codec IDs they don't support as `unsupported_codec`.
 
 Each job chooses its codecs (#42), by name: `none`, `zstd` or `snappy`.
-`mr run` and `mr submit` set them with flags.
+`mr run` and `mr submit` set them with flags; Python's local mode has no
+codec setting, so its jobs write uncompressed files.
 - `JobSpec.intermediate_codec` (`-intermediate-codec`) applies to the map
   output and the external sort's spill files.
 - `JobSpec.output_codec` (`-output-codec`) applies to output files, and

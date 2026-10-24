@@ -38,6 +38,23 @@ them first.) The golden tests run M = 1, 3 and 7 and expect the
 same bytes. A second test uses a reducer that concatenates values, so any
 reordering would change its output.
 
+## Flags
+
+Both commands take `-m`, `-r`, `-param` and the record formats
+(`-input-format` and `-output-format`, each `text` or `kv`; Python spells
+them with two dashes). An output written with `kv` can be the input of
+the next job with `-input-format kv`.
+
+Two things differ from a cluster job:
+
+- **No bad records are skipped (§3.7).** Skipping needs a task to crash,
+  be reported and run again; local mode runs each task once, so the first
+  record that makes user code fail fails the job, with the task named in
+  the error. `-max-skipped` exists only on `mr submit`.
+- **Python's local mode has no codecs.** Only `mr run` takes
+  `-intermediate-codec` and `-output-codec`. Python jobs write uncompressed
+  files, though its MRKV reader and writer handle every codec.
+
 ## Programs by name
 
 A job on the wire names its program (#4). In Go, a program registers itself

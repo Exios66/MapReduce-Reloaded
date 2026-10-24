@@ -1,12 +1,13 @@
 """Runs MapReduce jobs, mirroring go/cmd/mr:
 
     python -m mapreduce_reloaded run --local [-m M] [-r R] [--param NAME=VALUE]...
-        PROGRAM OUTPUT_DIR INPUT...
+        [--input-format text|kv] [--output-format text|kv] PROGRAM OUTPUT_DIR INPUT...
 
 PROGRAM is an example name, such as wordcount, or module:attribute naming a
 Program. Inputs may be files or glob patterns. Each --param is passed to the
 program, which reads it from ctx.params. Counters are printed to standard
-error. Only local mode exists so far (§4.7).
+error. Only local mode exists so far (§4.7). Unlike go/cmd/mr, it has no
+codec flags: jobs write uncompressed files.
 """
 
 import argparse
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> None:
         metavar="NAME=VALUE",
         help="a parameter for the program; may be repeated",
     )
+    for flag in ("--input-format", "--output-format"):
+        run.add_argument(flag, choices=("text", "kv"), default="text", help="record format")
     run.add_argument("program")
     run.add_argument("output")
     run.add_argument("inputs", nargs="+")
@@ -49,6 +52,8 @@ def main(argv: list[str] | None = None) -> None:
             r=args.r,
             split_size=split.size_for(args.inputs, args.m) if args.m else 0,
             params=dict(args.param),
+            input_format=args.input_format,
+            output_format=args.output_format,
         )
     except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
         parser.error(str(e))
