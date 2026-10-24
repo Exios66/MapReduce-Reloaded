@@ -16,7 +16,7 @@ run on a laptop (Docker Compose) or a cluster (Kubernetes).
    gRPC is first-class; binaries are single static files that containerise
    trivially. Go is also the language of MIT 6.824's MapReduce lab, which
    gives a well-known point of comparison.
-2. **Python is a second, complete reference implementation.** It is easier to
+2. **Python is a second, reference implementation.** It is easier to
    read, easier to write map/reduce functions in, and lets us demonstrate that
    the design is language-independent.
 3. **Both implementations share one contract**, defined once in this repo:
@@ -42,5 +42,7 @@ run on a laptop (Docker Compose) or a cluster (Kubernetes).
 - Any protocol or format change must be made in `proto/` or
   `docs/file-format.md` first, then in both languages.
 - Cross-implementation ("interop") tests become a core part of CI (Phase 5).
-- Mixed clusters are possible: a Go coordinator driving Python workers, or Go
-  workers running Python map/reduce functions.
+- Mixed clusters become possible: a Go coordinator driving Python workers, or
+  Go workers running Python map/reduce functions. Python has the API, the
+  file format and local mode today; its coordinator, worker and UDF host are
+  Phase 5 stretch work (#35–#39).

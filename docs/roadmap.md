@@ -5,8 +5,8 @@ are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
 
 **Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
-has a test. Next are #41 and #42 (Phase 6 Tier A), then Phase 7 (#57, #58,
-#60). Where the build departed from this plan, [design.md](design.md) lists
+has a test, and so are #41 and #42 (Phase 6 Tier A). Next is Phase 7 (#57,
+#58, #60). Where the build departed from this plan, [design.md](design.md) lists
 the differences from the paper and why.
 
 ## Context
@@ -19,8 +19,9 @@ possible, then extend them for modern infrastructure and modern use cases.
 - **Scope:** a real distributed system. A coordinator and N workers talk over
   the network. The cluster runs locally with Docker Compose and can optionally
   be deployed to Kubernetes.
-- **Languages:** Go is the primary implementation. Python is a second,
-  complete reference implementation. The original system was C++; see
+- **Languages:** Go is the primary implementation. Python is the
+  reference implementation of the API, the file format and local mode; a
+  Python coordinator and worker are stretch work (#35–#39). The original system was C++; see
   [ADR 0001](design/0001-languages-and-shared-contract.md) for why we use Go
   and Python instead.
 - **Key architectural idea:** both languages share one contract:
@@ -28,9 +29,9 @@ possible, then extend them for modern infrastructure and modern use cases.
   - a documented on-disk record format;
   - a language-neutral partition hash.
 
-  Go and Python components can therefore be mixed in one cluster, and running
-  the same job through both implementations gives a byte-for-byte correctness
-  check.
+  Running the same job through both implementations' local modes gives a
+  byte-for-byte correctness check. Mixing Go and Python components in one
+  cluster is the goal of Phase 5.
 
 ## Delivery scope (6 weeks)
 
@@ -74,28 +75,28 @@ Each item maps to a paper section and will get a test.
 
 | # | Paper feature (§) | How we implement it |
 |---|---|---|
-| F1 | Programming model: `map(k1,v1)→list(k2,v2)`, `reduce(k2,list(v2))→list(v2)` (§2) | `Mapper`/`Reducer` interfaces in Go; decorators in Python |
-| F2 | Input split into M pieces of 16–64 MB (§3.1) | `InputSplitter` with a configurable split size; split on record boundaries |
+| F1 | Programming model: `map(k1,v1)→list(k2,v2)`, `reduce(k2,list(v2))→list(v2)` (§2) | `Mapper`/`Reducer` interfaces in Go; `Mapper`/`Reducer` classes in Python |
+| F2 | Input split into M pieces of 16–64 MB (§3.1) | `split.Plan` with a configurable split size; split on record boundaries |
 | F3 | One master, M map tasks, R reduce tasks (§3.1) | Coordinator with a task scheduler; workers pull tasks over RPC |
 | F4 | Intermediate pairs buffered, partitioned by `hash(key) mod R`, written to local disk (§3.1) | In-memory buffer, spill to R partition files per map task |
 | F5 | Reducers fetch partitions remotely, sort by key, group, apply reduce (§3.1) | `FetchPartition` streaming RPC on each worker, plus external merge sort |
 | F6 | R output files, one per reduce task (§3.1) | `part-r-00000` … in the output directory or bucket |
-| F7 | Master data structures: task state (idle / in-progress / completed), worker identity, intermediate file locations (§3.2) | `TaskTable` and `WorkerRegistry` in the coordinator |
-| F8 | Worker failure detection by heartbeat; reset its tasks; **re-run completed map tasks** of a failed worker; notify reducers (§3.3) | Heartbeat timeout, task re-queue, location update pushed to reducers |
+| F7 | Master data structures: task state (idle / in-progress / completed), worker identity, intermediate file locations (§3.2) | `TaskTable` and `Registry` in the coordinator |
+| F8 | Worker failure detection by heartbeat; reset its tasks; **re-run completed map tasks** of a failed worker; notify reducers (§3.3) | Heartbeat timeout, task re-queue; a reduce attempt gets the new locations from the coordinator |
 | F9 | Master failure: periodic checkpoints and recovery (§3.3) | With `-data-dir`, a write-ahead log of coordinator decisions, replayed on restart, so the job resumes (no snapshot, ADR 0007); without it a restart loses the job |
 | F10 | Atomic commit semantics: map output reported to master once; reduce output via atomic rename (§3.3) | Write to temp file, `rename`/object-store commit; duplicate completions ignored |
 | F11 | Locality: schedule map tasks near their input data (§3.4) | Workers advertise a host/zone label; scheduler prefers a matching split |
 | F12 | Task granularity: M and R much larger than the number of workers (§3.5) | Configurable; defaults derived from input size and worker count |
 | F13 | Backup tasks for stragglers near the end of the job (§3.6) | Speculative copies once no task of the current phase is idle; first finisher wins |
-| F14 | Custom partitioning function, e.g. `hash(Hostname(url))` (§4.1) | `Partitioner` interface; built-in hash and range partitioners |
+| F14 | Custom partitioning function, e.g. `hash(Hostname(url))` (§4.1) | `Partitioner` interface; built-in hash partitioner (a range partitioner is Phase 6 stretch work) |
 | F15 | Ordering guarantee: keys sorted within each partition (§4.2) | Comes from the sort-merge in the reduce phase; test asserts it |
-| F16 | Combiner function (§4.3) | Optional `Combiner`, run on spill and on merge |
+| F16 | Combiner function (§4.3) | Optional `Combiner`, run on each spill |
 | F17 | Input/output types: text lines, key/value, custom `Reader`/`Writer` (§4.4) | Pluggable `InputFormat`/`OutputFormat` registry |
 | F18 | Side effects: atomic, idempotent auxiliary outputs (§4.5) | Task-scoped temp directory, committed together with the main output |
 | F19 | Skipping bad records: worker reports the crashing record; master tells retries to skip it (§4.6) | Record-sequence tracking; skip list after 2 failures on the same record |
 | F20 | Local execution mode for debugging (§4.7) | `mr run --local`: everything in one process, sequential, deterministic |
 | F21 | Status information: HTTP status pages (§4.8) | Coordinator web UI showing progress, throughput, failures and worker list |
-| F22 | Counters, aggregated by master, de-duplicated across re-executions (§4.9) | `ctx.Counter("name").Inc()`; only counted from the winning task attempt |
+| F22 | Counters, aggregated by master, de-duplicated across re-executions (§4.9) | `ctx.Count(name, delta)`; only counted from the winning task attempt |
 | F23 | Paper example programs (§2.3) | grep, word count, URL access frequency, reverse web-link graph, term vectors, inverted index, distributed sort |
 | F24 | Performance experiments (§5) | Benchmark harness (#57) and the grep, sort, no-backup and killed-worker runs at small scale (#58) |
 
@@ -215,7 +216,7 @@ Each phase ends in a runnable, tested state.
 - Run with Docker Compose: 1 coordinator and 4 workers on a shared volume.
 
 **Phase 3 — Fault tolerance (F8, F9, F13, F18, F19, F22)**
-- Heartbeats with timeouts, map re-execution on worker loss, reducers notified of new locations.
+- Heartbeats with timeouts, map re-execution on worker loss; reduce attempts get the new locations.
 - Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
 - **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. Driving the same faults against the Compose cluster is #29.

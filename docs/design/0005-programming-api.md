@@ -25,13 +25,15 @@ generics, Python objects) or raw bytes.
    is possible; `MapFunc`, `ReduceFunc` and `PartitionFunc` let the common
    case be a plain function. `Combiner` is an alias of `Reducer` (§4.3).
 3. **Reduce values are streamed**: `iter.Seq[[]byte]` in Go, a one-pass
-   iterable in Python. A key's values may not fit in memory (§4.1).
+   iterable in Python. A key's values may not fit in memory (§2.1).
 4. **Output errors reach user code.** Go's `Emitter.Emit` returns an error
    (for example, a full disk), which the user returns. Python functions
    yield or return pairs, and the framework checks they are bytes.
 5. **Context** gives user code its task ID, the job's params, counters
-   (§4.9) and a logger. It does not carry cancellation yet; backup tasks
-   (#25) can add it, and only the framework implements Context.
+   (§4.9) and a logger. It does not carry cancellation: the coordinator
+   stops a losing backup attempt (#25) in its heartbeat reply, and the
+   worker stops the attempt, not user code. Only the framework implements
+   Context.
 6. **`Program` is the code, `JobSpec` is code plus data.** The wire
    `JobSpec` names a registered program, so the in-process `JobSpec` holds
    a `Program` and otherwise mirrors the wire fields. M is not set directly:

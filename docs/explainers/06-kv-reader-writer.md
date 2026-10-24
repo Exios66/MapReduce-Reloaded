@@ -35,9 +35,9 @@ reads and writes data through it.
 
 ## How we know it's right
 
-- **Golden files:** both languages read all 9 files in `testdata/format/`
+- **Golden files:** both languages read all 17 files in `testdata/format/`
   and get the expected records or error, and both writers reproduce the 4
-  valid files **byte for byte**. Since both match the same bytes, a file
+  valid uncompressed files **byte for byte**. Since both match the same bytes, a file
   written by Go is readable by Python and vice versa.
 - **Hand-made bad files:** 16 malformed inputs (bad version, zero record
   count, leftover bytes, oversized block, short footer, ...) cover every
