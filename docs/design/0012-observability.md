@@ -23,12 +23,13 @@ system can scrape, and logs it can parse.
    label values. There is no client library: the metrics are a few gauges
    and counters, the format is simple, and the dependency stays out of
    `go.mod`.
-3. **Job state is gauges; worker activity is counters.** The coordinator's
+3. **Job state is gauges; worker totals are counters.** The coordinator's
    `/metrics` has `mr_workers`, `mr_job_tasks{job,kind,state}` and
    `mr_job_counter{job,name}`. A job's counters can go down when a re-run
    map task replaces its earlier counts, so they cannot be counters. Workers,
-   with `-http`, serve `mr_worker_tasks_total{kind,result}`, bytes written
-   and fetched, and registrations, as atomics in `worker/metrics.go`.
+   with `-http`, serve the counters `mr_worker_tasks_total{kind,result}`,
+   bytes written and fetched, and registrations, and the gauge
+   `mr_worker_task_running{kind}`, as atomics in `worker/metrics.go`.
 4. **Logs use `log/slog`.** `-log-format json` on the coordinator and the
    worker writes one JSON object per line; the default is text. The worker
    logs every message about an attempt, and its user code through

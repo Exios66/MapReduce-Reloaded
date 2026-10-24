@@ -16,8 +16,10 @@ close "close" is.
    `Server.RequestTask` first looks for an idle task. If there is none and
    `Config.Backups` is set, it calls `TaskTable.Backup(worker)`. A worker
    that would otherwise be told to wait gets a second attempt instead, and
-   no backup ever delays a task that has not started.
-2. **One backup per task, never on the same worker.** `canBackUp` accepts
+   no backup ever delays a task that has not started. A worker held back
+   from an idle map task for locality (`Config.LocalityWait`, explainer
+   23) waits instead; it does not get a backup.
+2. **One backup at a time, never on the same worker.** `canBackUp` accepts
    a task that is in progress with exactly one running attempt, on another
    worker. A task runs on at most two workers. If one attempt fails, the
    other carries on and the task can get a new backup.
@@ -47,7 +49,9 @@ close "close" is.
 
 - Idle workers do duplicate work at the end of a phase. That costs
   capacity that would otherwise be idle, but not time.
-- A losing attempt is not stopped, and runs until it finishes (#121). One
-  still running when the job ends fails, because the job has removed
-  `_temporary` and attempts never create it. It leaves nothing.
+- A losing attempt is not stopped, and runs until it finishes (#121). A
+  losing reduce attempt still running when the job ends fails, because the
+  job has removed `_temporary` and attempts never create it, so it leaves
+  nothing. A losing map attempt writes to its worker's work directory and
+  can finish there, leaving partition files that no reducer reads.
 - Output must be deterministic for both attempts to agree (§3.3).

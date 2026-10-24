@@ -19,7 +19,9 @@ Components:
   ([ADR 0003](design/0003-rpc-contract.md)).
 - **Shuffle server** (`go/internal/shuffle`). Each worker serves its own map
   output over `ShuffleService.FetchPartition`. Reducers fetch from it
-  directly, so no data passes through the coordinator.
+  directly, so no data passes through the coordinator. A worker started with
+  `-listen ""` serves nothing: it writes to a work directory all workers
+  share, and reports a `file://` location instead.
 - **Local mode** (`go/cmd/mr`, `go/internal/local`). The whole pipeline in
   one process, using the same `split`, `task` and `extsort` code as the
   cluster (§4.7).
@@ -183,7 +185,8 @@ If the fetch still fails with `Unavailable`, `NotFound` or
 attempt fails, and `Worker.report` sends `TaskFailure.lost_output` naming
 the `PartitionLocation`. `TaskTable.lose` makes that map task idle again,
 unless it has already re-run elsewhere with a different address. The reduce
-task becomes idle too, and a worker picks it up once the map is complete.
+task becomes idle too, unless another attempt of it is still running, and a
+worker picks it up once the map is complete.
 
 ### Failure recovery
 
@@ -206,8 +209,8 @@ sequenceDiagram
 
 *Worker failure.* `Server.Monitor` calls `Expire` every heartbeat interval.
 A worker unheard for `WorkerTimeout` is removed from the registry (the
-shipped binary uses 3 s and 10 s). The coordinator appends `WorkerLost` to
-the log. `TaskTable.ResetWorker` stops the worker's running attempts and
+shipped binary uses 3 s and 10 s). If a job is active, the coordinator
+appends `WorkerLost` to the log, and `TaskTable.ResetWorker` stops the worker's running attempts and
 makes its completed map tasks idle, because their output was on its disk.
 Its completed reduce tasks stay done, since their output is in the output
 directory (§3.3). If the worker returns, it is told to register again, under
@@ -250,7 +253,8 @@ It rejects the second, because `TaskTable.Complete` finds the task already
 completed. A rejected attempt changes nothing in the task table and its
 counters are dropped. Both attempts rename to the same `part-r-*`, and a
 rename is atomic, so readers see a whole file either way. A deterministic
-reducer writes the same bytes in both. The loser's temporary name no longer
+reducer writes the same bytes in both; a nondeterministic one can leave the
+rejected attempt's bytes in the final file. The loser's temporary name no longer
 exists after its rename, and `job.cleanup` removes anything left in
 `_temporary` when the job ends (see
 [the backup tasks explainer](explainers/20-backup-tasks.md)).
@@ -265,16 +269,16 @@ no reducer is told about them.
 | Google's internal RPC (§3.1) | gRPC and protobuf, with Go and Python generated from `proto/` | Both languages must speak one wire contract, and the shuffle needs streaming. | [ADR 0003](design/0003-rpc-contract.md), [explainer](explainers/03-rpc-contract.md) |
 | GFS holds input and output (§3.1) | A local or shared volume, mounted at the same path in every container. S3 is planned in #41. | GFS is not available, and the cluster runs on one VM. | [cluster VM](cluster-vm.md), [roadmap](roadmap.md) |
 | Intermediate records in files of undescribed format (§3.1) | MRKV: checksummed blocks of records with a footer. Compression is planned in #42. | Go and Python must agree byte for byte, corruption must be detected, and fetches must resume. | [ADR 0004](design/0004-intermediate-file-format.md), [file format](file-format.md), [explainer](explainers/04-file-format.md) |
-| Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | A write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](design/0007-write-ahead-log.md), [explainer](explainers/18-coordinator-recovery.md) |
+| Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](design/0007-write-ahead-log.md), [explainer](explainers/18-coordinator-recovery.md) |
 | Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](design/0003-rpc-contract.md), [explainer](explainers/16-worker-failure.md), [ADR 0009](design/0009-failure-detection.md) |
-| Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle. One backup per task, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](explainers/20-backup-tasks.md), [ADR 0010](design/0010-backup-tasks.md) |
+| Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](explainers/20-backup-tasks.md), [ADR 0010](design/0010-backup-tasks.md) |
 | A signal handler sends the bad record's number by UDP (§4.6) | The worker recovers the panic and reports the record in `ReportTask`. The coordinator skips it after two crashes. | Go can recover a panic, and the report already reaches the coordinator. | [explainer](explainers/19-bad-records.md), [ADR 0011](design/0011-bad-records.md) |
 | Master sums counters from task reports and ignores duplicates (§4.9) | Only the accepted attempt's counters are kept. A re-run map replaces its earlier counts. | A task may run more than once, and adding every attempt would over-count. | [explainer](explainers/21-counters.md) |
 | Master serves HTTP status pages (§4.8) | A status page and Prometheus `/metrics` on the coordinator, `/metrics` on workers, JSON logs, and a Grafana dashboard in the Compose monitoring profile. | These are standard tools, and per-attempt logs stay on each worker. | [explainer](explainers/24-status.md), [ADR 0012](design/0012-observability.md) |
 | Master places map tasks near GFS replicas (§3.4) | A scheduler hook: `Config.Locate` labels splits, and `LocalityWait` holds tasks back. Nothing sets `Locate` in Compose, so there is no location source. | All Compose workers share one volume, so there is nothing to exploit until a store knows where data lives (#41). | [explainer](explainers/23-locality.md), [paper mapping](paper-mapping.md) (F11) |
 | Keys and values are strings (§2) | `[]byte` in Go and `bytes` in Python. User code encodes its own data. | Both languages then sort and hash identically, with no extra rules. | [ADR 0005](design/0005-programming-api.md), [explainer](explainers/07-programming-api.md) |
 | Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](file-format.md), [explainer](explainers/09-external-sort.md) |
-| M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`. | These follow the paper's guidance, and M and R stay much larger than the number of workers. | [explainer](explainers/12-splits.md) |
+| M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`. | These follow the paper's guidance. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](explainers/12-splits.md) |
 | One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](design/0001-languages-and-shared-contract.md), [explainer](explainers/11-local-mode.md) |
 | Clusters of about 1,800 machines (§5.1) | Docker Compose on one 8 GB VM: one coordinator and four workers. | It is the hardware available, and it still exercises every protocol path. | [cluster VM](cluster-vm.md), [explainer](explainers/14-cluster.md) |
 

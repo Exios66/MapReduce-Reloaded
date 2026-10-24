@@ -24,7 +24,8 @@ no need to dial back into them.
    removes workers not seen for longer than the timeout. If a job is active,
    the coordinator logs `WorkerLost` (ADR 0007) for each one and calls
    `TaskTable.ResetWorker`:
-   - its running attempts stop, and their tasks become idle;
+   - its running attempts are forgotten, and their tasks become idle (the
+     worker is not told, and keeps running them, #121);
    - its completed map tasks become idle;
    - its completed reduce tasks stay completed.
 3. **A dead worker is not trusted under its old ID.** `RequestTask` for
