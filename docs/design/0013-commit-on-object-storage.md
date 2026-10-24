@@ -27,7 +27,7 @@ missing directory (`task.TempDir`).
    succeeds, and `Cleanup` removes the object with the rest of
    `_temporary/`.
 2. **Directories are marker objects.** `MkdirAll(dir)` writes an empty
-   object `dir/`, and `Create` fails with `fs.ErrNotExist` unless the
+   object `dir/`, and one for each parent, and `Create` fails with `fs.ErrNotExist` unless the
    file's directory has one. `Setup` therefore creates `_temporary/`, and
    `Cleanup` deletes everything under it, marker included. A late attempt
    then fails at `Create`, as it does locally.

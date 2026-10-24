@@ -25,7 +25,8 @@ import (
 // is then addressed by path rather than by virtual host.
 //
 // An object store has no directories and no rename (ADR 0013). MkdirAll
-// writes an empty marker object, dir/, and Create fails unless the file's
+// writes an empty marker object, dir/, for the directory and each parent,
+// and Create fails unless the file's
 // directory has one, as os.Create fails in a missing directory. Commit
 // copies tmp to name on the server, then deletes tmp: a copy creates its
 // object whole, so readers still never see part of a file.
@@ -198,9 +199,18 @@ func (b *S3) MkdirAll(ctx context.Context, dir string) error {
 	if err != nil || key == "" {
 		return err
 	}
-	key = strings.TrimSuffix(key, "/") + "/"
-	_, err = c.PutObject(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &key, Body: strings.NewReader("")})
-	return err
+	// One marker for the directory and each of its parents.
+	key = strings.TrimSuffix(key, "/")
+	for i := range len(key) + 1 {
+		if i < len(key) && key[i] != '/' {
+			continue
+		}
+		marker := key[:i] + "/"
+		if _, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &marker, Body: strings.NewReader("")}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteAll deletes every object under dir/, or in the bucket if dir is
