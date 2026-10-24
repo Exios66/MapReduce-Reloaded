@@ -55,7 +55,8 @@ The main design choices:
    comes later:
    - `skip_records` / `failed_record` for skipping bad records (§4.6);
    - `Counters` for counters (§4.9);
-   - `TaskProgress.fraction_done` for stragglers (§3.6);
+   - `TaskProgress.fraction_done` for stragglers (§3.6), unused so far:
+     backups go to the attempt that started first (ADR 0010);
    - `InputSplit.locations` and `WorkerInfo.zone` for locality (§3.4).
 
    Adding fields later is also safe, but defining them now makes the design

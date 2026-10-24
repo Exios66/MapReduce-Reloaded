@@ -34,7 +34,8 @@ type JobState int32
 
 const (
 	JobState_JOB_STATE_UNSPECIFIED JobState = 0
-	// Accepted, waiting for resources.
+	// Accepted, waiting for resources. Not produced yet: a job is MAPPING once
+	// it is submitted, even with no workers.
 	JobState_JOB_STATE_PENDING JobState = 1
 	// Map tasks are running.
 	JobState_JOB_STATE_MAPPING JobState = 2
@@ -242,6 +243,8 @@ type RequestTaskResponse struct {
 	// The coordinator always sets exactly one of these. A worker that finds
 	// none set (e.g. a newer coordinator sent a kind this worker does not know)
 	// treats it as `wait` with a default delay, so old workers keep working.
+	// A worker the coordinator does not know gets the error NOT_FOUND instead,
+	// and registers again.
 	//
 	// Types that are valid to be assigned to Assignment:
 	//
@@ -758,7 +761,11 @@ type TaskFailure struct {
 	// crashed, if known (§4.6).
 	FailedRecord *uint64 `protobuf:"varint,2,opt,name=failed_record,json=failedRecord,proto3,oneof" json:"failed_record,omitempty"`
 	// The map output a reduce task could not fetch, if that is why it
-	// failed. The coordinator runs that map task again (§3.3).
+	// failed: the fetch ended with UNAVAILABLE, NOT_FOUND or DEADLINE_EXCEEDED.
+	// The coordinator runs that map task again (§3.3) if a worker served the
+	// output (worker_address is set) and it is still the task's output. An
+	// output on shared storage, or one that fails its checksum, is not
+	// reported here, and the map task is not run again.
 	LostOutput    *PartitionLocation `protobuf:"bytes,3,opt,name=lost_output,json=lostOutput,proto3" json:"lost_output,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -919,8 +926,9 @@ type TaskProgress struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The running attempt.
 	Attempt *TaskAttemptId `protobuf:"bytes,1,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	// Fraction of the task's input processed so far, from 0.0 to 1.0. Used to
-	// spot stragglers (§3.6).
+	// Fraction of the task's input processed so far, from 0.0 to 1.0. Not
+	// used yet: workers leave it 0, and backups go to the attempt that started
+	// first (§3.6, ADR 0010).
 	FractionDone  float32 `protobuf:"fixed32,2,opt,name=fraction_done,json=fractionDone,proto3" json:"fraction_done,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

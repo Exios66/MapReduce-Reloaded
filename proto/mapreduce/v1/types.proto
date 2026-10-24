@@ -112,12 +112,14 @@ message JobSpec {
   string program = 1;
   // Input files or glob patterns, as URIs.
   repeated string inputs = 2;
-  // Output directory URI. Reduce task r writes "<output>/part-r-<r>".
+  // Output directory URI. Reduce task r writes "<output>/part-r-<r>", with r
+  // in at least five digits: part-r-00000, part-r-00001, ...
   string output = 3;
   // Target split size in bytes; this determines M (§3.5). 0 means the
   // default (64 MiB).
   uint64 split_size_bytes = 4;
-  // Number of reduce tasks, R (§3.5). Also the number of output files.
+  // Number of reduce tasks, R (§3.5). Also the number of output files. 0
+  // means 2 per registered worker.
   uint32 num_reduce_tasks = 5;
   // Name of the input format, e.g. "text" (§4.4).
   string input_format = 6;

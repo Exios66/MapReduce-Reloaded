@@ -27,7 +27,8 @@ type JobSpec struct {
 	Program Program
 	// Inputs are input files or glob patterns, as URIs.
 	Inputs []string
-	// Output is the output directory. Reduce task r writes part-r-<r>.
+	// Output is the output directory. Reduce task r writes part-r-<r>, with r
+	// in at least five digits.
 	Output string
 	// SplitSize is the target size of an input split in bytes, which
 	// determines M, the number of map tasks (§3.1). 0 means 64 MiB.
