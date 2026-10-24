@@ -30,7 +30,8 @@ func Start(t testing.TB) string {
 	if _, err := client.CreateBucket(t.Context(), &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
 		t.Fatal(err)
 	}
+	prev, _ := storage.For("s3://" + bucket)
 	storage.Register("s3", storage.NewS3(client))
-	t.Cleanup(func() { storage.Register("s3", &storage.S3{}) })
+	t.Cleanup(func() { storage.Register("s3", prev) })
 	return "s3://" + bucket
 }

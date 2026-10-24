@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -93,7 +94,8 @@ func (b *S3) List(ctx context.Context, pattern string) ([]string, error) {
 			}
 		}
 	}
-	return names, nil // ListObjectsV2 returns keys in order
+	slices.Sort(names) // not every store lists keys in order
+	return names, nil
 }
 
 func (b *S3) Size(ctx context.Context, name string) (int64, error) {
