@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -45,6 +45,12 @@ e2e: cluster-up
 e2e-s3: cluster-up
 	$(COMPOSE) --profile s3 up -d --wait s3
 	scripts/e2e.sh s3
+
+# One of the paper's benchmarks, with its data rates over time
+# (bench/README.md): make bench SCENARIO=grep|sort|zipf.
+SCENARIO ?= grep
+bench:
+	bench/run.sh $(SCENARIO)
 
 # Bytes shuffled and job time per intermediate codec (bench/README.md).
 bench-codecs: cluster-up

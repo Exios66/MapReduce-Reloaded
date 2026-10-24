@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Runs one of the paper's benchmarks (#57) on the Compose cluster and writes
+# its data rates over time, its counters and the machine it ran on to
+# bench/results/SCENARIO-STAMP/.
+#
+# Usage: bench/run.sh grep|sort|zipf
+#
+# grep runs the grep example over bench/gen-grep.py's records for the
+# pattern XYZ (§5.2), sort runs distsort over bench/gen-sort.py's records
+# (§5.3), and zipf runs word count over bench/gen-zipf.py's skewed words.
+# The environment sets the run: WORKERS (default 4), SIZE in bytes (default
+# 256 MiB), M (default 16) and R (default 4) tasks, SEED (default 42) and
+# INTERVAL, the seconds between samples of /metrics (default 0.5).
+#
+# The cluster is started, or scaled, to WORKERS workers. While the job runs,
+# scrape-metrics.py samples every worker's /metrics from the host, at the
+# worker containers' addresses; seconds in the samples count from just
+# before the job is submitted. The run's directory holds:
+#
+# - samples.csv: the samples, from scrape-metrics.py;
+# - rates.csv: the input, shuffle and output rates, from plot-rates.py;
+# - rates.png: the same in three panels, if matplotlib is installed;
+# - status.txt: what mr submit -wait printed;
+# - result.json: the run's settings, the job's counters and the machine.
+#
+# The input and the job's output are removed from /out at the end, as in
+# codecs.sh.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+scenario=${1:-}
+case $scenario in
+grep) gen=gen-grep.py program=grep params=(-param pattern=XYZ) ;;
+sort) gen=gen-sort.py program=distsort params=() ;;
+zipf) gen=gen-zipf.py program=wordcount params=() ;;
+*)
+    echo "usage: bench/run.sh grep|sort|zipf" >&2
+    exit 2
+    ;;
+esac
+workers=${WORKERS:-4}
+size=${SIZE:-268435456}
+m=${M:-16}
+r=${R:-4}
+seed=${SEED:-42}
+interval=${INTERVAL:-0.5}
+
+compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+dir=bench/results/$scenario-$stamp
+out=/out/bench-$scenario-$stamp
+tmp=$(mktemp -d)
+scraper=
+rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$@"; }
+cleanup() {
+    [ -z "$scraper" ] || kill "$scraper" 2>/dev/null || true
+    rm -rf "$tmp"
+    rm_out /out/bench-input.txt "$out"
+}
+trap cleanup EXIT
+
+"${compose[@]}" up -d --build --scale worker="$workers"
+mkdir -p "$dir"
+
+python3 "bench/$gen" "$size" "$seed" > "$tmp/input.txt"
+input_bytes=$(wc -c < "$tmp/input.txt")
+"${compose[@]}" cp "$tmp/input.txt" coordinator:/out/bench-input.txt
+
+urls=()
+for id in $("${compose[@]}" ps -q worker); do
+    ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$id")
+    urls+=("http://$ip:8081/metrics")
+done
+
+# Background jobs of a non-interactive shell ignore SIGINT, so the scraper
+# is stopped with SIGTERM; it flushes its rows after every round.
+python3 bench/scrape-metrics.py "$interval" 86400 "${urls[@]}" > "$dir/samples.csv" &
+scraper=$!
+start=$(date +%s.%N)
+"${compose[@]}" run --rm mr submit -coordinator coordinator:7070 -m "$m" -r "$r" -wait \
+    "${params[@]}" "$program" "$out" /out/bench-input.txt > "$dir/status.txt"
+end=$(date +%s.%N)
+# Two more rounds, so the samples hold the counters of the last tasks.
+sleep "$(awk -v i="$interval" 'BEGIN { print 2 * i }')"
+kill "$scraper"
+wait "$scraper" 2>/dev/null || true
+scraper=
+
+python3 bench/plot-rates.py "$dir/samples.csv" > "$dir/rates.csv"
+if python3 -c "import matplotlib" 2>/dev/null; then
+    python3 bench/plot-rates.py "$dir/samples.csv" "$dir/rates.png"
+fi
+
+SCENARIO=$scenario PROGRAM=$program WORKERS=$workers SIZE=$size M=$m R=$r SEED=$seed \
+    INTERVAL=$interval INPUT_BYTES=$input_bytes START=$start END=$end \
+    DOCKER=$(docker version --format '{{.Server.Version}}') \
+    COMMIT=$(git rev-parse HEAD) DIRTY=$(git status --porcelain | wc -l) \
+    python3 - "$dir/status.txt" > "$dir/result.json" <<'EOF'
+import json, os, platform, sys
+
+env = os.environ
+
+
+def number(s):
+    try:
+        return int(s)
+    except ValueError:
+        try:
+            return float(s)
+        except ValueError:
+            return s
+
+
+def meminfo():
+    with open("/proc/meminfo") as f:
+        for line in f:
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) * 1024
+    return None
+
+
+def cpu():
+    with open("/proc/cpuinfo") as f:
+        for line in f:
+            if line.startswith("model name"):
+                return line.partition(":")[2].strip()
+    return platform.processor()
+
+
+# The first line is the job's id and state, each other a name and value.
+with open(sys.argv[1]) as f:
+    lines = [line.split() for line in f if line.strip()]
+job = {"id": lines[0][0], "state": lines[0][1]}
+job.update((name, number(value)) for name, value in lines[1:])
+json.dump(
+    {
+        "scenario": env["SCENARIO"],
+        "program": env["PROGRAM"],
+        "workers": int(env["WORKERS"]),
+        "size": int(env["SIZE"]),
+        "input_bytes": int(env["INPUT_BYTES"]),
+        "m": int(env["M"]),
+        "r": int(env["R"]),
+        "seed": int(env["SEED"]),
+        "interval": float(env["INTERVAL"]),
+        "wall_seconds": round(float(env["END"]) - float(env["START"]), 3),
+        "job": job,
+        "commit": env["COMMIT"],
+        "dirty": int(env["DIRTY"]) > 0,
+        "machine": {
+            "cpus": os.cpu_count(),
+            "cpu": cpu(),
+            "memory_bytes": meminfo(),
+            "kernel": platform.release(),
+            "docker": env["DOCKER"],
+        },
+    },
+    sys.stdout,
+    indent=2,
+)
+print()
+EOF
+echo "$dir"
