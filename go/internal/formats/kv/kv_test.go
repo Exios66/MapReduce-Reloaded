@@ -14,6 +14,8 @@ import (
 	"slices"
 	"testing"
 	"testing/iotest"
+
+	"github.com/klauspost/compress/s2"
 )
 
 const formatDir = "../../../../testdata/format"
@@ -362,5 +364,17 @@ func TestCodecLimits(t *testing.T) {
 	data := file(header(1, byte(CodecZstd), 0, 0), block(1, big), footer(1, 1))
 	if _, err := readAll(bytes.NewReader(data)); !errors.Is(err, ErrBadBlock) {
 		t.Errorf("oversized zstd block: error = %v, want bad_block", err)
+	}
+	// S2 decodes its own extensions to Snappy, which other readers reject.
+	value := bytes.Repeat([]byte("abcdefgh0123"), 1000)
+	payload := binary.AppendUvarint([]byte{1, 'k'}, uint64(len(value)))
+	payload = append(payload, value...)
+	repeats := s2.Encode(nil, payload)
+	if out, err := s2.Decode(nil, repeats); err != nil || !bytes.Equal(out, payload) {
+		t.Fatalf("s2 round trip: %v", err)
+	}
+	data = file(header(1, byte(CodecSnappy), 0, 0), block(1, repeats), footer(1, 1))
+	if _, err := readAll(bytes.NewReader(data)); !errors.Is(err, ErrBadBlock) {
+		t.Errorf("S2 block: error = %v, want bad_block", err)
 	}
 }
