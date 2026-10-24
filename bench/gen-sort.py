@@ -31,15 +31,16 @@ size = int(sys.argv[1])
 rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 42)
 records = -(-size // RECORD)
 
-keys = b""  # random bytes not yet used, without newlines
+keys, used = b"", 0  # random bytes without newlines, and how many are used
 
 
 def key():
-    global keys
-    while len(keys) < KEY:
-        keys += rng.randbytes(64 * 1024).translate(None, b"\n\r")
-    k, keys = keys[:KEY], keys[KEY:]
-    return k
+    global keys, used
+    if len(keys) - used < KEY:
+        keys = keys[used:] + rng.randbytes(64 * 1024).translate(None, b"\n\r")
+        used = 0
+    used += KEY
+    return keys[used - KEY : used]
 
 
 out = sys.stdout.buffer
