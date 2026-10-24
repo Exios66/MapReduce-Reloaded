@@ -134,6 +134,11 @@ func testBackend(t *testing.T, dir string) {
 	if err := DeleteAll(ctx, tmp); err != nil {
 		t.Errorf("DeleteAll of a missing directory = %v", err)
 	}
+	// MkdirAll creates parents, so a file can be created in one.
+	if err := MkdirAll(ctx, Join(dir, "x", "y")); err != nil {
+		t.Fatal(err)
+	}
+	write(Join(dir, "x", "f"), "in a parent")
 	// A late attempt cannot write once its job's directory is gone.
 	if _, err := Create(ctx, Join(tmp, "late")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("Create in a deleted directory = %v, want fs.ErrNotExist", err)
