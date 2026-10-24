@@ -58,7 +58,7 @@ func TestJobSpecErrors(t *testing.T) {
 	for want, m := range map[string]*pb.JobSpec{
 		"unknown program":     {Program: "nope"},
 		"unknown partitioner": {Program: "wordcount", Partitioner: "range"},
-		"unsupported URI":     {Program: "wordcount", Inputs: []string{"s3://b/k"}, Output: "o", NumReduceTasks: 1},
+		"unsupported URI":     {Program: "wordcount", Inputs: []string{"gs://b/k"}, Output: "o", NumReduceTasks: 1},
 		"R must be":           {Program: "wordcount", Inputs: []string{"in"}, Output: "o"},
 	} {
 		if _, err := JobSpec(m); err == nil || !strings.Contains(err.Error(), want) {
@@ -81,10 +81,16 @@ func TestSplitRoundTrip(t *testing.T) {
 	if err != nil || got != (formats.Split{Path: abs, Start: 10, End: 25}) {
 		t.Fatalf("Split = %+v, %v", got, err)
 	}
-	for _, uri := range []string{"s3://b/k", "file://host/a.txt"} {
+	for _, uri := range []string{"gs://b/k", "s3:b/k", "file://host/a.txt"} {
 		if _, err := Split(&pb.InputSplit{Uri: uri}); err == nil {
 			t.Fatalf("%s accepted", uri)
 		}
+	}
+	s3 := formats.Split{Path: "s3://b/in/a.txt", Start: 10, End: 25}
+	if m, err := InputSplit(s3); err != nil || m.Uri != s3.Path {
+		t.Fatalf("InputSplit = %v, %v", m, err)
+	} else if got, err := Split(m); err != nil || got != s3 {
+		t.Fatalf("Split = %+v, %v", got, err)
 	}
 	if _, err := Path("file://%zz"); err == nil {
 		t.Fatal("malformed URI accepted")

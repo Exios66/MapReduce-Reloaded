@@ -1,11 +1,13 @@
-package storage
+package storage_test
 
 import (
 	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	. "github.com/exios66/mapreduce-reloaded/go/internal/storage"
+	"github.com/exios66/mapreduce-reloaded/go/internal/storage/s3test"
 )
 
 func TestScheme(t *testing.T) {
@@ -39,56 +41,92 @@ func TestUnknownScheme(t *testing.T) {
 	}
 }
 
-func TestLocal(t *testing.T) {
-	ctx := t.Context()
-	dir := filepath.Join(t.TempDir(), "out")
-	if err := MkdirAll(ctx, Join(dir, "tmp")); err != nil {
+func TestLocal(t *testing.T) { testBackend(t, filepath.Join(t.TempDir(), "out")) }
+
+func TestS3(t *testing.T) {
+	bucket := s3test.Start(t)
+	testBackend(t, bucket+"/out")
+	w, err := Create(t.Context(), bucket+"/other/object")
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"b", "a"} {
-		w, err := Create(ctx, Join(dir, "tmp", name))
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteAll(t.Context(), bucket); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"out", "other"} {
+		if left, err := List(t.Context(), bucket+"/"+dir+"/*"); err != nil || len(left) > 0 {
+			t.Errorf("after DeleteAll of the bucket, List of %s = %q, %v", dir, left, err)
+		}
+	}
+}
+
+// testBackend writes, commits, lists, reads and deletes files under dir.
+func testBackend(t *testing.T, dir string) {
+	ctx := t.Context()
+	tmp := Join(dir, "_temporary")
+	if err := MkdirAll(ctx, tmp); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, content string) {
+		t.Helper()
+		w, err := Create(ctx, name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := io.WriteString(w, "hello "+name); err != nil {
+		if _, err := io.WriteString(w, content); err != nil {
 			t.Fatal(err)
 		}
 		if err := w.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if err := Commit(ctx, Join(dir, "tmp", name), Join(dir, name)); err != nil {
+	}
+	for _, name := range []string{"b", "a"} {
+		write(Join(tmp, name), "hello "+name)
+		if err := Commit(ctx, Join(tmp, name), Join(dir, name)); err != nil {
 			t.Fatal(err)
 		}
 	}
+	write(Join(tmp, "c"), "left behind")
 
-	names, err := List(ctx, Join(dir, "*"))
-	if want := []string{Join(dir, "a"), Join(dir, "b"), Join(dir, "tmp")}; err != nil || !slices.Equal(names, want) {
-		t.Fatalf("List = %q, %v, want %q", names, err, want)
+	list := func(pattern string, want ...string) {
+		t.Helper()
+		got, err := List(ctx, pattern)
+		if err != nil || !slices.Equal(got, want) {
+			t.Errorf("List(%q) = %q, %v, want %q", pattern, got, err, want)
+		}
 	}
+	list(Join(dir, "?"), Join(dir, "a"), Join(dir, "b"))
+	list(Join(tmp, "*"), Join(tmp, "c"))
+	list(Join(dir, "part-*"))
 	if size, err := Size(ctx, Join(dir, "a")); err != nil || size != 7 {
 		t.Errorf("Size = %d, %v, want 7", size, err)
 	}
-	r, err := Open(ctx, Join(dir, "a"), 6)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b, err := io.ReadAll(r); err != nil || string(b) != "a" {
-		t.Errorf("read from offset 6 = %q, %v, want %q", b, err, "a")
-	}
-	if err := r.Close(); err != nil {
-		t.Fatal(err)
+	for offset, want := range map[int64]string{0: "hello a", 6: "a"} {
+		r, err := Open(ctx, Join(dir, "a"), offset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b, err := io.ReadAll(r); err != nil || string(b) != want {
+			t.Errorf("read from offset %d = %q, %v, want %q", offset, b, err, want)
+		}
+		if err := r.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := Delete(ctx, Join(dir, "b")); err != nil {
 		t.Fatal(err)
 	}
-	if err := DeleteAll(ctx, dir); err != nil {
+	list(Join(dir, "?"), Join(dir, "a"))
+	if err := DeleteAll(ctx, tmp); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Errorf("after DeleteAll, Stat = %v, want not exist", err)
-	}
-	if err := DeleteAll(ctx, dir); err != nil {
+	list(Join(tmp, "*"))
+	list(Join(dir, "?"), Join(dir, "a"))
+	if err := DeleteAll(ctx, tmp); err != nil {
 		t.Errorf("DeleteAll of a missing directory = %v", err)
 	}
 }

@@ -243,7 +243,7 @@ Each phase ends in a runnable, tested state.
 
 ## 6. Key technical choices
 
-- **Go libraries:** `google.golang.org/grpc`, `google.golang.org/protobuf` and the standard library so far. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `aws-sdk-go-v2` (#41), `klauspost/compress` (#42), `hashicorp/raft` or `etcd/client/v3` (Tier B).
+- **Go libraries:** `google.golang.org/grpc`, `google.golang.org/protobuf`, `aws-sdk-go-v2` for the s3 backend (with `gofakes3` as its test server), and the standard library. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `klauspost/compress` (#42), `hashicorp/raft` or `etcd/client/v3` (Tier B).
 - **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `zstandard`, `pyarrow`.
 - **Determinism:** the hash partitioner uses a fixed, language-independent hash (FNV-1a 64 over key bytes), so Go and Python place the same key in the same partition.
 - **Exactly-once output:** a task attempt ID goes into temp filenames. The coordinator accepts only the first `ReportTask(COMPLETED)` per task; later attempts are discarded.
