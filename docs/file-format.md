@@ -116,10 +116,12 @@ Rules:
 Readers reject codec IDs they don't support as `unsupported_codec`.
 
 Each job chooses its codecs (#42), by name: `none`, `zstd` or `snappy`.
-- `JobSpec.intermediate_codec` (`mr -intermediate-codec`) applies to the
-  map output and the external sort's spill files.
-- `JobSpec.output_codec` (`mr -output-codec`) applies to output files, and
-  needs the `kv` output format (`mr -output-format kv`).
+`mr run` and `mr submit` set them with flags.
+- `JobSpec.intermediate_codec` (`-intermediate-codec`) applies to the map
+  output and the external sort's spill files.
+- `JobSpec.output_codec` (`-output-codec`) applies to output files, and
+  needs the `kv` output format (`-output-format kv`). For example:
+  `mr submit -intermediate-codec zstd -output-format kv -output-codec zstd wordcount out in.txt`.
 
 Readers need no setting, because each file's header names its codec.
 
