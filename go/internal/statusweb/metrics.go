@@ -53,7 +53,8 @@ func metrics(st coordinator.Status) []byte {
 }
 
 // duration returns how long j has run, as of now if it has not finished.
-// It returns false if the coordinator does not know when j was submitted.
+// It returns false if the coordinator does not know when j was submitted,
+// and 0 if the clock was set back since: the times are wall-clock times.
 func duration(j *pb.GetJobStatusResponse, now time.Time) (time.Duration, bool) {
 	if j.GetSubmittedAt() == nil {
 		return 0, false
@@ -61,5 +62,5 @@ func duration(j *pb.GetJobStatusResponse, now time.Time) (time.Duration, bool) {
 	if j.GetFinishedAt() != nil {
 		now = j.GetFinishedAt().AsTime()
 	}
-	return now.Sub(j.GetSubmittedAt().AsTime()), true
+	return max(0, now.Sub(j.GetSubmittedAt().AsTime())), true
 }

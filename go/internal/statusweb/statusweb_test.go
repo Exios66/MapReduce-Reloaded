@@ -101,3 +101,16 @@ func TestMetrics(t *testing.T) {
 		t.Errorf("metrics give a duration for a job with no submit time:\n%s", body)
 	}
 }
+
+// A job submitted before the clock was set back has run for 0 s, not less.
+func TestDurationClockSetBack(t *testing.T) {
+	at := time.Unix(1_800_000_000, 0)
+	j := &pb.GetJobStatusResponse{SubmittedAt: timestamppb.New(at)}
+	if d, ok := duration(j, at.Add(-time.Second)); d != 0 || !ok {
+		t.Errorf("running: duration = %v, %v; want 0, true", d, ok)
+	}
+	j.FinishedAt = timestamppb.New(at.Add(-time.Second))
+	if d, ok := duration(j, at); d != 0 || !ok {
+		t.Errorf("finished: duration = %v, %v; want 0, true", d, ok)
+	}
+}
