@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 )
 
@@ -68,13 +69,16 @@ func (s *JobSpec) Validate() error {
 	if s.R == 0 {
 		errs = append(errs, errors.New("number of reduce tasks R must be at least 1"))
 	}
+	if _, err := formats.Input(s.InputFormat); err != nil {
+		errs = append(errs, err)
+	}
 	if _, err := kv.ParseCodec(s.IntermediateCodec); err != nil {
 		errs = append(errs, fmt.Errorf("intermediate codec: %w", err))
 	}
 	if c, err := kv.ParseCodec(s.OutputCodec); err != nil {
 		errs = append(errs, fmt.Errorf("output codec: %w", err))
-	} else if c != kv.CodecNone && s.OutputFormat != "kv" {
-		errs = append(errs, fmt.Errorf("output codec %s needs output format kv", c))
+	} else if _, err := formats.Output(s.OutputFormat, c); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

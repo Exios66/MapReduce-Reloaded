@@ -65,6 +65,7 @@ func TestJobSpecErrors(t *testing.T) {
 		"unknown partitioner": {Program: "wordcount", Partitioner: "range"},
 		"unsupported URI":     {Program: "wordcount", Inputs: []string{"gs://b/k"}, Output: "o", NumReduceTasks: 1},
 		"R must be":           {Program: "wordcount", Inputs: []string{"in"}, Output: "o"},
+		"unknown format":      {Program: "wordcount", Inputs: []string{"in"}, Output: "o", NumReduceTasks: 1, OutputFormat: "parquet"},
 	} {
 		if _, err := JobSpec(m); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("got %v, want an error containing %q", err, want)

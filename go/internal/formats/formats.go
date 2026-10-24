@@ -3,6 +3,7 @@
 package formats
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -66,7 +67,7 @@ func Output(name string, codec kv.Codec) (OutputFormat, error) {
 	}
 	k, ok := f.(KV)
 	if !ok {
-		return nil, fmt.Errorf("formats: format %q takes no codec", name)
+		return nil, fmt.Errorf("formats: output format %q takes no codec; only kv does", cmp.Or(name, "text"))
 	}
 	k.Codec = codec
 	return k, nil

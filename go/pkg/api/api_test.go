@@ -83,12 +83,13 @@ func TestValidate(t *testing.T) {
 		Combiner: api.ReduceFunc(nil), Partitioner: api.PartitionFunc(nil),
 	}
 	codecs := valid
-	codecs.IntermediateCodec, codecs.OutputCodec = "gzip", "zstd"
+	codecs.IntermediateCodec, codecs.OutputCodec, codecs.InputFormat = "gzip", "zstd", "csv"
 	if err := codecs.Validate(); err == nil || !strings.Contains(err.Error(), `intermediate codec: mrkv: unsupported_codec: "gzip"`) ||
-		!strings.Contains(err.Error(), "output codec zstd needs output format kv") {
+		!strings.Contains(err.Error(), `output format "text" takes no codec`) ||
+		!strings.Contains(err.Error(), `unknown format "csv"`) {
 		t.Errorf("bad codecs: got %v", err)
 	}
-	codecs.IntermediateCodec, codecs.OutputFormat = "snappy", "kv"
+	codecs.IntermediateCodec, codecs.OutputFormat, codecs.InputFormat = "snappy", "kv", "text"
 	if err := codecs.Validate(); err != nil {
 		t.Errorf("valid codecs: %v", err)
 	}
