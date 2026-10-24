@@ -77,6 +77,7 @@ cd MapReduce-Reloaded && git pull
 make cluster-up      # build the image, start the coordinator and 4 workers
 make e2e             # run word count and compare with the golden output
 make e2e-s3          # the same, with input and output in the S3 store
+make bench-codecs     # bytes shuffled and job time per codec (bench/README.md)
 make cluster-down    # stop and remove only this project's containers and volume
 ```
 

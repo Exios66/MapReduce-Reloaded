@@ -1,0 +1,48 @@
+# Benchmarks
+
+Scripts that measure the cluster. Each one runs on the Compose cluster and
+writes its raw results to `bench/results/`, which git ignores. The numbers
+below are copied from a run, with the machine it ran on.
+
+## Codecs (#42)
+
+`make bench-codecs` starts the cluster and runs [`codecs.sh`](codecs.sh):
+
+- Input: 64 MiB of lines of 5 to 15 random words from the test corpus,
+  written by [`gen-words.py`](gen-words.py) with a fixed seed.
+  - The lines are text-like but don't repeat.
+  - Copies of the corpus would make sorted map output far more compressible
+    than real data: a first attempt with 100 copies shrank 11 times with
+    zstd.
+- Jobs: word count, which combines, and `distsort`, which shuffles every
+  line.
+  - Each job runs with M = 16 and R = 4, three times per intermediate codec.
+- Bytes shuffled: every map output file is fetched once by its reduce task,
+  so the `map.output.bytes` counter is the bytes shuffled.
+- Time: the wall time of `mr submit -wait`, which includes about a second
+  to start its container.
+
+Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
+Docker 29.9.1, 4 workers. Time is the median of three runs, with the range.
+
+| Job | Codec | Bytes shuffled | vs none | Time (s) |
+|---|---|---:|---:|---|
+| wordcount | none | 2,071,855 | 1.00 | 3.68 (3.65–4.31) |
+| wordcount | zstd | 1,225,752 | 0.59 | 4.21 (4.18–4.24) |
+| wordcount | snappy | 1,930,867 | 0.93 | 4.23 (3.66–4.31) |
+| distsort | none | 68,353,231 | 1.00 | 3.48 (3.44–3.88) |
+| distsort | zstd | 31,892,233 | 0.47 | 3.89 (3.44–4.37) |
+| distsort | snappy | 51,049,537 | 0.75 | 3.82 (3.32–3.86) |
+
+What the numbers show:
+
+- **Bytes:** compression measurably reduces the bytes shuffled.
+  - zstd roughly halves them, and Snappy saves a quarter on `distsort`.
+  - Word count's combiner already leaves one record per word and map task,
+    so there is less left to compress.
+- **Time:** job time does not change beyond run-to-run noise.
+  - Every container shares one machine, so the shuffle crosses loopback,
+    not a network, and saving bytes saves almost no time.
+  - The paper's cluster shuffled over a real network (§5.1), where bytes
+    cost time. The Phase 7 benchmarks (#57, #58) will measure that across
+    machines.
