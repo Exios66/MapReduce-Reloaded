@@ -3,10 +3,12 @@ package formats
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"io"
-	"os"
 	"strconv"
+
+	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 )
 
 // Text reads and writes lines of text.
@@ -20,21 +22,18 @@ import (
 type Text struct{}
 
 // Splits cuts the file into byte ranges; Open aligns them to lines.
-func (Text) Splits(path string, splitSize int64) ([]Split, error) {
-	return byteSplits(path, splitSize)
+func (Text) Splits(ctx context.Context, path string, splitSize int64) ([]Split, error) {
+	return byteSplits(ctx, path, splitSize)
 }
 
 // Open returns a reader for the lines that start in s.
-func (Text) Open(s Split) (RecordReader, error) {
-	f, err := os.Open(s.Path)
-	if err != nil {
-		return nil, err
-	}
+func (Text) Open(ctx context.Context, s Split) (RecordReader, error) {
 	// Start one byte early: if that byte ends a line, the line at s.Start is
 	// ours; otherwise the partial line belongs to the previous split.
 	pos := max(s.Start-1, 0)
-	if _, err := f.Seek(pos, io.SeekStart); err != nil {
-		return nil, errors.Join(err, f.Close())
+	f, err := storage.Open(ctx, s.Path, pos)
+	if err != nil {
+		return nil, err
 	}
 	r := &textReader{f: f, br: bufio.NewReader(f), pos: pos, end: s.End}
 	if s.Start > 0 {
@@ -44,7 +43,7 @@ func (Text) Open(s Split) (RecordReader, error) {
 }
 
 type textReader struct {
-	f        *os.File
+	f        io.Closer
 	br       *bufio.Reader
 	pos, end int64 // offset of the next unread byte; end of the split
 	key      []byte
@@ -92,8 +91,8 @@ func (r *textReader) Err() error   { return r.err }
 func (r *textReader) Close() error { return r.f.Close() }
 
 // Create creates a text output file at path.
-func (Text) Create(path string) (RecordWriter, error) {
-	f, err := os.Create(path)
+func (Text) Create(ctx context.Context, path string) (RecordWriter, error) {
+	f, err := storage.Create(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +100,7 @@ func (Text) Create(path string) (RecordWriter, error) {
 }
 
 type textWriter struct {
-	f  *os.File
+	f  io.Closer
 	bw *bufio.Writer
 }
 

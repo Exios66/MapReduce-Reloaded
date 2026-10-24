@@ -4,14 +4,13 @@
 package split
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
-	"slices"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
+	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 )
 
 // DefaultSize is the split size used when a job sets none. The paper uses
@@ -24,8 +23,8 @@ const ReduceTasksPerWorker = 2
 
 // Plan expands patterns and cuts every file into splits of about size bytes;
 // 0 means DefaultSize. Splits come in file order, and M is their number.
-func Plan(in formats.InputFormat, patterns []string, size uint64) ([]formats.Split, error) {
-	files, err := Expand(patterns)
+func Plan(ctx context.Context, in formats.InputFormat, patterns []string, size uint64) ([]formats.Split, error) {
+	files, err := Expand(ctx, patterns)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +33,7 @@ func Plan(in formats.InputFormat, patterns []string, size uint64) ([]formats.Spl
 	}
 	var splits []formats.Split
 	for _, f := range files {
-		s, err := in.Splits(f, int64(min(size, math.MaxInt64)))
+		s, err := in.Splits(ctx, f, int64(min(size, math.MaxInt64)))
 		if err != nil {
 			return nil, err
 		}
@@ -45,21 +44,21 @@ func Plan(in formats.InputFormat, patterns []string, size uint64) ([]formats.Spl
 
 // SizeFor returns the split size that cuts the input into at most m splits
 // per file, and about m in total.
-func SizeFor(patterns []string, m int) (uint64, error) {
+func SizeFor(ctx context.Context, patterns []string, m int) (uint64, error) {
 	if m < 1 {
 		return 0, errors.New("split: m must be at least 1")
 	}
-	files, err := Expand(patterns)
+	files, err := Expand(ctx, patterns)
 	if err != nil {
 		return 0, err
 	}
 	var total int64
 	for _, f := range files {
-		info, err := os.Stat(f)
+		size, err := storage.Size(ctx, f)
 		if err != nil {
 			return 0, err
 		}
-		total += info.Size()
+		total += size
 	}
 	return uint64(max((total+int64(m)-1)/int64(m), 1)), nil
 }
@@ -72,17 +71,16 @@ func DefaultR(workers int) uint32 {
 
 // Expand resolves file names and glob patterns to files, sorted within each
 // pattern. A pattern that matches nothing is an error.
-func Expand(patterns []string) ([]string, error) {
+func Expand(ctx context.Context, patterns []string) ([]string, error) {
 	var files []string
 	for _, p := range patterns {
-		matches, err := filepath.Glob(p)
+		matches, err := storage.List(ctx, p)
 		if err != nil {
 			return nil, fmt.Errorf("split: %q: %w", p, err)
 		}
 		if len(matches) == 0 {
 			return nil, fmt.Errorf("split: no input matches %q", p)
 		}
-		slices.Sort(matches)
 		files = append(files, matches...)
 	}
 	return files, nil

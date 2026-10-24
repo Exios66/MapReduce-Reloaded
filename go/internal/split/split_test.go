@@ -37,7 +37,7 @@ func TestPlanCoversInput(t *testing.T) {
 			sizes[i] = rng.IntN(300)
 		}
 		size := uint64(rng.IntN(100) + 1)
-		splits, err := Plan(formats.Text{}, []string{writeFiles(t, sizes...)}, size)
+		splits, err := Plan(t.Context(), formats.Text{}, []string{writeFiles(t, sizes...)}, size)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func TestPlanCoversInput(t *testing.T) {
 }
 
 func TestPlanDefaultSize(t *testing.T) {
-	splits, err := Plan(formats.Text{}, []string{writeFiles(t, 10)}, 0)
+	splits, err := Plan(t.Context(), formats.Text{}, []string{writeFiles(t, 10)}, 0)
 	if err != nil || len(splits) != 1 {
 		t.Fatalf("got %v, %v; want one split", splits, err)
 	}
@@ -68,16 +68,16 @@ func TestPlanDefaultSize(t *testing.T) {
 func TestSizeFor(t *testing.T) {
 	glob := writeFiles(t, 100, 1)
 	for _, m := range []int{1, 3, 7, 101, 500} {
-		size, err := SizeFor([]string{glob}, m)
+		size, err := SizeFor(t.Context(), []string{glob}, m)
 		if err != nil {
 			t.Fatal(err)
 		}
-		splits, _ := Plan(formats.Text{}, []string{glob}, size)
+		splits, _ := Plan(t.Context(), formats.Text{}, []string{glob}, size)
 		if len(splits) > m+1 { // at most m per file, and about m in total
 			t.Errorf("m=%d: size %d gives %d splits", m, size, len(splits))
 		}
 	}
-	if _, err := SizeFor([]string{glob}, 0); err == nil {
+	if _, err := SizeFor(t.Context(), []string{glob}, 0); err == nil {
 		t.Error("m=0 accepted")
 	}
 }
@@ -93,7 +93,7 @@ func TestExpandErrors(t *testing.T) {
 		filepath.Join(t.TempDir(), "*"): "no input matches",
 		"[":                             "syntax error",
 	} {
-		if _, err := Expand([]string{pattern}); err == nil || !strings.Contains(err.Error(), want) {
+		if _, err := Expand(t.Context(), []string{pattern}); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("Expand(%q) = %v, want an error containing %q", pattern, err, want)
 		}
 	}

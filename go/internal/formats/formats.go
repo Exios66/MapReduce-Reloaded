@@ -3,14 +3,16 @@
 package formats
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"os"
+
+	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 )
 
 // Split is the byte range [Start, End) of one input file, the unit of work of
-// one map task.
+// one map task. Path names the file in storage.
 type Split struct {
 	Path       string
 	Start, End int64
@@ -20,9 +22,9 @@ type Split struct {
 type InputFormat interface {
 	// Splits divides the file at path into splits of about splitSize bytes.
 	// An empty file has no splits.
-	Splits(path string, splitSize int64) ([]Split, error)
+	Splits(ctx context.Context, path string, splitSize int64) ([]Split, error)
 	// Open returns a reader for the records of one split.
-	Open(s Split) (RecordReader, error)
+	Open(ctx context.Context, s Split) (RecordReader, error)
 }
 
 // RecordReader iterates over records, like kv.Reader: Key and Value are
@@ -37,7 +39,7 @@ type RecordReader interface {
 
 // OutputFormat creates output files.
 type OutputFormat interface {
-	Create(path string) (RecordWriter, error)
+	Create(ctx context.Context, path string) (RecordWriter, error)
 }
 
 // RecordWriter writes records. Close flushes them and closes the file.
@@ -69,17 +71,17 @@ func lookup[F any](formats map[string]F, name string) (F, error) {
 }
 
 // byteSplits cuts the file at path into consecutive ranges of splitSize bytes.
-func byteSplits(path string, splitSize int64) ([]Split, error) {
+func byteSplits(ctx context.Context, path string, splitSize int64) ([]Split, error) {
 	if splitSize <= 0 {
 		return nil, errors.New("formats: split size must be positive")
 	}
-	info, err := os.Stat(path)
+	size, err := storage.Size(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 	var splits []Split
-	for start := int64(0); start < info.Size(); start += splitSize {
-		splits = append(splits, Split{path, start, min(start+splitSize, info.Size())})
+	for start := int64(0); start < size; start += splitSize {
+		splits = append(splits, Split{path, start, min(start+splitSize, size)})
 	}
 	return splits, nil
 }

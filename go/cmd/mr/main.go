@@ -119,7 +119,7 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	j := job{program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r), params: f.params}
 	if *f.m > 0 {
 		var err error
-		if j.splitSize, err = split.SizeFor(j.inputs, int(*f.m)); err != nil {
+		if j.splitSize, err = split.SizeFor(context.Background(), j.inputs, int(*f.m)); err != nil {
 			return job{}, err
 		}
 	}

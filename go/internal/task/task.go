@@ -1,7 +1,7 @@
 // Package task runs one attempt of a map or reduce task (§3.1). Local mode
 // runs every task with it in turn; a worker runs the tasks it is given.
 //
-// An attempt writes its files under temporary names and renames them only
+// An attempt writes its files under temporary names and commits them only
 // once they are complete, so a failed or duplicate attempt never leaves a
 // partial file under a final name (§3.3).
 package task
@@ -21,6 +21,7 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/extsort"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
+	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
@@ -50,7 +51,7 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 	if err != nil {
 		return nil, nil, err
 	}
-	tc := newContext(spec, id, skip, log)
+	tc := newContext(ctx, spec, id, skip, log)
 	tc.input = split.Path
 	defer tc.commitSide(&err)
 	defer recovered(&err)
@@ -70,7 +71,7 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 		defer closeJoin(&err, sorters[r])
 	}
 
-	records, err := in.Open(split)
+	records, err := in.Open(ctx, split)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -129,15 +130,15 @@ func Reduce(ctx context.Context, spec api.JobSpec, id api.TaskID, sources []exts
 		return nil, err
 	}
 	name := fmt.Sprintf("part-r-%05d", id.Index)
-	path := filepath.Join(spec.Output, name)
-	tmp := attemptPath(filepath.Join(spec.Output, TempDir, name), id.Attempt)
-	w, err := out.Create(tmp)
+	path := storage.Join(spec.Output, name)
+	tmp := attemptPath(storage.Join(spec.Output, TempDir, name), id.Attempt)
+	w, err := out.Create(ctx, tmp)
 	if err != nil {
 		return nil, err
 	}
-	defer commit(&err, w, tmp, path)
+	defer commit(ctx, &err, w, tmp, path)
 
-	tc := newContext(spec, id, skip, log)
+	tc := newContext(ctx, spec, id, skip, log)
 	defer tc.commitSide(&err) // before the part file, which marks the task done
 	defer recovered(&err)
 	emit := emitter(func(key, value []byte) error {
@@ -191,7 +192,7 @@ func writeKV(path string, attempt uint32, records extsort.Records) (size int64, 
 	if err != nil {
 		return 0, err
 	}
-	defer commit(&err, f, tmp, path)
+	defer commit(context.Background(), &err, f, tmp, path)
 	w := kv.NewWriter(f)
 	for records.Next() {
 		if err := w.Write(records.Key(), records.Value()); err != nil {
@@ -206,8 +207,8 @@ func writeKV(path string, attempt uint32, records extsort.Records) (size int64, 
 
 // CheckOutput returns an error if output already holds part files, so that
 // a job's output is never mixed with an earlier job's.
-func CheckOutput(output string) error {
-	parts, err := filepath.Glob(filepath.Join(output, "part-r-*"))
+func CheckOutput(ctx context.Context, output string) error {
+	parts, err := storage.List(ctx, storage.Join(output, "part-r-*"))
 	if err == nil && len(parts) > 0 {
 		err = fmt.Errorf("task: %s already holds job output", output)
 	}
@@ -215,28 +216,28 @@ func CheckOutput(output string) error {
 }
 
 // Setup creates the job's TempDir.
-func Setup(output string) error {
-	return os.MkdirAll(filepath.Join(output, TempDir), 0o755)
+func Setup(ctx context.Context, output string) error {
+	return storage.MkdirAll(ctx, storage.Join(output, TempDir))
 }
 
 // Cleanup removes a finished job's TempDir, with the files of attempts that
 // failed or died before committing.
-func Cleanup(output string) error {
-	return os.RemoveAll(filepath.Join(output, TempDir))
+func Cleanup(ctx context.Context, output string) error {
+	return storage.DeleteAll(ctx, storage.Join(output, TempDir))
 }
 
 func attemptPath(path string, attempt uint32) string {
 	return fmt.Sprintf("%s.attempt-%d", path, attempt)
 }
 
-// commit closes c, then renames tmp to path if the attempt succeeded, or
+// commit closes c, then commits tmp as path if the attempt succeeded, or
 // removes tmp if it failed. Use it with defer.
-func commit(err *error, c io.Closer, tmp, path string) {
+func commit(ctx context.Context, err *error, c io.Closer, tmp, path string) {
 	if *err = errors.Join(*err, c.Close()); *err == nil {
-		*err = os.Rename(tmp, path)
+		*err = storage.Commit(ctx, tmp, path)
 	}
 	if *err != nil {
-		_ = os.Remove(tmp) // best effort: the attempt has already failed
+		_ = storage.Delete(context.WithoutCancel(ctx), tmp) // best effort: the attempt has already failed
 	}
 }
 
@@ -258,6 +259,7 @@ func (e *CrashError) Error() string {
 // taskContext is the api.Context of one attempt. An attempt runs on one
 // goroutine, so its counters need no locking.
 type taskContext struct {
+	ctx    context.Context // the attempt's, for its side files
 	task   api.TaskID
 	params map[string]string
 	input  string // the split's file, in a map task
@@ -268,8 +270,9 @@ type taskContext struct {
 	skip   map[uint64]bool
 }
 
-func newContext(spec api.JobSpec, id api.TaskID, skip []uint64, log *slog.Logger) *taskContext {
+func newContext(ctx context.Context, spec api.JobSpec, id api.TaskID, skip []uint64, log *slog.Logger) *taskContext {
 	c := &taskContext{
+		ctx:    ctx,
 		task:   id,
 		params: spec.Params,
 		output: spec.Output,
@@ -322,12 +325,12 @@ func (c *taskContext) SideOutput(name string) (io.Writer, error) {
 	if s := c.side[name]; s != nil {
 		return s, nil
 	}
-	tmp := attemptPath(filepath.Join(c.output, TempDir, fmt.Sprintf("%s.%v-%d", name, c.task.Kind, c.task.Index)), c.task.Attempt)
-	f, err := os.Create(tmp)
+	tmp := attemptPath(storage.Join(c.output, TempDir, fmt.Sprintf("%s.%v-%d", name, c.task.Kind, c.task.Index)), c.task.Attempt)
+	f, err := storage.Create(c.ctx, tmp)
 	if err != nil {
 		return nil, err
 	}
-	s := &sideFile{Writer: bufio.NewWriter(f), f: f, tmp: tmp, path: filepath.Join(c.output, name)}
+	s := &sideFile{Writer: bufio.NewWriter(f), f: f, tmp: tmp, path: storage.Join(c.output, name)}
 	c.side[name] = s
 	return s, nil
 }
@@ -336,14 +339,14 @@ func (c *taskContext) SideOutput(name string) (io.Writer, error) {
 // them otherwise. Use it with defer.
 func (c *taskContext) commitSide(err *error) {
 	for _, s := range c.side {
-		commit(err, s, s.tmp, s.path)
+		commit(c.ctx, err, s, s.tmp, s.path)
 	}
 }
 
 // sideFile is a side output being written under its temporary name.
 type sideFile struct {
 	*bufio.Writer
-	f         *os.File
+	f         io.Closer
 	tmp, path string
 }
 

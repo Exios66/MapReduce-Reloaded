@@ -16,13 +16,13 @@ type record struct{ key, value string }
 // readSplits reads every split of path in order.
 func readSplits(t *testing.T, f InputFormat, path string, splitSize int64) []record {
 	t.Helper()
-	splits, err := f.Splits(path, splitSize)
+	splits, err := f.Splits(t.Context(), path, splitSize)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out []record
 	for _, s := range splits {
-		r, err := f.Open(s)
+		r, err := f.Open(t.Context(), s)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,17 +84,17 @@ func TestTextLongLine(t *testing.T) {
 }
 
 func TestSplits(t *testing.T) {
-	if s, err := (Text{}).Splits(writeFile(t, nil), 10); err != nil || s != nil {
+	if s, err := (Text{}).Splits(t.Context(), writeFile(t, nil), 10); err != nil || s != nil {
 		t.Fatalf("empty file: %v, %v; want no splits", s, err)
 	}
-	if _, err := (Text{}).Splits(writeFile(t, []byte("x")), 0); err == nil {
+	if _, err := (Text{}).Splits(t.Context(), writeFile(t, []byte("x")), 0); err == nil {
 		t.Fatal("split size 0 accepted")
 	}
-	s, err := (Text{}).Splits(writeFile(t, make([]byte, 25)), 10)
+	s, err := (Text{}).Splits(t.Context(), writeFile(t, make([]byte, 25)), 10)
 	if err != nil || len(s) != 3 || s[2] != (Split{s[2].Path, 20, 25}) {
 		t.Fatalf("25 bytes in 10-byte splits: %+v, %v", s, err)
 	}
-	if s, err := (KV{}).Splits(writeFile(t, make([]byte, 25)), 10); err != nil || len(s) != 1 {
+	if s, err := (KV{}).Splits(t.Context(), writeFile(t, make([]byte, 25)), 10); err != nil || len(s) != 1 {
 		t.Fatalf("kv: %+v, %v; want one split", s, err)
 	}
 }
@@ -119,7 +119,7 @@ func TestOutputRoundTrip(t *testing.T) {
 			out, _ := Output(name)
 			in, _ := Input(name)
 			path := filepath.Join(t.TempDir(), "part-r-00000")
-			w, err := out.Create(path)
+			w, err := out.Create(t.Context(), path)
 			if err != nil {
 				t.Fatal(err)
 			}

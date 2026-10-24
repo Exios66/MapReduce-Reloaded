@@ -217,7 +217,7 @@ func (c *cluster) start() {
 // reduce tasks, and returns the job ID.
 func (c *cluster) submit(program string) string {
 	c.t.Helper()
-	splitSize, err := split.SizeFor(inputs, 7)
+	splitSize, err := split.SizeFor(c.t.Context(), inputs, 7)
 	if err != nil {
 		c.t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func TestClusterCountersMatchLocal(t *testing.T) {
 // returns the directory of the map output, and the counters.
 func runLocal(t *testing.T) (string, map[string]int64) {
 	t.Helper()
-	splitSize, err := split.SizeFor(inputs, 7)
+	splitSize, err := split.SizeFor(t.Context(), inputs, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
