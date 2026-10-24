@@ -82,7 +82,7 @@ Each item maps to a paper section and will get a test.
 | F6 | R output files, one per reduce task (§3.1) | `part-r-00000` … in the output directory or bucket |
 | F7 | Master data structures: task state (idle / in-progress / completed), worker identity, intermediate file locations (§3.2) | `TaskTable` and `WorkerRegistry` in the coordinator |
 | F8 | Worker failure detection by heartbeat; reset its tasks; **re-run completed map tasks** of a failed worker; notify reducers (§3.3) | Heartbeat timeout, task re-queue, location update pushed to reducers |
-| F9 | Master failure: periodic checkpoints and recovery (§3.3) | Write-ahead log of coordinator decisions, replayed on restart; the job resumes (no snapshot, ADR 0007) |
+| F9 | Master failure: periodic checkpoints and recovery (§3.3) | With `-data-dir`, a write-ahead log of coordinator decisions, replayed on restart, so the job resumes (no snapshot, ADR 0007); without it a restart loses the job |
 | F10 | Atomic commit semantics: map output reported to master once; reduce output via atomic rename (§3.3) | Write to temp file, `rename`/object-store commit; duplicate completions ignored |
 | F11 | Locality: schedule map tasks near their input data (§3.4) | Workers advertise a host/zone label; scheduler prefers a matching split |
 | F12 | Task granularity: M and R much larger than the number of workers (§3.5) | Configurable; defaults derived from input size and worker count |
@@ -216,7 +216,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 3 — Fault tolerance (F8, F9, F13, F18, F19, F22)**
 - Heartbeats with timeouts, map re-execution on worker loss, reducers notified of new locations.
-- Coordinator write-ahead log, replayed on restart.
+- Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
 - **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. Driving the same faults against the Compose cluster is #29.
 
@@ -243,7 +243,7 @@ Each phase ends in a runnable, tested state.
 
 ## 6. Key technical choices
 
-- **Go libraries:** `google.golang.org/grpc` and the standard library so far. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `aws-sdk-go-v2` (#41), `klauspost/compress` (#42), `hashicorp/raft` or `etcd/client/v3` (Tier B).
+- **Go libraries:** `google.golang.org/grpc`, `google.golang.org/protobuf` and the standard library so far. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `aws-sdk-go-v2` (#41), `klauspost/compress` (#42), `hashicorp/raft` or `etcd/client/v3` (Tier B).
 - **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `zstandard`, `pyarrow`.
 - **Determinism:** the hash partitioner uses a fixed, language-independent hash (FNV-1a 64 over key bytes), so Go and Python place the same key in the same partition.
 - **Exactly-once output:** a task attempt ID goes into temp filenames. The coordinator accepts only the first `ReportTask(COMPLETED)` per task; later attempts are discarded.
@@ -254,7 +254,7 @@ Each phase ends in a runnable, tested state.
 
 - **Unit tests:** partitioner (cross-language hash vectors), external sort, record framing round-trip, task-table state machine (property-based).
 - **Golden tests:** every example job in distributed mode must produce output identical to `--local` mode on a fixed corpus (e.g. Project Gutenberg texts and a synthetic web-link graph).
-- **Fault-injection tests:** `go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). A Compose driver is #29.
+- **Fault-injection tests:** `cd go && go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). A Compose driver is #29.
 - **Interop tests:** the Phase 5 matrix.
 - **End-to-end smoke test:** `make e2e` starts the Compose cluster, submits word count with `mr submit`, compares the output with the golden output, and checks the job's reduce tasks in `/metrics`.
 - **Benchmarks** (`bench/`): throughput, job completion time, and the cost of stragglers with and without backup tasks.
