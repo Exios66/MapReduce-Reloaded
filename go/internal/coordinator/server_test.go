@@ -227,6 +227,8 @@ func TestReportTask(t *testing.T) {
 	if len(reduce.GetSources()) != 1 {
 		t.Fatalf("reduce task %v; want one source", reduce)
 	}
+	_, err = s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: reduce.GetAttempt()})
+	assertCode(t, err, codes.InvalidArgument) // neither success nor failure
 	rep, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: reduce.GetAttempt(), Outcome: &pb.ReportTaskRequest_Failure{
 		Failure: &pb.TaskFailure{Message: "boom"},
 	}})
