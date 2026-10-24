@@ -31,6 +31,7 @@ where every task runs once.
 | `combine.input.records`, `combine.output.records` | records into and out of the combiner |
 | `reduce.input.records` | records read by reduce tasks |
 | `reduce.output.records` | records emitted by the reducer |
+| `reduce.output.bytes` | bytes of the keys and values emitted by the reducer, before the output format adds separators or compresses them |
 | `skipped.records` | bad records skipped (#26); not counted by Python's local mode, which never retries |
 
 `mr run -local` prints the totals when the job ends. `mr status` and

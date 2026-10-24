@@ -34,6 +34,7 @@ MAP_OUTPUT_RECORDS = "map.output.records"
 MAP_OUTPUT_BYTES = "map.output.bytes"  # after combining
 REDUCE_INPUT_RECORDS = "reduce.input.records"
 REDUCE_OUTPUT_RECORDS = "reduce.output.records"
+REDUCE_OUTPUT_BYTES = "reduce.output.bytes"  # keys and values emitted, before the output format
 
 # Where reduce tasks write under the output before committing, as in Go.
 TEMP_DIR = "_temporary"
@@ -123,6 +124,7 @@ class _Job:
                 for key, values in groups(_counted(ctx, merge(*runs))):
                     for k, v in self.spec.program.reducer(ctx, key, values):
                         ctx.count(REDUCE_OUTPUT_RECORDS)
+                        ctx.count(REDUCE_OUTPUT_BYTES, len(k) + len(v))
                         w.write(k, v)
         except BaseException:
             if os.path.exists(tmp):
