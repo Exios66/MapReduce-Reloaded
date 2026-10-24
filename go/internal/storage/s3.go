@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -22,9 +23,11 @@ import (
 // usual credentials, and AWS_ENDPOINT_URL for a store other than AWS, which
 // is then addressed by path rather than by virtual host.
 //
-// An object store has no directories and no rename. MkdirAll does nothing,
-// and Commit copies tmp to name on the server, then deletes tmp: a copy
-// creates its object whole, so readers still never see part of a file.
+// An object store has no directories and no rename (ADR 0013). MkdirAll
+// writes an empty marker object, dir/, and Create fails unless the file's
+// directory has one, as os.Create fails in a missing directory. Commit
+// copies tmp to name on the server, then deletes tmp: a copy creates its
+// object whole, so readers still never see part of a file.
 type S3 struct {
 	once   sync.Once
 	client *s3.Client
@@ -85,7 +88,7 @@ func (b *S3) List(ctx context.Context, pattern string) ([]string, error) {
 			return nil, err
 		}
 		for _, o := range page.Contents {
-			if ok, _ := path.Match(keys, *o.Key); ok {
+			if ok, _ := path.Match(keys, *o.Key); ok && !strings.HasSuffix(*o.Key, "/") {
 				names = append(names, "s3://"+bucket+"/"+*o.Key)
 			}
 		}
@@ -127,6 +130,16 @@ func (b *S3) Create(ctx context.Context, name string) (io.WriteCloser, error) {
 	c, bucket, key, err := b.resolve(ctx, name)
 	if err != nil {
 		return nil, err
+	}
+	if dir, _ := path.Split(key); dir != "" {
+		var notFound *types.NotFound
+		_, err := c.HeadObject(ctx, &s3.HeadObjectInput{Bucket: &bucket, Key: &dir})
+		if errors.As(err, &notFound) {
+			return nil, fmt.Errorf("storage: creating %s: %w", name, fs.ErrNotExist)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	f, err := os.CreateTemp("", "mr-s3-*")
 	if err != nil {
@@ -179,7 +192,12 @@ func (b *S3) Delete(ctx context.Context, name string) error {
 }
 
 func (b *S3) MkdirAll(ctx context.Context, dir string) error {
-	_, _, _, err := b.resolve(ctx, dir)
+	c, bucket, key, err := b.resolve(ctx, dir)
+	if err != nil || key == "" {
+		return err
+	}
+	key = strings.TrimSuffix(key, "/") + "/"
+	_, err = c.PutObject(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &key, Body: strings.NewReader("")})
 	return err
 }
 

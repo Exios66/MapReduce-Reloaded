@@ -22,7 +22,7 @@ Status: `planned` → `in progress` → `done`.
 | F7  | Master data structures | §3.2 | 2 | `go/internal/coordinator` | — | `TestInvariants`, `TestResetWorker` | done |
 | F8  | Worker failure + map re-execution | §3.3 | 3 | `go/internal/coordinator`, `go/internal/worker` | — | `TestExpire`, `TestClusterSurvivesWorkerLoss`, `TestChaos` | done |
 | F9  | Master checkpoint / recovery | §3.3 | 3 | `go/internal/wal`, `go/internal/coordinator` | — | `TestRecover`, `TestClusterSurvivesCoordinatorRestart`, `TestChaos` | done |
-| F10 | Atomic commits | §3.3 | 2 | `go/internal/task`, `go/internal/coordinator` | `mapreduce_reloaded/local.py` | `TestFailedAttemptLeavesNoFiles`, `TestFirstCompletionWins`, `test_failed_reduce_leaves_no_part` | done |
+| F10 | Atomic commits | §3.3 | 2 | `go/internal/task`, `go/internal/storage`, `go/internal/coordinator` | `mapreduce_reloaded/local.py` | `TestFailedAttemptLeavesNoFiles`, `TestFirstCompletionWins`, `TestDuplicateAttemptsS3`, `test_failed_reduce_leaves_no_part` | done |
 | F11 | Locality-aware scheduling | §3.4 | 4 | `go/internal/coordinator` | — | `TestLocality`, `TestLocalityWait`, `TestClusterLocality` | done |
 | F12 | Task granularity (M, R ≫ workers) | §3.5 | 2 | `go/internal/split`, `go/internal/coordinator` | `mapreduce_reloaded/split.py` | `TestSizeFor`, `TestSubmitJob` | done |
 | F13 | Backup tasks for stragglers | §3.6 | 3 | `go/internal/coordinator` | — | `TestBackups`, `TestRecoverBackup`, `TestClusterBackupTasks`, `TestChaos` | done |

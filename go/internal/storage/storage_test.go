@@ -1,7 +1,9 @@
 package storage_test
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -119,5 +121,9 @@ func testBackend(t *testing.T, dir string) {
 	list(Join(dir, "?"), Join(dir, "a"))
 	if err := DeleteAll(ctx, tmp); err != nil {
 		t.Errorf("DeleteAll of a missing directory = %v", err)
+	}
+	// A late attempt cannot write once its job's directory is gone.
+	if _, err := Create(ctx, Join(tmp, "late")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Create in a deleted directory = %v, want fs.ErrNotExist", err)
 	}
 }
