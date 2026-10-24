@@ -1,8 +1,8 @@
 // Package wire converts between the RPC messages of proto/mapreduce/v1 and
 // the in-process types the coordinator and workers use.
 //
-// File locations travel as URIs. Only file:// URIs, and plain paths, are
-// supported until object storage arrives (#41).
+// File locations travel as URIs. A file:// URI becomes a local path; a URI
+// with a scheme that internal/storage stores, such as s3://, stays a URI.
 package wire
 
 import (
@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
+	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
@@ -89,8 +90,12 @@ func TaskID(m *pb.TaskAttemptId) (api.TaskID, error) {
 	return id, nil
 }
 
-// URI returns the file:// URI of path, made absolute.
+// URI returns the file:// URI of path, made absolute. A name that is
+// already a URI is returned as it is.
 func URI(path string) (string, error) {
+	if storage.Scheme(path) != "" {
+		return path, nil
+	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -99,7 +104,8 @@ func URI(path string) (string, error) {
 }
 
 // Path returns the local path of a file:// URI, which must name no host but
-// localhost. A string with no scheme is already a path.
+// localhost. A string with no scheme is already a path, and a URI that
+// internal/storage stores is returned as it is.
 func Path(uri string) (string, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -114,5 +120,8 @@ func Path(uri string) (string, error) {
 		}
 		return filepath.FromSlash(u.Path), nil
 	}
-	return "", fmt.Errorf("wire: unsupported URI %q", uri)
+	if _, err := storage.For(uri); err != nil || storage.Scheme(uri) != u.Scheme {
+		return "", fmt.Errorf("wire: unsupported URI %q", uri)
+	}
+	return uri, nil
 }

@@ -36,7 +36,11 @@ type Backend interface {
 	DeleteAll(ctx context.Context, dir string) error
 }
 
-var backends = map[string]Backend{"": Local{}}
+var backends = map[string]Backend{"": Local{}, "s3": &S3{}}
+
+// Register makes b the backend for names with the given scheme, replacing
+// any backend there. It is not safe to call while files are in use.
+func Register(scheme string, b Backend) { backends[scheme] = b }
 
 // For returns the backend that stores name.
 func For(name string) (Backend, error) {
