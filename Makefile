@@ -43,7 +43,7 @@ e2e: cluster-up
 
 # The same job with input and output in the s3 profile's store.
 e2e-s3: cluster-up
-	$(COMPOSE) --profile s3 up -d s3
+	$(COMPOSE) --profile s3 up -d --wait s3
 	scripts/e2e.sh s3
 
 test: go-test py-test

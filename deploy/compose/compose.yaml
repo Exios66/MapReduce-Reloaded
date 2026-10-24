@@ -60,6 +60,11 @@ services:
     volumes:
       - ../../testdata/corpus:/data/corpus:ro
       - s3-output:/data/out
+    # Ready once the port accepts connections; make e2e-s3 waits for it.
+    healthcheck:
+      test: [CMD, nc, -w, "1", 127.0.0.1, "9000"]
+      interval: 1s
+      retries: 30
     mem_limit: 256m
 
   # The monitoring profile: Prometheus scrapes the coordinator and every
