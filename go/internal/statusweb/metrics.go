@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"time"
 
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 	"github.com/exios66/mapreduce-reloaded/go/internal/promtext"
 )
 
 // metrics renders st in the Prometheus text format, version 0.0.4.
+// Job durations are in seconds, ending at the finish time or st.At for
+// running jobs; jobs without a submission timestamp have no duration sample.
 func metrics(st coordinator.Status) []byte {
 	var b bytes.Buffer
 	family := func(name, help string) { promtext.Family(&b, name, "gauge", help) }
@@ -33,6 +37,19 @@ func metrics(st coordinator.Status) []byte {
 		}
 	}
 
+	family("mr_job_duration_seconds", "Time since each job was submitted, until it finished.")
+	for _, j := range st.Jobs {
+		if d, ok := duration(j, st.At); ok {
+			fmt.Fprintf(&b, "mr_job_duration_seconds{job=%s} %g\n", promtext.Label(j.GetJobId()), d.Seconds())
+		}
+	}
+
+	family("mr_job_backups", "Backup attempts of each job's last tasks (§3.6): started, and won by finishing first.")
+	for _, j := range st.Jobs {
+		fmt.Fprintf(&b, "mr_job_backups{job=%s,state=\"started\"} %d\n", promtext.Label(j.GetJobId()), j.GetBackupAttempts())
+		fmt.Fprintf(&b, "mr_job_backups{job=%s,state=\"won\"} %d\n", promtext.Label(j.GetJobId()), j.GetBackupWins())
+	}
+
 	family("mr_job_counter", "Counters of each job's accepted attempts (§4.9).")
 	for _, j := range st.Jobs {
 		counts := j.GetCounters().GetValues()
@@ -41,4 +58,17 @@ func metrics(st coordinator.Status) []byte {
 		}
 	}
 	return b.Bytes()
+}
+
+// duration returns how long j has run, as of now if it has not finished.
+// It returns false if the coordinator does not know when j was submitted,
+// and 0 if the clock was set back since: the times are wall-clock times.
+func duration(j *pb.GetJobStatusResponse, now time.Time) (time.Duration, bool) {
+	if j.GetSubmittedAt() == nil {
+		return 0, false
+	}
+	if j.GetFinishedAt() != nil {
+		now = j.GetFinishedAt().AsTime()
+	}
+	return max(0, now.Sub(j.GetSubmittedAt().AsTime())), true
 }

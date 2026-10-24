@@ -9,6 +9,7 @@ syntax = "proto3";
 package mapreduce.v1;
 
 import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
 import "mapreduce/v1/types.proto";
 
 option go_package = "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1";
@@ -221,4 +222,13 @@ message GetJobStatusResponse {
   // zone, that holds their split (§3.4).
   uint32 map_tasks_host_local = 9;
   uint32 map_tasks_zone_local = 10;
+  // When the coordinator accepted the job, and when it succeeded or failed;
+  // finished_at is unset while the job runs. The job's duration is the time
+  // between them, including any time the coordinator was down.
+  google.protobuf.Timestamp submitted_at = 11;
+  google.protobuf.Timestamp finished_at = 12;
+  // Backup attempts started near the end of a phase, for tasks still
+  // running elsewhere, and the tasks that a backup completed first (§3.6).
+  uint32 backup_attempts = 13;
+  uint32 backup_wins = 14;
 }

@@ -6,7 +6,8 @@
 # The input is SIZE bytes (default 64 MiB) of lines of random corpus words,
 # from bench/gen-words.py, copied into the shared /out volume. Every map
 # output file is fetched once by its reduce task, so map.output.bytes is
-# the bytes shuffled. Seconds is the wall time of mr submit -wait, which
+# the bytes shuffled. Seconds is the job's duration as the coordinator
+# measured it; wall_seconds is the time of mr submit -wait, which also
 # includes about a second to start its container. Each run's output, and the
 # input at the end, are removed from /out with the Dockerfile's build image,
 # since the cluster images have no shell.
@@ -28,7 +29,7 @@ input_bytes=$(wc -c < "$tmp/input.txt")
 "${compose[@]}" cp "$tmp/input.txt" coordinator:/out/bench-input.txt
 
 mkdir -p bench/results
-echo "program,codec,run,input_bytes,map_output_records,map_output_bytes,seconds" > "$results"
+echo "program,codec,run,input_bytes,map_output_records,map_output_bytes,seconds,wall_seconds" > "$results"
 stamp=$(date +%s)
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 for program in wordcount distsort; do
@@ -39,8 +40,8 @@ for program in wordcount distsort; do
                 -intermediate-codec "$codec" -wait \
                 "$program" "/out/bench-$stamp-$program-$codec-$run" /out/bench-input.txt > "$tmp/status"
             end=$(date +%s.%N)
-            seconds=$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }')
-            echo "$program,$codec,$run,$input_bytes,$(counter map.output.records),$(counter map.output.bytes),$seconds" |
+            wall=$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }')
+            echo "$program,$codec,$run,$input_bytes,$(counter map.output.records),$(counter map.output.bytes),$(counter seconds),$wall" |
                 tee -a "$results"
             rm_out "/out/bench-$stamp-$program-$codec-$run"
         done

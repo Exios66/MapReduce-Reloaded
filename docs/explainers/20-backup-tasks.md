@@ -13,7 +13,7 @@ slower.
 | Step | Where |
 |------|-------|
 | A worker asks for work and no task of the current phase is idle | `Server.RequestTask` |
-| The coordinator offers it the first in-progress task that has one attempt, running on another worker | `TaskTable.Backup` |
+| The coordinator offers it the in-progress task whose attempt started first, of those with one attempt, running on another worker | `TaskTable.Backup` |
 | The backup is an ordinary attempt, with the next attempt number | `TaskTable.Assign` |
 | The first attempt to report success wins; the other's report is rejected | `TaskTable.Complete` |
 
@@ -32,6 +32,9 @@ count attempts exactly.
   carries on, and the task may get a new backup.
 - **Never on the same worker.** A second attempt on the slow machine would
   not help.
+- **Oldest first.** The attempt that has run longest is the likeliest
+  straggler, so its task gets the first backup. Attempt start times come
+  from the log, so a restarted coordinator keeps them.
 - **Two winners are safe.** Both attempts of a reduce task rename their
   file to the same `part-r-*`, and the rename is atomic. A deterministic
   reducer writes the same bytes either way (§3.3). A losing map attempt's
@@ -40,6 +43,14 @@ count attempts exactly.
   Replay applies the assignment, not the policy that chose it, so a
   coordinator restarted with backups off still recovers a job that had
   some (ADR 0007).
+
+## Seeing it
+
+The coordinator counts the backup attempts it starts and the tasks that a
+backup finished first. The status page shows them for each job, `mr status`
+prints `backups` and `backups_won`, and `/metrics` has
+`mr_job_backups{job,state="started"|"won"}`. `TestClusterBackupTasks`
+checks that the stuck task was won by its backup.
 
 ## What is not promised
 
