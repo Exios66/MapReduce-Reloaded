@@ -292,7 +292,7 @@ func (t *TaskTable) task(id Task) (*task, error) {
 	case pb.TaskKind_TASK_KIND_REDUCE:
 		tasks = t.reduces
 	}
-	if int(id.Index) >= len(tasks) {
+	if int64(id.Index) >= int64(len(tasks)) {
 		return nil, fmt.Errorf("coordinator: no task %v", id)
 	}
 	return &tasks[id.Index], nil
