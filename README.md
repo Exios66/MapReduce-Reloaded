@@ -6,14 +6,16 @@ Dean & Ghemawat, [*MapReduce: Simplified Data Processing on Large Clusters*](htt
 gRPC, observability, high availability, and multi-language user code.
 
 - **Go** — primary implementation (coordinator, worker, `mr` CLI).
-- **Python** — complete reference implementation that speaks the same
-  protocol and file format, so the two can be mixed in one cluster.
+- **Python** — reference implementation of the API, the file format and
+  local mode, without compression. For the same uncompressed job, both
+  languages produce the same bytes.
 
 ## Status
 
-**Phase 3 — fault tolerance.** Local mode runs jobs in Go and Python, and
-the Go coordinator and workers run them over gRPC, re-running the work of
-workers that die (§3.3). See the [roadmap](docs/roadmap.md) for the full
+**Phases 0–4 are done, with S3 storage and compression; Phase 7, the
+evaluation, is next.** Local mode runs jobs in Go and Python, and the Go
+coordinator and workers run them over gRPC, with every paper feature
+F1–F23. See the [roadmap](docs/roadmap.md) for the full
 plan, [the roadmap explained](docs/roadmap-explained.md) for a plain-language
 walkthrough and the 6-week schedule, and the [paper mapping](docs/paper-mapping.md) for feature-by-feature
 progress against the paper. The cluster runs in Docker Compose on a single
@@ -27,7 +29,7 @@ scripts/   code generation and other helper scripts
 go/        Go implementation
 python/    Python reference implementation
 docs/      roadmap, paper mapping, file format, design records (ADRs)
-deploy/    Docker, Compose, Helm                             (Phase 2+)
+deploy/    Docker and Compose                                (Phase 2+)
 bench/     data generators and benchmark harness             (Phase 7)
 ```
 

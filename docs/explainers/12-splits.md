@@ -37,9 +37,10 @@ large fails it.
 
 ## Likely review questions
 
-- **Where are the location hints?** The wire message `InputSplit` already
-  has a `locations` field. Nothing can fill or use it until locality
-  scheduling (#31), so the in-process split type does not carry it yet.
+- **Where are the location hints?** In the wire message `InputSplit`'s
+  `locations` field. The coordinator's `Config.Locate` fills it when a job is
+  submitted, and locality scheduling (#31) uses it; see
+  [23-locality.md](23-locality.md).
 - **Why does a KV file give one split?** MRKV blocks are not
   self-synchronising from an arbitrary byte, so a reader cannot start in
   the middle of a file.

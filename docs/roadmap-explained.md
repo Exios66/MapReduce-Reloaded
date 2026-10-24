@@ -21,7 +21,7 @@ identical bytes, which gives a second, independent correctness check.
 
 ## The phases
 
-Phases 0–4 are done. Next are #41 and #42, then Phase 7. Where the build
+Phases 0–4 are done, and so are #41 and #42. Next is Phase 7. Where the build
 differs from the plan, [design.md](design.md) says how and why.
 
 ### Phase 0 — Foundations (#1–#5)
