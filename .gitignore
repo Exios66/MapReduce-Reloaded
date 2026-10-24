@@ -3,6 +3,7 @@
 
 # Go
 /go/bin/
+/go/mr
 *.test
 *.out
 
