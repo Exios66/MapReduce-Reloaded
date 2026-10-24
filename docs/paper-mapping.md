@@ -2,9 +2,12 @@
 
 Traceability from each feature of Dean & Ghemawat, *MapReduce: Simplified Data
 Processing on Large Clusters* (OSDI 2004), to where it lives in this repo and
-the test that proves it. Rows are filled in as phases land. A dash marks a
-feature that only the Go cluster has; `TestPaperMapping` checks that every
-path and test named here exists.
+the test that proves it. Rows are filled in as phases land. A dash in the
+Python column marks a feature that only the Go cluster has: Python is the
+reference implementation and local mode (ADR 0001), and a Python cluster is
+stretch work (#35). `TestPaperMapping` checks that every path and test named
+here exists. Where we chose differently from the paper, the notes below the
+table say how.
 
 Status: `planned` → `in progress` → `done`.
 
@@ -14,7 +17,7 @@ Status: `planned` → `in progress` → `done`.
 | F2  | Input splitting (16–64 MB) | §3.1 | 2 | `go/internal/split` | `mapreduce_reloaded/split.py` | `TestPlanCoversInput`, `test_split.py` | done |
 | F3  | Master + M map / R reduce tasks | §3.1 | 2 | `go/internal/coordinator`, `go/internal/worker` | — | `TestClusterWordCount`, `TestRequestTask`, `TestReportTask` | done |
 | F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition`, `go/internal/task` | `mapreduce_reloaded/partition` | `testdata/hash/vectors.json`, `test_partition_hash.py`, `TestClusterMapOutputMatchesLocal` | done |
-| F5  | Remote fetch, sort, group, reduce | §3.1 | 2 | `go/internal/shuffle`, `go/internal/task` | — | `TestFetch`, `TestFetchResumes`, `TestClusterWordCount` | done |
+| F5  | Remote fetch, merge, group, reduce | §3.1 | 2 | `go/internal/shuffle`, `go/internal/task` | — | `TestFetch`, `TestFetchResumes`, `TestClusterWordCount` | done |
 | F6  | R output files | §3.1 | 2 | `go/internal/task` | `mapreduce_reloaded/local.py` | `TestWordCountGolden`, `test_wordcount_golden` | done |
 | F7  | Master data structures | §3.2 | 2 | `go/internal/coordinator` | — | `TestInvariants`, `TestResetWorker` | done |
 | F8  | Worker failure + map re-execution | §3.3 | 3 | `go/internal/coordinator`, `go/internal/worker` | — | `TestExpire`, `TestClusterSurvivesWorkerLoss`, `TestChaos` | done |
@@ -32,4 +35,18 @@ Status: `planned` → `in progress` → `done`.
 | F20 | Local execution mode | §4.7 | 1 | `go/internal/local`, `go/cmd/mr` | `mapreduce_reloaded/local.py`, `mapreduce_reloaded/__main__.py` | `TestWordCountGolden`, `test_local.py` | done |
 | F21 | HTTP status pages | §4.8 | 4 | `go/internal/statusweb`, `go/cmd/coordinator` | — | `TestStatus`, `TestPage`, `TestMetrics`, `scripts/e2e.sh` | done |
 | F22 | Counters (de-duplicated) | §4.9 | 3 | `go/internal/coordinator`, `go/internal/task` | `mapreduce_reloaded/local.py` | `TestClusterCountersMatchLocal`, `test_wordcount_golden`, `TestChaos` | done |
-| F23 | Paper example programs | §2.3, §5 | 4 | `go/examples` | `mapreduce_reloaded/examples` | `TestWordCountGolden`, `TestGrep`, `TestURLFreq`, `TestReverseLinks`, `TestSort`, `TestInvertedIndex`, `TestTermVector`, `test_wordcount_golden`, `test_grep`, `test_urlfreq`, `test_reverselinks`, `test_distsort`, `test_invertedindex`, `test_termvector` | done |
+| F23 | Paper example programs | §2.3 | 4 | `go/examples` | `mapreduce_reloaded/examples` | `TestWordCountGolden`, `TestGrep`, `TestURLFreq`, `TestReverseLinks`, `TestSort`, `TestInvertedIndex`, `TestTermVector`, `test_wordcount_golden`, `test_grep`, `test_urlfreq`, `test_reverselinks`, `test_distsort`, `test_invertedindex`, `test_termvector` | done |
+| F24 | Performance experiments (grep, sort, backups, killed workers) | §5 | 7 | — | — | | planned |
+
+## Notes
+
+- **F5.** Each map output partition is already sorted, so a reducer merges
+  its inputs (`extsort.Merge`) instead of sorting them again.
+- **F9.** There is no periodic checkpoint. The coordinator logs each
+  decision before it replies, and a restarted coordinator replays the log,
+  so the job survives instead of being aborted (ADR 0007).
+- **F11.** The scheduler ranks tasks by host, then zone, and can wait for a
+  local worker (`Config.Locate`, `LocalityWait`). Nothing in the shipped
+  binaries labels splits yet: Compose workers share one volume, so there is
+  no locality to exploit until a store that knows where data lives (#41).
+- **F24.** The benchmark harness and the §5 experiments are #57 and #58.

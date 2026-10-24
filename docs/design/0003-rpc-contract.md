@@ -14,13 +14,14 @@ We need a replacement that:
 
 ## Decision
 
-The contract lives in `proto/mapreduce/v1/` as three files.
+The contract lives in `proto/mapreduce/v1/` as four files.
 
 | File | Contents |
 |---|---|
 | `types.proto` | Shared data types: `TaskId`, `TaskAttemptId`, `InputSplit`, `PartitionLocation`, `JobSpec`, `Counters`, `WorkerInfo`, and the `TaskKind` / `TaskState` enums |
 | `coordinator.proto` | `CoordinatorService` (`RegisterWorker`, `RequestTask`, `ReportTask`, `Heartbeat`, `SubmitJob`, `GetJobStatus`) |
 | `shuffle.proto` | `ShuffleService.FetchPartition`, a server-streaming RPC that every worker serves |
+| `log.proto` | `LogRecord`, the coordinator's write-ahead log records (ADR 0007, added in Phase 3) |
 
 The main design choices:
 
@@ -43,7 +44,9 @@ The main design choices:
    was accepted. Reducers fetch the data directly
    from the map worker with `FetchPartition`. The coordinator only stores
    locations and never touches data.
-   - `PartitionLocation.uri` is reserved for Phase 6's external shuffle mode.
+   - `PartitionLocation.uri` names the file instead when workers share a
+     work directory and serve no shuffle (`worker -listen ""`). External
+     shuffle mode (#43) will reuse it.
 4. **Streaming shuffle with resume.** `FetchPartition` streams chunks, so
    memory stays bounded on both ends. An `offset` field lets an interrupted
    fetch continue instead of restarting.

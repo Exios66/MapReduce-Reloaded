@@ -94,8 +94,8 @@ message PartitionLocation {
   string worker_address = 3;
   // Size of the data in bytes, so reducers can plan their fetches.
   uint64 size_bytes = 4;
-  // Set when the data lives in shared storage (external shuffle mode, Phase
-  // 6) rather than on the worker's local disk.
+  // Set when the data lives in shared storage, such as a work directory the
+  // workers share, rather than behind the worker's shuffle server.
   string uri = 5;
 }
 
