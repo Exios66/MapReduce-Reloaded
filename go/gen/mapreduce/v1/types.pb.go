@@ -407,8 +407,8 @@ type PartitionLocation struct {
 	WorkerAddress string `protobuf:"bytes,3,opt,name=worker_address,json=workerAddress,proto3" json:"worker_address,omitempty"`
 	// Size of the data in bytes, so reducers can plan their fetches.
 	SizeBytes uint64 `protobuf:"varint,4,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
-	// Set when the data lives in shared storage (external shuffle mode, Phase
-	// 6) rather than on the worker's local disk.
+	// Set when the data lives in shared storage, such as a work directory the
+	// workers share, rather than behind the worker's shuffle server.
 	Uri           string `protobuf:"bytes,5,opt,name=uri,proto3" json:"uri,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

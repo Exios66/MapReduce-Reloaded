@@ -25,7 +25,8 @@ owns the state and receives requests on a channel.
    Every operation is a few map and slice updates. The one exception is
    removing a finished job's `_temporary` directory (#23): it runs once per
    job, on at most R files, and doing it under the lock means the job is
-   never reported done before its output is clean.
+   never reported done before its output is clean. ADR 0007 adds a
+   second: the write-ahead log's fsync.
 
 ## Alternatives rejected
 
@@ -40,7 +41,8 @@ owns the state and receives requests on a channel.
 
 - Handlers are easy to read and to test: the table and registry are tested
   directly, with no goroutines, and the race detector checks the handlers.
-- All changes to the state are serialised; only SubmitJob's checks of
-  the file system run outside the lock. At this project's scale (a handful
+- All changes to the state are serialised. SubmitJob plans its splits
+  before it takes the lock. It checks and creates the output directory
+  under the lock, so that no other job can finish in between. At this project's scale (a handful
   of workers, thousands of tasks), each critical section takes
   microseconds, so this is not a bottleneck. The paper's master is also a single process (§3.2).
