@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 
@@ -313,10 +312,8 @@ func (l *memLog) Append(b []byte) error {
 func (l *memLog) kinds() []string {
 	var names []string
 	for _, rec := range l.records {
-		rec.ProtoReflect().Range(func(f protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
-			names = append(names, string(f.Name()))
-			return false
-		})
+		m := rec.ProtoReflect()
+		names = append(names, string(m.WhichOneof(m.Descriptor().Oneofs().ByName("record")).Name()))
 	}
 	return names
 }
@@ -352,6 +349,11 @@ func TestLog(t *testing.T) {
 	want := []string{"job_submitted", "task_assigned", "task_reported", "task_assigned", "task_reported"}
 	if got := log.kinds(); !slices.Equal(got, want) {
 		t.Fatalf("log holds %v, want %v", got, want)
+	}
+	for i, rec := range log.records {
+		if rec.GetAt() == nil || i > 0 && rec.GetAt().AsTime().Before(log.records[i-1].GetAt().AsTime()) {
+			t.Fatalf("record %d at %v, after one at %v", i, rec.GetAt(), log.records[max(0, i-1)].GetAt())
+		}
 	}
 
 	s, _, _ = newJobWith(t, Config{Log: log, WorkerTimeout: time.Minute}, 1)

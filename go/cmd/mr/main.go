@@ -267,11 +267,17 @@ func dial(addr string) (pb.CoordinatorServiceClient, func(), error) {
 	return pb.NewCoordinatorServiceClient(conn), func() { _ = conn.Close() }, nil
 }
 
+// printStatus prints the job's state and progress, its duration in seconds
+// once it has finished, as the coordinator measured it, then its counters.
 func printStatus(w io.Writer, st *pb.GetJobStatusResponse) error {
 	_, err := fmt.Fprintf(w, "%s\t%s\nmap\t%d/%d\nreduce\t%d/%d\n",
 		st.GetJobId(), strings.TrimPrefix(st.GetState().String(), "JOB_STATE_"),
 		st.GetMapTasksCompleted(), st.GetMapTasksTotal(),
 		st.GetReduceTasksCompleted(), st.GetReduceTasksTotal())
+	if err == nil && st.GetSubmittedAt() != nil && st.GetFinishedAt() != nil {
+		d := st.GetFinishedAt().AsTime().Sub(st.GetSubmittedAt().AsTime())
+		_, err = fmt.Fprintf(w, "seconds\t%.3f\n", d.Seconds())
+	}
 	return errors.Join(err, printCounters(w, st.GetCounters().GetValues()))
 }
 

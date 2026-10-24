@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 )
 
@@ -62,7 +64,8 @@ func jobStatus(t *testing.T, s *Server, job string) *pb.GetJobStatusResponse {
 }
 
 // A restarted coordinator resumes its job: completed tasks stay completed,
-// running attempts are given up, and attempt numbers are never reused.
+// running attempts are given up, and attempt numbers are never reused. The
+// job keeps the times it was submitted and finished.
 func TestRecover(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "coordinator.log")
 	in := filepath.Join(t.TempDir(), "in.txt")
@@ -79,6 +82,10 @@ func TestRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := sub.GetJobId()
+	submitted := jobStatus(t, s, job).GetSubmittedAt()
+	if submitted == nil || jobStatus(t, s, job).GetFinishedAt() != nil {
+		t.Fatalf("running job status %v; want a submit time and no finish time", jobStatus(t, s, job))
+	}
 	succeed(t, s, old, next(t, s, old), outputs(0, 2))
 	succeed(t, s, old, next(t, s, old), nil) // reduce 0
 	running := next(t, s, old)               // reduce 1, lost in the crash
@@ -86,6 +93,9 @@ func TestRecover(t *testing.T) {
 	s = recoverServer(t, Config{}, path)
 	if st := jobStatus(t, s, job); st.GetMapTasksCompleted() != 1 || st.GetReduceTasksCompleted() != 1 || st.GetCounters().GetValues()["n"] != 2 {
 		t.Fatalf("recovered status %v; want 1 map and 1 reduce done, counted once", st)
+	}
+	if st := jobStatus(t, s, job); !proto.Equal(st.GetSubmittedAt(), submitted) || st.GetFinishedAt() != nil {
+		t.Fatalf("recovered status %v; want submitted at %v and not finished", st, submitted)
 	}
 	w := register(t, s)
 	if w == old {
@@ -101,10 +111,17 @@ func TestRecover(t *testing.T) {
 	if !succeed(t, s, w, retry, nil) || jobStatus(t, s, job).GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
 		t.Fatal("the job did not finish")
 	}
+	finished := jobStatus(t, s, job).GetFinishedAt()
+	if finished == nil || finished.AsTime().Before(submitted.AsTime()) {
+		t.Fatalf("job finished at %v, submitted at %v", finished, submitted)
+	}
 
 	s = recoverServer(t, Config{}, path) // replaying a finished job, and a restart, again
 	if st := jobStatus(t, s, job); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED || st.GetCounters().GetValues()["n"] != 3 {
 		t.Fatalf("recovered status %v; want succeeded", st)
+	}
+	if st := jobStatus(t, s, job); !proto.Equal(st.GetSubmittedAt(), submitted) || !proto.Equal(st.GetFinishedAt(), finished) {
+		t.Fatalf("recovered status %v; want submitted at %v and finished at %v", st, submitted, finished)
 	}
 	if w := register(t, s); w != "r3-w1" {
 		t.Fatalf("worker ID %s after the second restart, want r3-w1", w)
@@ -142,5 +159,20 @@ func TestRecoverBackup(t *testing.T) {
 	}
 	if succeed(t, s, w1, original, outputs(0, 1)) {
 		t.Fatal("accepted the original's completion after the backup's")
+	}
+}
+
+// A log written before records had times still replays; its job has no
+// submit or finish time.
+func TestReplayWithoutTimes(t *testing.T) {
+	s := NewServer(Config{})
+	rec := &pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: &pb.JobSubmitted{
+		JobId: "job-1", Job: &pb.JobSpec{NumReduceTasks: 1}, Splits: []*pb.InputSplit{{}},
+	}}}
+	if err := s.replay(rec); err != nil {
+		t.Fatal(err)
+	}
+	if st := jobStatus(t, s, "job-1"); st.GetSubmittedAt() != nil || st.GetFinishedAt() != nil {
+		t.Fatalf("status %v; want no times", st)
 	}
 }

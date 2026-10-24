@@ -19,20 +19,22 @@ below are copied from a run, with the machine it ran on.
   - Each job runs with M = 16 and R = 4, three times per intermediate codec.
 - Bytes shuffled: every map output file is fetched once by its reduce task,
   so the `map.output.bytes` counter is the bytes shuffled.
-- Time: the wall time of `mr submit -wait`, which includes about a second
-  to start its container.
+- Time: the job's duration as the coordinator measured it, from accepting
+  the job to its last reduce task (`seconds` in `mr status`).
+  - The CSV also has `wall_seconds`, the time of `mr submit -wait`, which
+    adds about a second to start its container.
 
 Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
 Docker 29.9.1, 4 workers. Time is the median of three runs, with the range.
 
 | Job | Codec | Bytes shuffled | vs none | Time (s) |
 |---|---|---:|---:|---|
-| wordcount | none | 2,071,855 | 1.00 | 3.68 (3.65–4.31) |
-| wordcount | zstd | 1,225,752 | 0.59 | 4.21 (4.18–4.24) |
-| wordcount | snappy | 1,930,867 | 0.93 | 4.23 (3.66–4.31) |
-| distsort | none | 68,353,231 | 1.00 | 3.48 (3.44–3.88) |
-| distsort | zstd | 31,892,233 | 0.47 | 3.89 (3.44–4.37) |
-| distsort | snappy | 51,049,537 | 0.75 | 3.82 (3.32–3.86) |
+| wordcount | none | 2,071,855 | 1.00 | 2.81 (2.75–2.99) |
+| wordcount | zstd | 1,225,752 | 0.59 | 2.93 (2.55–3.02) |
+| wordcount | snappy | 1,930,867 | 0.93 | 3.00 (2.80–3.04) |
+| distsort | none | 68,353,231 | 1.00 | 2.25 (1.98–2.37) |
+| distsort | zstd | 31,892,233 | 0.47 | 2.40 (2.22–2.58) |
+| distsort | snappy | 51,049,537 | 0.75 | 2.28 (2.23–2.34) |
 
 What the numbers show:
 

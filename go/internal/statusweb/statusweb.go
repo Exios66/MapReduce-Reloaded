@@ -8,7 +8,9 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"time"
 
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 	"github.com/exios66/mapreduce-reloaded/go/internal/promtext"
 )
@@ -21,7 +23,16 @@ type Source interface {
 //go:embed status.html
 var page string
 
-var tmpl = template.Must(template.New("status").Parse(page))
+var tmpl = template.Must(template.New("status").Funcs(template.FuncMap{
+	// duration shows how long a job has run, to a tenth of a second.
+	"duration": func(j *pb.GetJobStatusResponse, now time.Time) string {
+		d, ok := duration(j, now)
+		if !ok {
+			return ""
+		}
+		return d.Round(100 * time.Millisecond).String()
+	},
+}).Parse(page))
 
 // Handler serves the status page at / and the metrics at /metrics.
 func Handler(src Source) http.Handler {

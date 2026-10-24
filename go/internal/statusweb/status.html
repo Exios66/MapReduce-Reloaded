@@ -16,18 +16,19 @@ progress { width: 8em; }
 
 <h2>Jobs</h2>
 <table>
-<tr><th>Job</th><th>State</th><th>Map</th><th>Reduce</th><th>Counters</th><th>Error</th></tr>
+<tr><th>Job</th><th>State</th><th>Duration</th><th>Map</th><th>Reduce</th><th>Counters</th><th>Error</th></tr>
 {{range .Jobs}}
 <tr>
 <td>{{.JobId}}</td>
 <td>{{.State}}</td>
+<td>{{duration . $.At}}</td>
 <td><progress max="{{.MapTasksTotal}}" value="{{.MapTasksCompleted}}"></progress> {{.MapTasksCompleted}}/{{.MapTasksTotal}}</td>
 <td><progress max="{{.ReduceTasksTotal}}" value="{{.ReduceTasksCompleted}}"></progress> {{.ReduceTasksCompleted}}/{{.ReduceTasksTotal}}</td>
-<td>{{range $name, $n := .Counters.Values}}{{$name}}: {{$n}}<br>{{end}}</td>
+<td>{{range $name, $n := .GetCounters.GetValues}}{{$name}}: {{$n}}<br>{{end}}</td>
 <td>{{.Error}}</td>
 </tr>
 {{else}}
-<tr><td colspan="6">No jobs yet.</td></tr>
+<tr><td colspan="7">No jobs yet.</td></tr>
 {{end}}
 </table>
 
