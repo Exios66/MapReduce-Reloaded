@@ -33,6 +33,7 @@ const (
 	MapOutputBytes      = "map.output.bytes" // file sizes, after combining and compression
 	ReduceInputRecords  = "reduce.input.records"
 	ReduceOutputRecords = "reduce.output.records"
+	ReduceOutputBytes   = "reduce.output.bytes" // keys and values emitted, before the output format
 	SkippedRecords      = "skipped.records"
 )
 
@@ -151,6 +152,7 @@ func Reduce(ctx context.Context, spec api.JobSpec, id api.TaskID, sources []exts
 	defer recovered(&err)
 	emit := emitter(func(key, value []byte) error {
 		tc.Count(ReduceOutputRecords, 1)
+		tc.Count(ReduceOutputBytes, int64(len(key)+len(value)))
 		return w.Write(key, value)
 	})
 	merged := extsort.Merge(sources...) // in map task order, so equal keys stay in input order

@@ -116,7 +116,7 @@
     },
     {
       "id": 5,
-      "title": "Map output bytes per second",
+      "title": "Bytes per second: input, map output, shuffle, output",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -131,13 +131,23 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(mr_worker_map_output_bytes_total[1m]))",
-          "legendFormat": "written"
+          "expr": "sum(rate(mr_worker_map_input_bytes_total[1m]))",
+          "legendFormat": "input"
         },
         {
           "refId": "B",
+          "expr": "sum(rate(mr_worker_map_output_bytes_total[1m]))",
+          "legendFormat": "map output"
+        },
+        {
+          "refId": "C",
           "expr": "sum(rate(mr_worker_shuffle_fetched_bytes_total[1m]))",
-          "legendFormat": "fetched"
+          "legendFormat": "shuffle"
+        },
+        {
+          "refId": "D",
+          "expr": "sum(rate(mr_worker_reduce_output_bytes_total[1m]))",
+          "legendFormat": "output"
         }
       ],
       "fieldConfig": {

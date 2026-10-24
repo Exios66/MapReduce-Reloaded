@@ -26,8 +26,11 @@ way, from start to finish (§5.2, §5.3).
 
 `worker -http :8081` serves the worker's own `/metrics`: task attempts
 finished by kind and result (`mr_worker_tasks_total{kind,result}`), those
-running (`mr_worker_task_running{kind}`), bytes of map output written and
-fetched, and registrations. It is off by default. They are atomic counters
+running (`mr_worker_task_running{kind}`), bytes of input mapped, of map
+output written and fetched, and of output reduced, and registrations. Input
+and output bytes are counted as each task ends; output bytes are the keys
+and values before the output format (`reduce.output.bytes`). It is off by
+default. They are atomic counters
 on the worker, in `worker/metrics.go`; both servers write the text format
 with `promtext`.
 
@@ -42,7 +45,8 @@ the job's reduce tasks completed.
 the coordinator and every worker each 5 seconds, and Grafana
 (`127.0.0.1:13000`, read-only without a login). Its MapReduce dashboard
 shows live workers, each job's progress, tasks by kind and state, task
-attempts finished per second, map output written and fetched per second,
+attempts finished per second, the input, map output, shuffle and output
+rates in bytes per second, as in the paper's Figures 2 and 3,
 each job's duration, and its backup attempts started and won. They sit in the Compose `monitoring` profile, so `cluster-up` and
 `e2e` do not start them; `cluster-down` removes them. The files are in
 `deploy/compose/monitoring`, and `TestDashboardQueriesServedMetrics` checks

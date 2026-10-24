@@ -38,6 +38,8 @@ def test_wordcount_golden(tmp_path, m):
     assert counts[local.MAP_OUTPUT_RECORDS] == 59372
     assert counts[local.REDUCE_INPUT_RECORDS] == counts[combine.OUTPUT_RECORDS]
     assert counts[local.REDUCE_OUTPUT_RECORDS] == 11786
+    # The expected files' 118,674 bytes, less a tab and a newline per line.
+    assert counts[local.REDUCE_OUTPUT_BYTES] == 118674 - 2 * 11786
 
 
 def test_without_combiner(tmp_path):

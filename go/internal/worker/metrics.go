@@ -22,8 +22,10 @@ var kinds = [...]string{mapKind: "map", reduceKind: "reduce"}
 type stats struct {
 	running        [len(kinds)]atomic.Int64
 	ok, failed     [len(kinds)]atomic.Uint64
+	mapInputBytes  atomic.Uint64
 	mapOutputBytes atomic.Uint64
 	fetchedBytes   atomic.Uint64
+	outputBytes    atomic.Uint64
 	registrations  atomic.Uint64
 }
 
@@ -66,8 +68,10 @@ func (s *stats) metrics() []byte {
 		name, help string
 		v          *atomic.Uint64
 	}{
+		{"mr_worker_map_input_bytes_total", "Bytes of input splits mapped, counted when each map task ends.", &s.mapInputBytes},
 		{"mr_worker_map_output_bytes_total", "Bytes of map output written.", &s.mapOutputBytes},
 		{"mr_worker_shuffle_fetched_bytes_total", "Bytes of map output fetched from workers.", &s.fetchedBytes},
+		{"mr_worker_reduce_output_bytes_total", "Bytes of keys and values reduced into the output, counted when each reduce task ends.", &s.outputBytes},
 		{"mr_worker_registrations_total", "Registrations with the coordinator.", &s.registrations},
 	} {
 		promtext.Family(&b, m.name, "counter", m.help)

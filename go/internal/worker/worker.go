@@ -297,6 +297,7 @@ func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([
 		locations[r] = loc
 		w.stats.mapOutputBytes.Add(uint64(size))
 	}
+	w.stats.mapInputBytes.Add(uint64(counts[task.MapInputBytes]))
 	return locations, counts, nil
 }
 
@@ -319,7 +320,10 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logg
 		defer func() { err = errors.Join(err, r.Close()) }()
 		sources[i] = kv.NewReader(r)
 	}
-	return task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log)
+	if counts, err = task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log); err == nil {
+		w.stats.outputBytes.Add(uint64(counts[task.ReduceOutputBytes]))
+	}
+	return counts, err
 }
 
 // open opens one map output: from the worker that holds it, or from shared

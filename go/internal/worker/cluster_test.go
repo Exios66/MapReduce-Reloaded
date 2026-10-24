@@ -324,8 +324,9 @@ func TestClusterWordCount(t *testing.T) {
 // With a free worker on every host that holds a split, nearly every map
 // task runs on one, and the output does not change (§3.4). With fewer, the
 // job still finishes: no task waits for ever for a missing host.
-// A worker's /metrics counts the tasks it ran, and the map output it wrote
-// and then fetched back for the reduce tasks.
+// A worker's /metrics counts the tasks it ran, the input it mapped, the map
+// output it wrote and then fetched back for the reduce tasks, and the output
+// it reduced.
 func TestClusterWorkerMetrics(t *testing.T) {
 	c, _, status := runJob(t, "wordcount", 1)
 	body := scrape(t, c.workers[0])
@@ -335,6 +336,8 @@ func TestClusterWorkerMetrics(t *testing.T) {
 		`mr_worker_tasks_total{kind="map",result="failed"} 0`,
 		`mr_worker_task_running{kind="map"} 0`,
 		"mr_worker_registrations_total 1",
+		fmt.Sprint("mr_worker_map_input_bytes_total ", status.GetCounters().GetValues()[task.MapInputBytes]),
+		fmt.Sprint("mr_worker_reduce_output_bytes_total ", status.GetCounters().GetValues()[task.ReduceOutputBytes]),
 	} {
 		if !strings.Contains(body, want+"\n") {
 			t.Errorf("metrics lack %q:\n%s", want, body)
