@@ -28,17 +28,18 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	if err != nil {
 		return nil, err
 	}
-	splits, err := split.Plan(in, spec.Inputs, spec.SplitSize)
+	ctx := context.Background()
+	splits, err := split.Plan(ctx, in, spec.Inputs, spec.SplitSize)
 	if err != nil {
 		return nil, err
 	}
 	if len(splits) == 0 {
 		return nil, errors.New("local: the input is empty")
 	}
-	if err := task.CheckOutput(spec.Output); err != nil {
+	if err := task.CheckOutput(ctx, spec.Output); err != nil {
 		return nil, err
 	}
-	if err := task.Setup(spec.Output); err != nil {
+	if err := task.Setup(ctx, spec.Output); err != nil {
 		return nil, err
 	}
 
@@ -50,7 +51,7 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	}
 	for i, s := range splits {
 		id := api.TaskID{Kind: api.MapTask, Index: uint32(i)}
-		_, c, err := task.Map(context.Background(), spec, id, s, workDir, nil, slog.Default().With("task", id))
+		_, c, err := task.Map(ctx, spec, id, s, workDir, nil, slog.Default().With("task", id))
 		if err != nil {
 			return nil, fmt.Errorf("map task %d: %w", i, err)
 		}
@@ -63,7 +64,7 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 		}
 		add(c)
 	}
-	return counts, task.Cleanup(spec.Output)
+	return counts, task.Cleanup(ctx, spec.Output)
 }
 
 // reduce runs reduce task r over the outputs of all m map tasks in dir.

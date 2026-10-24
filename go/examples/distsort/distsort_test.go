@@ -33,7 +33,7 @@ func TestSort(t *testing.T) {
 		lines = append(lines, string(b))
 	}
 	in := run.Write(t, strings.Join(lines, "\n")+"\n")
-	splitSize, err := split.SizeFor([]string{in}, 5)
+	splitSize, err := split.SizeFor(t.Context(), []string{in}, 5)
 	if err != nil {
 		t.Fatal(err)
 	}

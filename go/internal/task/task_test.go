@@ -38,7 +38,7 @@ func setup(t *testing.T, text string) (api.JobSpec, formats.Split) {
 		Output:  filepath.Join(t.TempDir(), "out"),
 		R:       2,
 	}
-	if err := Setup(spec.Output); err != nil {
+	if err := Setup(t.Context(), spec.Output); err != nil {
 		t.Fatal(err)
 	}
 	return spec, formats.Split{Path: in, End: int64(len(text))}
@@ -93,7 +93,7 @@ func TestMapThenReduce(t *testing.T) {
 		total += counts[ReduceOutputRecords]
 		read += counts[ReduceInputRecords]
 	}
-	if err := Cleanup(spec.Output); err != nil {
+	if err := Cleanup(t.Context(), spec.Output); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"part-r-00000", "part-r-00001"}; total != 3 || read != 3 || !slices.Equal(dirNames(t, spec.Output), want) {
@@ -337,7 +337,7 @@ func TestSideOutput(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := Cleanup(spec.Output); err != nil {
+	if err := Cleanup(t.Context(), spec.Output); err != nil {
 		t.Fatal(err)
 	}
 	if names := dirNames(t, spec.Output); !slices.Equal(names, []string{"keys-0", "part-r-00000"}) {
@@ -350,7 +350,7 @@ func TestSideOutput(t *testing.T) {
 
 func TestSideOutputNames(t *testing.T) {
 	spec, _ := setup(t, "")
-	ctx := newContext(spec, api.TaskID{Kind: api.MapTask}, nil, quiet)
+	ctx := newContext(t.Context(), spec, api.TaskID{Kind: api.MapTask}, nil, quiet)
 	for _, name := range []string{"", ".", "..", ".hidden", "_SUCCESS", "part-r-00000", "a/b", "../x"} {
 		if _, err := ctx.SideOutput(name); err == nil {
 			t.Errorf("SideOutput(%q) succeeded", name)

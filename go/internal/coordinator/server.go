@@ -178,7 +178,7 @@ func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
 
 // SubmitJob validates the job, defaulting R to a multiple of the number of
 // workers (§3.5), and plans its map tasks.
-func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
+func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
 	m := proto.CloneOf(req.GetJob())
 	if m == nil {
 		return nil, status.Error(codes.InvalidArgument, "no job")
@@ -196,7 +196,7 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	plan, err := split.Plan(in, spec.Inputs, spec.SplitSize)
+	plan, err := split.Plan(ctx, in, spec.Inputs, spec.SplitSize)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -218,10 +218,10 @@ func (s *Server) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.Sub
 	if s.active != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "job %s is still running", s.active.id)
 	}
-	if err := mrtask.CheckOutput(spec.Output); err != nil { // under the lock, so no job finishes in between
+	if err := mrtask.CheckOutput(ctx, spec.Output); err != nil { // under the lock, so no job finishes in between
 		return nil, status.Error(codes.AlreadyExists, err.Error())
 	}
-	if err := mrtask.Setup(spec.Output); err != nil {
+	if err := mrtask.Setup(ctx, spec.Output); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
@@ -483,7 +483,7 @@ func (s *Server) record(rec *pb.LogRecord) error {
 func (j *job) cleanup() {
 	path, err := wire.Path(j.spec.GetOutput())
 	if err == nil {
-		err = mrtask.Cleanup(path)
+		err = mrtask.Cleanup(context.Background(), path)
 	}
 	if err != nil {
 		slog.Warn("cleaning up job output", "job", j.id, "err", err)

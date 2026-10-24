@@ -16,7 +16,7 @@ import (
 // params, and returns its output file.
 func Local(t *testing.T, p api.Program, inputs []string, m int, params map[string]string) ([]byte, error) {
 	t.Helper()
-	splitSize, err := split.SizeFor(inputs, m)
+	splitSize, err := split.SizeFor(t.Context(), inputs, m)
 	if err != nil {
 		t.Fatal(err)
 	}

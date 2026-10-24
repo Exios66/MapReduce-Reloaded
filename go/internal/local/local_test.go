@@ -27,7 +27,7 @@ var corpusInputs = []string{filepath.Join(corpus, "*.txt")}
 // and returns the output directory and the counters.
 func runJob(t *testing.T, p api.Program, m int, r uint32) (string, map[string]int64) {
 	t.Helper()
-	splitSize, err := split.SizeFor(corpusInputs, m)
+	splitSize, err := split.SizeFor(t.Context(), corpusInputs, m)
 	if err != nil {
 		t.Fatal(err)
 	}
