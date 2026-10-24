@@ -129,7 +129,7 @@ failing, and jobs still finish correctly.*
 *How you would build it in 2026 instead of 2004.*
 
 - **In scope:**
-  - **#41** cloud object storage (S3, run locally with MinIO);
+  - **#41** cloud object storage (S3, run locally with VersityGW);
   - **#42** compression.
 - **Stretch:**
   - durable shuffle storage;

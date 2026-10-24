@@ -2,7 +2,7 @@
 
 The distributed cluster (#21 onward) runs on one Linux VM with **8 GB of RAM**:
 the VM provided for CS544. Every component runs as a Docker container on that
-VM: the coordinator, the workers and MinIO. The containers talk to each other
+VM: the coordinator, the workers and an S3-compatible store. The containers talk to each other
 over a Docker network exactly as they would across machines, so the code
 does not know or care that it is one host.
 
@@ -20,8 +20,8 @@ slowing down the whole VM.
 | coordinator | 256 MB | Holds only task state and partition locations, never data (§3.2) |
 | worker (× 4) | 768 MB each | 256 MB sort buffer (#10 spills beyond that), the rest for the Go runtime, gRPC and file buffers |
 | mr (on demand) | 128 MB | Submits jobs and polls status; workers process the data |
-| MinIO (#41) | 512 MB | Object storage for input and output |
-| **Total** | **≈ 3.9 GB** | Leaves about 4 GB for the OS, Docker and coursework containers |
+| s3 (#41, profile `s3`) | 256 MB | [VersityGW](https://github.com/versity/versitygw), an S3-compatible store for input and output |
+| **Total** | **≈ 3.7 GB** | Leaves about 4 GB for the OS, Docker and coursework containers |
 
 - Scaling up (`docker compose up --scale worker=N`) costs 768 MB per worker.
   About 6 workers is the practical ceiling.
@@ -76,6 +76,7 @@ ssh mr-vm
 cd MapReduce-Reloaded && git pull
 make cluster-up      # build the image, start the coordinator and 4 workers
 make e2e             # run word count and compare with the golden output
+make e2e-s3          # the same, with input and output in the S3 store
 make cluster-down    # stop and remove only this project's containers and volume
 ```
 
@@ -83,7 +84,9 @@ Run any `mr` command on the cluster with
 `docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr ...`, for example
 `mr status -coordinator coordinator:7070 job-1`. Every container sees the
 test corpus at `/corpus` and job output in the `output` volume at `/out`.
-MinIO joins the Compose file with #41.
+In the `s3` profile, the store serves the corpus as `s3://corpus` and keeps
+output in `s3://out`; every node has its address and credentials in the
+`AWS_*` variables (ADR 0013).
 
 The coordinator is also available to a host CLI at `127.0.0.1:18770`, bound
 only to loopback. For example, on the VM run
@@ -103,20 +106,13 @@ The status page and Prometheus metrics are at `127.0.0.1:18780` (`/` and
 is at `127.0.0.1:13000` and Prometheus at `127.0.0.1:19090`:
 `ssh -L 13000:127.0.0.1:13000 mr-vm`.
 
-Web pages (the status UI from #32, MinIO's console) are reached through an
-SSH tunnel, so no port is opened to the network:
-
-```sh
-ssh -L 18080:localhost:18080 -L 18900:localhost:18900 mr-vm
-# then open http://localhost:18080 (status UI) or http://localhost:18900 (MinIO)
-```
 
 ## Living alongside CS544 coursework
 
 - The Compose project is named `mapreduce`. `make cluster-down` therefore only
   removes containers, networks and volumes with that name, and never touches
   course containers.
-- Published ports use the 18xxx range (for example, status UI 18080 and MinIO
-  18900), away from the common 8080/9000-style ports that course work uses.
+- Published ports use the 18xxx range (for example, the status page at
+  18780), away from the common 8080/9000-style ports that course work uses.
 - Check memory use at any time with `docker stats`. The #21 end-to-end test
   also checks that every service stays under its limit.
