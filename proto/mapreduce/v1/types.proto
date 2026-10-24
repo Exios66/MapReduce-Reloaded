@@ -113,7 +113,7 @@ message JobSpec {
   // Input files or glob patterns, as URIs.
   repeated string inputs = 2;
   // Output directory URI. Reduce task r writes "<output>/part-r-<r>", with r
-  // in five digits: part-r-00000, part-r-00001, ...
+  // in at least five digits: part-r-00000, part-r-00001, ...
   string output = 3;
   // Target split size in bytes; this determines M (§3.5). 0 means the
   // default (64 MiB).

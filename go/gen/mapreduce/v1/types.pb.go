@@ -534,7 +534,7 @@ type JobSpec struct {
 	// Input files or glob patterns, as URIs.
 	Inputs []string `protobuf:"bytes,2,rep,name=inputs,proto3" json:"inputs,omitempty"`
 	// Output directory URI. Reduce task r writes "<output>/part-r-<r>", with r
-	// in five digits: part-r-00000, part-r-00001, ...
+	// in at least five digits: part-r-00000, part-r-00001, ...
 	Output string `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
 	// Target split size in bytes; this determines M (§3.5). 0 means the
 	// default (64 MiB).
