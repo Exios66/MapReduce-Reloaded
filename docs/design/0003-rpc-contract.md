@@ -30,8 +30,8 @@ The main design choices:
    or `shutdown`.
    - The coordinator never needs to open connections *to* workers, which
      keeps it simpler and makes it work behind NAT or container networking.
-   - Cancellation of losing backup tasks (§3.6) rides back on the heartbeat
-     response.
+   - Cancellation of losing backup tasks (§3.6) is to ride back on the
+     heartbeat response. The field exists, but nothing fills it yet (#121).
 2. **Tasks and attempts are different things.** A `TaskId` (job, kind,
    index) is stable. A `TaskAttemptId` adds an attempt number.
    - Re-execution after failures (§3.3) and backup tasks (§3.6) both create
