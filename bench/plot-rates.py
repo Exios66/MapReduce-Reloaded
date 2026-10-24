@@ -10,6 +10,9 @@ mr_worker_reduce_output_bytes_total, differentiated between samples, in MB/s
 two rates come in steps of whole tasks; the shuffle is counted as it is
 fetched.
 
+Each worker's counters count from its first sample, and a counter that
+drops, as when a worker restarts, counts from zero again.
+
 With only SAMPLES.csv, this writes the rates as CSV to stdout:
 seconds,input,shuffle,output, one row per interval between samples, at the
 interval's end. With OUT.png it draws them in three panels, one above the
@@ -29,18 +32,27 @@ METRICS = {
 
 
 def rates(rows):
-    """Returns (seconds, {rate: [MB/s, ...]}) from scrape-metrics.py rows.
-    A worker missing from a round counts with its last value."""
-    rounds, last = {}, {}
+    """Returns (seconds, {rate: [MB/s, ...]}) from scrape-metrics.py rows:
+    the times of the rounds, and the rates over the intervals between them,
+    one fewer. Each worker's counters count from its first sample, so one
+    first seen late adds no bytes it counted before; a worker missing from
+    a round counts with its last value; and a counter that drops, as when a
+    worker restarts, counts from zero again."""
+    rounds, last, grown = {}, {}, {}
     for row in rows:
         rounds.setdefault(float(row["seconds"]), []).append(row)
     times, totals = sorted(rounds), []
     for t in times:
         for row in rounds[t]:
-            last[row["url"], row["metric"]] = int(row["value"])
+            key, value = (row["url"], row["metric"]), int(row["value"])
+            if key in last:
+                grown[key] += value - last[key] if value >= last[key] else value
+            else:
+                grown[key] = 0
+            last[key] = value
         totals.append(
             {
-                rate: sum(v for (_, m), v in last.items() if m == metric)
+                rate: sum(v for (_, m), v in grown.items() if m == metric)
                 for rate, metric in METRICS.items()
             }
         )
@@ -49,7 +61,7 @@ def rates(rows):
         dt = times[i] - times[i - 1]
         for rate in METRICS:
             series[rate].append((totals[i][rate] - totals[i - 1][rate]) / dt / 1e6)
-    return times[1:], series
+    return times, series
 
 
 def plot(seconds, series, path):
@@ -60,8 +72,8 @@ def plot(seconds, series, path):
 
     fig, axes = plt.subplots(len(series), 1, sharex=True, figsize=(6, 6))
     for ax, (rate, values) in zip(axes, series.items(), strict=True):
-        # Each rate is an average over the interval that ends at its time.
-        ax.step(seconds, values, where="pre")
+        # Each rate is an average over the interval between two rounds.
+        ax.stairs(values, seconds)
         ax.set_ylabel(f"{rate.capitalize()} (MB/s)")
         ax.set_ylim(bottom=0)
     axes[-1].set_xlabel("Seconds")
@@ -77,7 +89,7 @@ def main():
         return
     out = csv.writer(sys.stdout, lineterminator="\n")
     out.writerow(["seconds", *METRICS])
-    for i, t in enumerate(seconds):
+    for i, t in enumerate(seconds[1:]):
         out.writerow([f"{t:.3f}", *(f"{series[r][i]:.3f}" for r in METRICS)])
 
 

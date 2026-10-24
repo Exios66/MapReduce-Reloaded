@@ -8,6 +8,8 @@ import sys
 import threading
 from pathlib import Path
 
+import pytest
+
 BENCH = Path(__file__).resolve().parent.parent.parent / "bench"
 
 
@@ -53,7 +55,7 @@ def test_scrape():
     assert [r["metric"] for r in rows] == ["mr_worker_shuffle_fetched_bytes_total"] * 3
     assert {r["url"] for r in rows} == {url}
     assert [int(r["value"]) for r in rows] == [1000, 2000, 3000]
-    assert [float(r["seconds"]) for r in rows] == [0.0, 0.2, 0.4]
+    assert [float(r["seconds"]) for r in rows] == pytest.approx([0.0, 0.2, 0.4], abs=0.05)
 
 
 def test_rates(tmp_path):
@@ -61,6 +63,8 @@ def test_rates(tmp_path):
     samples.write_text(
         "seconds,url,metric,value\n"
         "0,a,mr_worker_map_input_bytes_total,0\n"
+        "0,a,mr_worker_shuffle_fetched_bytes_total,0\n"
+        "0,a,mr_worker_reduce_output_bytes_total,0\n"
         "0,b,mr_worker_map_input_bytes_total,0\n"
         "1,a,mr_worker_map_input_bytes_total,2000000\n"
         "1,b,mr_worker_map_input_bytes_total,4000000\n"
@@ -68,10 +72,16 @@ def test_rates(tmp_path):
         "3,a,mr_worker_map_input_bytes_total,4000000\n"
         "3,a,mr_worker_shuffle_fetched_bytes_total,6000000\n"
         "3,a,mr_worker_reduce_output_bytes_total,1000000\n"
+        # c is first seen here: what it counted before adds nothing.
+        "3,c,mr_worker_map_input_bytes_total,5000000\n"
+        # a restarted: its counter counts from zero again.
+        "4,a,mr_worker_map_input_bytes_total,1000000\n"
+        "4,c,mr_worker_map_input_bytes_total,6000000\n"
     )
     rows = list(csv.reader(io.StringIO(run("plot-rates.py", samples))))
     assert rows == [
         ["seconds", "input", "shuffle", "output"],
         ["1.000", "6.000", "0.000", "0.000"],
         ["3.000", "1.000", "3.000", "0.500"],
+        ["4.000", "2.000", "0.000", "0.000"],
     ]

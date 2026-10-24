@@ -4,7 +4,8 @@ counters to stdout as CSV, for plot-rates.py.
 Every INTERVAL seconds, for DURATION seconds or until interrupted, this
 fetches each URL and writes one row per byte counter it serves:
 seconds,url,metric,value. seconds is when the round of fetches started,
-from the first round, so the rows of one round share it. A URL that does
+from the first round, so the rows of one round share it. A round that
+takes longer than INTERVAL delays the next one. A URL that does
 not answer in a round is left out of that round.
 
 Usage: python3 bench/scrape-metrics.py INTERVAL DURATION URL...
@@ -37,6 +38,9 @@ def main():
     tick = start
     try:
         while tick - start <= duration:
+            # Stamped when the round starts, which is later than its tick
+            # if the round before took longer than INTERVAL.
+            now = time.monotonic() - start
             for url in urls:
                 try:
                     with urllib.request.urlopen(url, timeout=interval) as resp:
@@ -44,9 +48,9 @@ def main():
                 except OSError:
                     continue
                 for name, value in sorted(counters(text).items()):
-                    out.writerow([f"{tick - start:.3f}", url, name, value])
+                    out.writerow([f"{now:.3f}", url, name, value])
             sys.stdout.flush()
-            tick += interval
+            tick = max(tick + interval, time.monotonic())
             time.sleep(max(0.0, tick - time.monotonic()))
     except KeyboardInterrupt:
         pass
