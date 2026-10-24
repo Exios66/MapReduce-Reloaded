@@ -11,8 +11,8 @@ them to predict how long a job would take and to find slow machines.
 
 | Path | What | Where |
 |------|------|-------|
-| `/` | Jobs with their duration, map and reduce progress, counters and errors; live workers and what each runs; lost workers and the tasks that had to run again. It refreshes every 2 seconds. | `statusweb/status.html` |
-| `/metrics` | `mr_workers`, `mr_job_tasks{job,kind,state}`, `mr_job_duration_seconds{job}` and `mr_job_counter{job,name}`, in the Prometheus text format | `statusweb/metrics.go` |
+| `/` | Jobs with their duration, map and reduce progress, backup attempts, counters and errors; live workers and what each runs; lost workers and the tasks that had to run again. It refreshes every 2 seconds. | `statusweb/status.html` |
+| `/metrics` | `mr_workers`, `mr_job_tasks{job,kind,state}`, `mr_job_duration_seconds{job}`, `mr_job_backups{job,state}` and `mr_job_counter{job,name}`, in the Prometheus text format | `statusweb/metrics.go` |
 
 Both read `coordinator.Server.Status`, a copy of the coordinator's state
 taken under its lock. Nothing in `statusweb` touches the lock.
@@ -43,7 +43,7 @@ the coordinator and every worker each 5 seconds, and Grafana
 (`127.0.0.1:13000`, read-only without a login). Its MapReduce dashboard
 shows live workers, each job's progress, tasks by kind and state, task
 attempts finished per second, map output written and fetched per second,
-and each job's duration. They sit in the Compose `monitoring` profile, so `cluster-up` and
+each job's duration, and its backup attempts started and won. They sit in the Compose `monitoring` profile, so `cluster-up` and
 `e2e` do not start them; `cluster-down` removes them. The files are in
 `deploy/compose/monitoring`, and `TestDashboardQueriesServedMetrics` checks
 that the dashboard queries only metrics that are served.

@@ -1185,10 +1185,14 @@ type GetJobStatusResponse struct {
 	// When the coordinator accepted the job, and when it succeeded or failed;
 	// finished_at is unset while the job runs. The job's duration is the time
 	// between them, including any time the coordinator was down.
-	SubmittedAt   *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SubmittedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"`
+	FinishedAt  *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	// Backup attempts started near the end of a phase, for tasks still
+	// running elsewhere, and the tasks that a backup completed first (§3.6).
+	BackupAttempts uint32 `protobuf:"varint,13,opt,name=backup_attempts,json=backupAttempts,proto3" json:"backup_attempts,omitempty"`
+	BackupWins     uint32 `protobuf:"varint,14,opt,name=backup_wins,json=backupWins,proto3" json:"backup_wins,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetJobStatusResponse) Reset() {
@@ -1305,6 +1309,20 @@ func (x *GetJobStatusResponse) GetFinishedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *GetJobStatusResponse) GetBackupAttempts() uint32 {
+	if x != nil {
+		return x.BackupAttempts
+	}
+	return 0
+}
+
+func (x *GetJobStatusResponse) GetBackupWins() uint32 {
+	if x != nil {
+		return x.BackupWins
+	}
+	return 0
+}
+
 var File_mapreduce_v1_coordinator_proto protoreflect.FileDescriptor
 
 const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
@@ -1373,7 +1391,7 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\x11SubmitJobResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\",\n" +
 	"\x13GetJobStatusRequest\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\xbf\x04\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\x89\x05\n" +
 	"\x14GetJobStatusResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12,\n" +
 	"\x05state\x18\x02 \x01(\x0e2\x16.mapreduce.v1.JobStateR\x05state\x12&\n" +
@@ -1388,7 +1406,10 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	" \x01(\rR\x11mapTasksZoneLocal\x12=\n" +
 	"\fsubmitted_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vsubmittedAt\x12;\n" +
 	"\vfinished_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt*\x9a\x01\n" +
+	"finishedAt\x12'\n" +
+	"\x0fbackup_attempts\x18\r \x01(\rR\x0ebackupAttempts\x12\x1f\n" +
+	"\vbackup_wins\x18\x0e \x01(\rR\n" +
+	"backupWins*\x9a\x01\n" +
 	"\bJobState\x12\x19\n" +
 	"\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11JOB_STATE_PENDING\x10\x01\x12\x15\n" +

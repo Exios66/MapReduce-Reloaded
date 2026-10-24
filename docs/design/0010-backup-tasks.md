@@ -23,16 +23,27 @@ close "close" is.
    a task that is in progress with exactly one running attempt, on another
    worker. A task runs on at most two workers. If one attempt fails, the
    other carries on and the task can get a new backup.
-3. **A backup is an ordinary attempt.** `TaskTable.Assign` gives it the next
+3. **The oldest attempt is backed up first.** Of the tasks that can get a
+   backup, `TaskTable.Backup` picks the one whose running attempt started
+   first: it has run longest, so it is the likeliest straggler. This
+   matters when fewer workers are free than tasks remain. Each attempt's
+   start time is the time of its `TaskAssigned` record, so replay restores
+   it.
+4. **A backup is an ordinary attempt.** `TaskTable.Assign` gives it the next
    attempt number, and the write-ahead log records an ordinary assignment.
    Replay accepts it whatever the coordinator's `Backups` setting is.
-4. **The first accepted completion wins.** `TaskTable.Complete` rejects a
+5. **The first accepted completion wins.** `TaskTable.Complete` rejects a
    report for a task that is already completed. Both reduce attempts rename
    their file to the same `part-r-*`, and a rename is atomic. A losing map
    attempt's output stays on its worker, and no reducer is told about it.
-5. **Backups are a setting.** `cmd/coordinator` enables them by default and
+6. **Backups are a setting.** `cmd/coordinator` enables them by default and
    `-backups=false` turns them off. `coordinator.Config` leaves them off,
    so tests can count attempts exactly.
+7. **Backups are counted.** The task table counts the backup attempts it
+   starts and the tasks a backup completes first. `GetJobStatusResponse`
+   reports them (`backup_attempts`, `backup_wins`), as do the status page,
+   `mr status` and `mr_job_backups{job,state}` on `/metrics`, so the cost
+   and the effect of backups can be measured (§5.3).
 
 ## Alternatives rejected
 
@@ -40,7 +51,11 @@ close "close" is.
   does not give and that depends on the job's size. "Nothing idle" needs no
   tuning, and by then the free workers have nothing better to do.
 - **Back up on measured slowness.** It needs progress reports from
-  workers, which they do not send, and a rule for what counts as slow.
+  workers, which they do not send, and a rule for what counts as slow. How
+  long an attempt has run is the measure the coordinator already has.
+- **Back up the first task by index.** It was the rule until the start
+  times were logged. It can back up a task that has just started while an
+  older one waits.
 - **Allow several backups per task.** One straggler would cost many extra
   attempts, and a second attempt on a healthy worker already bounds the
   delay.

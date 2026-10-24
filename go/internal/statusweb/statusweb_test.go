@@ -33,7 +33,7 @@ var status = source{
 		Error:       "<script>",
 		SubmittedAt: timestamppb.New(at.Add(-2500 * time.Millisecond)),
 	}, {
-		JobId: "job-2", State: pb.JobState_JOB_STATE_SUCCEEDED,
+		JobId: "job-2", State: pb.JobState_JOB_STATE_SUCCEEDED, BackupAttempts: 3, BackupWins: 1,
 		SubmittedAt: timestamppb.New(at.Add(-time.Hour)),
 		FinishedAt:  timestamppb.New(at.Add(-time.Hour + 90*time.Second)),
 	}, {
@@ -66,7 +66,7 @@ func TestPage(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %s", resp.Status)
 	}
-	for _, want := range []string{"job-1", "JOB_STATE_MAPPING", "<td>2.5s</td>", "<td>1m30s</td>", "3/7", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), "&lt;script&gt;"} {
+	for _, want := range []string{"job-1", "JOB_STATE_MAPPING", "<td>2.5s</td>", "<td>1m30s</td>", "3 started, 1 won", "3/7", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), "&lt;script&gt;"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -92,6 +92,8 @@ func TestMetrics(t *testing.T) {
 		`mr_job_counter{job="job-1",name="odd\"name"} 1` + "\n",
 		`mr_job_duration_seconds{job="job-1"} 2.5` + "\n",
 		`mr_job_duration_seconds{job="job-2"} 90` + "\n",
+		`mr_job_backups{job="job-2",state="started"} 3` + "\n",
+		`mr_job_backups{job="job-2",state="won"} 1` + "\n",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("metrics lack %q:\n%s", want, body)

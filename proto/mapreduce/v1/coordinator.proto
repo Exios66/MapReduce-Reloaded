@@ -227,4 +227,8 @@ message GetJobStatusResponse {
   // between them, including any time the coordinator was down.
   google.protobuf.Timestamp submitted_at = 11;
   google.protobuf.Timestamp finished_at = 12;
+  // Backup attempts started near the end of a phase, for tasks still
+  // running elsewhere, and the tasks that a backup completed first (§3.6).
+  uint32 backup_attempts = 13;
+  uint32 backup_wins = 14;
 }

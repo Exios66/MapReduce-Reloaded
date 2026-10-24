@@ -42,6 +42,12 @@ func metrics(st coordinator.Status) []byte {
 		}
 	}
 
+	family("mr_job_backups", "Backup attempts of each job's last tasks (§3.6): started, and won by finishing first.")
+	for _, j := range st.Jobs {
+		fmt.Fprintf(&b, "mr_job_backups{job=%s,state=\"started\"} %d\n", promtext.Label(j.GetJobId()), j.GetBackupAttempts())
+		fmt.Fprintf(&b, "mr_job_backups{job=%s,state=\"won\"} %d\n", promtext.Label(j.GetJobId()), j.GetBackupWins())
+	}
+
 	family("mr_job_counter", "Counters of each job's accepted attempts (§4.9).")
 	for _, j := range st.Jobs {
 		counts := j.GetCounters().GetValues()

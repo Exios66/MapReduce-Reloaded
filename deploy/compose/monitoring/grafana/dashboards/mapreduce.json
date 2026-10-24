@@ -175,6 +175,34 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 7,
+      "title": "Backup attempts",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "mr_job_backups",
+          "legendFormat": "{{job}} {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      }
     }
   ]
 }

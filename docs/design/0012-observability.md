@@ -25,7 +25,8 @@ system can scrape, and logs it can parse.
    `go.mod`.
 3. **Job state is gauges; worker totals are counters.** The coordinator's
    `/metrics` has `mr_workers`, `mr_job_tasks{job,kind,state}`,
-   `mr_job_duration_seconds{job}` and `mr_job_counter{job,name}`. A job's
+   `mr_job_duration_seconds{job}`, `mr_job_backups{job,state}` (ADR 0010)
+   and `mr_job_counter{job,name}`. A job's
    duration runs from its submission to its end, or to the scrape while it
    runs; the times come from the write-ahead log, so a restart keeps them.
    A job's counters can go down when a re-run
