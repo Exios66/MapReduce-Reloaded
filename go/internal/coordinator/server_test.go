@@ -360,9 +360,13 @@ func TestLog(t *testing.T) {
 	if got := log.kinds()[len(want):]; !slices.Equal(got, want[:1]) {
 		t.Fatalf("second job logged %v", got)
 	}
-	s.Expire(time.Now().Add(time.Hour))
+	recordStart := time.Now()
+	s.Expire(recordStart.Add(time.Hour))
 	if got := log.kinds()[len(want)+1:]; !slices.Equal(got, []string{"worker_lost"}) {
 		t.Fatalf("expiry logged %v", got)
+	}
+	if at := log.records[len(log.records)-1].GetAt().AsTime(); at.Before(recordStart) || at.After(time.Now()) {
+		t.Fatalf("worker loss recorded at %v; want the current time, not the expiry cutoff", at)
 	}
 }
 
