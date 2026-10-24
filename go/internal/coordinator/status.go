@@ -11,6 +11,7 @@ const maxLost = 100
 
 // Status is what the coordinator's status page shows (§4.8).
 type Status struct {
+	At      time.Time                  // when it was taken
 	Jobs    []*pb.GetJobStatusResponse // every job, in the order submitted
 	Workers []WorkerStatus             // the live workers, in the order they registered
 	Lost    []LostWorker               // the last maxLost workers lost since the process started, oldest first
@@ -34,7 +35,7 @@ type LostWorker struct {
 func (s *Server) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Status{Lost: append([]LostWorker(nil), s.lost...)}
+	st := Status{At: time.Now(), Lost: append([]LostWorker(nil), s.lost...)}
 	for _, j := range s.order {
 		st.Jobs = append(st.Jobs, j.status())
 	}

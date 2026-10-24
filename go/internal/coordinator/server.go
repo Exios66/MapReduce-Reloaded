@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
@@ -82,6 +83,8 @@ type job struct {
 	ran    map[Task]pb.Locality      // of each task's accepted attempt
 	since  time.Time                 // when the job began holding back tasks, if it has
 	err    string                    // why the job failed, if it did
+
+	submitted, finished time.Time // finished is zero while the job runs
 }
 
 // NewServer returns a coordinator with no workers and no jobs.
@@ -102,6 +105,8 @@ func (s *Server) Shutdown() {
 // completed reduce tasks stay done, since that output is in the job's
 // output directory (§3.3). A dead worker that calls again is told to
 // register anew.
+// A zero WorkerTimeout disables expiration. Log failures do not prevent
+// workers from expiring or their tasks from being reset.
 func (s *Server) Expire(now time.Time) []string {
 	if s.cfg.WorkerTimeout == 0 {
 		return nil
@@ -109,10 +114,11 @@ func (s *Server) Expire(now time.Time) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	dead := s.workers.Expire(now, s.cfg.WorkerTimeout)
+	at := time.Now() // now may predate a record logged while we waited for the lock
 	for _, w := range dead {
 		var reset []Task
 		if s.active != nil {
-			if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_WorkerLost{WorkerLost: &pb.WorkerLost{WorkerId: w}}}); err != nil {
+			if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_WorkerLost{WorkerLost: &pb.WorkerLost{WorkerId: w}}}, at); err != nil {
 				slog.Error("logging a lost worker", "worker", w, "err", err)
 			}
 			reset = s.active.tasks.ResetWorker(w)
@@ -178,6 +184,10 @@ func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
 
 // SubmitJob validates the job, defaulting R to a multiple of the number of
 // workers (§3.5), and plans its map tasks.
+// On success it makes the job active and returns its ID. It returns
+// InvalidArgument for invalid jobs or input planning failures, AlreadyExists
+// if checking the output fails, FailedPrecondition if another job is running
+// or output setup fails, and Unavailable if recording the submission fails.
 func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
 	m := proto.CloneOf(req.GetJob())
 	if m == nil {
@@ -225,23 +235,25 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
-	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}); err != nil {
+	now := time.Now()
+	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}, now); err != nil {
 		return nil, err
 	}
-	s.submit(rec)
+	s.submit(rec, now)
 	return &pb.SubmitJobResponse{JobId: rec.GetJobId()}, nil
 }
 
-// submit makes the job rec describes the active one.
-func (s *Server) submit(rec *pb.JobSubmitted) {
+// submit makes the job rec describes, submitted at at, the active one.
+func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 	j := &job{
-		id:     rec.GetJobId(),
-		spec:   rec.GetJob(),
-		splits: rec.GetSplits(),
-		tasks:  NewTaskTable(len(rec.GetSplits()), int(rec.GetJob().GetNumReduceTasks())),
-		counts: map[Task]map[string]int64{},
-		placed: map[Task][]pb.Locality{},
-		ran:    map[Task]pb.Locality{},
+		id:        rec.GetJobId(),
+		spec:      rec.GetJob(),
+		splits:    rec.GetSplits(),
+		tasks:     NewTaskTable(len(rec.GetSplits()), int(rec.GetJob().GetNumReduceTasks())),
+		counts:    map[Task]map[string]int64{},
+		placed:    map[Task][]pb.Locality{},
+		ran:       map[Task]pb.Locality{},
+		submitted: at,
 	}
 	s.jobs[j.id], s.active = j, j
 	s.order = append(s.order, j)
@@ -250,6 +262,9 @@ func (s *Server) submit(rec *pb.JobSubmitted) {
 // RequestTask hands an idle worker its next task: map tasks first, the
 // nearest to their input (§3.4), reduce tasks once every map task has
 // completed (§3.1), then backup attempts if enabled (§3.6).
+// It returns a wait instruction when no task is ready, or a shutdown
+// instruction after Shutdown. Errors are NotFound for an unknown worker,
+// Internal if assigning a task fails, or Unavailable if recording it fails.
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -270,7 +285,7 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 			t, ok = s.active.tasks.Backup(worker)
 		}
 		if ok {
-			return s.assign(t, worker)
+			return s.assign(t, worker, now)
 		}
 	}
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Wait{
@@ -278,10 +293,12 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	}}, nil
 }
 
-// assign starts an attempt at t, a task of the active job, on worker.
-func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) {
+// assign starts an attempt at t, a task of the active job, on worker at now.
+// It returns the map or reduce assignment, or Internal for task table errors
+// and Unavailable for log errors. An error does not roll back the attempt.
+func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskResponse, error) {
 	j := s.active
-	attempt, err := j.tasks.Assign(t, worker)
+	attempt, err := j.tasks.Assign(t, worker, now)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -295,7 +312,7 @@ func (s *Server) assign(t Task, worker string) (*pb.RequestTaskResponse, error) 
 		rec.Locality = locality(j.splits[t.Index], s.workerInfo(worker))
 	}
 	j.placed[t] = append(j.placed[t], rec.GetLocality())
-	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}); err != nil {
+	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}, now); err != nil {
 		return nil, err
 	}
 	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
@@ -355,6 +372,10 @@ func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
 // ReportTask records the outcome of an attempt, from the worker it was
 // assigned to. The first successful attempt of a task is accepted, and only
 // its counters are kept (§3.3, §4.9).
+// Valid failure reports and stale or duplicate attempts are not accepted.
+// It returns NotFound for an unknown job,
+// InvalidArgument for task or output validation errors, and Unavailable if
+// recording the report fails. A log error does not undo the report's effects.
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -362,24 +383,29 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetAttempt().GetTask().GetJobId())
 	}
-	accepted, err := s.report(j, req)
+	now := time.Now()
+	accepted, err := s.report(j, req, now)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskReported{TaskReported: req}}); err != nil {
+	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskReported{TaskReported: req}}, now); err != nil {
 		return nil, err
 	}
 	return &pb.ReportTaskResponse{Accepted: accepted}, nil
 }
 
-// report applies req to j, and says whether it completed its task.
-func (s *Server) report(j *job, req *pb.ReportTaskRequest) (accepted bool, err error) {
+// report applies req, received at at, to j, and says whether it completed
+// its task.
+// Failure reports and stale attempts return false; invalid tasks or map
+// outputs return an error. If the report ends the active job, at is its
+// finish time.
+func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accepted bool, err error) {
 	id := req.GetAttempt()
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 	if f := req.GetFailure(); f != nil {
 		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
 		if limit := j.spec.MaxSkippedRecords; limit != nil && uint64(j.tasks.Skipped()) > *limit {
-			s.end(j, fmt.Sprintf("more than %d bad records to skip", *limit))
+			s.end(j, fmt.Sprintf("more than %d bad records to skip", *limit), at)
 		}
 		return false, err
 	}
@@ -389,20 +415,20 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest) (accepted bool, err e
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
 		j.ran[t] = j.placed[t][id.GetAttempt()]
 		if j.tasks.Done() {
-			s.end(j, "")
+			s.end(j, "", at)
 		}
 	}
 	return accepted, err
 }
 
-// end ends j if it is the active job: it failed with err, or succeeded if
-// err is empty. Attempts still running may report, but its state no longer
-// changes.
-func (s *Server) end(j *job, err string) {
+// end ends j at at if it is the active job: it failed with err, or
+// succeeded if err is empty. Attempts still running may report, but its
+// state no longer changes.
+func (s *Server) end(j *job, err string, at time.Time) {
 	if s.active != j {
 		return
 	}
-	j.err = err
+	j.err, j.finished = err, at
 	j.cleanup()
 	s.active = nil
 }
@@ -418,6 +444,8 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 }
 
 // status describes the job's progress.
+// Submission and finish timestamps are omitted when unknown; a running
+// job has no finish timestamp.
 func (j *job) status() *pb.GetJobStatusResponse {
 	mapsDone, reducesDone := j.tasks.Progress()
 	state := pb.JobState_JOB_STATE_MAPPING
@@ -429,6 +457,7 @@ func (j *job) status() *pb.GetJobStatusResponse {
 	case mapsDone == len(j.splits):
 		state = pb.JobState_JOB_STATE_REDUCING
 	}
+	backups, won := j.tasks.Backups()
 	near := map[pb.Locality]uint32{}
 	for t, l := range j.ran {
 		if st, _ := j.tasks.State(t); st == pb.TaskState_TASK_STATE_COMPLETED {
@@ -446,7 +475,20 @@ func (j *job) status() *pb.GetJobStatusResponse {
 		Error:                j.err,
 		MapTasksHostLocal:    near[pb.Locality_LOCALITY_HOST],
 		MapTasksZoneLocal:    near[pb.Locality_LOCALITY_ZONE],
+		SubmittedAt:          timestamp(j.submitted),
+		FinishedAt:           timestamp(j.finished),
+		BackupAttempts:       uint32(backups),
+		BackupWins:           uint32(won),
 	}
+}
+
+// timestamp returns t as a Timestamp, or nil if t is zero: a job not yet
+// finished, or one replayed from a log written before records had times.
+func timestamp(t time.Time) *timestamppb.Timestamp {
+	if t.IsZero() {
+		return nil
+	}
+	return timestamppb.New(t)
 }
 
 // total sums the counters of every task's accepted attempt.
@@ -460,12 +502,16 @@ func (j *job) total() map[string]int64 {
 	return sum
 }
 
-// record appends rec to the log, if there is one. It runs under the lock,
-// so no reply reveals a change before the log holds it (ADR 0007).
-func (s *Server) record(rec *pb.LogRecord) error {
+// record appends rec, a decision made at at, to the log, if there is one.
+// It runs under the lock, so no reply reveals a change before the log holds
+// it (ADR 0007).
+// With a log configured it sets rec.At, returning Unavailable if encoding
+// or appending fails. Without a log it returns nil without changing rec.
+func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 	if s.cfg.Log == nil {
 		return nil
 	}
+	rec.At = timestamppb.New(at)
 	b, err := proto.Marshal(rec)
 	if err == nil {
 		err = s.cfg.Log.Append(b)

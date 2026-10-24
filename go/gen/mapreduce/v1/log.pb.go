@@ -13,6 +13,7 @@ package mapreducev1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -34,7 +35,10 @@ type LogRecord struct {
 	//	*LogRecord_TaskReported
 	//	*LogRecord_WorkerLost
 	//	*LogRecord_Restarted
-	Record        isLogRecord_Record `protobuf_oneof:"record"`
+	Record isLogRecord_Record `protobuf_oneof:"record"`
+	// When the coordinator made the decision. Replay uses it, so a job's
+	// times survive a restart. Logs written before this field have none.
+	At            *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=at,proto3" json:"at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -117,6 +121,13 @@ func (x *LogRecord) GetRestarted() *Restarted {
 		if x, ok := x.Record.(*LogRecord_Restarted); ok {
 			return x.Restarted
 		}
+	}
+	return nil
+}
+
+func (x *LogRecord) GetAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.At
 	}
 	return nil
 }
@@ -368,14 +379,15 @@ var File_mapreduce_v1_log_proto protoreflect.FileDescriptor
 
 const file_mapreduce_v1_log_proto_rawDesc = "" +
 	"\n" +
-	"\x16mapreduce/v1/log.proto\x12\fmapreduce.v1\x1a\x1emapreduce/v1/coordinator.proto\x1a\x18mapreduce/v1/types.proto\"\xd9\x02\n" +
+	"\x16mapreduce/v1/log.proto\x12\fmapreduce.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1emapreduce/v1/coordinator.proto\x1a\x18mapreduce/v1/types.proto\"\x85\x03\n" +
 	"\tLogRecord\x12A\n" +
 	"\rjob_submitted\x18\x01 \x01(\v2\x1a.mapreduce.v1.JobSubmittedH\x00R\fjobSubmitted\x12A\n" +
 	"\rtask_assigned\x18\x02 \x01(\v2\x1a.mapreduce.v1.TaskAssignedH\x00R\ftaskAssigned\x12F\n" +
 	"\rtask_reported\x18\x03 \x01(\v2\x1f.mapreduce.v1.ReportTaskRequestH\x00R\ftaskReported\x12;\n" +
 	"\vworker_lost\x18\x04 \x01(\v2\x18.mapreduce.v1.WorkerLostH\x00R\n" +
 	"workerLost\x127\n" +
-	"\trestarted\x18\x05 \x01(\v2\x17.mapreduce.v1.RestartedH\x00R\trestartedB\b\n" +
+	"\trestarted\x18\x05 \x01(\v2\x17.mapreduce.v1.RestartedH\x00R\trestarted\x12*\n" +
+	"\x02at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x02atB\b\n" +
 	"\x06record\"\x80\x01\n" +
 	"\fJobSubmitted\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12'\n" +
@@ -404,32 +416,34 @@ func file_mapreduce_v1_log_proto_rawDescGZIP() []byte {
 
 var file_mapreduce_v1_log_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_mapreduce_v1_log_proto_goTypes = []any{
-	(*LogRecord)(nil),         // 0: mapreduce.v1.LogRecord
-	(*JobSubmitted)(nil),      // 1: mapreduce.v1.JobSubmitted
-	(*TaskAssigned)(nil),      // 2: mapreduce.v1.TaskAssigned
-	(*WorkerLost)(nil),        // 3: mapreduce.v1.WorkerLost
-	(*Restarted)(nil),         // 4: mapreduce.v1.Restarted
-	(*ReportTaskRequest)(nil), // 5: mapreduce.v1.ReportTaskRequest
-	(*JobSpec)(nil),           // 6: mapreduce.v1.JobSpec
-	(*InputSplit)(nil),        // 7: mapreduce.v1.InputSplit
-	(*TaskAttemptId)(nil),     // 8: mapreduce.v1.TaskAttemptId
-	(Locality)(0),             // 9: mapreduce.v1.Locality
+	(*LogRecord)(nil),             // 0: mapreduce.v1.LogRecord
+	(*JobSubmitted)(nil),          // 1: mapreduce.v1.JobSubmitted
+	(*TaskAssigned)(nil),          // 2: mapreduce.v1.TaskAssigned
+	(*WorkerLost)(nil),            // 3: mapreduce.v1.WorkerLost
+	(*Restarted)(nil),             // 4: mapreduce.v1.Restarted
+	(*ReportTaskRequest)(nil),     // 5: mapreduce.v1.ReportTaskRequest
+	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
+	(*JobSpec)(nil),               // 7: mapreduce.v1.JobSpec
+	(*InputSplit)(nil),            // 8: mapreduce.v1.InputSplit
+	(*TaskAttemptId)(nil),         // 9: mapreduce.v1.TaskAttemptId
+	(Locality)(0),                 // 10: mapreduce.v1.Locality
 }
 var file_mapreduce_v1_log_proto_depIdxs = []int32{
-	1, // 0: mapreduce.v1.LogRecord.job_submitted:type_name -> mapreduce.v1.JobSubmitted
-	2, // 1: mapreduce.v1.LogRecord.task_assigned:type_name -> mapreduce.v1.TaskAssigned
-	5, // 2: mapreduce.v1.LogRecord.task_reported:type_name -> mapreduce.v1.ReportTaskRequest
-	3, // 3: mapreduce.v1.LogRecord.worker_lost:type_name -> mapreduce.v1.WorkerLost
-	4, // 4: mapreduce.v1.LogRecord.restarted:type_name -> mapreduce.v1.Restarted
-	6, // 5: mapreduce.v1.JobSubmitted.job:type_name -> mapreduce.v1.JobSpec
-	7, // 6: mapreduce.v1.JobSubmitted.splits:type_name -> mapreduce.v1.InputSplit
-	8, // 7: mapreduce.v1.TaskAssigned.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	9, // 8: mapreduce.v1.TaskAssigned.locality:type_name -> mapreduce.v1.Locality
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	1,  // 0: mapreduce.v1.LogRecord.job_submitted:type_name -> mapreduce.v1.JobSubmitted
+	2,  // 1: mapreduce.v1.LogRecord.task_assigned:type_name -> mapreduce.v1.TaskAssigned
+	5,  // 2: mapreduce.v1.LogRecord.task_reported:type_name -> mapreduce.v1.ReportTaskRequest
+	3,  // 3: mapreduce.v1.LogRecord.worker_lost:type_name -> mapreduce.v1.WorkerLost
+	4,  // 4: mapreduce.v1.LogRecord.restarted:type_name -> mapreduce.v1.Restarted
+	6,  // 5: mapreduce.v1.LogRecord.at:type_name -> google.protobuf.Timestamp
+	7,  // 6: mapreduce.v1.JobSubmitted.job:type_name -> mapreduce.v1.JobSpec
+	8,  // 7: mapreduce.v1.JobSubmitted.splits:type_name -> mapreduce.v1.InputSplit
+	9,  // 8: mapreduce.v1.TaskAssigned.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	10, // 9: mapreduce.v1.TaskAssigned.locality:type_name -> mapreduce.v1.Locality
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_mapreduce_v1_log_proto_init() }

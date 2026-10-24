@@ -15,6 +15,10 @@ log and carries on with the job.
 | `WorkerLost` | a worker misses its heartbeats |
 | `Restarted` | a coordinator starts from the log |
 
+Each record also holds the time of its decision. Replay uses the times of
+`JobSubmitted` and of the report that ended a job, so a job's duration
+survives a restart and counts the time the coordinator was down.
+
 Each record is appended and synced before the reply that depends on it
 ([ADR 0007](../design/0007-write-ahead-log.md)). The worker registry is not
 logged: workers register again.

@@ -23,10 +23,11 @@ _sym_db = _symbol_database.Default()
 
 
 from google.protobuf import duration_pb2 as google_dot_protobuf_dot_duration__pb2
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from mapreduce_reloaded.gen.mapreduce.v1 import types_pb2 as mapreduce_dot_v1_dot_types__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1emapreduce/v1/coordinator.proto\x12\x0cmapreduce.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x18mapreduce/v1/types.proto\"A\n\x15RegisterWorkerRequest\x12(\n\x06worker\x18\x01 \x01(\x0b\x32\x18.mapreduce.v1.WorkerInfo\"b\n\x16RegisterWorkerResponse\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x35\n\x12heartbeat_interval\x18\x02 \x01(\x0b\x32\x19.google.protobuf.Duration\"\'\n\x12RequestTaskRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\"\xe5\x01\n\x13RequestTaskResponse\x12)\n\x08map_task\x18\x01 \x01(\x0b\x32\x15.mapreduce.v1.MapTaskH\x00\x12/\n\x0breduce_task\x18\x02 \x01(\x0b\x32\x18.mapreduce.v1.ReduceTaskH\x00\x12-\n\x04wait\x18\x03 \x01(\x0b\x32\x1d.mapreduce.v1.WaitInstructionH\x00\x12\x35\n\x08shutdown\x18\x04 \x01(\x0b\x32!.mapreduce.v1.ShutdownInstructionH\x00\x42\x0c\n\nassignment\"\x9a\x01\n\x07MapTask\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\"\n\x03job\x18\x02 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\x12\'\n\x05split\x18\x03 \x01(\x0b\x32\x18.mapreduce.v1.InputSplit\x12\x14\n\x0cskip_records\x18\x04 \x03(\x04\"\xa6\x01\n\nReduceTask\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\"\n\x03job\x18\x02 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\x12\x30\n\x07sources\x18\x03 \x03(\x0b\x32\x1f.mapreduce.v1.PartitionLocation\x12\x14\n\x0cskip_records\x18\x04 \x03(\x04\"A\n\x0fWaitInstruction\x12.\n\x0bretry_after\x18\x01 \x01(\x0b\x32\x19.google.protobuf.Duration\"\x15\n\x13ShutdownInstruction\"\xbb\x01\n\x11ReportTaskRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12,\n\x07\x61ttempt\x18\x02 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12,\n\x07success\x18\x03 \x01(\x0b\x32\x19.mapreduce.v1.TaskSuccessH\x00\x12,\n\x07\x66\x61ilure\x18\x04 \x01(\x0b\x32\x19.mapreduce.v1.TaskFailureH\x00\x42\t\n\x07outcome\"i\n\x0bTaskSuccess\x12\x30\n\x07outputs\x18\x01 \x03(\x0b\x32\x1f.mapreduce.v1.PartitionLocation\x12(\n\x08\x63ounters\x18\x02 \x01(\x0b\x32\x16.mapreduce.v1.Counters\"\x82\x01\n\x0bTaskFailure\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x1a\n\rfailed_record\x18\x02 \x01(\x04H\x00\x88\x01\x01\x12\x34\n\x0blost_output\x18\x03 \x01(\x0b\x32\x1f.mapreduce.v1.PartitionLocationB\x10\n\x0e_failed_record\"&\n\x12ReportTaskResponse\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\"R\n\x10HeartbeatRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12+\n\x07running\x18\x02 \x03(\x0b\x32\x1a.mapreduce.v1.TaskProgress\"S\n\x0cTaskProgress\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\x15\n\rfraction_done\x18\x02 \x01(\x02\"T\n\x11HeartbeatResponse\x12+\n\x06\x63\x61ncel\x18\x01 \x03(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\x12\n\nreregister\x18\x02 \x01(\x08\"6\n\x10SubmitJobRequest\x12\"\n\x03job\x18\x01 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\"#\n\x11SubmitJobResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\t\"%\n\x13GetJobStatusRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\t\"\xb4\x02\n\x14GetJobStatusResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12%\n\x05state\x18\x02 \x01(\x0e\x32\x16.mapreduce.v1.JobState\x12\x17\n\x0fmap_tasks_total\x18\x03 \x01(\r\x12\x1b\n\x13map_tasks_completed\x18\x04 \x01(\r\x12\x1a\n\x12reduce_tasks_total\x18\x05 \x01(\r\x12\x1e\n\x16reduce_tasks_completed\x18\x06 \x01(\r\x12(\n\x08\x63ounters\x18\x07 \x01(\x0b\x32\x16.mapreduce.v1.Counters\x12\r\n\x05\x65rror\x18\x08 \x01(\t\x12\x1c\n\x14map_tasks_host_local\x18\t \x01(\r\x12\x1c\n\x14map_tasks_zone_local\x18\n \x01(\r*\x9a\x01\n\x08JobState\x12\x19\n\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n\x11JOB_STATE_PENDING\x10\x01\x12\x15\n\x11JOB_STATE_MAPPING\x10\x02\x12\x16\n\x12JOB_STATE_REDUCING\x10\x03\x12\x17\n\x13JOB_STATE_SUCCEEDED\x10\x04\x12\x14\n\x10JOB_STATE_FAILED\x10\x05\x32\x89\x04\n\x12\x43oordinatorService\x12[\n\x0eRegisterWorker\x12#.mapreduce.v1.RegisterWorkerRequest\x1a$.mapreduce.v1.RegisterWorkerResponse\x12R\n\x0bRequestTask\x12 .mapreduce.v1.RequestTaskRequest\x1a!.mapreduce.v1.RequestTaskResponse\x12O\n\nReportTask\x12\x1f.mapreduce.v1.ReportTaskRequest\x1a .mapreduce.v1.ReportTaskResponse\x12L\n\tHeartbeat\x12\x1e.mapreduce.v1.HeartbeatRequest\x1a\x1f.mapreduce.v1.HeartbeatResponse\x12L\n\tSubmitJob\x12\x1e.mapreduce.v1.SubmitJobRequest\x1a\x1f.mapreduce.v1.SubmitJobResponse\x12U\n\x0cGetJobStatus\x12!.mapreduce.v1.GetJobStatusRequest\x1a\".mapreduce.v1.GetJobStatusResponseBGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1emapreduce/v1/coordinator.proto\x12\x0cmapreduce.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18mapreduce/v1/types.proto\"A\n\x15RegisterWorkerRequest\x12(\n\x06worker\x18\x01 \x01(\x0b\x32\x18.mapreduce.v1.WorkerInfo\"b\n\x16RegisterWorkerResponse\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x35\n\x12heartbeat_interval\x18\x02 \x01(\x0b\x32\x19.google.protobuf.Duration\"\'\n\x12RequestTaskRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\"\xe5\x01\n\x13RequestTaskResponse\x12)\n\x08map_task\x18\x01 \x01(\x0b\x32\x15.mapreduce.v1.MapTaskH\x00\x12/\n\x0breduce_task\x18\x02 \x01(\x0b\x32\x18.mapreduce.v1.ReduceTaskH\x00\x12-\n\x04wait\x18\x03 \x01(\x0b\x32\x1d.mapreduce.v1.WaitInstructionH\x00\x12\x35\n\x08shutdown\x18\x04 \x01(\x0b\x32!.mapreduce.v1.ShutdownInstructionH\x00\x42\x0c\n\nassignment\"\x9a\x01\n\x07MapTask\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\"\n\x03job\x18\x02 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\x12\'\n\x05split\x18\x03 \x01(\x0b\x32\x18.mapreduce.v1.InputSplit\x12\x14\n\x0cskip_records\x18\x04 \x03(\x04\"\xa6\x01\n\nReduceTask\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\"\n\x03job\x18\x02 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\x12\x30\n\x07sources\x18\x03 \x03(\x0b\x32\x1f.mapreduce.v1.PartitionLocation\x12\x14\n\x0cskip_records\x18\x04 \x03(\x04\"A\n\x0fWaitInstruction\x12.\n\x0bretry_after\x18\x01 \x01(\x0b\x32\x19.google.protobuf.Duration\"\x15\n\x13ShutdownInstruction\"\xbb\x01\n\x11ReportTaskRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12,\n\x07\x61ttempt\x18\x02 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12,\n\x07success\x18\x03 \x01(\x0b\x32\x19.mapreduce.v1.TaskSuccessH\x00\x12,\n\x07\x66\x61ilure\x18\x04 \x01(\x0b\x32\x19.mapreduce.v1.TaskFailureH\x00\x42\t\n\x07outcome\"i\n\x0bTaskSuccess\x12\x30\n\x07outputs\x18\x01 \x03(\x0b\x32\x1f.mapreduce.v1.PartitionLocation\x12(\n\x08\x63ounters\x18\x02 \x01(\x0b\x32\x16.mapreduce.v1.Counters\"\x82\x01\n\x0bTaskFailure\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x1a\n\rfailed_record\x18\x02 \x01(\x04H\x00\x88\x01\x01\x12\x34\n\x0blost_output\x18\x03 \x01(\x0b\x32\x1f.mapreduce.v1.PartitionLocationB\x10\n\x0e_failed_record\"&\n\x12ReportTaskResponse\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\"R\n\x10HeartbeatRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12+\n\x07running\x18\x02 \x03(\x0b\x32\x1a.mapreduce.v1.TaskProgress\"S\n\x0cTaskProgress\x12,\n\x07\x61ttempt\x18\x01 \x01(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\x15\n\rfraction_done\x18\x02 \x01(\x02\"T\n\x11HeartbeatResponse\x12+\n\x06\x63\x61ncel\x18\x01 \x03(\x0b\x32\x1b.mapreduce.v1.TaskAttemptId\x12\x12\n\nreregister\x18\x02 \x01(\x08\"6\n\x10SubmitJobRequest\x12\"\n\x03job\x18\x01 \x01(\x0b\x32\x15.mapreduce.v1.JobSpec\"#\n\x11SubmitJobResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\t\"%\n\x13GetJobStatusRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\t\"\xc5\x03\n\x14GetJobStatusResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12%\n\x05state\x18\x02 \x01(\x0e\x32\x16.mapreduce.v1.JobState\x12\x17\n\x0fmap_tasks_total\x18\x03 \x01(\r\x12\x1b\n\x13map_tasks_completed\x18\x04 \x01(\r\x12\x1a\n\x12reduce_tasks_total\x18\x05 \x01(\r\x12\x1e\n\x16reduce_tasks_completed\x18\x06 \x01(\r\x12(\n\x08\x63ounters\x18\x07 \x01(\x0b\x32\x16.mapreduce.v1.Counters\x12\r\n\x05\x65rror\x18\x08 \x01(\t\x12\x1c\n\x14map_tasks_host_local\x18\t \x01(\r\x12\x1c\n\x14map_tasks_zone_local\x18\n \x01(\r\x12\x30\n\x0csubmitted_at\x18\x0b \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12/\n\x0b\x66inished_at\x18\x0c \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x17\n\x0f\x62\x61\x63kup_attempts\x18\r \x01(\r\x12\x13\n\x0b\x62\x61\x63kup_wins\x18\x0e \x01(\r*\x9a\x01\n\x08JobState\x12\x19\n\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n\x11JOB_STATE_PENDING\x10\x01\x12\x15\n\x11JOB_STATE_MAPPING\x10\x02\x12\x16\n\x12JOB_STATE_REDUCING\x10\x03\x12\x17\n\x13JOB_STATE_SUCCEEDED\x10\x04\x12\x14\n\x10JOB_STATE_FAILED\x10\x05\x32\x89\x04\n\x12\x43oordinatorService\x12[\n\x0eRegisterWorker\x12#.mapreduce.v1.RegisterWorkerRequest\x1a$.mapreduce.v1.RegisterWorkerResponse\x12R\n\x0bRequestTask\x12 .mapreduce.v1.RequestTaskRequest\x1a!.mapreduce.v1.RequestTaskResponse\x12O\n\nReportTask\x12\x1f.mapreduce.v1.ReportTaskRequest\x1a .mapreduce.v1.ReportTaskResponse\x12L\n\tHeartbeat\x12\x1e.mapreduce.v1.HeartbeatRequest\x1a\x1f.mapreduce.v1.HeartbeatResponse\x12L\n\tSubmitJob\x12\x1e.mapreduce.v1.SubmitJobRequest\x1a\x1f.mapreduce.v1.SubmitJobResponse\x12U\n\x0cGetJobStatus\x12!.mapreduce.v1.GetJobStatusRequest\x1a\".mapreduce.v1.GetJobStatusResponseBGZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,46 +35,46 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'mapreduce.v1.coordinator_pb
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'ZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1'
-  _globals['_JOBSTATE']._serialized_start=2131
-  _globals['_JOBSTATE']._serialized_end=2285
-  _globals['_REGISTERWORKERREQUEST']._serialized_start=106
-  _globals['_REGISTERWORKERREQUEST']._serialized_end=171
-  _globals['_REGISTERWORKERRESPONSE']._serialized_start=173
-  _globals['_REGISTERWORKERRESPONSE']._serialized_end=271
-  _globals['_REQUESTTASKREQUEST']._serialized_start=273
-  _globals['_REQUESTTASKREQUEST']._serialized_end=312
-  _globals['_REQUESTTASKRESPONSE']._serialized_start=315
-  _globals['_REQUESTTASKRESPONSE']._serialized_end=544
-  _globals['_MAPTASK']._serialized_start=547
-  _globals['_MAPTASK']._serialized_end=701
-  _globals['_REDUCETASK']._serialized_start=704
-  _globals['_REDUCETASK']._serialized_end=870
-  _globals['_WAITINSTRUCTION']._serialized_start=872
-  _globals['_WAITINSTRUCTION']._serialized_end=937
-  _globals['_SHUTDOWNINSTRUCTION']._serialized_start=939
-  _globals['_SHUTDOWNINSTRUCTION']._serialized_end=960
-  _globals['_REPORTTASKREQUEST']._serialized_start=963
-  _globals['_REPORTTASKREQUEST']._serialized_end=1150
-  _globals['_TASKSUCCESS']._serialized_start=1152
-  _globals['_TASKSUCCESS']._serialized_end=1257
-  _globals['_TASKFAILURE']._serialized_start=1260
-  _globals['_TASKFAILURE']._serialized_end=1390
-  _globals['_REPORTTASKRESPONSE']._serialized_start=1392
-  _globals['_REPORTTASKRESPONSE']._serialized_end=1430
-  _globals['_HEARTBEATREQUEST']._serialized_start=1432
-  _globals['_HEARTBEATREQUEST']._serialized_end=1514
-  _globals['_TASKPROGRESS']._serialized_start=1516
-  _globals['_TASKPROGRESS']._serialized_end=1599
-  _globals['_HEARTBEATRESPONSE']._serialized_start=1601
-  _globals['_HEARTBEATRESPONSE']._serialized_end=1685
-  _globals['_SUBMITJOBREQUEST']._serialized_start=1687
-  _globals['_SUBMITJOBREQUEST']._serialized_end=1741
-  _globals['_SUBMITJOBRESPONSE']._serialized_start=1743
-  _globals['_SUBMITJOBRESPONSE']._serialized_end=1778
-  _globals['_GETJOBSTATUSREQUEST']._serialized_start=1780
-  _globals['_GETJOBSTATUSREQUEST']._serialized_end=1817
-  _globals['_GETJOBSTATUSRESPONSE']._serialized_start=1820
-  _globals['_GETJOBSTATUSRESPONSE']._serialized_end=2128
-  _globals['_COORDINATORSERVICE']._serialized_start=2288
-  _globals['_COORDINATORSERVICE']._serialized_end=2809
+  _globals['_JOBSTATE']._serialized_start=2309
+  _globals['_JOBSTATE']._serialized_end=2463
+  _globals['_REGISTERWORKERREQUEST']._serialized_start=139
+  _globals['_REGISTERWORKERREQUEST']._serialized_end=204
+  _globals['_REGISTERWORKERRESPONSE']._serialized_start=206
+  _globals['_REGISTERWORKERRESPONSE']._serialized_end=304
+  _globals['_REQUESTTASKREQUEST']._serialized_start=306
+  _globals['_REQUESTTASKREQUEST']._serialized_end=345
+  _globals['_REQUESTTASKRESPONSE']._serialized_start=348
+  _globals['_REQUESTTASKRESPONSE']._serialized_end=577
+  _globals['_MAPTASK']._serialized_start=580
+  _globals['_MAPTASK']._serialized_end=734
+  _globals['_REDUCETASK']._serialized_start=737
+  _globals['_REDUCETASK']._serialized_end=903
+  _globals['_WAITINSTRUCTION']._serialized_start=905
+  _globals['_WAITINSTRUCTION']._serialized_end=970
+  _globals['_SHUTDOWNINSTRUCTION']._serialized_start=972
+  _globals['_SHUTDOWNINSTRUCTION']._serialized_end=993
+  _globals['_REPORTTASKREQUEST']._serialized_start=996
+  _globals['_REPORTTASKREQUEST']._serialized_end=1183
+  _globals['_TASKSUCCESS']._serialized_start=1185
+  _globals['_TASKSUCCESS']._serialized_end=1290
+  _globals['_TASKFAILURE']._serialized_start=1293
+  _globals['_TASKFAILURE']._serialized_end=1423
+  _globals['_REPORTTASKRESPONSE']._serialized_start=1425
+  _globals['_REPORTTASKRESPONSE']._serialized_end=1463
+  _globals['_HEARTBEATREQUEST']._serialized_start=1465
+  _globals['_HEARTBEATREQUEST']._serialized_end=1547
+  _globals['_TASKPROGRESS']._serialized_start=1549
+  _globals['_TASKPROGRESS']._serialized_end=1632
+  _globals['_HEARTBEATRESPONSE']._serialized_start=1634
+  _globals['_HEARTBEATRESPONSE']._serialized_end=1718
+  _globals['_SUBMITJOBREQUEST']._serialized_start=1720
+  _globals['_SUBMITJOBREQUEST']._serialized_end=1774
+  _globals['_SUBMITJOBRESPONSE']._serialized_start=1776
+  _globals['_SUBMITJOBRESPONSE']._serialized_end=1811
+  _globals['_GETJOBSTATUSREQUEST']._serialized_start=1813
+  _globals['_GETJOBSTATUSREQUEST']._serialized_end=1850
+  _globals['_GETJOBSTATUSRESPONSE']._serialized_start=1853
+  _globals['_GETJOBSTATUSRESPONSE']._serialized_end=2306
+  _globals['_COORDINATORSERVICE']._serialized_start=2466
+  _globals['_COORDINATORSERVICE']._serialized_end=2987
 # @@protoc_insertion_point(module_scope)
