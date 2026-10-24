@@ -46,6 +46,29 @@ rise in steps of whole tasks. The shuffle is counted as it is fetched.
 `python/tests/test_bench_rates.py` tests both scripts against a fake
 `/metrics`.
 
+`make bench SCENARIO=grep|sort|zipf` runs one benchmark with them on the
+Compose cluster, through [`run.sh`](run.sh):
+
+| Scenario | Input | Program |
+|---|---|---|
+| `grep` | `gen-grep.py` | `grep` for `XYZ` (§5.2) |
+| `sort` | `gen-sort.py` | `distsort` (§5.3) |
+| `zipf` | `gen-zipf.py` | `wordcount` |
+
+- Settings come from the environment: `WORKERS` (default 4), `SIZE` in
+  bytes (default 256 MiB), `M` (16), `R` (4), `SEED` (42) and `INTERVAL`,
+  the seconds between samples (0.5).
+- The cluster is started or scaled to `WORKERS` workers. The host samples
+  each worker's `/metrics` at its container's address, so this needs Docker
+  on Linux, where the host can reach the Compose network.
+- Each run writes `bench/results/SCENARIO-STAMP/`: `samples.csv`,
+  `rates.csv`, `rates.png` (with matplotlib), `status.txt` (from
+  `mr submit -wait`) and `result.json`.
+- `result.json` records the settings, the job's counters and duration, the
+  git commit (and whether the tree had changes), and the machine: CPUs, CPU
+  model, memory, kernel and Docker version.
+- Seconds in the samples count from just before the job is submitted.
+
 ## Codecs (#42)
 
 `make bench-codecs` starts the cluster and runs [`codecs.sh`](codecs.sh):
