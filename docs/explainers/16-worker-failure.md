@@ -24,9 +24,10 @@ fails when it cannot fetch the lost output (see
 ## Coming back
 
 A worker the coordinator declared dead is not trusted again under its old
-ID: `RequestTask` answers `NotFound`, and the worker registers anew. If it
-was only slow, any report it still sends is for an attempt the coordinator
-has stopped tracking, and is rejected.
+ID: `RequestTask` answers `NotFound` and `Heartbeat` answers `reregister`,
+and the worker stops its attempt and registers anew. If it was only slow,
+any report it sent first is for an attempt the coordinator has stopped
+tracking, and is rejected.
 
 ## Counting once
 

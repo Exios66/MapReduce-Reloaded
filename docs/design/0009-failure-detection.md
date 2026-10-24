@@ -24,14 +24,15 @@ no need to dial back into them.
    removes workers not seen for longer than the timeout. If a job is active,
    the coordinator logs `WorkerLost` (ADR 0007) for each one and calls
    `TaskTable.ResetWorker`:
-   - its running attempts are forgotten, and their tasks become idle (the
-     worker is not told, and keeps running them, #121);
+   - its running attempts are forgotten, and their tasks become idle (if
+     the worker is still alive, its next heartbeat is told to re-register,
+     and it stops them);
    - its completed map tasks become idle;
    - its completed reduce tasks stay completed.
 3. **A dead worker is not trusted under its old ID.** `RequestTask` for
    an expired ID answers `NotFound`, and the worker registers again and
-   gets a new ID. `Heartbeat` answers `reregister` too, but the worker
-   does not act on it yet (#121).
+   gets a new ID. `Heartbeat` answers `reregister` too, and the worker
+   stops its attempt, ends the session and registers again.
 4. **Late reports are rejected.** `Complete` and `Fail` accept an attempt
    only if it is still running on the reporting worker. A slow worker's
    report for a reset task is ignored, so a task's counts and output come

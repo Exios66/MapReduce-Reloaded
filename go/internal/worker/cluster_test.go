@@ -47,6 +47,11 @@ var mapStuck, reduceStuck = make(chan struct{}, 1), make(chan struct{}, 1)
 // sent on.
 var resume = make(chan struct{})
 
+// The first attempt of map task 0 of test.slow-map also sends on mapStuck,
+// then takes 100 ms a record: longer than the test can wait, unless it is
+// stopped.
+const slowRecord = 100 * time.Millisecond
+
 func init() {
 	first := func(ctx api.Context, kind api.TaskKind) bool {
 		id := ctx.Task()
@@ -114,6 +119,18 @@ func init() {
 		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)
 	})
 	api.Register("test.pause-reduce", pauseReduce)
+
+	slowMap := wordcount.Program
+	slowMap.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if first(ctx, api.MapTask) {
+			if string(key) == "0" {
+				mapStuck <- struct{}{}
+			}
+			time.Sleep(slowRecord)
+		}
+		return wordcount.Map(ctx, key, value, out)
+	})
+	api.Register("test.slow-map", slowMap)
 }
 
 // listen serves the services that register adds on addr, or on a free
@@ -311,17 +328,7 @@ func TestClusterWordCount(t *testing.T) {
 // and then fetched back for the reduce tasks.
 func TestClusterWorkerMetrics(t *testing.T) {
 	c, _, status := runJob(t, "wordcount", 1)
-	srv := httptest.NewServer(c.workers[0].MetricsHandler())
-	defer srv.Close()
-	resp, err := http.Get(srv.URL + "/metrics")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	body := scrape(t, c.workers[0])
 	for _, want := range []string{
 		fmt.Sprintf(`mr_worker_tasks_total{kind="map",result="ok"} %d`, status.GetMapTasksTotal()),
 		`mr_worker_tasks_total{kind="reduce",result="ok"} 4`,
@@ -329,13 +336,13 @@ func TestClusterWorkerMetrics(t *testing.T) {
 		`mr_worker_task_running{kind="map"} 0`,
 		"mr_worker_registrations_total 1",
 	} {
-		if !strings.Contains(string(body), want+"\n") {
+		if !strings.Contains(body, want+"\n") {
 			t.Errorf("metrics lack %q:\n%s", want, body)
 		}
 	}
-	written := regexp.MustCompile(`mr_worker_map_output_bytes_total (\d+)`).FindSubmatch(body)
-	fetched := regexp.MustCompile(`mr_worker_shuffle_fetched_bytes_total (\d+)`).FindSubmatch(body)
-	if written == nil || fetched == nil || string(written[1]) == "0" || string(written[1]) != string(fetched[1]) {
+	written := regexp.MustCompile(`mr_worker_map_output_bytes_total (\d+)`).FindStringSubmatch(body)
+	fetched := regexp.MustCompile(`mr_worker_shuffle_fetched_bytes_total (\d+)`).FindStringSubmatch(body)
+	if written == nil || fetched == nil || written[1] == "0" || written[1] != fetched[1] {
 		t.Errorf("map output written %q, fetched %q; want equal and nonzero", written, fetched)
 	}
 }
@@ -473,6 +480,55 @@ func TestClusterBackupTasks(t *testing.T) {
 			assertMapOutputRecords(t, status)
 		})
 	}
+}
+
+// The losing attempt of a backed-up task is stopped once its twin finishes
+// (§3.6), so its worker is free again and exits when the job ends.
+func TestClusterStopsLosingAttempt(t *testing.T) {
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Backups = true })
+	job := c.submit("test.slow-map")
+	c.addWorker()
+	<-mapStuck
+	c.addWorker()
+	c.wait(job)
+	assertGolden(t, c.output())
+	if body := scrape(t, c.workers[0]); !strings.Contains(body, `mr_worker_tasks_total{kind="map",result="failed"} 1`+"\n") {
+		t.Fatalf("want the slow attempt stopped:\n%s", body)
+	}
+}
+
+// A worker that its coordinator declared dead hears so from its next
+// heartbeat, and registers again without waiting for its attempt to end.
+func TestClusterReregistersOnHeartbeat(t *testing.T) {
+	c := newCluster(t)
+	job := c.submit("test.slow-map")
+	c.addWorker()
+	<-mapStuck
+	c.gates[0].freeze()
+	time.Sleep(3 * c.cfg.WorkerTimeout)
+	c.gates[0].thaw()
+	c.wait(job)
+	assertGolden(t, c.output())
+	if body := scrape(t, c.workers[0]); !strings.Contains(body, "mr_worker_registrations_total 2\n") {
+		t.Fatalf("want one registration again:\n%s", body)
+	}
+}
+
+// scrape returns w's metrics.
+func scrape(t *testing.T, w *worker.Worker) string {
+	t.Helper()
+	srv := httptest.NewServer(w.MetricsHandler())
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
 }
 
 // A restarted coordinator resumes the job from its log: its workers
