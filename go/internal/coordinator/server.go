@@ -374,7 +374,8 @@ func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
 // its counters are kept (§3.3, §4.9).
 // Valid failure reports and stale or duplicate attempts are not accepted.
 // It returns NotFound for an unknown job,
-// InvalidArgument for task or output validation errors, and Unavailable if
+// InvalidArgument for a report with no outcome or for task or output
+// validation errors, and Unavailable if
 // recording the report fails. A log error does not undo the report's effects.
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
@@ -382,6 +383,9 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	j, ok := s.jobs[req.GetAttempt().GetTask().GetJobId()]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetAttempt().GetTask().GetJobId())
+	}
+	if req.GetOutcome() == nil {
+		return nil, status.Error(codes.InvalidArgument, "report has neither success nor failure")
 	}
 	now := time.Now()
 	accepted, err := s.report(j, req, now)
