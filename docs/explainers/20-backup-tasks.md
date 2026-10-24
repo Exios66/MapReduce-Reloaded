@@ -43,7 +43,8 @@ count attempts exactly.
 
 ## What is not promised
 
-A losing reduce attempt can start writing after the job has finished and
-its output has been cleaned up. It then leaves an empty `_temporary`
-directory in the output, which readers skip. The paper accepts the same
-risk.
+A losing reduce attempt keeps running until it finishes (#121). If it is
+still running when the job ends, it fails: the job has removed `_temporary`,
+and attempts never create it (`task.Setup`, #29). It leaves nothing behind.
+If it finishes first, it renames over the winner's file, so the reducer must
+be deterministic (§3.3).
