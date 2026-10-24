@@ -498,6 +498,10 @@
     "file": "zstd_two_frames.mrkv",
     "error": "bad_block"
   },
+  "zstd_trailing_empty_frame": {
+    "file": "zstd_trailing_empty_frame.mrkv",
+    "error": "bad_block"
+  },
   "zstd_no_content_size": {
     "file": "zstd_no_content_size.mrkv",
     "error": "bad_block"

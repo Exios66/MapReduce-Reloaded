@@ -128,7 +128,7 @@ def encode(records, block_target=DEFAULT_BLOCK_TARGET, codec=CODEC_NONE):
     codec is CODEC_NONE, CODEC_ZSTD or CODEC_SNAPPY; anything else raises
     ValueError. A block closes by the size of its uncompressed payload, and
     each block is then compressed on its own. Raises ValueError if a
-    compressed payload is over MAX_BLOCK_SIZE.
+    payload is over MAX_BLOCK_SIZE before or after compression.
 
     Preserves input order without sorting. block_target is the payload size
     threshold in bytes, checked after each complete record, so blocks may
@@ -153,6 +153,8 @@ def encode(records, block_target=DEFAULT_BLOCK_TARGET, codec=CODEC_NONE):
         blocks.append((bytes(payload), count))
 
     for payload, count in blocks:
+        if len(payload) > MAX_BLOCK_SIZE:
+            raise ValueError("block exceeds MAX_BLOCK_SIZE")
         if codec != CODEC_NONE:
             payload = _compress(codec, payload)
             if len(payload) > MAX_BLOCK_SIZE:

@@ -77,8 +77,7 @@ func compress(c Codec, dst, payload []byte) []byte {
 func decompress(c Codec, dst, stored []byte) ([]byte, error) {
 	switch c {
 	case CodecZstd:
-		// The payload must be one frame that records its content size, so
-		// output longer than that size means another frame follows.
+		// The payload must be exactly one frame that records its content size.
 		var h zstd.Header
 		if err := h.Decode(stored); err != nil {
 			return nil, err
@@ -89,9 +88,14 @@ func decompress(c Codec, dst, stored []byte) ([]byte, error) {
 		if h.FrameContentSize > MaxBlockSize {
 			return nil, fmt.Errorf("frame declares %d bytes, limit %d", h.FrameContentSize, MaxBlockSize)
 		}
+		if n, err := frameLen(stored, &h); err != nil {
+			return nil, err
+		} else if n != len(stored) {
+			return nil, errors.New("bytes follow the frame")
+		}
 		out, err := zstdDecoder().DecodeAll(stored, dst[:0])
 		if err == nil && uint64(len(out)) != h.FrameContentSize {
-			err = errors.New("bytes follow the frame")
+			err = errors.New("frame does not match its content size")
 		}
 		return out, err
 	case CodecSnappy:
@@ -105,4 +109,28 @@ func decompress(c Codec, dst, stored []byte) ([]byte, error) {
 		return s2.Decode(slices.Grow(dst[:0], n), stored)
 	}
 	return stored, nil
+}
+
+// frameLen returns the length of the zstd frame at the start of b, found by
+// walking its block headers (RFC 8878, section 3.1.1).
+func frameLen(b []byte, h *zstd.Header) (int, error) {
+	n := h.HeaderSize
+	for {
+		if n+3 > len(b) {
+			return 0, errors.New("frame runs past end of payload")
+		}
+		bh := int(b[n]) | int(b[n+1])<<8 | int(b[n+2])<<16
+		size := bh >> 3
+		if bh>>1&3 == 1 { // an RLE block stores one byte
+			size = 1
+		}
+		n += 3 + size
+		if bh&1 == 1 { // the last block
+			break
+		}
+	}
+	if h.HasCheckSum {
+		n += 4
+	}
+	return n, nil
 }

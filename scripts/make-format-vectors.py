@@ -67,6 +67,7 @@ def raw_file(codec, payload, count=1):
 hello = b"\x05hello\x011"  # the record ("hello", "1")
 two_frames = zstandard.ZstdCompressor().compress(hello) * 2
 no_size = zstandard.ZstdCompressor(write_content_size=False).compress(hello)
+empty_frame = zstandard.ZstdCompressor().compress(b"")  # decodes to nothing
 
 # A snappy block that declares 64 MiB + 1 decoded bytes.
 too_large = mrkv._uvarint(mrkv.MAX_BLOCK_SIZE + 1) + b"junk"
@@ -91,6 +92,10 @@ VECTORS = {
     ),
     "zstd_bad_payload": (raw_file(mrkv.CODEC_ZSTD, b"not zstd"), "bad_block"),
     "zstd_two_frames": (raw_file(mrkv.CODEC_ZSTD, two_frames, count=2), "bad_block"),
+    "zstd_trailing_empty_frame": (
+        raw_file(mrkv.CODEC_ZSTD, zstandard.ZstdCompressor().compress(hello) + empty_frame),
+        "bad_block",
+    ),
     "zstd_no_content_size": (raw_file(mrkv.CODEC_ZSTD, no_size), "bad_block"),
     "snappy_too_large": (raw_file(mrkv.CODEC_SNAPPY, too_large), "bad_block"),
     "unknown_codec": (one_bytes[:5] + b"\x03" + one_bytes[6:], "unsupported_codec"),
