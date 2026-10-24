@@ -49,9 +49,11 @@ close "close" is.
 
 - Idle workers do duplicate work at the end of a phase. That costs
   capacity that would otherwise be idle, but not time.
-- A losing attempt is not stopped, and runs until it finishes (#121). A
-  losing reduce attempt still running when the job ends fails, because the
-  job has removed `_temporary` and attempts never create it, so it leaves
-  nothing. A losing map attempt writes to its worker's work directory and
-  can finish there, leaving partition files that no reducer reads.
+- A losing attempt is stopped at its worker's next heartbeat, whose reply
+  lists it in `cancel`; the worker checks between records and groups, and
+  does not report it. Until then it keeps running. A losing reduce attempt
+  still running when the job ends fails, because the job has removed
+  `_temporary` and attempts never create it, so it leaves nothing. A losing
+  map attempt writes to its worker's work directory and can finish there,
+  leaving partition files that no reducer reads.
 - Output must be deterministic for both attempts to agree (§3.3).

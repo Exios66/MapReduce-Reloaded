@@ -400,6 +400,42 @@ func TestHeartbeat(t *testing.T) {
 	}
 }
 
+// A worker is told to stop the attempts it should no longer run (§3.6).
+func TestHeartbeatCancels(t *testing.T) {
+	s, w, _ := newJob(t, 1)
+	other, _ := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
+	resp, _ := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	attempt := resp.GetMapTask().GetAttempt()
+	stale := proto.CloneOf(attempt)
+	stale.Task.JobId = "job-0"
+	cancels := func(worker string, attempts ...*pb.TaskAttemptId) int {
+		req := &pb.HeartbeatRequest{WorkerId: worker}
+		for _, a := range attempts {
+			req.Running = append(req.Running, &pb.TaskProgress{Attempt: a})
+		}
+		resp, err := s.Heartbeat(ctx, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(resp.GetCancel())
+	}
+	if n := cancels(w, attempt); n != 0 {
+		t.Fatalf("running attempt: %d cancelled, want 0", n)
+	}
+	if n := cancels(other.GetWorkerId(), attempt, stale); n != 2 {
+		t.Fatalf("another worker's attempt and an unknown job's: %d cancelled, want 2", n)
+	}
+	_, err := s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: attempt, Outcome: &pb.ReportTaskRequest_Success{
+		Success: &pb.TaskSuccess{Outputs: []*pb.PartitionLocation{{MapIndex: 0, Partition: 0, Uri: "file:///map-output"}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := cancels(w, attempt); n != 1 {
+		t.Fatalf("completed attempt: %d cancelled, want 1", n)
+	}
+}
+
 // A worker that goes quiet is declared dead, and its completed map task is
 // run again (§3.3).
 func TestExpire(t *testing.T) {

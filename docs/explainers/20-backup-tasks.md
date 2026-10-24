@@ -43,8 +43,9 @@ count attempts exactly.
 
 ## What is not promised
 
-A losing reduce attempt keeps running until it finishes (#121). If it is
-still running when the job ends, it fails: the job has removed `_temporary`,
-and attempts never create it (`task.Setup`, #29). It leaves nothing behind.
-If it finishes first, it renames over the winner's file, so the reducer must
-be deterministic (§3.3).
+A losing attempt is stopped at its worker's next heartbeat, whose reply
+lists it in `cancel` (#121); until then it keeps running. A losing reduce
+attempt still running when the job ends fails: the job has removed
+`_temporary`, and attempts never create it (`task.Setup`, #29). It leaves
+nothing behind. If it finishes before it is stopped, it renames over the
+winner's file, so the reducer must be deterministic (§3.3).

@@ -16,12 +16,14 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/extsort"
@@ -81,20 +83,32 @@ func (w *Worker) Run(ctx context.Context) (err error) {
 }
 
 // session registers, then runs tasks under that registration, sending
-// heartbeats while it does.
-func (w *Worker) session(ctx context.Context) error {
+// heartbeats while it does. It ends with errForgotten if a heartbeat says
+// to register again.
+func (w *Worker) session(parent context.Context) error {
 	// Wait for the coordinator to come up: workers may start before it.
-	reg, err := w.coordinator.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: w.info}, grpc.WaitForReady(true))
+	reg, err := w.coordinator.RegisterWorker(parent, &pb.RegisterWorkerRequest{Worker: w.info}, grpc.WaitForReady(true))
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
 	}
 	w.stats.registrations.Add(1)
 	w.id = reg.GetWorkerId()
 	w.logger = slog.Default().With("worker", w.id)
-	beating, stop := context.WithCancel(ctx)
-	defer stop()
-	go w.heartbeat(beating, w.id, reg.GetHeartbeatInterval().AsDuration())
+	ctx, end := context.WithCancelCause(parent)
+	defer end(nil)
+	cur := new(current)
+	go w.heartbeat(ctx, end, w.id, reg.GetHeartbeatInterval().AsDuration(), cur)
+	err = w.serve(ctx, cur)
+	if cause := context.Cause(ctx); errors.Is(cause, errForgotten) {
+		return cause
+	}
+	return err
+}
 
+// serve runs tasks until the coordinator says to shut down, or ctx is
+// done, or an RPC fails. An attempt runs under its own context, which a
+// heartbeat cancels if the coordinator says to stop it.
+func (w *Worker) serve(ctx context.Context, cur *current) error {
 	for {
 		resp, err := w.coordinator.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w.id})
 		if status.Code(err) == codes.NotFound {
@@ -107,14 +121,18 @@ func (w *Worker) session(ctx context.Context) error {
 		switch a := resp.GetAssignment().(type) {
 		case *pb.RequestTaskResponse_MapTask:
 			log, done := w.attemptLogger(a.MapTask.GetAttempt()), w.stats.start(mapKind)
-			outputs, counts, err := w.runMap(a.MapTask, log)
+			actx, stop := cur.start(ctx, a.MapTask.GetAttempt())
+			outputs, counts, err := w.runMap(actx, a.MapTask, log)
+			stop()
 			done(err)
-			report = w.report(a.MapTask.GetAttempt(), log, outputs, counts, err)
+			report = w.finish(cur, a.MapTask.GetAttempt(), log, outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
 			log, done := w.attemptLogger(a.ReduceTask.GetAttempt()), w.stats.start(reduceKind)
-			counts, err := w.runReduce(ctx, a.ReduceTask, log)
+			actx, stop := cur.start(ctx, a.ReduceTask.GetAttempt())
+			counts, err := w.runReduce(actx, a.ReduceTask, log)
+			stop()
 			done(err)
-			report = w.report(a.ReduceTask.GetAttempt(), log, nil, counts, err)
+			report = w.finish(cur, a.ReduceTask.GetAttempt(), log, nil, counts, err)
 		case *pb.RequestTaskResponse_Shutdown:
 			return nil
 		default:
@@ -129,17 +147,87 @@ func (w *Worker) session(ctx context.Context) error {
 			}
 			continue
 		}
+		if ctx.Err() != nil {
+			return ctx.Err() // the coordinator forgot the attempt with the worker
+		}
+		if report == nil {
+			continue
+		}
 		if _, err := w.coordinator.ReportTask(ctx, report); err != nil {
 			return fmt.Errorf("report task: %w", err)
 		}
 	}
 }
 
+// finish returns the report on an attempt, or nil if the coordinator said
+// to stop it, and so has nothing to hear.
+func (w *Worker) finish(cur *current, attempt *pb.TaskAttemptId, log *slog.Logger, outputs []*pb.PartitionLocation, counts map[string]int64, err error) *pb.ReportTaskRequest {
+	if cur.cancelled() {
+		log.Info("attempt stopped by the coordinator")
+		return nil
+	}
+	return w.report(attempt, log, outputs, counts, err)
+}
+
+// current is the attempt a session runs, shared with its heartbeats.
+type current struct {
+	mu      sync.Mutex
+	attempt *pb.TaskAttemptId // nil between attempts
+	cancel  context.CancelFunc
+	stopped bool // the coordinator said to stop the last attempt
+}
+
+// start makes attempt the current one, and returns its context and a
+// function to call when it ends.
+func (c *current) start(ctx context.Context, attempt *pb.TaskAttemptId) (context.Context, func()) {
+	actx, cancel := context.WithCancel(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.attempt, c.cancel, c.stopped = attempt, cancel, false
+	return actx, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.attempt = nil
+		cancel()
+	}
+}
+
+// running lists the current attempt, if any, for a heartbeat.
+func (c *current) running() []*pb.TaskProgress {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.attempt == nil {
+		return nil
+	}
+	return []*pb.TaskProgress{{Attempt: c.attempt}}
+}
+
+// stop cancels the current attempt if it is one of attempts.
+func (c *current) stop(attempts []*pb.TaskAttemptId) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, a := range attempts {
+		if c.attempt != nil && proto.Equal(a, c.attempt) {
+			c.cancel()
+			c.stopped = true
+		}
+	}
+}
+
+// cancelled reports whether the coordinator said to stop the last attempt.
+func (c *current) cancelled() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.stopped
+}
+
 // heartbeat tells the coordinator every interval that worker id is alive,
-// until ctx is done. Asking for a task counts as a heartbeat too; these
-// cover the time a task runs. A failed heartbeat is not retried: the next
-// one, or the next task request, tells the coordinator.
-func (w *Worker) heartbeat(ctx context.Context, id string, interval time.Duration) {
+// and which attempt it runs, until ctx is done. Asking for a task counts as
+// a heartbeat too; these cover the time a task runs. The reply may say to
+// stop the attempt (§3.6), or to end the session with errForgotten. A
+// failed heartbeat is not retried: the next one, or the next task request,
+// tells the coordinator.
+func (w *Worker) heartbeat(ctx context.Context, end context.CancelCauseFunc, id string, interval time.Duration, cur *current) {
 	if interval <= 0 {
 		return
 	}
@@ -150,7 +238,15 @@ func (w *Worker) heartbeat(ctx context.Context, id string, interval time.Duratio
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			_, _ = w.coordinator.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: id})
+			resp, err := w.coordinator.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: id, Running: cur.running()})
+			switch {
+			case err != nil:
+			case resp.GetReregister():
+				end(errForgotten)
+				return
+			default:
+				cur.stop(resp.GetCancel())
+			}
 		}
 	}
 }
@@ -166,7 +262,7 @@ func (w *Worker) attemptLogger(attempt *pb.TaskAttemptId) *slog.Logger {
 }
 
 // runMap runs a map task and returns where its output partitions are.
-func (w *Worker) runMap(m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
+func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, nil, err
@@ -183,7 +279,7 @@ func (w *Worker) runMap(m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocatio
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	sizes, counts, err := task.Map(spec, id, split, dir, m.GetSkipRecords(), log)
+	sizes, counts, err := task.Map(ctx, spec, id, split, dir, m.GetSkipRecords(), log)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -223,7 +319,7 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logg
 		defer func() { err = errors.Join(err, r.Close()) }()
 		sources[i] = kv.NewReader(r)
 	}
-	return task.Reduce(spec, id, sources, m.GetSkipRecords(), log)
+	return task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log)
 }
 
 // open opens one map output: from the worker that holds it, or from shared
