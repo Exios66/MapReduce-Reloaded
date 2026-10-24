@@ -43,7 +43,16 @@ func TestUnknownScheme(t *testing.T) {
 
 func TestLocal(t *testing.T) { testBackend(t, filepath.Join(t.TempDir(), "out")) }
 
-func TestS3(t *testing.T) { testBackend(t, s3test.Start(t)+"/out") }
+func TestS3(t *testing.T) {
+	bucket := s3test.Start(t)
+	testBackend(t, bucket+"/out")
+	if err := DeleteAll(t.Context(), bucket); err != nil {
+		t.Fatal(err)
+	}
+	if left, err := List(t.Context(), bucket+"/out/*"); err != nil || len(left) > 0 {
+		t.Errorf("after DeleteAll of the bucket, List = %q, %v", left, err)
+	}
+}
 
 // testBackend writes, commits, lists, reads and deletes files under dir.
 func testBackend(t *testing.T, dir string) {

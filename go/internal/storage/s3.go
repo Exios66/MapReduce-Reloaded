@@ -163,8 +163,10 @@ func (b *S3) Commit(ctx context.Context, tmp, name string) error {
 	if _, err := c.CopyObject(ctx, &s3.CopyObjectInput{Bucket: &bucket, Key: &key, CopySource: &src}); err != nil {
 		return err
 	}
-	_, err = c.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &srcBucket, Key: &srcKey})
-	return err
+	// The copy is the commit. A tmp left behind is removed with the rest of
+	// the job's temporary files.
+	_, _ = c.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &srcBucket, Key: &srcKey})
+	return nil
 }
 
 func (b *S3) Delete(ctx context.Context, name string) error {
@@ -181,13 +183,16 @@ func (b *S3) MkdirAll(ctx context.Context, dir string) error {
 	return err
 }
 
-// DeleteAll deletes every object under dir/.
+// DeleteAll deletes every object under dir/, or in the bucket if dir is
+// s3://bucket.
 func (b *S3) DeleteAll(ctx context.Context, dir string) error {
 	c, bucket, prefix, err := b.resolve(ctx, dir)
 	if err != nil {
 		return err
 	}
-	prefix = strings.TrimSuffix(prefix, "/") + "/"
+	if prefix != "" { // a bucket's root has no "/" before its keys
+		prefix = strings.TrimSuffix(prefix, "/") + "/"
+	}
 	pages := s3.NewListObjectsV2Paginator(c, &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &prefix})
 	for pages.HasMorePages() {
 		page, err := pages.NextPage(ctx)
