@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -46,13 +46,17 @@ e2e-s3: cluster-up
 	$(COMPOSE) --profile s3 up -d --wait s3
 	scripts/e2e.sh s3
 
+# Bytes shuffled and job time per intermediate codec (bench/README.md).
+bench-codecs: cluster-up
+	bench/codecs.sh
+
 test: go-test py-test
 
 lint: go-lint py-lint
 
 fmt:
 	cd go && gofmt -w .
-	cd python && $(PYTHON) -m ruff format . ../scripts && $(PYTHON) -m ruff check --fix . ../scripts
+	cd python && $(PYTHON) -m ruff format . ../scripts ../bench && $(PYTHON) -m ruff check --fix . ../scripts ../bench
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
@@ -99,4 +103,4 @@ py-test:
 	cd python && $(PYTHON) -m pytest -q
 
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts && $(PYTHON) -m ruff check . ../scripts
+	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench
