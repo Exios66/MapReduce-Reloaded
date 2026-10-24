@@ -41,10 +41,11 @@ def test_vector(name):
         assert mrkv.decode(data) == want
 
 
-@pytest.mark.parametrize("name", [n for n in sorted(MANIFEST) if "records" in MANIFEST[n]])
+@pytest.mark.parametrize("name", [n for n in sorted(MANIFEST) if "block_target" in MANIFEST[n]])
 def test_reference_encoder_is_deterministic(name):
     # Re-encoding a valid vector's records must give back the file exactly,
-    # given the same block target that produced it.
+    # given the same block target that produced it. Compressed vectors have
+    # no block target: their bytes depend on the compressor.
     entry = MANIFEST[name]
     data = (VECTORS_DIR / entry["file"]).read_bytes()
     records = mrkv.decode(data)

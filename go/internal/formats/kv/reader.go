@@ -24,7 +24,9 @@ import (
 // turns out to be corrupt.
 type Reader struct {
 	r          *bufio.Reader
-	block      []byte // verified payload of the current block
+	block      []byte // verified, decompressed payload of the current block
+	stored     []byte // the current block as stored, if compressed
+	codec      Codec
 	pos        int    // read offset in block
 	left       uint32 // records not yet returned from block
 	key, value []byte
@@ -90,11 +92,12 @@ func (r *Reader) readHeader() error {
 	switch {
 	case h[4] != version:
 		return fmt.Errorf("%w: %d", ErrUnsupportedVersion, h[4])
-	case h[5] != codecNone:
+	case !Codec(h[5]).valid():
 		return fmt.Errorf("%w: %d", ErrUnsupportedCodec, h[5])
 	case h[6] != 0 || h[7] != 0:
 		return ErrBadHeader
 	}
+	r.codec = Codec(h[5])
 	return nil
 }
 
@@ -115,16 +118,27 @@ func (r *Reader) readBlock() error {
 	if err := r.readFull(h[4:]); err != nil {
 		return err
 	}
-	r.block = slices.Grow(r.block[:0], int(size))[:size]
-	if err := r.readFull(r.block); err != nil {
+	buf := &r.block
+	if r.codec != CodecNone {
+		buf = &r.stored
+	}
+	*buf = slices.Grow((*buf)[:0], int(size))[:size]
+	if err := r.readFull(*buf); err != nil {
 		return err
 	}
-	if checksum(r.block) != binary.LittleEndian.Uint32(h[8:]) {
+	if checksum(*buf) != binary.LittleEndian.Uint32(h[8:]) {
 		return fmt.Errorf("%w: block %d", ErrChecksumMismatch, r.blocks)
 	}
 	r.left = binary.LittleEndian.Uint32(h[4:])
 	if r.left == 0 {
 		return fmt.Errorf("%w: block %d has record_count 0", ErrBadBlock, r.blocks)
+	}
+	if r.codec != CodecNone {
+		block, err := decompress(r.codec, r.block, r.stored)
+		if err != nil {
+			return fmt.Errorf("%w: block %d: %s payload: %v", ErrBadBlock, r.blocks, r.codec, err)
+		}
+		r.block = block
 	}
 	r.pos = 0
 	r.blocks++

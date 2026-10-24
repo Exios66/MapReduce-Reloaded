@@ -38,24 +38,28 @@ the format of the *messages*, this is the format of the *saved data*.
   `checksum_mismatch` instead of passing on wrong data.
 - **One checksum per block** means a reader can check and use a block
   without holding the whole file in memory.
-- **Blocks are also where compression will go** (#42), and a natural place
-  to resume an interrupted download.
+- **Blocks are also the unit of compression** (#42): each block's records
+  are compressed on their own, with zstd or Snappy, so a reader still needs
+  only one block in memory. Blocks are also a natural place to resume an
+  interrupted download.
 - **The footer** catches the two failures checksums can't:
   - a file that was cut short (no footer);
   - a block that went missing (the counts don't add up).
 
 ## How we know the spec is right
 
-- `testdata/format/` holds 9 small **golden files**:
-  - 4 valid: empty, one record, many records, binary keys;
-  - 5 deliberately broken: a corrupted byte, a cut-off file, a missing
-    block, a wrong magic word, extra bytes at the end.
+- `testdata/format/` holds 17 small **golden files**:
+  - 6 valid: empty, one record, many records, binary keys, and one file
+    each compressed with zstd and Snappy;
+  - 11 deliberately broken: a corrupted byte, a cut-off file, a missing
+    block, a wrong magic word, extra bytes at the end, an unknown codec,
+    and five bad compressed blocks.
 
   `vectors.json` says what a correct reader must return for each: the
   records, or the exact error.
 - `scripts/mrkv_reference.py` is a short, line-by-line translation of the
   spec, used to generate and check those files.
-- **Python** decodes all 9 and gets the expected records or errors.
+- **Python** decodes all 17 and gets the expected records or errors.
 - **Go** checks that its own checksum function gives exactly the values
   stored in the files, so files written by Python are readable from Go.
 - **Proof the tests can fail:** flipping one bit in `one_record.mrkv` fails
@@ -63,7 +67,7 @@ the format of the *messages*, this is the format of the *saved data*.
   the Go test.
 
 The real readers and writers (#8) are written separately and must pass the
-same 9 files. That's the point: two independent implementations agreeing
+same 17 files. That's the point: two independent implementations agreeing
 with one fixed answer key.
 
 ## Likely review questions

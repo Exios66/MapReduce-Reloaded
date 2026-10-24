@@ -15,7 +15,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5", "grpcio-tools==1.84.1"]
+# Block compression for MRKV codecs 1 (zstd) and 2 (snappy); codec 0 needs neither.
+compression = ["zstandard>=0.25", "python-snappy>=0.7"]
+dev = [
+    "pytest>=8",
+    "hypothesis>=6",
+    "ruff>=0.5",
+    "grpcio-tools==1.84.1",
+    "zstandard>=0.25",
+    "python-snappy>=0.7",
+]
 
 [tool.setuptools.packages.find]
 include = ["mapreduce_reloaded*"]
