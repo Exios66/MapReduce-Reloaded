@@ -277,7 +277,7 @@ func printStatus(w io.Writer, st *pb.GetJobStatusResponse) error {
 		st.GetReduceTasksCompleted(), st.GetReduceTasksTotal(),
 		st.GetBackupAttempts(), st.GetBackupWins())
 	if err == nil && st.GetSubmittedAt() != nil && st.GetFinishedAt() != nil {
-		d := st.GetFinishedAt().AsTime().Sub(st.GetSubmittedAt().AsTime())
+		d := max(0, st.GetFinishedAt().AsTime().Sub(st.GetSubmittedAt().AsTime())) // 0 if the clock was set back
 		_, err = fmt.Fprintf(w, "seconds\t%.3f\n", d.Seconds())
 	}
 	return errors.Join(err, printCounters(w, st.GetCounters().GetValues()))
