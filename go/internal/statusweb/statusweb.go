@@ -25,7 +25,6 @@ var page string
 
 var tmpl = template.Must(template.New("status").Funcs(template.FuncMap{
 	// duration shows how long a job has run, to a tenth of a second.
-	// It uses now for unfinished jobs and returns "" if submission time is unknown.
 	"duration": func(j *pb.GetJobStatusResponse, now time.Time) string {
 		d, ok := duration(j, now)
 		if !ok {
