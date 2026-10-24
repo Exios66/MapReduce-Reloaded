@@ -42,7 +42,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - Phases 0–4: every paper feature, F1–F23, in Go (done);
   - the Python halves of #5 and #8–#12: file format, hash, formats, sort,
     combiner and local mode;
-  - #41 S3/MinIO storage and #42 compression;
+  - #41 S3 storage and #42 compression;
   - #57 and #58: benchmarks and the paper's §5 experiments;
   - #60: the final report.
 - **Stretch** (issues kept open with a `[stretch]` prefix):
@@ -106,7 +106,7 @@ Each item maps to a paper section and will get a test.
 Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 
 **Tier A — infrastructure (2004 → 2026)**
-- **Pluggable storage** instead of GFS: local FS, **S3-compatible object storage** (MinIO locally), and optionally GCS/Azure. The `Storage` interface handles listing, ranged reads and atomic commit.
+- **Pluggable storage** instead of GFS: local FS, **S3-compatible object storage** (VersityGW in Compose), and optionally GCS/Azure. The `Storage` interface handles listing, ranged reads and atomic commit.
 - **gRPC + protobuf** instead of the custom RPC layer. Supports streaming shuffle, deadlines and retries.
 - **Containers**: Docker images for the coordinator and worker, `docker-compose.yml` for a local cluster, and a Helm chart/manifests for Kubernetes.
 - **External shuffle service** (optional mode): map output persists in object storage or a shuffle daemon, so losing a worker no longer forces map tasks to re-run (contrast with F8). Both modes are kept so their behaviour can be benchmarked side by side.
@@ -150,11 +150,11 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
   └ UDF host: Go plugin | Python subprocess | WASM
             │
             ▼
-   Storage: local FS │ S3/MinIO │ GCS        (input, output, optional shuffle)
+   Storage: local FS │ S3         │ GCS        (input, output, optional shuffle)
 ```
 
-This is the target. Today storage is the local filesystem or a shared volume
-(S3 is #41), every worker is Go, and the UDF host is Phase 5 stretch work.
+This is the target. Today storage is the local filesystem, a shared volume
+or an S3-compatible store (#41), every worker is Go, and the UDF host is Phase 5 stretch work.
 
 **Pull-based scheduling** (as in MIT 6.824): idle workers call `RequestTask`. This keeps the coordinator simple and makes heartbeats piggyback naturally.
 

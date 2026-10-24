@@ -3,11 +3,19 @@
 # test corpus must match the golden output, which local mode also produces,
 # byte for byte, no container may have been killed for exceeding its memory
 # limit, and the coordinator's /metrics must show the job done (#32).
+#
+# With the argument s3, the job reads and writes the s3 profile's store
+# (#41) instead of the shared volume.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
-job=/out/e2e-$(date +%s)
+name=e2e-$(date +%s)
+case "${1:-local}" in
+local) job=/out/$name input='/corpus/*.txt' from=coordinator:/out/$name ;;
+s3) job=s3://out/$name input='s3://corpus/*.txt' from=s3:/data/out/$name ;;
+*) echo "usage: $0 [local|s3]" >&2; exit 2 ;;
+esac
 got=$(mktemp -d)
 trap 'rm -rf "$got"' EXIT
 
@@ -15,7 +23,7 @@ trap 'rm -rf "$got"' EXIT
 # the memory check below then says why.
 submitted=0
 timeout 600 "${compose[@]}" run --rm mr submit -coordinator coordinator:7070 -m 7 -r 4 -wait \
-    wordcount "$job" '/corpus/*.txt' || submitted=$?
+    wordcount "$job" "$input" || submitted=$?
 
 containers=$("${compose[@]}" ps -aq)
 if [ -z "$containers" ]; then
@@ -37,7 +45,7 @@ if [ "$submitted" -ne 0 ]; then
     echo "e2e: the job failed or timed out (exit $submitted)" >&2
     exit 1
 fi
-"${compose[@]}" cp "coordinator:$job" "$got/out"
+"${compose[@]}" cp "$from" "$got/out"
 diff -r testdata/corpus/expected "$got/out"
 # Jobs are listed in the order submitted, so the last one is this job.
 done_reduces=$(curl -fsS http://127.0.0.1:18780/metrics | grep 'kind="reduce",state="completed"}' | tail -1)

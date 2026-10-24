@@ -1,7 +1,8 @@
 # The cluster on one machine (docs/cluster-vm.md): one coordinator and four
 # workers. `make cluster-up` starts it, `make e2e` runs word count on it and
 # `make cluster-down` removes it. `make monitoring-up` adds Prometheus and
-# Grafana with a dashboard of the cluster's metrics.
+# Grafana with a dashboard of the cluster's metrics, and `make e2e-s3` runs
+# the same job against an S3 store in the s3 profile.
 #
 # Every container sees the input at /corpus and job output at /out, because
 # job specs carry absolute paths. Map output stays inside each worker and is
@@ -10,6 +11,11 @@ name: mapreduce
 
 x-node: &node
   image: mapreduce-reloaded
+  environment: # used only for s3:// names
+    AWS_ENDPOINT_URL: http://s3:9000
+    AWS_REGION: us-east-1
+    AWS_ACCESS_KEY_ID: mapreduce
+    AWS_SECRET_ACCESS_KEY: mapreduce-secret
   volumes:
     - ../../testdata/corpus:/corpus:ro
     - output:/out
@@ -41,6 +47,26 @@ services:
     profiles: [tools]
     mem_limit: 128m
 
+  # The s3 profile: an S3-compatible store (#41, ADR 0013). Each directory in
+  # /data is a bucket: s3://corpus holds the test corpus, and s3://out the
+  # job output.
+  s3:
+    image: versity/versitygw:v1.9.0
+    profiles: [s3]
+    command: [--port, ":9000", posix, /data]
+    environment:
+      ROOT_ACCESS_KEY: mapreduce
+      ROOT_SECRET_KEY: mapreduce-secret
+    volumes:
+      - ../../testdata/corpus:/data/corpus:ro
+      - s3-output:/data/out
+    # Ready once the port accepts connections; make e2e-s3 waits for it.
+    healthcheck:
+      test: [CMD, nc, -w, "1", 127.0.0.1, "9000"]
+      interval: 1s
+      retries: 30
+    mem_limit: 256m
+
   # The monitoring profile: Prometheus scrapes the coordinator and every
   # worker, and Grafana shows them (docs/explainers/24-status.md).
   prometheus:
@@ -68,3 +94,4 @@ services:
 
 volumes:
   output:
+  s3-output:
