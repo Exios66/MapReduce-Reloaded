@@ -13,6 +13,8 @@ import (
 )
 
 // metrics renders st in the Prometheus text format, version 0.0.4.
+// Job durations are in seconds, ending at the finish time or st.At for
+// running jobs; jobs without a submission timestamp have no duration sample.
 func metrics(st coordinator.Status) []byte {
 	var b bytes.Buffer
 	family := func(name, help string) { promtext.Family(&b, name, "gauge", help) }

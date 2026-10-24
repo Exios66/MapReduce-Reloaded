@@ -105,6 +105,8 @@ func (s *Server) Shutdown() {
 // completed reduce tasks stay done, since that output is in the job's
 // output directory (§3.3). A dead worker that calls again is told to
 // register anew.
+// A zero WorkerTimeout disables expiration. Log failures do not prevent
+// workers from expiring or their tasks from being reset.
 func (s *Server) Expire(now time.Time) []string {
 	if s.cfg.WorkerTimeout == 0 {
 		return nil
@@ -182,6 +184,10 @@ func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
 
 // SubmitJob validates the job, defaulting R to a multiple of the number of
 // workers (§3.5), and plans its map tasks.
+// On success it makes the job active and returns its ID. It returns
+// InvalidArgument for invalid jobs or input planning failures, AlreadyExists
+// if checking the output fails, FailedPrecondition if another job is running
+// or output setup fails, and Unavailable if recording the submission fails.
 func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
 	m := proto.CloneOf(req.GetJob())
 	if m == nil {
@@ -256,6 +262,9 @@ func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 // RequestTask hands an idle worker its next task: map tasks first, the
 // nearest to their input (§3.4), reduce tasks once every map task has
 // completed (§3.1), then backup attempts if enabled (§3.6).
+// It returns a wait instruction when no task is ready, or a shutdown
+// instruction after Shutdown. Errors are NotFound for an unknown worker,
+// Internal if assigning a task fails, or Unavailable if recording it fails.
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -285,6 +294,8 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 }
 
 // assign starts an attempt at t, a task of the active job, on worker at now.
+// It returns the map or reduce assignment, or Internal for task table errors
+// and Unavailable for log errors. An error does not roll back the attempt.
 func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskResponse, error) {
 	j := s.active
 	attempt, err := j.tasks.Assign(t, worker, now)
@@ -361,6 +372,10 @@ func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
 // ReportTask records the outcome of an attempt, from the worker it was
 // assigned to. The first successful attempt of a task is accepted, and only
 // its counters are kept (§3.3, §4.9).
+// Valid failure reports and stale or duplicate attempts are not accepted.
+// It returns NotFound for an unknown job,
+// InvalidArgument for task or output validation errors, and Unavailable if
+// recording the report fails. A log error does not undo the report's effects.
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -381,6 +396,9 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 
 // report applies req, received at at, to j, and says whether it completed
 // its task.
+// Failure reports and stale attempts return false; invalid tasks or map
+// outputs return an error. If the report ends the active job, at is its
+// finish time.
 func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accepted bool, err error) {
 	id := req.GetAttempt()
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
@@ -426,6 +444,8 @@ func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*
 }
 
 // status describes the job's progress.
+// Submission and finish timestamps are omitted when unknown; a running
+// job has no finish timestamp.
 func (j *job) status() *pb.GetJobStatusResponse {
 	mapsDone, reducesDone := j.tasks.Progress()
 	state := pb.JobState_JOB_STATE_MAPPING
@@ -485,6 +505,8 @@ func (j *job) total() map[string]int64 {
 // record appends rec, a decision made at at, to the log, if there is one.
 // It runs under the lock, so no reply reveals a change before the log holds
 // it (ADR 0007).
+// With a log configured it sets rec.At, returning Unavailable if encoding
+// or appending fails. Without a log it returns nil without changing rec.
 func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 	if s.cfg.Log == nil {
 		return nil

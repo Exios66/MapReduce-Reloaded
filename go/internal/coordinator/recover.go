@@ -16,6 +16,9 @@ import (
 // then logs a restart: the attempts that were running stop, and workers
 // register again under IDs the old coordinator never gave out. The server
 // logs to path from then on; the caller closes the returned log.
+// Logged submission and finish times are preserved; missing times stay unknown.
+// It returns log open, read, decoding, or replay errors, or Unavailable if
+// recording the restart fails, joined with any error closing the log.
 func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
 	s := NewServer(cfg)
 	restarts := 0
@@ -44,6 +47,8 @@ func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
 
 // replay applies a logged decision as the handler that logged it did, at
 // the time it was made.
+// A missing timestamp leaves submission or finish times unknown. It returns
+// an error for unknown records, inconsistent assignments, or invalid reports.
 func (s *Server) replay(rec *pb.LogRecord) error {
 	var at time.Time // zero in logs written before records had times
 	if rec.GetAt() != nil {
