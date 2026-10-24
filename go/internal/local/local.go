@@ -18,7 +18,7 @@ import (
 )
 
 // Run executes spec. Intermediate files go in workDir, which the caller
-// removes. Output file r is written to <Output>/part-r-<r>. Run returns the
+// removes. Output file r is written to <Output>/part-r-<r>, r in five digits. Run returns the
 // job's counters.
 func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 	if err := spec.Validate(); err != nil {

@@ -35,7 +35,10 @@ a slow or dead worker without a reducer waiting forever.
 4. **A lost output is reported.** If a fetch ends with `Unavailable`,
    `NotFound` or `DeadlineExceeded`, the reduce attempt fails with
    `TaskFailure.lost_output` set. `TaskTable.Fail` makes that map task idle,
-   but only if its output is still at the address reported.
+   but only if its output is still at the address reported. Two cases are
+   not covered: an output on shared storage, which has no address, and an
+   output that fails its checksum, which fails the reduce attempt without
+   being reported as lost.
 5. **Shared storage is a second path.** With `worker -listen ""` and a
    shared `-work-dir`, a location has no `worker_address`, and the reducer
    opens `PartitionLocation.uri` as a file.

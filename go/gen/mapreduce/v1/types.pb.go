@@ -533,12 +533,14 @@ type JobSpec struct {
 	Program string `protobuf:"bytes,1,opt,name=program,proto3" json:"program,omitempty"`
 	// Input files or glob patterns, as URIs.
 	Inputs []string `protobuf:"bytes,2,rep,name=inputs,proto3" json:"inputs,omitempty"`
-	// Output directory URI. Reduce task r writes "<output>/part-r-<r>".
+	// Output directory URI. Reduce task r writes "<output>/part-r-<r>", with r
+	// in five digits: part-r-00000, part-r-00001, ...
 	Output string `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
 	// Target split size in bytes; this determines M (§3.5). 0 means the
 	// default (64 MiB).
 	SplitSizeBytes uint64 `protobuf:"varint,4,opt,name=split_size_bytes,json=splitSizeBytes,proto3" json:"split_size_bytes,omitempty"`
-	// Number of reduce tasks, R (§3.5). Also the number of output files.
+	// Number of reduce tasks, R (§3.5). Also the number of output files. 0
+	// means 2 per registered worker.
 	NumReduceTasks uint32 `protobuf:"varint,5,opt,name=num_reduce_tasks,json=numReduceTasks,proto3" json:"num_reduce_tasks,omitempty"`
 	// Name of the input format, e.g. "text" (§4.4).
 	InputFormat string `protobuf:"bytes,6,opt,name=input_format,json=inputFormat,proto3" json:"input_format,omitempty"`
