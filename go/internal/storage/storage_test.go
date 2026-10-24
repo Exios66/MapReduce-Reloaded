@@ -48,6 +48,9 @@ func TestLocal(t *testing.T) { testBackend(t, filepath.Join(t.TempDir(), "out"))
 func TestS3(t *testing.T) {
 	bucket := s3test.Start(t)
 	testBackend(t, bucket+"/out")
+	if err := MkdirAll(t.Context(), bucket+"/other"); err != nil {
+		t.Fatal(err)
+	}
 	w, err := Create(t.Context(), bucket+"/other/object")
 	if err != nil {
 		t.Fatal(err)
