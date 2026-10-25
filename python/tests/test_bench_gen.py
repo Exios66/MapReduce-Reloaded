@@ -1,6 +1,7 @@
 """The benchmark data generators in bench/ (#57)."""
 
 import collections
+import datetime
 import re
 import subprocess
 import sys
@@ -54,6 +55,17 @@ def test_weblog():
     top, count = urls.most_common(1)[0]
     assert top == b"/page1.html" and count > len(lines) // 20, urls.most_common(3)
     assert len(urls) > 1_000
+
+
+# Time never goes back, even after a day of requests.
+def test_weblog_time_moves_forward():
+    lines = generate("weblog", 30_000_000).splitlines()
+    stamps = [
+        datetime.datetime.strptime(line.split(b" ")[3][1:].decode(), "%d/%b/%Y:%H:%M:%S")
+        for line in lines
+    ]
+    assert stamps == sorted(stamps)
+    assert stamps[-1].date() > stamps[0].date()
 
 
 # Each link is a source, a tab and a target, and a few targets get most links.
