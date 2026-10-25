@@ -3,6 +3,10 @@ global:
 
 scrape_configs:
   - job_name: coordinator
+    # Its metrics carry a job label of their own, the MapReduce job's ID.
+    # Without this, Prometheus renames it to exported_job and sets job to
+    # "coordinator", which merges every job in the dashboard.
+    honor_labels: true
     static_configs:
       - targets: ["coordinator:8080"]
   # The Compose DNS name worker resolves to every replica.
