@@ -1,8 +1,8 @@
 """The paper's term vector per host (§2.3), mirroring go/examples/termvector.
 
 Each input line is a document: a URL, a tab and the document's text. The
-host is the part of the URL between "://" and the next "/"; lines without a
-tab or a host are skipped.
+host is the part of the URL between "://" and the next "/", "?" or "#"; lines
+without a tab or a host are skipped.
 
 The output is each host with its term vector: the words of its documents,
 split as word count splits them, as word:count pairs, most frequent first,
@@ -10,6 +10,7 @@ then by word. Terms that occur fewer than the job's "min" parameter times
 (default 2) are dropped.
 """
 
+import re
 from collections import Counter
 
 from mapreduce_reloaded.api import Program, combiner, mapper, reducer
@@ -18,7 +19,7 @@ from mapreduce_reloaded.api import Program, combiner, mapper, reducer
 @mapper
 def tv_map(ctx, offset, line):
     url, tab, text = line.partition(b"\t")
-    host = url.partition(b"://")[2].partition(b"/")[0]
+    host = re.split(rb"[/?#]", url.partition(b"://")[2], maxsplit=1)[0]
     if tab and host:
         yield host, encode(Counter(text.split()))
 

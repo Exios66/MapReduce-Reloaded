@@ -12,7 +12,7 @@ from mapreduce_reloaded.api import Program, combiner, mapper, reducer
 
 @mapper
 def index_map(ctx, offset, line):
-    file = os.path.basename(ctx.input).encode()
+    file = os.fsencode(os.path.basename(ctx.input))  # not .encode(): a name need not be UTF-8
     for word in line.split():
         yield word, file
 

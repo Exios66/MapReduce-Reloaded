@@ -50,11 +50,17 @@ func Reduce(_ api.Context, word []byte, files iter.Seq[[]byte], out api.Emitter)
 	return out.Emit(word, bytes.Join(distinct(files), []byte(",")))
 }
 
+// distinct returns the sorted, distinct values. It keeps one copy of each
+// value, so a word that occurs a million times in a few files stays small.
 func distinct(values iter.Seq[[]byte]) [][]byte {
+	seen := map[string]bool{}
 	var all [][]byte
 	for v := range values {
-		all = append(all, bytes.Clone(v))
+		if !seen[string(v)] {
+			seen[string(v)] = true
+			all = append(all, bytes.Clone(v))
+		}
 	}
 	slices.SortFunc(all, bytes.Compare)
-	return slices.CompactFunc(all, bytes.Equal)
+	return all
 }

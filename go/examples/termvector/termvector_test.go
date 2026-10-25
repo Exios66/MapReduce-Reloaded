@@ -10,6 +10,8 @@ import (
 const docs = "http://a.com/x\tthe cat the\n" +
 	"http://a.com/y\tthe dog\n" +
 	"https://b.org\tcat cat\n" +
+	"http://a.com?q=1\tthe\n" + // a query or fragment ends the host too
+	"https://b.org#top\tcat\n" +
 	"no tab\n" +
 	"nohost\tword\n"
 
@@ -18,8 +20,8 @@ func TestTermVector(t *testing.T) {
 		params map[string]string
 		want   string
 	}{
-		{nil, "a.com\tthe:3\nb.org\tcat:2\n"},
-		{map[string]string{"min": "1"}, "a.com\tthe:3 cat:1 dog:1\nb.org\tcat:2\n"},
+		{nil, "a.com\tthe:4\nb.org\tcat:3\n"},
+		{map[string]string{"min": "1"}, "a.com\tthe:4 cat:1 dog:1\nb.org\tcat:3\n"},
 	} {
 		got, err := run.Local(t, termvector.Program, []string{run.Write(t, docs)}, 2, tc.params)
 		if err != nil {
