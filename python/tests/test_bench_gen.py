@@ -1,6 +1,7 @@
 """The benchmark data generators in bench/ (#57)."""
 
 import collections
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,7 @@ def generate(name, *args):
     ).stdout
 
 
-@pytest.mark.parametrize("name", ["words", "grep", "sort", "zipf"])
+@pytest.mark.parametrize("name", ["words", "grep", "sort", "zipf", "weblog", "links"])
 def test_reproducible(name):
     assert generate(name, 10_000) == generate(name, 10_000)
     assert generate(name, 10_000) != generate(name, 10_000, 7)
@@ -37,6 +38,34 @@ def test_grep_matches():
     lines = generate("grep", 100 * 300_000).splitlines()
     assert sum(b"XYZ" in line for line in lines) == 3  # 300,000 * 92,337 / 10^10
     assert sum(b"XYZ" in line for line in generate("grep", 100).splitlines()) == 1
+
+
+# Each request is a Common Log Format line whose seventh field is the URL, as
+# urlfreq reads it, and the pages follow a skewed distribution.
+def test_weblog():
+    lines = generate("weblog", 2_000_000).splitlines()
+    assert len(lines) >= 20_000
+    pattern = re.compile(
+        rb"^10\.0\.\d+\.\d+ - - \[10/Oct/2000:\d\d:\d\d:\d\d -0700\] "
+        rb'"GET (/page\d+\.html) HTTP/1\.0" 200 \d+$'
+    )
+    urls = collections.Counter(pattern.match(line).group(1) for line in lines)
+    assert all(line.split(b" ")[6] in urls for line in lines[:100])
+    top, count = urls.most_common(1)[0]
+    assert top == b"/page1.html" and count > len(lines) // 20, urls.most_common(3)
+    assert len(urls) > 1_000
+
+
+# Each link is a source, a tab and a target, and a few targets get most links.
+def test_links():
+    lines = generate("links", 2_000_000).splitlines()
+    assert len(lines) >= 20_000
+    pairs = [line.split(b"\t") for line in lines]
+    assert all(len(p) == 2 and p[0].startswith(b"http://example.com/p") for p in pairs)
+    targets = collections.Counter(p[1] for p in pairs)
+    assert targets.most_common(1)[0][0] == b"http://example.com/p1"
+    assert targets.most_common(1)[0][1] > len(lines) // 20
+    assert len({p[0] for p in pairs}) > 10_000  # sources are not skewed
 
 
 # Keys spread over the first byte that distsort partitions on.
