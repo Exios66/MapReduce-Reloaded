@@ -12,6 +12,9 @@
 | [`make-golden.py`](make-golden.py) | Regenerates the binary protobuf goldens from their text form. |
 
 The `make-*` scripts write the files under [`testdata/`](../testdata/), and are
-needed only after changing the format, the hash, a message or the corpus. Each
-is written without the Go or Python implementations it checks, so a
-misreading of the spec cannot hide in both.
+needed only after changing the format, the hash, a message or the corpus. The
+corpus, format and hash scripts are written straight from the spec, without the
+Go or Python code they check, so a misreading of the spec cannot hide in both
+implementations. `make-golden.py` is the exception: it serializes with the
+generated Python bindings, and both test suites check that their own
+serialization matches its output byte for byte.

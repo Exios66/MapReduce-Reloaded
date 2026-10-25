@@ -19,8 +19,9 @@ the memory budget and the setup of the course VM.
 | `s3` | `s3` | 256 MB | An S3-compatible store (VersityGW) that serves the corpus and keeps output |
 | `prometheus`, `grafana` | `monitoring` | 256 MB each | At `127.0.0.1:19090` and `127.0.0.1:13000` |
 
-Every container sees the test corpus at `/corpus` and job output in the
-`output` volume at `/out`. A container that goes over its limit is killed, and
+The coordinator, the workers and `mr` see the test corpus at `/corpus` and
+job output in the `output` volume at `/out`; the `s3`, `prometheus` and
+`grafana` services mount neither. A container that goes over its limit is killed, and
 `make e2e` fails if any was.
 
 ## Commands
