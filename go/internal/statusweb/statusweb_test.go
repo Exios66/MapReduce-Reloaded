@@ -33,7 +33,7 @@ var status = source{
 		Error:       "<script>",
 		SubmittedAt: timestamppb.New(at.Add(-2500 * time.Millisecond)),
 	}, {
-		JobId: "job-2", State: pb.JobState_JOB_STATE_SUCCEEDED, BackupAttempts: 3, BackupWins: 1,
+		JobId: "job-2", State: pb.JobState_JOB_STATE_SUCCEEDED, BackupAttempts: 3, BackupWins: 1, MapTasksHostLocal: 5, MapTasksZoneLocal: 2,
 		SubmittedAt: timestamppb.New(at.Add(-time.Hour)),
 		FinishedAt:  timestamppb.New(at.Add(-time.Hour + 90*time.Second)),
 	}, {
@@ -94,6 +94,8 @@ func TestMetrics(t *testing.T) {
 		`mr_job_duration_seconds{job="job-2"} 90` + "\n",
 		`mr_job_backups{job="job-2",state="started"} 3` + "\n",
 		`mr_job_backups{job="job-2",state="won"} 1` + "\n",
+		`mr_job_map_tasks_local{job="job-2",level="host"} 5` + "\n",
+		`mr_job_map_tasks_local{job="job-2",level="zone"} 2` + "\n",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("metrics lack %q:\n%s", want, body)

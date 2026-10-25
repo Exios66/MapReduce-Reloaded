@@ -281,16 +281,17 @@ func dial(addr string) (pb.CoordinatorServiceClient, func(), error) {
 }
 
 // printStatus prints the job's state and progress, its backup attempts
-// started and won (§3.6), its duration in seconds once it has finished, as
+// started and won (§3.6), the map tasks that ran on their split's host or in
+// its zone (§3.4), its duration in seconds once it has finished, as
 // the coordinator measured it, then its counters.
 // The duration is omitted unless both timestamps are present. It returns
 // any write errors, still attempting to print counters after an earlier error.
 func printStatus(w io.Writer, st *pb.GetJobStatusResponse) error {
-	_, err := fmt.Fprintf(w, "%s\t%s\nmap\t%d/%d\nreduce\t%d/%d\nbackups\t%d\nbackups_won\t%d\n",
+	_, err := fmt.Fprintf(w, "%s\t%s\nmap\t%d/%d\nreduce\t%d/%d\nbackups\t%d\nbackups_won\t%d\nmap_host_local\t%d\nmap_zone_local\t%d\n",
 		st.GetJobId(), strings.TrimPrefix(st.GetState().String(), "JOB_STATE_"),
 		st.GetMapTasksCompleted(), st.GetMapTasksTotal(),
 		st.GetReduceTasksCompleted(), st.GetReduceTasksTotal(),
-		st.GetBackupAttempts(), st.GetBackupWins())
+		st.GetBackupAttempts(), st.GetBackupWins(), st.GetMapTasksHostLocal(), st.GetMapTasksZoneLocal())
 	if err == nil && st.GetSubmittedAt() != nil && st.GetFinishedAt() != nil {
 		d := max(0, st.GetFinishedAt().AsTime().Sub(st.GetSubmittedAt().AsTime())) // 0 if the clock was set back
 		_, err = fmt.Fprintf(w, "seconds\t%.3f\n", d.Seconds())

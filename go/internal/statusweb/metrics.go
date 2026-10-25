@@ -50,6 +50,12 @@ func metrics(st coordinator.Status) []byte {
 		fmt.Fprintf(&b, "mr_job_backups{job=%s,state=\"won\"} %d\n", promtext.Label(j.GetJobId()), j.GetBackupWins())
 	}
 
+	family("mr_job_map_tasks_local", "Completed map tasks that ran on the host or in the zone that held their split (§3.4).")
+	for _, j := range st.Jobs {
+		fmt.Fprintf(&b, "mr_job_map_tasks_local{job=%s,level=\"host\"} %d\n", promtext.Label(j.GetJobId()), j.GetMapTasksHostLocal())
+		fmt.Fprintf(&b, "mr_job_map_tasks_local{job=%s,level=\"zone\"} %d\n", promtext.Label(j.GetJobId()), j.GetMapTasksZoneLocal())
+	}
+
 	family("mr_job_counter", "Counters of each job's accepted attempts (§4.9).")
 	for _, j := range st.Jobs {
 		counts := j.GetCounters().GetValues()
