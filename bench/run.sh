@@ -24,7 +24,8 @@
 # - result.json: the run's settings, the job's counters and the machine.
 #
 # The input and the job's output are removed from /out at the end, as in
-# codecs.sh.
+# codecs.sh. If the job fails, the files are still written, and run.sh exits
+# with mr's status.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -46,7 +47,9 @@ seed=${SEED:-42}
 interval=${INTERVAL:-0.5}
 
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
-stamp=$(date -u +%Y%m%dT%H%M%SZ)
+# The process ID keeps runs that start in the same second apart.
+stamp=$(date -u +%Y%m%dT%H%M%SZ)-$$
+input=/out/bench-input-$scenario-$stamp.txt
 dir=bench/results/$scenario-$stamp
 out=/out/bench-$scenario-$stamp
 tmp=$(mktemp -d)
@@ -55,7 +58,7 @@ rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$
 cleanup() {
     [ -z "$scraper" ] || kill "$scraper" 2>/dev/null || true
     rm -rf "$tmp"
-    rm_out /out/bench-input.txt "$out"
+    rm_out "$input" "$out"
 }
 trap cleanup EXIT
 
@@ -64,7 +67,7 @@ mkdir -p "$dir"
 
 python3 "bench/$gen" "$size" "$seed" > "$tmp/input.txt"
 input_bytes=$(wc -c < "$tmp/input.txt")
-"${compose[@]}" cp "$tmp/input.txt" coordinator:/out/bench-input.txt
+"${compose[@]}" cp "$tmp/input.txt" "coordinator:$input"
 
 urls=()
 for id in $("${compose[@]}" ps -q worker); do
@@ -77,8 +80,11 @@ done
 python3 bench/scrape-metrics.py "$interval" 86400 "${urls[@]}" > "$dir/samples.csv" &
 scraper=$!
 start=$(date +%s.%N)
+# A failed job makes mr exit nonzero after printing its status. Its samples
+# and counters are still worth recording, so the exit status is kept for the end.
+status=0
 "${compose[@]}" run --rm mr submit -coordinator coordinator:7070 -m "$m" -r "$r" -wait \
-    "${params[@]}" "$program" "$out" /out/bench-input.txt > "$dir/status.txt"
+    "${params[@]}" "$program" "$out" "$input" > "$dir/status.txt" || status=$?
 end=$(date +%s.%N)
 # Two more rounds, so the samples hold the counters of the last tasks.
 sleep "$(awk -v i="$interval" 'BEGIN { print 2 * i }')"
@@ -130,7 +136,8 @@ def cpu():
 # The first line is the job's id and state, each other a name and value.
 with open(sys.argv[1]) as f:
     lines = [line.split() for line in f if line.strip()]
-job = {"id": lines[0][0], "state": lines[0][1]}
+# mr prints nothing if it could not reach the coordinator.
+job = {"id": lines[0][0], "state": lines[0][1]} if lines else {}
 job.update((name, number(value)) for name, value in lines[1:])
 json.dump(
     {
@@ -161,3 +168,4 @@ json.dump(
 print()
 EOF
 echo "$dir"
+exit "$status"
