@@ -1,7 +1,7 @@
 // Package termvector is the paper's term vector per host (§2.3), registered
 // as "termvector". Each input line is a document: a URL, a tab and the
 // document's text. The host is the part of the URL between "://" and the
-// next "/"; lines without a tab or a host are skipped.
+// next "/", "?" or "#"; lines without a tab or a host are skipped.
 //
 // It outputs each host with its term vector: the words of its documents,
 // split as word count splits them, as word:count pairs, most frequent
@@ -39,7 +39,10 @@ type vector map[string]int
 func Map(_ api.Context, _, line []byte, out api.Emitter) error {
 	url, text, ok := bytes.Cut(line, []byte("\t"))
 	_, rest, _ := bytes.Cut(url, []byte("://"))
-	host, _, _ := bytes.Cut(rest, []byte("/"))
+	host := rest
+	if i := bytes.IndexAny(rest, "/?#"); i >= 0 {
+		host = rest[:i]
+	}
 	if !ok || len(host) == 0 {
 		return nil
 	}

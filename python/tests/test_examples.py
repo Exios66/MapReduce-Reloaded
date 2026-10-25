@@ -1,6 +1,7 @@
 """Tests for the example programs other than word count, mirroring the tests
 in go/examples."""
 
+import os
 import random
 from pathlib import Path
 
@@ -63,6 +64,14 @@ def test_invertedindex(tmp_path, m):
     assert (out / "part-r-00000").read_bytes() == want
 
 
+def test_invertedindex_non_utf8_name(tmp_path):
+    # A file name is bytes on Linux; it need not be UTF-8.
+    path = tmp_path / os.fsdecode(b"\xff.txt")
+    path.write_bytes(b"x y\n")
+    out = run(tmp_path, invertedindex.program, 1, {}, (str(path),))
+    assert (out / "part-r-00000").read_bytes() == b"x\t\xff.txt\ny\t\xff.txt\n"
+
+
 def write(tmp_path, data):
     path = tmp_path / "input"
     path.write_bytes(data)
@@ -91,6 +100,8 @@ DOCS = (
     b"http://a.com/x\tthe cat the\n"
     b"http://a.com/y\tthe dog\n"
     b"https://b.org\tcat cat\n"
+    b"http://a.com?q=1\tthe\n"  # a query or fragment ends the host too
+    b"https://b.org#top\tcat\n"
     b"no tab\n"
     b"nohost\tword\n"
 )
@@ -99,8 +110,8 @@ DOCS = (
 @pytest.mark.parametrize(
     "params, want",
     [
-        ({}, b"a.com\tthe:3\nb.org\tcat:2\n"),
-        ({"min": "1"}, b"a.com\tthe:3 cat:1 dog:1\nb.org\tcat:2\n"),
+        ({}, b"a.com\tthe:4\nb.org\tcat:3\n"),
+        ({"min": "1"}, b"a.com\tthe:4 cat:1 dog:1\nb.org\tcat:3\n"),
     ],
 )
 def test_termvector(tmp_path, params, want):

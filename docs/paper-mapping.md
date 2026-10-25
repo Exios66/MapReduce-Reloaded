@@ -42,9 +42,11 @@ Status: `planned` → `in progress` → `done`.
 
 - **F5.** Each map output partition is already sorted, so a reducer merges
   its inputs (`extsort.Merge`) instead of sorting them again.
-- **F9.** There is no periodic checkpoint. The coordinator logs each
-  decision before it replies, and a restarted coordinator replays the log,
-  so the job survives instead of being aborted (ADR 0007).
+- **F9.** There is no periodic checkpoint. With `-data-dir`, the
+  coordinator logs each decision before it replies, and a restarted
+  coordinator replays the log, so the job survives instead of being
+  aborted (ADR 0007). Without it there is no log, and a restart loses the
+  job.
 - **F11.** The scheduler ranks tasks by host, then zone, and can wait for a
   local worker (`Config.Locate`, `LocalityWait`). Nothing in the shipped
   binaries labels splits yet: Compose workers share one volume, so there is
