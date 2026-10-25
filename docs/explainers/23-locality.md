@@ -36,6 +36,15 @@ that most input is read from local disk (§3.4).
 - **Only accepted attempts count.** A task run again after its worker died,
   or a backup, counts once: where its accepted attempt ran.
 
+## Seeing it
+
+`GetJobStatus` counts a job's completed map tasks that ran on their split's
+host and in its zone. `mr status` prints them as `map_host_local` and
+`map_zone_local`, and `/metrics` has
+`mr_job_map_tasks_local{job,level="host"|"zone"}`. Their share of the job's
+map tasks is the percentage that ran near their data. A job with no labels
+counts none, since no task has a host to be near.
+
 ## Testing
 
 - `TestLocality` checks the ranking, and that the counts survive a restart.
