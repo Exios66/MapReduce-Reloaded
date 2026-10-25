@@ -13,6 +13,8 @@ fetched.
 Each worker's counters count from its first sample, and a counter that
 drops, as when a worker restarts, counts from zero again.
 
+With fewer than two samples there is no interval, and no chart is drawn.
+
 With only SAMPLES.csv, this writes the rates as CSV to stdout:
 seconds,input,shuffle,output, one row per interval between samples, at the
 interval's end. With OUT.png it draws them in three panels, one above the
@@ -65,6 +67,9 @@ def rates(rows):
 
 
 def plot(seconds, series, path):
+    if len(seconds) < 2:  # no interval to draw, as when no worker answered
+        print("plot-rates: fewer than two samples; no chart drawn", file=sys.stderr)
+        return
     import matplotlib
 
     matplotlib.use("Agg")

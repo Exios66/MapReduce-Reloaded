@@ -58,6 +58,16 @@ def test_scrape():
     assert [float(r["seconds"]) for r in rows] == pytest.approx([0.0, 0.2, 0.4], abs=0.05)
 
 
+def test_plot_without_samples(tmp_path):
+    # A run whose scraper saw no worker has only the header; plotting must
+    # not fail, or bench/run.sh would stop before it wrote result.json.
+    samples = tmp_path / "samples.csv"
+    samples.write_text("seconds,url,metric,value\n")
+    run("plot-rates.py", samples, tmp_path / "rates.png")
+    assert not (tmp_path / "rates.png").exists()
+    assert run("plot-rates.py", samples) == "seconds,input,shuffle,output\n"
+
+
 def test_rates(tmp_path):
     samples = tmp_path / "samples.csv"
     samples.write_text(
