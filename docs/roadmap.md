@@ -17,10 +17,11 @@ requirements come before the stretch phases of this roadmap.
 
 | Date (2026) | Deliverable | State |
 |---|---|---|
-| Nov 1 | Solo team emailed to Tyler; repository shared (invite `tylerharter` if private) | to confirm |
+| Nov 1 | Email Tyler that this is a solo team, with the repository link (the repository is public, so no invite is needed) | to confirm |
 | Nov 6 | [design.md](design.md#key-decisions) answers the design questions | done |
 | Nov 16 | Final code merged to `main` through pull requests | in progress |
-| Nov 17–20 | Demo | — |
+| Nov 17–20 | Demo with Tyler, scheduled by me | — |
+| After finishing | Submit the course's end-of-project form | — |
 
 Work still due by Nov 16, each a small pull request reviewed by an AI agent
 before it merges ([design.md](design.md#process)):
@@ -44,6 +45,8 @@ before it merges ([design.md](design.md#process)):
    `bench/README.md`.
 10. **README:** what to build, what to install, how to upload the example
     data, how to write a job file and how to submit it, all from the host.
+11. **Feedback given:** review at least one pull request written by an AI
+    agent, with comments on it ([design.md](design.md#process)).
 
 Items 1 and 2 are in review in #164 (CPU limits) and #165 (CI on pull
 requests), and are not on this branch yet. Phase 5, the rest of Phase 6 and #59 stay stretch

@@ -15,6 +15,22 @@ and lists where we differ from the paper and why.
 Items marked **(planned)** are decided here and due before the code
 deadline (Nov 16, 2026); everything else is built and tested.
 
+## Assignment requirements
+
+Each requirement of the assignment, and where this repository meets it.
+
+| Requirement | Where | State |
+|---|---|---|
+| Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml), [cluster VM](cluster-vm.md) | built |
+| Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | planned (#164) |
+| Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | planned |
+| Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file and exact M planned |
+| README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](../README.md), rewritten for the host client | planned |
+| Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation) | features built; evaluation planned |
+| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](design/0014-ci-on-pull-requests.md) | in place; CI in #165 |
+| Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
+
 ## Key decisions
 
 ### Client interface
@@ -76,7 +92,10 @@ byte for byte; it does not run on the cluster
 ### Communication
 
 gRPC with protobuf messages, defined once in [`proto/`](../proto/) and
-generated for Go and Python ([ADR 0003](design/0003-rpc-contract.md)).
+generated for Go and Python ([ADR 0003](design/0003-rpc-contract.md)). The
+assignment's "boss" is our coordinator. Boss → workers runs in the replies:
+a worker asks with `RequestTask` and the coordinator answers with a task, so
+only workers open connections to the coordinator.
 
 | From → to | RPCs | Notes |
 |---|---|---|
@@ -136,13 +155,17 @@ on manual dispatches ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 
 ### Special features
 
-The evaluation measures each of these. All four are built in code; two
-evaluation switches (`-combiner=false` and Compose's `-data-dir`) are planned.
-We claim as beyond the basic design: coordinator recovery from a
-write-ahead log, which the paper does not have, and user-supplied job files
-run by an interpreter (planned). Combiners, backup tasks and worker-failure
-handling are in the paper, so we present them as paper features done and
-measured, not as extensions.
+The assignment asks for at least one feature beyond basic MapReduce, and
+names four examples: combiners, extra tasks for stragglers, handling worker
+failures, and scheduling tasks where their data is. We do the first three,
+plus a fourth of our own, coordinator recovery. All four are built in code;
+two evaluation switches (`-combiner=false` and Compose's `-data-dir`) are
+planned. Each has an experiment and a plot below.
+
+Locality is a scheduler hook only. On one VM every container reads the same
+disk, so there is no locality to exploit or measure
+([ADR 0016](design/0016-shared-storage-and-host-client.md)). User job files
+are not a special feature: the assignment requires them.
 
 1. **Combiners** (§4.3). A map task runs the job's combiner on each sorted
    spill, so fewer bytes cross the shuffle.
@@ -184,7 +207,7 @@ M, R and the commit.
 
 | # | Question | Experiment | Plot |
 |---|---|---|---|
-| E0 | Do the CPU limits make distribution pay off? | grep, sort and Zipf word count (1 GiB) on 1, 2 and 4 workers | Job time against workers, one line per program, with ideal linear speed-up dashed |
+| E0 | Is the job faster when its tasks are spread over all four 1-CPU workers, as the assignment's deployment intends? | grep, sort and Zipf word count (1 GiB) on 1, 2 and 4 workers | Job time against workers, one line per program, with ideal linear speed-up dashed |
 | E1 | How much does the combiner save? | Zipf word count, 1 GiB, Zipf exponent 0.5, 1.0 and 1.5, combiner on and off (`-combiner=false`, **planned**) | Two panels: bytes shuffled and job time, grouped bars per exponent |
 | E2 | Do backup tasks hide a straggler? | sort, 1 GiB, M = 32; one worker throttled to 0.2 CPU (`docker update --cpus 0.2`) at the start; coordinator `-backups` on and off; also no straggler | Tasks completed against time, one line per setting, as the paper's Figure 3; job-time bars beside it |
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
@@ -215,10 +238,21 @@ with the commands that made them.
 
 ### Process
 
-Solo, so an AI agent plays the reviewer. Every change is a small pull
-request from a branch; `main` is changed only by merging one. GitHub
-Actions runs the checks on each PR, and every PR gets a review with
-comments before it merges.
+Solo, so an AI agent plays the teammate, as the assignment allows. The
+four engineering practices:
+
+- **Never push to `main`.** Work goes to a branch, and `main` changes only by
+  merging a pull request.
+- **Actions run tests on pull requests.** `.github/workflows/ci.yml` runs the
+  `make check` targets on every PR. While the account's hosted runners fail,
+  `make ci-report` runs the same checks and records the result on the PR's
+  commit ([ADR 0014](design/0014-ci-on-pull-requests.md), #165).
+- **Many small pull requests.** One concern each, as the roadmap's
+  course-deliverable items are listed.
+- **Feedback sought and given.** An AI agent reviews my pull requests with
+  inline comments, and I answer each thread with a fix or a reason (sought).
+  I review at least one pull request written by an AI agent and leave
+  comments on it before it merges (given).
 
 ## Components
 
@@ -501,7 +535,7 @@ no reducer is told about them.
 | M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is to become an exact M (planned). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](explainers/12-splits.md) |
 | User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. (planned) | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](design/0015-user-job-files.md) |
 | One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](design/0001-languages-and-shared-contract.md), [explainer](explainers/11-local-mode.md) |
-| Clusters of about 1,800 machines (§5.1) | Docker Compose on one 8 GB VM: one coordinator and four workers. | It is the hardware available, and it still exercises every protocol path. | [cluster VM](cluster-vm.md), [explainer](explainers/14-cluster.md) |
+| Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB: one coordinator and four workers, each limited to one CPU (planned, #164). | The assignment sets this deployment, and it still exercises every protocol path. | [cluster VM](cluster-vm.md), [explainer](explainers/14-cluster.md) |
 
 ## Where to look next
 
