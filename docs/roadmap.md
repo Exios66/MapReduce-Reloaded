@@ -45,7 +45,8 @@ before it merges ([design.md](design.md#process)):
 10. **README:** what to build, what to install, how to upload the example
     data, how to write a job file and how to submit it, all from the host.
 
-Items 1 and 2 are done. Phase 5, the rest of Phase 6 and #59 stay stretch
+Items 1 and 2 are in review in #164 (CPU limits) and #165 (CI on pull
+requests), and are not on this branch yet. Phase 5, the rest of Phase 6 and #59 stay stretch
 goals.
 
 ## Context
