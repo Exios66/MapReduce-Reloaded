@@ -33,13 +33,25 @@ the planned mounts and client path handling.
 - The containers run as the distroless `nonroot` user (UID 65532). `make
   data` creates `data/` with `input/` and `out/`, and makes `out/` writable
   by that UID. `make cluster-up` runs `make data` before starting Compose;
-  the directories are prepared for the planned mount.
+  the directories are prepared for the planned mount. A bare
+  `docker compose up` skips `make data`, and Docker then creates `data/` as
+  root, so the cluster cannot write to it; use `make cluster-up`.
+- Ownership (planned): output files are created by UID 65532. The planned
+  design assumes a host umask of 022, so `mr cat` can read them, and says
+  that deleting `data/out/…` may need `sudo` on the VM. Running the
+  containers as the host user (`user: "${UID}:${GID}"`) would remove both
+  problems and the `chmod`; it is the alternative if this proves awkward.
 - The S3 profile ([ADR 0013](0013-commit-on-object-storage.md)) stays as an
   option for `s3://` paths.
 
 **The client.** Building `mr` for the host with `make mr` (into `bin/mr`)
 is planned. `mr submit` and `mr status` default to `127.0.0.1:18770`, which
 Compose publishes on loopback only; `-coordinator` overrides the address.
+`mr submit` never touches `data/` itself: the coordinator expands globs, so
+the client sends container-side paths such as `/data/input/…` unchanged.
+Only `mr upload` and `mr cat` resolve `/data` to `MR_DATA_DIR`, and they fail
+if that directory does not exist, so a run from another directory does not
+silently use the wrong one.
 
 The upload, job-file submission and output-reading workflow below is planned:
 
