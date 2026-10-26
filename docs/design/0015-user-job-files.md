@@ -33,13 +33,17 @@ import (
 // Map is called once per input record. For text input, key is the byte
 // offset of the line and value is the line.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	for _, w := range bytes.Fields(value) {
+	for _, w := range bytes.FieldsFunc(value, isSpace) {
 		if err := out.Emit(w, []byte("1")); err != nil {
 			return err
 		}
 	}
 	return nil
 }
+
+// isSpace is the same word boundary the registered wordcount uses: ASCII
+// whitespace only, so both versions give the same output.
+func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
 
 // Reduce is called once per key. values yields each value in turn; return
 // false from the callback to stop early.
@@ -81,8 +85,18 @@ var Combine = Reduce
   still run the job ([ADR 0007](0007-write-ahead-log.md)).
 - Each worker interprets the source once per job, then uses the same
   `api.Program` for every task of that job. A file that does not compile, or
-  lacks `Map` or `Reduce`, fails its first task with the interpreter's error,
-  and the job fails with that message in `mr status`.
+  lacks `Map` or `Reduce`, must not be treated as an ordinary task failure.
+  Today `TaskTable.Fail` makes a failed task idle again, and only a
+  bad-record limit (`MaxSkippedRecords`) ends a job, so the task would be
+  retried forever. The design (planned) has two parts:
+  - The coordinator loads the source with the same interpreter when it
+    accepts the submit, and rejects the submit with the interpreter's error
+    (`InvalidArgument`). Most errors never reach a worker.
+  - `TaskFailure` gets a `fatal` field (a proto change). A worker that fails
+    to load the source, which can happen only if the interpreter differs from
+    the coordinator's, sets it. The coordinator then ends the job at once
+    through the same path as the bad-record limit, with the message shown in
+    `mr status`, and does not requeue the task.
 - Registered program names still work. `mr` takes a `.go` path or a name in
   the same position, so the examples, the golden tests and the benchmarks
   keep running compiled code.
