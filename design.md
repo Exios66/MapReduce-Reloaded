@@ -27,8 +27,8 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file and exact M planned |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation) | features built; evaluation planned |
-| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place; CI in #165 |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0 and E2–E4 scripted; E1 and E5 planned |
+| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
 ## Key decisions
@@ -158,9 +158,12 @@ on manual dispatches ([ADR 0014](docs/design/0014-ci-on-pull-requests.md)).
 The assignment asks for at least one feature beyond basic MapReduce, and
 names four examples: combiners, extra tasks for stragglers, handling worker
 failures, and scheduling tasks where their data is. We do the first three,
-plus a fourth of our own, coordinator recovery. All four are built in code;
-two evaluation switches (`-combiner=false` and Compose's `-data-dir`) are
-planned. Each has an experiment and a plot below.
+plus a fourth of our own, coordinator recovery. All four are built in code.
+Compose runs the coordinator with `-data-dir` through the override
+[`deploy/compose/wal.yaml`](deploy/compose/wal.yaml), and with backups off
+through [`backups-off.yaml`](deploy/compose/backups-off.yaml); the
+combiner's switch, `-combiner=false`, is planned. Each feature has an
+experiment and a plot below.
 
 Locality is a scheduler hook only. On one VM every container reads the same
 disk, so there is no locality to exploit or measure
@@ -178,8 +181,9 @@ are not a special feature: the assignment requires them.
 4. **Coordinator recovery**, beyond the paper. With `-data-dir` the
    coordinator logs every decision before replying, and a restarted
    coordinator replays the log and finishes the job
-   ([ADR 0007](docs/design/0007-write-ahead-log.md)). **(Planned: Compose starts
-   the coordinator with `-data-dir` on a volume.)**
+   ([ADR 0007](docs/design/0007-write-ahead-log.md)). Under Compose, the
+   `wal.yaml` override keeps the log in the output volume. **(Planned: the
+   default Compose file does too.)**
 
 Bad-record skipping, counters, side outputs, compression, a status page with
 Prometheus and Grafana, and a locality-aware scheduler hook are also built.
@@ -198,8 +202,8 @@ Prometheus and Grafana, and a locality-aware scheduler hook are also built.
 ### Performance evaluation
 
 All runs use the Compose cluster on the course VM: four workers at one CPU
-each, 8 GB of memory (7,940 MB usable) and a 35 GB disk with about 7 GB
-free ([the VM](docs/cluster-vm.md#the-vm)). `make bench` already generates the inputs, samples every worker's
+each, on 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory and a 35 GB
+disk ([the VM](docs/cluster-vm.md#the-vm)). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
 the machine in `result.json`. Every point is the median of three runs, with
 the range shown as an error bar. Each plot's caption states the input size,
@@ -211,7 +215,7 @@ M, R and the commit.
 | E1 | How much does the combiner save? | Zipf word count, 1 GiB, Zipf exponent 0.5, 1.0 and 1.5, combiner on and off (`-combiner=false`, **planned**) | Two panels: bytes shuffled and job time, grouped bars per exponent |
 | E2 | Do backup tasks hide a straggler? | sort, 1 GiB, M = 32; one worker throttled to 0.2 CPU (`docker update --cpus 0.2`) at the start; coordinator `-backups` on and off; also no straggler | Tasks completed against time, one line per setting, as the paper's Figure 3; job-time bars beside it |
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
-| E4 | What does a coordinator restart cost? | sort, 1 GiB; restart the coordinator at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
+| E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
 | E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` | Job time and map-phase time, bars |
 
 What each plot should show if the feature works: E0, job time falling as
@@ -219,16 +223,29 @@ workers are added, close to linear for grep; E1, far fewer bytes shuffled
 with the combiner, the saving growing with skew; E2, the throttled run
 close to the unthrottled one with backups on, and much slower with them
 off; E3 and E4, the job finishing with correct output and a delay of about
-the lost work plus the detection timeout (10 s for a worker). A run whose
-output differs from local mode is discarded and reported, not plotted.
+the lost work plus the detection timeout (10 s for a worker). Every run's
+output is checksummed and compared with a normal run of the same program,
+whose output `make e2e` and the golden tests tie to local mode; a run that
+differs, fails, or ends before its kill or restart is marked invalid and
+reported, not plotted.
 
-Budget. Each run deletes `data/out/*` first; the 1 GiB inputs are generated
-once. A run holds the input, the intermediate files in the workers'
-containers and the output on the same disk, about 3 GiB, so `docs/cluster-vm.md`
-will carry the disk budget. E0 runs on 1 and 2 workers with
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E2|E3|E4|all`
+runs the experiments and writes one CSV row per run, plus the
+coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
+time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
+draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
+has the commands. E0 and E2 report the coordinator's job time; E3 and E4
+report the time from submission until `mr status` sees the job finish,
+because a restarted coordinator times a job from its replay.
+
+Budget. Each run deletes its output first; the 1 GiB inputs are generated
+once and kept in the output volume. A run holds the input, the
+intermediate files in the workers' containers and the output on the same
+disk, about 3 GiB, within the disk budget in
+[cluster VM](docs/cluster-vm.md#disk-budget). E0 runs on 1 and 2 workers with
 `docker compose up --scale worker=N`, which keeps the one-CPU limit. E2 and
-E4 change coordinator flags (`-backups`, `-data-dir`), so each uses a Compose
-override file. E1's "bytes shuffled" is the map output bytes after the
+E4 change coordinator flags, so they use the Compose overrides
+`backups-off.yaml` (`-backups=false`) and `wal.yaml` (`-data-dir`). E1's "bytes shuffled" is the map output bytes after the
 combiner, an existing counter. The Zipf generator takes its exponent as a
 parameter and a seed; exponent 0.5 needs a custom sampler, which is checked
 before E1 is run.

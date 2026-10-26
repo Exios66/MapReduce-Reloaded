@@ -1,7 +1,7 @@
 # Cluster VM: where the distributed cluster runs
 
 The distributed cluster (#21 onward) runs on one Linux VM with **4 vCPUs,
-8 GB of RAM (7,940 MB usable) and a 35 GB disk**, the VM the course provides. Every component runs as a Docker
+8 GB of RAM and a 35 GB disk**, the VM the course provides. Every component runs as a Docker
 container on that VM: the coordinator, the workers and an S3-compatible store. The containers talk to each other
 over a Docker network exactly as they would across machines, so the code
 does not know or care that it is one host.
@@ -19,14 +19,14 @@ Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
 |---|---|
 | CPU | 4 vCPUs, Intel Xeon Silver 4516Y+, 1 thread per core, KVM guest |
 | Memory | 8 GB: `MemTotal` 8,130,756 kB (7,940 MB), no swap |
-| Disk | 35 GB (`/dev/sda`); the root filesystem is 33 GB, with about 7 GB free after setup and every demo image (2026-10-26) |
+| Disk | 35 GB (`/dev/sda`), with a 33 GB root filesystem (`/dev/sda1`) holding `$HOME`, Docker and job data |
 | OS | Ubuntu 24.04.4 LTS, kernel 6.8.0-139-generic, x86_64 |
 | Docker | Engine 29.8.1, Compose 5.5.1; the user is in the `docker` group |
 | Tools | git 2.43.0, Python 3.12.3; Go 1.26.0 is installed by `scripts/vm-setup.sh --install`; `make` and `gcc` are not installed by default (`sudo apt-get install -y make gcc`) |
 
-The VM also runs other coursework: its containers held about 2.8 GB on
-2026-10-26, which left about 4.3 GB available, enough for the core cluster
-(3.3 GB of limits) and the s3 profile.
+The budgets below are planned against these totals. The VM is shared with
+other coursework, so what is free at any moment is less;
+`scripts/vm-setup.sh` reports it at the start of each session.
 
 ## CPU budget
 
@@ -50,7 +50,7 @@ CPU per container.
 
 ## Memory budget
 
-The VM has 8 GB of RAM (7,940 MB usable) and also runs other coursework, so the cluster
+The VM has 8 GB of RAM and also runs other coursework, so the cluster
 keeps well under it. Each service gets a hard memory limit (`mem_limit` in
 [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml)). A container that exceeds its limit is killed instead of
 slowing down the whole VM.
@@ -82,14 +82,14 @@ daemon take some of the remainder.
 
 The disk is 35 GB, with a 33 GB root filesystem shared by the OS, other
 coursework, Docker images, the Go toolchain, the Python venv, and job data.
-About 7 GB is free after setup and pulling every image the demo uses
-(about 2 GB, of which Grafana is 960 MB); the rest is other coursework and
-its Docker build cache. `scripts/vm-setup.sh` warns
+This project's own share is about 2.4 GB that stays (2 GB of images, of
+which Grafana is 960 MB, and 0.4 GB for Go and the venv), plus up to 3 GB
+of job data while a 1 GiB experiment runs. `scripts/vm-setup.sh` warns
 when less than 5 GB is free in `$HOME`. A job's data exists several times at
 once: input, intermediate files (about the input's size; the `distsort`
-benchmark shuffled 68 MB for a 64 MB input) and output. The benchmarks use
-inputs of tens of MB, which fit easily; keep any larger input to a few GB at
-most, and delete old output and `bench/results/` files as you go.
+benchmark shuffled 68 MB for a 64 MB input) and output. The experiments
+(E0–E4) use 1 GiB inputs; keep any larger input to a few GB at most, and
+delete old output and `bench/results/` files as you go.
 
 ## One-time setup
 

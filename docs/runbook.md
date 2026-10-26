@@ -5,7 +5,7 @@ order. [Cluster VM](cluster-vm.md) explains the budgets and the setup in
 more detail; this page is the checklist. Every command here was run on the
 course VM on 2026-10-26.
 
-The VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of RAM (7,940 MB usable),
+The VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of RAM,
 a 35 GB disk with a 33 GB root filesystem, Ubuntu 24.04.4 LTS, Docker 29.8.1
 and Compose 5.5.1. See [the VM](cluster-vm.md#the-vm) for the full list.
 

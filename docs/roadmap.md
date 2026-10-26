@@ -48,8 +48,10 @@ before it merges ([design.md](../design.md#process)):
 11. **Feedback given:** review at least one pull request written by an AI
     agent, with comments on it ([design.md](../design.md#process)).
 
-Items 1 and 2 are in review in #164 (CPU limits) and #165 (CI on pull
-requests), and are not on this branch yet. Phase 5, the rest of Phase 6 and #59 stay stretch
+Items 1 and 2 are done (#164, #165). Item 8 is in part: the Compose
+override `deploy/compose/wal.yaml` runs the coordinator with `-data-dir`,
+and making it the default is still to do. Item 9 is in part: E0 and E2–E4
+run with `bench/experiments.sh` (#169); E1 and E5 wait on items 7 and 6. Phase 5, the rest of Phase 6 and #59 stay stretch
 goals.
 
 ## Context

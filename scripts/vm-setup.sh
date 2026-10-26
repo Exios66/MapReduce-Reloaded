@@ -84,9 +84,9 @@ check_machine() {
         report WARN memory "${total_mb} MB total, only ${avail_mb} MB available (cluster needs ~3.7 GB)"
     fi
 
-    # Images, Go, the venv and job data need a few GB. The VM's 33 GB root
-    # filesystem is shared with the OS and other coursework, and has about
-    # 7 GB free after setup, so 5 GB free is the most to ask.
+    # Images, Go, the venv and job data need a few GB. The VM's 35 GB disk
+    # (a 33 GB root filesystem) is shared with the OS and other coursework,
+    # so 5 GB free is the most to ask.
     free_mb=$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 / 1024)}')
     if [ "$free_mb" -ge 5120 ]; then
         report OK disk "${free_mb} MB free in \$HOME"
