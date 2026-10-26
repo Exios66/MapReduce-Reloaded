@@ -2,6 +2,7 @@ name: CI
 
 # Runs the same checks as `make check` on every pull request and on main, so
 # a reviewer sees the result on the PR (see docs/design/0014-ci-on-pull-requests.md).
+# The repository variable CI_RUNNER picks the runner (ADR 0014).
 # The pre-push hook still runs `make check` locally before each push.
 on:
   pull_request:
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   proto:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +34,7 @@ jobs:
       - run: make proto-check PYTHON=python PROTO_FETCH=false
 
   go:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,7 +47,7 @@ jobs:
       - run: make go-lint go-test
 
   python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     strategy:
       matrix:
         python-version: ["3.11", "3.13"]
