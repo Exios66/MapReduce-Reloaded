@@ -50,7 +50,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #35–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions.
-- **Cluster host:** the course VM (Linux, 4 vCPUs, 16 GB RAM). The whole
+- **Cluster host:** the course VM (Linux, 4 vCPUs, 8 GB RAM, 16 GB disk to be confirmed). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
   [cluster-vm.md](cluster-vm.md).

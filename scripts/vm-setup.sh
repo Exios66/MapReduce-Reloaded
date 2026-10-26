@@ -64,16 +64,24 @@ check_machine() {
         report WARN cpus "only $cpus; the four workers are meant to get one CPU each"
     fi
 
-    # /proc/meminfo reports kB. The cluster's limits add up to about 3.8 GB.
+    # /proc/meminfo reports kB. The cluster's limits add up to about 3.7 GB
+    # (4.2 GB with the monitoring profile) on a VM with 8 GB of RAM. An 8 GB
+    # VM reports a little less than 8192 MB, so warn below 7.5 GB.
     total_mb=$(awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo)
     avail_mb=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+    if [ "$total_mb" -ge 7500 ]; then
+        report OK ram "${total_mb} MB total"
+    else
+        report WARN ram "only ${total_mb} MB total; the VM is meant to have 8 GB"
+    fi
     if [ "$avail_mb" -ge 4096 ]; then
         report OK memory "${total_mb} MB total, ${avail_mb} MB available"
     else
-        report WARN memory "${total_mb} MB total, only ${avail_mb} MB available (cluster needs ~3.8 GB)"
+        report WARN memory "${total_mb} MB total, only ${avail_mb} MB available (cluster needs ~3.7 GB)"
     fi
 
-    # Images, Go, the venv and job data need a few GB.
+    # Images, Go, the venv and job data need a few GB. The VM disk is 16 GB
+    # (to be confirmed), shared with the OS, so 5 GB free is the most to ask.
     free_mb=$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 / 1024)}')
     if [ "$free_mb" -ge 5120 ]; then
         report OK disk "${free_mb} MB free in \$HOME"

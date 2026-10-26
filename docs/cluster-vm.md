@@ -1,7 +1,7 @@
 # Cluster VM: where the distributed cluster runs
 
-The distributed cluster (#21 onward) runs on one Linux VM with **4 vCPUs and
-16 GB of RAM**, the VM the course provides. Every component runs as a Docker
+The distributed cluster (#21 onward) runs on one Linux VM with **4 vCPUs,
+8 GB of RAM and a 16 GB disk** (disk size to be confirmed), the VM the course provides. Every component runs as a Docker
 container on that VM: the coordinator, the workers and an S3-compatible store. The containers talk to each other
 over a Docker network exactly as they would across machines, so the code
 does not know or care that it is one host.
@@ -30,8 +30,8 @@ CPU per container.
 
 ## Memory budget
 
-The VM may also run other coursework, so the cluster keeps well under its
-16 GB. Each service gets a hard memory limit (`mem_limit` in
+The VM has 8 GB of RAM and may also run other coursework, so the cluster
+keeps well under it. Each service gets a hard memory limit (`mem_limit` in
 [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml)). A container that exceeds its limit is killed instead of
 slowing down the whole VM.
 
@@ -41,13 +41,32 @@ slowing down the whole VM.
 | worker (× 4) | 768 MB each | 256 MB sort buffer (#10 spills beyond that), the rest for the Go runtime, gRPC and file buffers |
 | mr (on demand) | 128 MB | Submits jobs and polls status; workers process the data |
 | s3 (#41, profile `s3`) | 256 MB | [VersityGW](https://github.com/versity/versitygw), an S3-compatible store for input and output |
-| **Total** | **≈ 3.7 GB** | Leaves about 12 GB for the OS, Docker and other containers |
+| prometheus, grafana (profile `monitoring`) | 256 MB each | Optional metrics and dashboards |
+| **Core: coordinator + 4 workers** | **3,328 MB (≈ 3.3 GB)** | Always running |
+| **Core + mr + s3** | **3,712 MB (≈ 3.7 GB)** | A job run against the S3 store |
+| **Everything, including monitoring** | **4,224 MB (≈ 4.2 GB)** | Leaves about 3.8 GB of the 8 GB for the OS, Docker and anything else |
+
+These are ceilings: a container may use less. The optional `s3` and
+`monitoring` profiles both fit, but with all of them running only about half
+of the 8 GB is left, so close other memory-hungry work before a benchmark.
+The kernel reports a little under 8 GB as total, and the OS and the Docker
+daemon take some of the remainder.
 
 - Scaling up (`docker compose up --scale worker=N`) costs 768 MB and one CPU
-  per worker. Memory would allow many more, but the 4 vCPUs make four the
-  sensible ceiling (see the CPU budget above).
+  per worker. Each extra worker eats into the 8 GB, and the 4 vCPUs already make
+  four the sensible ceiling (see the CPU budget above).
 - The task-level numbers (sort buffer size, how many tasks a worker runs at
   once) are set in #10 and #16 to stay inside these limits.
+
+## Disk budget
+
+The disk is 16 GB (to be confirmed), shared by the OS, Docker images, the Go
+toolchain and the Python venv, and job data. `scripts/vm-setup.sh` warns
+when less than 5 GB is free in `$HOME`. A job's data exists several times at
+once: input, intermediate files (about the input's size; the `distsort`
+benchmark shuffled 68 MB for a 64 MB input) and output. The benchmarks use
+inputs of tens of MB, which fit easily; keep any larger input to a few GB at
+most, and delete old output and `bench/results/` files as you go.
 
 ## One-time setup
 
