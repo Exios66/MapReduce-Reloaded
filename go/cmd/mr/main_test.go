@@ -259,6 +259,53 @@ func TestSubmitCombiner(t *testing.T) {
 	}
 }
 
+const exampleJob = "../../../examples/wordcount.go"
+
+// A .go path in place of a program name runs that job file; the example's
+// output is the compiled wordcount's expected output.
+func TestRunLocalJobFile(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out")
+	args := []string{"run", "-local", "-r", "4", exampleJob, out, "../../../testdata/corpus/*.txt"}
+	if err := run(args, new(strings.Builder), new(strings.Builder)); err != nil {
+		t.Fatal(err)
+	}
+	want, _ := filepath.Glob("../../../testdata/corpus/expected/*")
+	for _, w := range want {
+		a, errA := os.ReadFile(w)
+		b, errB := os.ReadFile(filepath.Join(out, filepath.Base(w)))
+		if errA != nil || errB != nil || string(a) != string(b) {
+			t.Errorf("%s differs from the expected output", filepath.Base(w))
+		}
+	}
+	err := run([]string{"run", "-local", "missing.go", out + "2", raven}, new(strings.Builder), new(strings.Builder))
+	if err == nil || !strings.Contains(err.Error(), "missing.go") {
+		t.Errorf("a missing job file: got %v", err)
+	}
+}
+
+// mr submit reads a job file on the client and sends its source.
+func TestSubmitJobFile(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := specCoordinator{specs: make(chan *pb.JobSpec, 1)}
+	gs := grpc.NewServer()
+	pb.RegisterCoordinatorServiceServer(gs, c)
+	go func() { _ = gs.Serve(lis) }()
+	t.Cleanup(gs.Stop)
+
+	args := []string{"submit", "-coordinator", lis.Addr().String(), exampleJob, filepath.Join(t.TempDir(), "out"), raven}
+	if err := run(args, new(strings.Builder), new(strings.Builder)); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := os.ReadFile(exampleJob)
+	spec := <-c.specs
+	if spec.GetProgram() != "wordcount.go" || spec.GetProgramSource() != string(src) {
+		t.Fatalf("sent program %q with %d bytes of source", spec.GetProgram(), len(spec.GetProgramSource()))
+	}
+}
+
 // -input-format kv reads what -output-format kv wrote: one record per
 // distinct word of the first job.
 func TestInputFormat(t *testing.T) {

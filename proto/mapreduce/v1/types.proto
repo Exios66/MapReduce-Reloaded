@@ -142,6 +142,11 @@ message JobSpec {
   // Compression for output files, with the same names. Only the "kv" output
   // format has blocks to compress.
   string output_codec = 13;
+  // Go source of a job file (ADR 0015): package job with Map and Reduce,
+  // and optionally Combine and Partition. When set, workers interpret it
+  // instead of looking up program, which then only names the job for
+  // display. At most 1 MiB.
+  string program_source = 14;
 }
 
 // Identity and capabilities of a worker.

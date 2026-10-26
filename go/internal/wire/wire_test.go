@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +47,30 @@ func TestJobSpec(t *testing.T) {
 	m.UseCombiner = false
 	if spec, _ := JobSpec(m); spec.Program.Combiner != nil {
 		t.Fatal("combiner kept with use_combiner false")
+	}
+}
+
+// A job with program_source runs that job file; program only names it.
+func TestJobFile(t *testing.T) {
+	src, err := os.ReadFile("../../../examples/wordcount.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &pb.JobSpec{
+		Program: "wordcount.go", ProgramSource: string(src), Inputs: []string{"in"}, Output: "o",
+		NumReduceTasks: 1, UseCombiner: true,
+	}
+	spec, err := JobSpec(m)
+	if err != nil || spec.Program.Mapper == nil || spec.Program.Combiner == nil {
+		t.Fatalf("got %+v, %v", spec.Program, err)
+	}
+	m.UseCombiner = false
+	if spec, _ := JobSpec(m); spec.Program.Combiner != nil {
+		t.Fatal("combiner kept with use_combiner false")
+	}
+	m.ProgramSource = "package job"
+	if _, err := JobSpec(m); err == nil || !strings.Contains(err.Error(), "no Map") {
+		t.Fatalf("a job file without Map: got %v", err)
 	}
 }
 

@@ -75,7 +75,7 @@ run a short container that mounts the `output` volume). There is no upload
 step yet: input is the corpus mounted at `/corpus`.
 
 Planned ([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)):
-`make mr`, `bin/mr upload`, job files, and `bin/mr cat`, against a host
+`make mr`, `bin/mr upload` and `bin/mr cat`, against a host
 `data/` directory mounted at `/data`. Those commands are not built yet.
 
 Every container sees the test corpus at `/corpus` and writes job output to
@@ -138,8 +138,8 @@ Programs written in Go register themselves with the `api` package; see
 ## The `mr` command
 
 ```
-mr run -local [job flags] <program> <output-dir> <inputs>
-mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program> <output-dir> <inputs>
+mr run -local [job flags] <program | job.go> <output-dir> <inputs>
+mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program | job.go> <output-dir> <inputs>
 mr status [-coordinator addr] <job-id>
 
 job flags:
