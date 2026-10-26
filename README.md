@@ -68,6 +68,15 @@ docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr \
 make cluster-down     # remove the containers and the output volume
 ```
 
+To read the output today, copy it out of the volume: `docker compose -p
+mapreduce -f deploy/compose/compose.yaml cp coordinator:/out/wc ./wc` (or
+run a short container that mounts the `output` volume). There is no upload
+step yet: input is the corpus mounted at `/corpus`.
+
+Planned ([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)):
+`make mr`, `bin/mr upload`, job files, and `bin/mr cat`, against a host
+`data/` directory mounted at `/data`. Those commands are not built yet.
+
 Every container sees the test corpus at `/corpus` and writes job output to
 the `output` volume at `/out`. While a job runs, the status page and
 Prometheus metrics are at `127.0.0.1:18780` (`/` and `/metrics`). `make
