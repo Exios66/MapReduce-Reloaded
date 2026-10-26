@@ -44,8 +44,8 @@ checks on the PR.
   'ubuntu-latest' }}`. Register a self-hosted runner on the course VM
   (Settings, Actions, Runners), then set the repository variable
   `CI_RUNNER` to `self-hosted`. Self-hosted runners do not use hosted
-  minutes. The VM needs Linux x64, `git`, `make`, `curl`
-  `tar`/`unzip`; the setup actions install Go and Python. Docker is not
+  minutes. The VM needs Linux x64, `git`, `make`, `curl`,
+  `tar` and `unzip`; the setup actions install Go and Python. Docker is not
   needed. Unset the variable to go back to hosted runners.
 - **Local report.** `make ci-report` runs `make check` on a clean clone of
   `HEAD` and posts a commit status `local-ci/make-check` (pending, then
