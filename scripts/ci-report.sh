@@ -45,6 +45,7 @@ post() { # state description
     # The token goes in a header file so it is not on the command line.
     curl -sS --fail-with-body -o /dev/null -X POST \
         -H "Accept: application/vnd.github+json" \
+        -H "Content-Type: application/json" \
         -H @<(printf 'Authorization: Bearer %s\n' "$token") \
         "https://api.github.com/repos/$slug/statuses/$sha" \
         -d "{\"state\":\"$1\",\"context\":\"$context\",\"description\":\"$2\"}"
