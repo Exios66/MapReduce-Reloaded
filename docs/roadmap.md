@@ -7,7 +7,7 @@ GitHub issue, labelled by phase and numbered in the order it should be done.
 **Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
 has a test, and so are #41 and #42 (Phase 6 Tier A). Next are the course
 deliverables below, then Phase 7 (#57, #58, #60). Where the build departed
-from this plan, [design.md](design.md) lists the differences from the paper
+from this plan, [design.md](../design.md) lists the differences from the paper
 and why.
 
 ## Course deliverables (Honors Project 1)
@@ -18,13 +18,13 @@ requirements come before the stretch phases of this roadmap.
 | Date (2026) | Deliverable | State |
 |---|---|---|
 | Nov 1 | Email Tyler that this is a solo team, with the repository link (the repository is public, so no invite is needed) | to confirm |
-| Nov 6 | [design.md](design.md#key-decisions) answers the design questions | done |
+| Nov 6 | [design.md](../design.md#key-decisions) answers the design questions | done |
 | Nov 16 | Final code merged to `main` through pull requests | in progress |
 | Nov 17–20 | Demo with Tyler, scheduled by me | — |
 | After finishing | Submit the course's end-of-project form | — |
 
 Work still due by Nov 16, each a small pull request reviewed by an AI agent
-before it merges ([design.md](design.md#process)):
+before it merges ([design.md](../design.md#process)):
 
 1. **Deployment:** four workers limited to one CPU each; the VM described
    as 4 vCPUs and 8 GB ([cluster VM](cluster-vm.md)).
@@ -41,12 +41,12 @@ before it merges ([design.md](design.md#process)):
 7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation.
 8. **Coordinator recovery in Compose:** `-data-dir` on a volume.
 9. **Evaluation:** experiments E0–E5 of
-   [design.md](design.md#performance-evaluation), with plots in
+   [design.md](../design.md#performance-evaluation), with plots in
    `bench/README.md`.
 10. **README:** what to build, what to install, how to upload the example
     data, how to write a job file and how to submit it, all from the host.
 11. **Feedback given:** review at least one pull request written by an AI
-    agent, with comments on it ([design.md](design.md#process)).
+    agent, with comments on it ([design.md](../design.md#process)).
 
 Items 1 and 2 are in review in #164 (CPU limits) and #165 (CI on pull
 requests), and are not on this branch yet. Phase 5, the rest of Phase 6 and #59 stay stretch
@@ -210,9 +210,9 @@ or an S3-compatible store (#41), every worker is Go, and the UDF host is Phase 5
 
 ```
 MapReduce-Reloaded/
+├── design.md                    # key decisions; one job's lifecycle; differences from the paper
 ├── proto/mapreduce/v1/          # coordinator, shuffle, types, log .proto  ← shared contract
 ├── docs/
-│   ├── design.md                # one job's lifecycle; differences from the paper
 │   ├── design/                  # ADRs
 │   ├── explainers/              # one plain-language page per feature
 │   ├── paper-mapping.md         # F1–F24 → code → tests (checked by internal/papermap)

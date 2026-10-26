@@ -23,7 +23,7 @@ The benchmark harness and data generators are done. Next are the course
 deliverables: a host-side client with uploads to a shared `/data` mount, user
 job files submitted with each job, and the evaluation of the special features
 (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
-and [design](docs/design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
+and [design](design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
 in plain language.
@@ -111,7 +111,7 @@ in an S3-compatible store.
 The coordinator splits the input into map tasks and hands tasks to workers
 that ask for them. Map output stays on the worker that made it, and reduce
 tasks fetch it from there. The coordinator logs every decision before it
-replies, so a restarted coordinator resumes the job. [Design](docs/design.md)
+replies, so a restarted coordinator resumes the job. [Design](design.md)
 follows one job from submission to completion, with sequence diagrams and a
 list of where this system differs from the paper and why.
 
@@ -204,7 +204,7 @@ unavailable, `make ci-report` posts the result as a commit status instead
 
 [`docs/README.md`](docs/README.md) is the index. In short:
 
-- [Design](docs/design.md): one job from submission to completion, and the
+- [Design](design.md): one job from submission to completion, and the
   differences from the paper.
 - [Paper mapping](docs/paper-mapping.md): each feature of the paper, where it
   is, and how it is tested.

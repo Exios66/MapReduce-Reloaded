@@ -22,7 +22,7 @@ identical bytes, which gives a second, independent correctness check.
 ## The phases
 
 Phases 0–4 are done, and so are #41 and #42. Next is Phase 7. Where the build
-differs from the plan, [design.md](design.md) says how and why.
+differs from the plan, [design.md](../design.md) says how and why.
 
 ### Phase 0 — Foundations (#1–#5)
 *Agree on the language and the paperwork before anyone builds anything.*
@@ -115,7 +115,7 @@ failing, and jobs still finish correctly.*
   sort, and others.
 - **#34** The paper-to-code table filled in: every paper feature linked to
   its code and its test, with a design walkthrough
-  ([design.md](design.md)) and decision records. This makes the "faithful
+  ([design.md](../design.md)) and decision records. This makes the "faithful
   recreation" claim checkable.
 
 ### Phase 5 — Python catches up (#35–#39) · *stretch*
