@@ -219,15 +219,22 @@ e0() {
     done
 }
 
-# E1 runs combiner on first for each exponent, so its output is the reference.
+# E1 pairs the settings in each run and swaps which goes first on even runs,
+# so neither always gets the page cache the other warmed. Both give the same
+# output, so whichever runs first sets the reference.
 e1() {
     begin E1
     configure 4
+    local n combiner order
     for zipf in 0.5 1.0 1.5; do
-        for combiner in on off; do
-            submit_flags=()
-            [ "$combiner" = on ] || submit_flags=(-combiner=false)
-            for n in $(seq "$repeat"); do run E1 "s$zipf-$combiner" wordcount "$n" 4 ""; done
+        for n in $(seq "$repeat"); do
+            order="on off"
+            [ $((n % 2)) = 1 ] || order="off on"
+            for combiner in $order; do
+                submit_flags=()
+                [ "$combiner" = on ] || submit_flags=(-combiner=false)
+                run E1 "s$zipf-$combiner" wordcount "$n" 4 ""
+            done
         done
     done
     zipf=1.0 submit_flags=()
