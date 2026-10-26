@@ -74,7 +74,7 @@ differs from the plan, [design.md](../design.md) says how and why.
 - **#20** Safe commits: write to a temporary file, then rename it in one
   step, so a half-written output file can never be seen.
 - **#21** Docker: one command starts 1 coordinator and 4 workers, one CPU
-  each, on the course VM (4 vCPUs, 8 GB RAM, 16 GB disk; see [cluster-vm.md](cluster-vm.md)). `make e2e`
+  each, on the course VM (4 vCPUs, 8 GB RAM, 35 GB disk; see [cluster-vm.md](cluster-vm.md)). `make e2e`
   checks that the output matches the oracle; see
   [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml).
 

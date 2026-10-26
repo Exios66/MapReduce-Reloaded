@@ -58,7 +58,8 @@ diff -r /tmp/wc /tmp/wc-py && echo identical
 The cluster runs in Docker Compose: one coordinator and four workers, each
 worker limited to one CPU. It needs Docker with Compose, 4 CPUs and about
 3.7 GB of memory ([cluster VM](docs/cluster-vm.md) has the budgets and the
-setup for the course VM).
+setup for the course VM, and the [runbook](docs/runbook.md) goes from SSH to
+a full demo).
 
 ```sh
 make cluster-up       # build the image; start the coordinator and 4 workers

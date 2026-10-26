@@ -1,0 +1,8 @@
+# Override for experiment E4 (bench/experiments.sh): the coordinator logs
+# its decisions to /out/wal, in the output volume that the image makes
+# writable by its nonroot user, so a restarted coordinator replays the log
+# and resumes the job (§3.3, ADR 0007).
+# docker compose -p mapreduce -f compose.yaml -f wal.yaml up -d
+services:
+  coordinator:
+    command: [coordinator, -addr, ":7070", -http, ":8080", -data-dir, /out/wal]

@@ -1,0 +1,6 @@
+# Override for experiment E2 (bench/experiments.sh): the coordinator runs no
+# backup attempts (§3.6), so a straggler holds up the end of each phase.
+# docker compose -p mapreduce -f compose.yaml -f backups-off.yaml up -d
+services:
+  coordinator:
+    command: [coordinator, -addr, ":7070", -http, ":8080", -backups=false]

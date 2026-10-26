@@ -4,7 +4,8 @@
 # but it works on any Linux machine.
 #
 #   scripts/vm-setup.sh            check only: report what is missing, change nothing
-#   scripts/vm-setup.sh --install  also install Go and the Python venv, inside $HOME
+#   scripts/vm-setup.sh --install  also install Go, the Python venv and the
+#                                  tools make check uses, inside $HOME
 #
 # The script never uses sudo and never installs or reconfigures Docker. When
 # something needs root, it prints the command for you to run instead.
@@ -25,6 +26,9 @@ esac
 GO_HOME="$HOME/.local/go"
 GO_DL_BASE=${GO_DL_BASE:-https://go.dev/dl}
 VENV="$REPO/python/.venv"
+# The linter make go-lint runs; keep in step with .github/workflows/ci.yml.
+GOLANGCI_VERSION=v2.14.0
+TOOLS_BIN="$HOME/.local/bin"
 
 # --- Reporting helpers --------------------------------------------------------
 # Each check adds one line to the summary printed at the end: OK, WARN (works,
@@ -65,8 +69,8 @@ check_machine() {
     fi
 
     # /proc/meminfo reports kB. The cluster's limits add up to about 3.7 GB
-    # (4.2 GB with the monitoring profile) on a VM with 8 GB of RAM. An 8 GB
-    # VM reports a little less than 8192 MB, so warn below 7.5 GB.
+    # (4.2 GB with the monitoring profile) on a VM with 8 GB of RAM. The
+    # course VM reports 7,940 MB, so warn below 7.5 GB.
     total_mb=$(awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo)
     avail_mb=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
     if [ "$total_mb" -ge 7500 ]; then
@@ -80,8 +84,9 @@ check_machine() {
         report WARN memory "${total_mb} MB total, only ${avail_mb} MB available (cluster needs ~3.7 GB)"
     fi
 
-    # Images, Go, the venv and job data need a few GB. The VM disk is 16 GB
-    # (to be confirmed), shared with the OS, so 5 GB free is the most to ask.
+    # Images, Go, the venv and job data need a few GB. The VM's 35 GB disk
+    # (a 33 GB root filesystem) is shared with the OS and other coursework,
+    # so 5 GB free is the most to ask.
     free_mb=$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 / 1024)}')
     if [ "$free_mb" -ge 5120 ]; then
         report OK disk "${free_mb} MB free in \$HOME"
@@ -95,6 +100,16 @@ check_git() {
         report OK git "$(git --version)"
     else
         report MISSING git "install git (sudo apt install git)"
+    fi
+}
+
+# Every cluster command in docs/cluster-vm.md is a make target, and the
+# course VM does not ship with make.
+check_make() {
+    if command -v make >/dev/null 2>&1; then
+        report OK make "$(make --version | head -1)"
+    else
+        report MISSING make "install make (sudo apt install make)"
     fi
 }
 
@@ -226,17 +241,64 @@ install_venv() {
     echo "created $VENV (activate with: source python/.venv/bin/activate)"
 }
 
+# --- Tools for make check -----------------------------------------------------
+# The cluster runs without these; make check (docs/design/0002) needs them.
+# They are WARN, not MISSING, so a machine that only runs the cluster is Ready.
+golangci_ok() {
+    command -v golangci-lint >/dev/null 2>&1 || [ -x "$TOOLS_BIN/golangci-lint" ]
+}
+
+check_devtools() {
+    if golangci_ok; then
+        report OK lint "golangci-lint"
+    else
+        report WARN lint "golangci-lint missing, needed by make check (run with --install)"
+    fi
+    if [ -x "$REPO/.tools/bin/buf" ]; then
+        report OK proto "buf and the code generators in .tools/bin"
+    else
+        report WARN proto "code generators missing, needed by make check (run with --install)"
+    fi
+    # go test -race, in make go-test, needs cgo and so a C compiler.
+    if command -v gcc >/dev/null 2>&1; then
+        report OK gcc "$(gcc --version | head -1)"
+    else
+        report WARN gcc "no C compiler; make check's go test -race needs one (sudo apt install gcc)"
+    fi
+}
+
+install_devtools() {
+    go_ok || return 0
+    gobin=$(find_go)
+    if ! golangci_ok; then
+        echo "installing golangci-lint $GOLANGCI_VERSION into $TOOLS_BIN ..."
+        mkdir -p "$TOOLS_BIN"
+        GOBIN="$TOOLS_BIN" GOTOOLCHAIN=local "$gobin" install \
+            "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$GOLANGCI_VERSION"
+        echo "add this line to ~/.bashrc if ~/.local/bin is not on PATH:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+    if [ ! -x "$REPO/.tools/bin/buf" ] && command -v make >/dev/null 2>&1; then
+        echo "installing the code generators into .tools/bin ..."
+        # Some pinned tools need a newer Go than go.mod's; as in CI, the go
+        # command downloads that toolchain itself (GOTOOLCHAIN=auto).
+        PATH="$(dirname "$gobin"):$PATH" make -C "$REPO" --no-print-directory tools
+    fi
+}
+
 # --- Main ---------------------------------------------------------------------
 check_machine
 if [ "$MODE" = install ]; then
     install_go
     python_ok && install_venv
+    install_devtools
     echo
 fi
 check_git
+check_make
 check_docker
 check_go
 check_python
+check_devtools
 
 echo
 echo "===== vm-setup summary ($MODE) ====="

@@ -93,7 +93,8 @@ Compose cluster, through [`run.sh`](run.sh):
 
 Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
 Docker 29.9.1, 4 workers. This was a development machine, not the course
-VM, which has 8 GB. Time is the median of three runs, with the range.
+VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
+([the VM](../docs/cluster-vm.md#the-vm)). Time is the median of three runs, with the range.
 
 | Job | Codec | Bytes shuffled | vs none | Time (s) |
 |---|---|---:|---:|---|

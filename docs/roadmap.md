@@ -27,7 +27,7 @@ Work still due by Nov 16, each a small pull request reviewed by an AI agent
 before it merges ([design.md](../design.md#process)):
 
 1. **Deployment:** four workers limited to one CPU each; the VM described
-   as 4 vCPUs and 8 GB ([cluster VM](cluster-vm.md)).
+   as 4 vCPUs, 8 GB and a 35 GB disk ([cluster VM](cluster-vm.md)).
 2. **CI on pull requests** ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 3. **Shared storage:** `data/` bind-mounted at `/data`; `make data`,
    `make upload-example`
@@ -48,8 +48,10 @@ before it merges ([design.md](../design.md#process)):
 11. **Feedback given:** review at least one pull request written by an AI
     agent, with comments on it ([design.md](../design.md#process)).
 
-Items 1 and 2 are in review in #164 (CPU limits) and #165 (CI on pull
-requests), and are not on this branch yet. Phase 5, the rest of Phase 6 and #59 stay stretch
+Items 1 and 2 are done (#164, #165). Item 8 is in part: the Compose
+override `deploy/compose/wal.yaml` runs the coordinator with `-data-dir`,
+and making it the default is still to do. Item 9 is in part: E0 and E2–E4
+run with `bench/experiments.sh` (#169); E1 and E5 wait on items 7 and 6. Phase 5, the rest of Phase 6 and #59 stay stretch
 goals.
 
 ## Context
@@ -93,7 +95,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #35–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions.
-- **Cluster host:** the course VM (Linux, 4 vCPUs, 8 GB RAM, 16 GB disk to be confirmed). The whole
+- **Cluster host:** the course VM (Ubuntu 24.04, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
   [cluster-vm.md](cluster-vm.md).
