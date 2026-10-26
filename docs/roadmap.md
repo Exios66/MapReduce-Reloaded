@@ -26,7 +26,7 @@ Work still due by Nov 16, each a small pull request reviewed by an AI agent
 before it merges ([design.md](design.md#process)):
 
 1. **Deployment:** four workers limited to one CPU each; the VM described
-   as 4 vCPUs and 16 GB ([cluster VM](cluster-vm.md)).
+   as 4 vCPUs and 8 GB ([cluster VM](cluster-vm.md)).
 2. **CI on pull requests** ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 3. **Shared storage:** `data/` bind-mounted at `/data`; `make data`,
    `make upload-example`

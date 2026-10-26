@@ -21,9 +21,8 @@ deadline (Nov 16, 2026); everything else is built and tested.
 The client is the `mr` command, built for the VM itself with `make mr` and
 run outside every container. It talks to the coordinator at
 `127.0.0.1:18770`, which Compose publishes on loopback only
-([ADR 0016](design/0016-shared-storage-and-host-client.md)). That becomes
-`mr`'s default address **(planned; today the default is `localhost:7070` and
-host commands pass `-coordinator 127.0.0.1:18770`)**.
+([ADR 0016](design/0016-shared-storage-and-host-client.md)). This is the
+default address for `mr submit` and `mr status`; `-coordinator` overrides it.
 
 ```sh
 make cluster-up                                   # build the image; start 1 coordinator + 4 workers
@@ -100,7 +99,7 @@ input with a plain copy and read output without a container
 | Input | Text, one record per line (key = byte offset, value = line), or MRKV records (`-input-format kv`) |
 | Intermediate | MRKV: our block format of length-prefixed key/value records, with a CRC-32C per block and a footer; blocks optionally compressed with zstd or Snappy ([spec](file-format.md), [ADR 0004](design/0004-intermediate-file-format.md)). One sorted file per map task and reduce partition |
 | Output | Text, `key<TAB>value` per line, one `part-r-NNNNN` per reduce task (default), or MRKV (`-output-format kv`) |
-| Job file | Go source ([ADR 0015](design/0015-user-job-files.md)) |
+| Job file | Go source ([ADR 0015](design/0015-user-job-files.md)) **(planned)** |
 | RPC messages | Protobuf |
 
 MRKV was chosen over Arrow or Parquet because keys and values are opaque
@@ -110,8 +109,8 @@ resume a broken fetch at a byte offset and detect corruption.
 ### Tests
 
 Every check is a make target. `make check` runs them before every push, and
-GitHub Actions runs them on every pull request
-([ADR 0014](design/0014-ci-on-pull-requests.md)).
+GitHub Actions runs them on every pull request, on pushes to `main`, and
+on manual dispatches ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 
 | Kind | What it checks | Where |
 |---|---|---|

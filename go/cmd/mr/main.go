@@ -190,7 +190,7 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 
 func submit(args []string, stdout, stderr io.Writer) error {
 	fs := newFlagSet("submit", stderr)
-	addr := fs.String("coordinator", "localhost:7070", "coordinator address")
+	addr := fs.String("coordinator", "127.0.0.1:18770", "coordinator address")
 	wait := fs.Bool("wait", false, "wait for the job to finish, then print its status")
 	maxSkipped := fs.Int64("max-skipped", -1, "fail the job if it would skip more bad records than this (negative: no limit)")
 	flags := addJobFlags(fs, 0) // 0: the coordinator picks R from its worker count
@@ -253,7 +253,7 @@ func submit(args []string, stdout, stderr io.Writer) error {
 
 func jobStatus(args []string, stdout, stderr io.Writer) error {
 	fs := newFlagSet("status", stderr)
-	addr := fs.String("coordinator", "localhost:7070", "coordinator address")
+	addr := fs.String("coordinator", "127.0.0.1:18770", "coordinator address")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

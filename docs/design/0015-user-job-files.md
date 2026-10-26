@@ -69,11 +69,12 @@ var Combine = Reduce
   loader passes the framework's `iter.Seq[[]byte]` straight through, since
   the two types have the same underlying type.
 
-**How the file travels.**
+**How the file travels (planned).**
 
-- `mr submit … ./wordcount.go …` reads the file on the client's machine and
-  sends its source in a new `JobSpec.program_source` field. `program` is
-  set to the file's base name for display.
+- Once `JobSpec.program_source` is added to the protobuf contract,
+  `mr submit … ./wordcount.go …` will read the file on the client's machine
+  and send its source in that field. Setting `program` to the file's base
+  name for display is also planned.
 - The coordinator checks nothing beyond a size limit (1 MiB). It hands the
   `JobSpec` to every task, as it already does, so the write-ahead log's
   `JobSubmitted` record holds the source and a restarted coordinator can
@@ -106,9 +107,11 @@ var Combine = Reduce
   and no restart.
 - Interpreted code is slower than compiled code. The evaluation measures
   word count both ways, so the cost is known rather than guessed.
-- A panic in interpreted code reaches the worker as a Go panic, so bad-record
-  skipping ([ADR 0011](0011-bad-records.md)) applies unchanged. A test checks
-  it.
+- Recovery and bad-record skipping ([ADR 0011](0011-bad-records.md)) are
+  established for compiled `api.Program` callbacks: `TestBadRecords` in
+  `go/internal/task/task_test.go` covers Map and Reduce panics. Once
+  interpreted jobs are integrated, add Map and Reduce panic tests to
+  establish their recovery behavior.
 - The interpreter runs user code with the worker's permissions. That is
   acceptable on a single-user course VM, and it is no worse than the
   compiled-in programs. A shared cluster would need a sandbox.

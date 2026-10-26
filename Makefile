@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check data cluster-up cluster-down monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -28,7 +28,13 @@ vm-check:
 # named mapreduce, so cluster-down removes only this project's containers.
 COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
 
-cluster-up:
+# Prepare the host directories for the planned /data mount (ADR 0016).
+# Distroless workers run as UID 65532 and need to write output here.
+data:
+	mkdir -p data/input data/out
+	chmod a+rwx data/out
+
+cluster-up: data
 	$(COMPOSE) up -d --build
 
 cluster-down:
@@ -82,8 +88,12 @@ proto-lint:
 # GitHub. We fetch it first so a missing or stale local main cannot hide a
 # break. Skipped only while main has no .proto files yet.
 PROTO_BASE := origin/main
+# CI's full checkout already fetched main before removing credentials.
+PROTO_FETCH ?= true
 proto-breaking:
+ifeq ($(PROTO_FETCH),true)
 	@git fetch --quiet origin main
+endif
 	@files=$$(git ls-tree -r --name-only $(PROTO_BASE) -- proto) || exit 1; \
 	if echo "$$files" | grep -q '\.proto$$'; then \
 		$(TOOLS)/buf breaking --against '.git#ref=$(PROTO_BASE)'; \

@@ -17,27 +17,31 @@ container (`docker compose run --rm mr …`).
 
 ## Decision
 
-**Shared storage.** A directory on the VM, `data/` at the repository root
-(git-ignored), is bind-mounted at `/data` in the coordinator and every
-worker. It is the cluster's shared storage: the assignment names "a shared
-volume mount across all containers" as an acceptable choice for a
-single-VM deployment. Job inputs, job outputs and nothing else live there.
+**Shared storage (planned).** A directory on the VM, `data/` at the repository
+root (git-ignored), will be bind-mounted at `/data` in the coordinator and
+every worker. It will be the cluster's shared storage: the assignment names
+"a shared volume mount across all containers" as an acceptable choice for a
+single-VM deployment. Job inputs, job outputs and nothing else will live there.
+Today Compose still mounts `/corpus` and `/out`; `/data` job paths require
+the planned mounts and client path handling.
 
-- A path in a job is a shared-storage path, as every container sees it:
+- A path in a job will be a shared-storage path, as every container sees it:
   `/data/input/corpus/*.txt`, `/data/out/wc`.
 - Intermediate data does not use shared storage. Map output stays on each
   worker's own disk and reducers fetch it over gRPC
   ([ADR 0008](0008-shuffle.md)), as in the paper (§3.1).
 - The containers run as the distroless `nonroot` user (UID 65532). `make
   data` creates `data/` with `input/` and `out/`, and makes `out/` writable
-  by that UID, so no `sudo` is needed after setup.
+  by that UID. `make cluster-up` runs `make data` before starting Compose;
+  the directories are prepared for the planned mount.
 - The S3 profile ([ADR 0013](0013-commit-on-object-storage.md)) stays as an
   option for `s3://` paths.
 
-**The client.** `mr` is built for the host with `make mr` (into `bin/mr`).
-It reaches the coordinator at `127.0.0.1:18770`, which Compose already
-publishes on loopback only; that becomes the default `-coordinator`, in
-place of `localhost:7070`.
+**The client.** Building `mr` for the host with `make mr` (into `bin/mr`)
+is planned. `mr submit` and `mr status` default to `127.0.0.1:18770`, which
+Compose publishes on loopback only; `-coordinator` overrides the address.
+
+The upload, job-file submission and output-reading workflow below is planned:
 
 - `mr upload <local files or dirs…> <shared dir>` copies files into shared
   storage. On the VM this is a copy into `data/` (`MR_DATA_DIR`, by default
@@ -51,21 +55,26 @@ place of `localhost:7070`.
 - `mr cat /data/out/wc` prints a job's output files in order, for a quick
   look without knowing the layout.
 - `docker compose run --rm mr …` keeps working, for machines without Go.
+  Pass `-coordinator coordinator:7070` inside the Compose network.
+
+Planned host-client quick start, once the `/data` mounts and client path
+handling are available:
 
 ```sh
-make cluster-up                      # build the image, start 1 coordinator and 4 workers
+make cluster-up                      # initialize data/, build the image, start 1 coordinator and 4 workers
 make mr                              # build the client into bin/mr
 bin/mr upload testdata/corpus /data/input/corpus
 bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/corpus/*.txt'
 bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head
 ```
 
-**M is exact.** `-m` gives the number of map tasks, not an approximate one.
-The coordinator divides M among the input files in proportion to their
-sizes (largest remainder, at least one split per file) and cuts each file
-into that many splits on record boundaries. M can come out lower only if
-there are more files than M, or fewer lines than splits; `mr status`
-reports the actual M.
+**M is exact (planned).** `-m` will request an exact number of map tasks.
+The target behavior is proportional allocation among input files by size
+(largest remainder, at least one split per file), with each file cut into
+the allocated number of splits on record boundaries. The implementation
+will need to handle inputs with more files than M or too few records for
+the requested splits, and report the resulting count. Today `-m` sets an
+approximate split size; exact allocation and its reporting are planned.
 
 ## Alternatives considered
 
