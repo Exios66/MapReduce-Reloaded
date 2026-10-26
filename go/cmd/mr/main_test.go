@@ -191,6 +191,74 @@ func TestRunLocal(t *testing.T) {
 	}
 }
 
+// -combiner=false runs the job without its combiner, for the evaluation's
+// E1: the output is the same, and no combine counters are counted.
+func TestCombinerSwitch(t *testing.T) {
+	dir := t.TempDir()
+	job := func(out string, flags ...string) string {
+		t.Helper()
+		var stderr strings.Builder
+		args := append(append([]string{"run", "-local"}, flags...), "wordcount", filepath.Join(dir, out), raven)
+		if err := run(args, new(strings.Builder), &stderr); err != nil {
+			t.Fatal(err)
+		}
+		return stderr.String()
+	}
+	with, without := job("with"), job("without", "-combiner=false")
+	if !strings.Contains(with, "combine.input.records\t") {
+		t.Errorf("combiner on, but no combine counters: %q", with)
+	}
+	if strings.Contains(without, "combine.") {
+		t.Errorf("-combiner=false, but combine counters: %q", without)
+	}
+	a, errA := os.ReadFile(filepath.Join(dir, "with", "part-r-00000"))
+	b, errB := os.ReadFile(filepath.Join(dir, "without", "part-r-00000"))
+	if err := errors.Join(errA, errB); err != nil {
+		t.Fatal(err)
+	}
+	if string(a) != string(b) {
+		t.Error("the output differs with and without the combiner")
+	}
+}
+
+// specCoordinator records the job it is sent.
+type specCoordinator struct {
+	pb.UnimplementedCoordinatorServiceServer
+	specs chan *pb.JobSpec
+}
+
+func (c specCoordinator) SubmitJob(_ context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
+	c.specs <- req.GetJob()
+	return &pb.SubmitJobResponse{JobId: "job-1"}, nil
+}
+
+// mr submit asks for the combiner unless -combiner=false.
+func TestSubmitCombiner(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := specCoordinator{specs: make(chan *pb.JobSpec, 2)}
+	gs := grpc.NewServer()
+	pb.RegisterCoordinatorServiceServer(gs, c)
+	go func() { _ = gs.Serve(lis) }()
+	t.Cleanup(gs.Stop)
+
+	for _, tc := range []struct {
+		flags []string
+		want  bool
+	}{{nil, true}, {[]string{"-combiner=false"}, false}} {
+		args := append(append([]string{"submit", "-coordinator", lis.Addr().String()}, tc.flags...),
+			"wordcount", filepath.Join(t.TempDir(), "out"), raven)
+		if err := run(args, new(strings.Builder), new(strings.Builder)); err != nil {
+			t.Fatal(err)
+		}
+		if got := (<-c.specs).GetUseCombiner(); got != tc.want {
+			t.Errorf("%v: use_combiner %v, want %v", tc.flags, got, tc.want)
+		}
+	}
+}
+
 // -input-format kv reads what -output-format kv wrote: one record per
 // distinct word of the first job.
 func TestInputFormat(t *testing.T) {

@@ -47,7 +47,8 @@ const usage = `usage:
 job flags:
   -m M  -r R  -param name=value (repeatable)
   -input-format text|kv  -output-format text|kv
-  -intermediate-codec none|zstd|snappy  -output-codec none|zstd|snappy`
+  -intermediate-codec none|zstd|snappy  -output-codec none|zstd|snappy
+  -combiner=false (run without the program's combiner)`
 
 // pollInterval is how often submit -wait checks the job's status.
 const pollInterval = 500 * time.Millisecond
@@ -83,6 +84,7 @@ type job struct {
 	params          params
 	// Codec and format names, checked when the job is validated.
 	inputFormat, intermediateCodec, outputFormat, outputCodec string
+	combiner                                                  bool
 }
 
 // jobFlags are the flags that describe a job.
@@ -90,6 +92,7 @@ type jobFlags struct {
 	m, r                                                      *uint
 	params                                                    params
 	inputFormat, intermediateCodec, outputFormat, outputCodec *string
+	combiner                                                  *bool
 }
 
 // addJobFlags defines the job flags on fs; defaultR is the default of -r.
@@ -103,6 +106,7 @@ func addJobFlags(fs *flag.FlagSet, defaultR uint) jobFlags {
 		intermediateCodec: fs.String("intermediate-codec", "none", "compression for map output: none, zstd or snappy"),
 		outputFormat:      fs.String("output-format", "text", "output format: text or kv"),
 		outputCodec:       fs.String("output-codec", "none", "compression for kv output: none, zstd or snappy"),
+		combiner:          fs.Bool("combiner", true, "run the program's combiner on map output, if it has one (§4.3)"),
 	}
 	fs.Var(f.params, "param", "a `name=value` parameter for the program; may be repeated")
 	return f
@@ -136,7 +140,7 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	j := job{
 		program: fs.Arg(0), output: fs.Arg(1), inputs: fs.Args()[2:], r: uint32(*f.r), params: f.params,
 		inputFormat: *f.inputFormat, intermediateCodec: *f.intermediateCodec, outputFormat: *f.outputFormat,
-		outputCodec: *f.outputCodec,
+		outputCodec: *f.outputCodec, combiner: *f.combiner,
 	}
 	if *f.m > 0 {
 		var err error
@@ -171,6 +175,9 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 	if !ok {
 		return fmt.Errorf("unknown program %q; registered: %s", j.program, strings.Join(api.Programs(), ", "))
 	}
+	if !j.combiner {
+		program.Combiner = nil
+	}
 
 	work, err := os.MkdirTemp("", "mr-")
 	if err != nil {
@@ -204,7 +211,7 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	// Send absolute URIs, so the coordinator and workers resolve them the
 	// same way whatever their working directory.
 	spec := &pb.JobSpec{
-		Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: true, Params: j.params,
+		Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: j.combiner, Params: j.params,
 		InputFormat: j.inputFormat, OutputFormat: j.outputFormat,
 		IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
 	}

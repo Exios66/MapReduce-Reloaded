@@ -152,13 +152,12 @@ tail -f bench/results/experiments.log        # about an hour for all four
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E2|E3|E4` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4` runs one experiment of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
 SSH drops. The plots land in `bench/plots/E0.png` … `E4.png`, and the
 script prints the tables that go in [`bench/README.md`](../bench/README.md#experiments).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
-E1 (the combiner) and E5 (job files) wait on `-combiner=false` and job
-files.
+E5 (job files) waits on job files.
 
 ### 5.7 Monitoring (optional)
 

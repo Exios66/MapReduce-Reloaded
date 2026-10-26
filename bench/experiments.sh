@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # The performance evaluation (design.md, "Performance evaluation") on
-# the Compose cluster: experiments E0, E2, E3 and E4, each run REPEAT times
+# the Compose cluster: experiments E0 to E4, each run REPEAT times
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
-# Usage: bench/experiments.sh E0|E2|E3|E4|all
+# Usage: bench/experiments.sh E0|E1|E2|E3|E4|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
+# - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
+#   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU, with the
 #   coordinator's backup tasks on and off, and with no straggler.
 # - E3: distsort with one worker killed at 25%, 50% and 75% of the normal
@@ -20,13 +22,16 @@
 # (scrape-metrics.py) per run. bench/plot-experiments.py draws the plots.
 #
 # Every run's output is checksummed and compared with the first normal run
-# of the same program; a run that differs has valid=0 and is not plotted.
-# The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt between
+# on the same input; a run that differs has valid=0 and is not plotted.
+# The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt
+# (-SIZE-S.txt for word count's Zipf exponent S) between
 # experiments, and make cluster-down removes them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 repeat=${REPEAT:-3}
+zipf=1.0      # word count's Zipf exponent; E1 varies it
+submit_flags=() # extra mr submit flags; E1 sets -combiner=false
 size=${SIZE:-1073741824}
 m=${M:-32}
 r=${R:-4}
@@ -84,7 +89,10 @@ input() {
     case $1 in
     grep) gen=(bench/gen-grep.py "$size" 42) ;;
     distsort) gen=(bench/gen-sort.py "$size" 42) ;;
-    wordcount) gen=(bench/gen-zipf.py "$size" 42 1.0) ;;
+    wordcount)
+        gen=(bench/gen-zipf.py "$size" 42 "$zipf")
+        path=/out/exp-input-$1-$size-$zipf.txt
+        ;;
     esac
     if ! in_volume test -f "$path"; then
         log "generating $size bytes for $1"
@@ -99,9 +107,10 @@ params() { [ "$1" = grep ] && echo "-param pattern=XYZ" || true; }
 
 checksum() { in_volume sh -c "cat $1/part-r-* | sha256sum | cut -d' ' -f1"; }
 
-# The first normal run of each program sets its reference checksum.
+# valid INPUT OUTPUT: the first normal run on each input sets its reference
+# checksum, which every later run on that input must match.
 valid() {
-    local sum ref=$tmp/ref-$1
+    local sum ref=$tmp/ref-${1##*/}
     sum=$(checksum "$2")
     [ -f "$ref" ] || echo "$sum" > "$ref"
     [ "$sum" = "$(cat "$ref")" ] && echo 1 || echo 0
@@ -144,7 +153,7 @@ run() {
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
     job=$("${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") "$program" "$out" "$in" 2>/dev/null | tail -1)
+        $(params "$program") "${submit_flags[@]}" "$program" "$out" "$in" 2>/dev/null | tail -1)
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
         exit 1
@@ -178,7 +187,7 @@ run() {
     [ -z "$pid" ] || wait "$pid" 2>/dev/null || true
     echo "$exp,$setting,$program,$workers,$n,$size,$m,$r,$at,$state,$(counter seconds)," \
         "$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }'),$(counter backups),$(counter backups_won)," \
-        "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$program" "$out"; else echo 0; fi),$job" |
+        "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$in" "$out"; else echo 0; fi),$job" |
         tr -d ' ' >> "$dir/runs.csv"
     in_volume rm -rf "$out"
 }
@@ -208,6 +217,20 @@ e0() {
             for n in $(seq "$repeat"); do run E0 "w$workers" "$program" "$n" "$workers" ""; done
         done
     done
+}
+
+# E1 runs combiner on first for each exponent, so its output is the reference.
+e1() {
+    begin E1
+    configure 4
+    for zipf in 0.5 1.0 1.5; do
+        for combiner in on off; do
+            submit_flags=()
+            [ "$combiner" = on ] || submit_flags=(-combiner=false)
+            for n in $(seq "$repeat"); do run E1 "s$zipf-$combiner" wordcount "$n" 4 ""; done
+        done
+    done
+    zipf=1.0 submit_flags=()
 }
 
 e2() {
@@ -278,12 +301,13 @@ e4() {
 
 case ${1:-} in
 E0) e0 ;;
+E1) e1 ;;
 E2) e2 ;;
 E3) e3 ;;
 E4) e4 ;;
-all) e0 && e2 && e3 && e4 ;;
+all) e0 && e1 && e2 && e3 && e4 ;;
 *)
-    echo "usage: bench/experiments.sh E0|E2|E3|E4|all" >&2
+    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|all" >&2
     exit 2
     ;;
 esac

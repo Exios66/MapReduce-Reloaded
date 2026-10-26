@@ -2,13 +2,15 @@
 results of bench/experiments.sh, and prints a Markdown table of each
 experiment's job times for bench/README.md.
 
-For each of E0, E2, E3 and E4 whose bench/results/EXPERIMENT/runs.csv
+For each of E0 to E4 whose bench/results/EXPERIMENT/runs.csv
 exists, this writes OUT_DIR/EXPERIMENT.png. Every point is the median of
 the valid runs, with the range as an error bar; runs whose output differed
 from the normal run's (valid=0) are left out and counted in the table.
 
 - E0: job time against workers, one line per program, with ideal linear
   speed-up from one worker dashed.
+- E1: bytes shuffled and job time per Zipf exponent, combiner on and off,
+  as grouped bars.
 - E2: tasks completed against time for the median run of each setting, as
   in the paper's Figure 3, and job-time bars.
 - E3: input, shuffle and output rates against time for the median run that
@@ -17,7 +19,7 @@ from the normal run's (valid=0) are left out and counted in the table.
 - E4: tasks completed against time with the restart marked, and job-time
   bars with and without the restart.
 
-E0 and E2 use the coordinator's job time (seconds); E3 and E4 use the time
+E0, E1 and E2 use the coordinator's job time (seconds); E3 and E4 use the time
 from submission until mr status saw the job finish (wall_seconds), since a
 restarted coordinator measures its jobs from when it replays them.
 
@@ -137,6 +139,36 @@ def e0(rows, out):
     fig.savefig(out)
 
 
+def e1(rows, out):
+    exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    panels = (("map_output_bytes", 1e6, "Bytes shuffled (MB)"), ("seconds", 1, "Job time (s)"))
+    for ax, (field, scale, ylabel) in zip(axes, panels, strict=True):
+        for i, (combiner, label) in enumerate((("on", "combiner on"), ("off", "combiner off"))):
+            stats = [spread(valid(rows, setting=f"{e}-{combiner}"), field) for e in exponents]
+            xs = [j + (i - 0.5) * 0.4 for j in range(len(exponents))]
+            kept = [(x, st) for x, st in zip(xs, stats, strict=True) if st]
+            ax.bar(
+                [x for x, _ in kept],
+                [st[0] / scale for _, st in kept],
+                width=0.4,
+                yerr=[
+                    [(st[0] - st[1]) / scale for _, st in kept],
+                    [(st[2] - st[0]) / scale for _, st in kept],
+                ],
+                capsize=3,
+                label=label,
+            )
+        ax.set_xticks(range(len(exponents)), [f"S = {e[1:]}" for e in exponents])
+        ax.set_xlabel("Zipf exponent (higher: more skew)")
+        ax.set_ylabel(ylabel)
+        ax.set_ylim(bottom=0)
+        ax.legend()
+    fig.suptitle(f"E1: what the combiner saves in word count ({caption(rows)})")
+    fig.tight_layout()
+    fig.savefig(out)
+
+
 def timeline_and_bars(rows, results, exp, settings, field, title, event_label=None):
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4), gridspec_kw={"width_ratios": [2, 1]})
     labels, stats = [], []
@@ -230,7 +262,7 @@ def e4(rows, results, out):
 
 
 def table(exp, rows):
-    field = "seconds" if exp in ("E0", "E2") else "wall_seconds"
+    field = "seconds" if exp in ("E0", "E1", "E2") else "wall_seconds"
     print(f"\n{exp}\n")
     print("| Setting | Program | Workers | Job time (s) | Valid runs |")
     print("|---|---|---:|---|---:|")
@@ -257,6 +289,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     draw = {
         "E0": lambda rows: e0(rows, out / "E0.png"),
+        "E1": lambda rows: e1(rows, out / "E1.png"),
         "E2": lambda rows: e2(rows, results, out / "E2.png"),
         "E3": lambda rows: e3(rows, results, out / "E3.png"),
         "E4": lambda rows: e4(rows, results, out / "E4.png"),
