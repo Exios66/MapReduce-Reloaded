@@ -3,7 +3,8 @@
 This repository recreates the system in Dean and Ghemawat,
 [*MapReduce: Simplified Data Processing on Large Clusters*](https://research.google.com/archive/mapreduce-osdi04.pdf)
 (OSDI 2004), for Honors Project 1: a MapReduce that runs with Docker Compose
-on one VM with 4 vCPUs, as four worker containers limited to one CPU each.
+on one VM with 4 vCPUs and 8 GB, as four worker containers limited to one
+CPU each **(planned, #164: Compose sets no CPU limit today)**.
 It is a solo project.
 
 The first section answers the assignment's design questions, with the
@@ -49,6 +50,16 @@ Optional flags choose input and output formats, compression and the
 bad-record limit, and will turn the combiner off (`-combiner=false`,
 **planned**; today it is always on). A built-in program name (`wordcount`, `grep`, …)
 can stand in for the job file; the benchmarks use them.
+
+A job file's `Reduce` takes `values func(yield func([]byte) bool)`, not the
+compiled API's `iter.Seq[[]byte]`, because Yaegi cannot range over a
+function ([ADR 0015](design/0015-user-job-files.md)). Each worker interprets
+the source once per job. `Combine` must be pure and associative: a bad
+combiner silently changes the output, and so the E1 results.
+
+Today the README's quick start runs `mr` in a container against `/corpus`
+and `/out`. The host-client commands above work only after the planned items
+land.
 
 ### Language
 
@@ -125,8 +136,13 @@ on manual dispatches ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 
 ### Special features
 
-Solo, so one feature is required; four are built, and the evaluation
-measures each.
+The evaluation measures each of these. All four are built in code; two
+evaluation switches (`-combiner=false` and Compose's `-data-dir`) are planned.
+We claim as beyond the basic design: coordinator recovery from a
+write-ahead log, which the paper does not have, and user-supplied job files
+run by an interpreter (planned). Combiners, backup tasks and worker-failure
+handling are in the paper, so we present them as paper features done and
+measured, not as extensions.
 
 1. **Combiners** (§4.3). A map task runs the job's combiner on each sorted
    spill, so fewer bytes cross the shuffle.
@@ -145,12 +161,24 @@ measures each.
 Bad-record skipping, counters, side outputs, compression, a status page with
 Prometheus and Grafana, and a locality-aware scheduler hook are also built.
 
+### Failure semantics
+
+- There is no per-task attempt cap. A task that always fails for a reason
+  other than a bad record is retried forever, and the job does not fail. A
+  job ends as failed only through `-max-skipped` (default no limit) or a
+  rejected `SubmitJob`. A planned fatal failure for job files is in ADR 0015.
+- A record is skipped only after `SkipAfter = 2` attempts crash on the same
+  record, so skipping needs at least three attempts.
+- After a coordinator restart, running attempts are stopped and workers
+  register again under new IDs. Completed tasks stay completed.
+
 ### Performance evaluation
 
 All runs use the Compose cluster on the course VM: four workers at one CPU
-each. `make bench` already generates the inputs, samples every worker's
+each (planned, #164), 8 GB of memory and a disk of about 16 GB (to be
+confirmed). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
-the machine in `result.json`. Every point is the median of five runs, with
+the machine in `result.json`. Every point is the median of three runs, with
 the range shown as an error bar. Each plot's caption states the input size,
 M, R and the commit.
 
@@ -170,6 +198,17 @@ close to the unthrottled one with backups on, and much slower with them
 off; E3 and E4, the job finishing with correct output and a delay of about
 the lost work plus the detection timeout (10 s for a worker). A run whose
 output differs from local mode is discarded and reported, not plotted.
+
+Budget. Each run deletes `data/out/*` first; the 1 GiB inputs are generated
+once. A run holds the input, the intermediate files in the workers'
+containers and the output on the same disk, about 3 GiB, so `docs/cluster-vm.md`
+will carry the disk budget. E0 runs on 1 and 2 workers with
+`docker compose up --scale worker=N`, which keeps the one-CPU limit. E2 and
+E4 change coordinator flags (`-backups`, `-data-dir`), so each uses a Compose
+override file. E1's "bytes shuffled" is the map output bytes after the
+combiner, an existing counter. The Zipf generator takes its exponent as a
+parameter and a seed; exponent 0.5 needs a custom sampler, which is checked
+before E1 is run.
 
 The plots and their tables go in `bench/README.md` and the final report,
 with the commands that made them.
