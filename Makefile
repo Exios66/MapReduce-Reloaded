@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check cluster-up cluster-down monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -15,6 +15,11 @@ check:
 	$(MAKE) proto-check
 	$(MAKE) lint
 	$(MAKE) test
+
+# Run `make check` on a clean copy of HEAD and post the result as a GitHub
+# commit status (needs GITHUB_TOKEN; docs/design/0014-ci-on-pull-requests.md).
+ci-report:
+	scripts/ci-report.sh
 
 # One-time setup per clone: tell git to use the hooks in .githooks/.
 hooks:

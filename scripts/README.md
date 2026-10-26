@@ -2,6 +2,7 @@
 
 | Script | What it does |
 |---|---|
+| [`ci-report.sh`](ci-report.sh) | Runs `make check` on a clean clone of `HEAD` and posts a `local-ci/make-check` commit status to GitHub (needs `GITHUB_TOKEN`). `make ci-report`; see ADR 0014. |
 | [`gen-proto.sh`](gen-proto.sh) | Generates the Go and Python code from [`proto/`](../proto/), with the `protoc` bundled in `grpcio-tools`. Run it with `make proto`. |
 | [`e2e.sh`](e2e.sh) | The end-to-end test on the running Compose cluster: word count over the corpus must equal the golden output, no container may be OOM-killed, and `/metrics` must show the job done. `make e2e`, or `make e2e-s3` for the S3 store. |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |

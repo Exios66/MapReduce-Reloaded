@@ -21,7 +21,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | ADR | Decision |
 |---|---|
 | [0001](design/0001-languages-and-shared-contract.md) | Go primary, Python reference, one shared contract |
-| [0002](design/0002-local-quality-gate.md) | Local quality gate instead of hosted CI |
+| [0002](design/0002-local-quality-gate.md) | Local quality gate (`make check` and a pre-push hook) |
 | [0003](design/0003-rpc-contract.md) | The gRPC/protobuf contract |
 | [0004](design/0004-intermediate-file-format.md) | A custom block format for intermediate data (MRKV) |
 | [0005](design/0005-programming-api.md) | The programming API: bytes in, bytes out |
@@ -33,6 +33,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0011](design/0011-bad-records.md) | Skipping bad records after two crashes |
 | [0012](design/0012-observability.md) | Status page, hand-written metrics and structured logs |
 | [0013](design/0013-commit-on-object-storage.md) | Committing output on object storage |
+| [0014](design/0014-ci-on-pull-requests.md) | CI on every pull request (supersedes part of 0002) |
 
 ## Explainers
 

@@ -1,26 +1,49 @@
 name: CI
 
-# Automatic runs are disabled: the quality gate is `make check`, run locally
-# by the pre-push hook (see docs/design/0002-local-quality-gate.md).
-# This workflow can still be started by hand from the Actions tab.
+# Runs the same checks as `make check` on every pull request and on main, so
+# a reviewer sees the result on the PR (see docs/design/0014-ci-on-pull-requests.md).
+# The repository variable CI_RUNNER picks the runner (ADR 0014).
+# The pre-push hook still runs `make check` locally before each push.
 on:
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  proto:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # proto-breaking compares with origin/main
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e "python[dev]"
+      - run: make tools
+      - run: make proto-check PYTHON=python
+
   go:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          working-directory: go
-      - run: make go-test
+      # Built from source so it is built with the module's Go version.
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+      - run: make go-lint go-test
 
   python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     strategy:
       matrix:
         python-version: ["3.11", "3.13"]
@@ -30,4 +53,4 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e "python[dev]"
-      - run: make py-lint py-test
+      - run: make py-lint py-test PYTHON=python
