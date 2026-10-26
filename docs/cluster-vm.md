@@ -1,17 +1,37 @@
 # Cluster VM: where the distributed cluster runs
 
-The distributed cluster (#21 onward) runs on one Linux VM with **8 GB of RAM**:
-the VM provided for CS544. Every component runs as a Docker container on that
-VM: the coordinator, the workers and an S3-compatible store. The containers talk to each other
+The distributed cluster (#21 onward) runs on one Linux VM with **4 vCPUs and
+16 GB of RAM**, the VM the course provides. Every component runs as a Docker
+container on that VM: the coordinator, the workers and an S3-compatible store. The containers talk to each other
 over a Docker network exactly as they would across machines, so the code
 does not know or care that it is one host.
 
-This page covers the memory budget, one-time setup, and daily use.
+This page covers the CPU and memory budgets, one-time setup, and daily use.
+
+## CPU budget
+
+The assignment asks for four worker containers, each limited to one CPU, so
+that a job runs faster when its tasks are spread over all four. Compose sets
+`cpus: 1` on the `worker` service, which Docker enforces as a CFS quota of one
+CPU per container.
+
+| Service | CPU limit | Why |
+|---|---|---|
+| worker (× 4) | 1 CPU each | One worker per vCPU: a job that keeps all four busy uses the whole VM, and one that runs on fewer workers is measurably slower |
+| coordinator | none | It only schedules and stores locations (§3.2), and it is idle most of the time |
+| mr, s3, prometheus, grafana | none | Short-lived or optional; the benchmarks record whether they ran |
+
+- A worker runs one task at a time, so one CPU per worker means one task per
+  CPU. Go's runtime reads the quota (`GOMAXPROCS` follows the container's CPU
+  limit since Go 1.25), so a worker does not start more threads than it can
+  run.
+- Scaling past four workers (`--scale worker=N`) oversubscribes the VM.
+  Benchmarks that compare 1, 2 and 4 workers stay within it.
 
 ## Memory budget
 
-The VM is shared with CS544 coursework, so the cluster has to fit in about
-half of it. Each service gets a hard memory limit (`mem_limit` in
+The VM may also run other coursework, so the cluster keeps well under its
+16 GB. Each service gets a hard memory limit (`mem_limit` in
 [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml)). A container that exceeds its limit is killed instead of
 slowing down the whole VM.
 
@@ -21,10 +41,11 @@ slowing down the whole VM.
 | worker (× 4) | 768 MB each | 256 MB sort buffer (#10 spills beyond that), the rest for the Go runtime, gRPC and file buffers |
 | mr (on demand) | 128 MB | Submits jobs and polls status; workers process the data |
 | s3 (#41, profile `s3`) | 256 MB | [VersityGW](https://github.com/versity/versitygw), an S3-compatible store for input and output |
-| **Total** | **≈ 3.7 GB** | Leaves about 4 GB for the OS, Docker and coursework containers |
+| **Total** | **≈ 3.7 GB** | Leaves about 12 GB for the OS, Docker and other containers |
 
-- Scaling up (`docker compose up --scale worker=N`) costs 768 MB per worker.
-  About 6 workers is the practical ceiling.
+- Scaling up (`docker compose up --scale worker=N`) costs 768 MB and one CPU
+  per worker. Memory would allow many more, but the 4 vCPUs make four the
+  sensible ceiling (see the CPU budget above).
 - The task-level numbers (sort buffer size, how many tasks a worker runs at
   once) are set in #10 and #16 to stay inside these limits.
 
@@ -108,7 +129,7 @@ is at `127.0.0.1:13000` and Prometheus at `127.0.0.1:19090`:
 `ssh -L 13000:127.0.0.1:13000 mr-vm`.
 
 
-## Living alongside CS544 coursework
+## Living alongside other coursework
 
 - The Compose project is named `mapreduce`. `make cluster-down` therefore only
   removes containers, networks and volumes with that name, and never touches

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Checks, and optionally prepares, a Linux machine to build and run the
-# MapReduce cluster. Written for the CS544 course VM (see docs/cluster-vm.md),
+# MapReduce cluster. Written for the course VM (see docs/cluster-vm.md),
 # but it works on any Linux machine.
 #
 #   scripts/vm-setup.sh            check only: report what is missing, change nothing
@@ -54,6 +54,14 @@ check_machine() {
         report OK machine "Linux $(uname -m)"
     else
         report MISSING machine "need Linux on x86_64 or arm64, found $os $(uname -m)"
+    fi
+
+    # Each of the four workers is limited to one CPU (docs/cluster-vm.md).
+    cpus=$(nproc)
+    if [ "$cpus" -ge 4 ]; then
+        report OK cpus "$cpus"
+    else
+        report WARN cpus "only $cpus; the four workers are meant to get one CPU each"
     fi
 
     # /proc/meminfo reports kB. The cluster's limits add up to about 3.8 GB.
