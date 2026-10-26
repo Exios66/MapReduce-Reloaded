@@ -5,9 +5,48 @@ are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
 
 **Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
-has a test, and so are #41 and #42 (Phase 6 Tier A). Next is Phase 7 (#57,
-#58, #60). Where the build departed from this plan, [design.md](design.md) lists
-the differences from the paper and why.
+has a test, and so are #41 and #42 (Phase 6 Tier A). Next are the course
+deliverables below, then Phase 7 (#57, #58, #60). Where the build departed
+from this plan, [design.md](design.md) lists the differences from the paper
+and why.
+
+## Course deliverables (Honors Project 1)
+
+This project is a solo submission for Honors Project 1. The course's
+requirements come before the stretch phases of this roadmap.
+
+| Date (2026) | Deliverable | State |
+|---|---|---|
+| Nov 1 | Solo team emailed to Tyler; repository shared (invite `tylerharter` if private) | to confirm |
+| Nov 6 | [design.md](design.md#key-decisions) answers the design questions | done |
+| Nov 16 | Final code merged to `main` through pull requests | in progress |
+| Nov 17–20 | Demo | — |
+
+Work still due by Nov 16, each a small pull request reviewed by an AI agent
+before it merges ([design.md](design.md#process)):
+
+1. **Deployment:** four workers limited to one CPU each; the VM described
+   as 4 vCPUs and 16 GB ([cluster VM](cluster-vm.md)).
+2. **CI on pull requests** ([ADR 0014](design/0014-ci-on-pull-requests.md)).
+3. **Shared storage:** `data/` bind-mounted at `/data`; `make data`,
+   `make upload-example`
+   ([ADR 0016](design/0016-shared-storage-and-host-client.md)).
+4. **Host client:** `make mr`, `mr upload`, `mr cat`, and `127.0.0.1:18770`
+   as the default coordinator address (ADR 0016).
+5. **Exact M:** `-m` gives the number of map tasks (ADR 0016).
+6. **Job files:** `mr submit job.go …`, `JobSpec.program_source`, Yaegi in
+   the worker, and `examples/wordcount.go`
+   ([ADR 0015](design/0015-user-job-files.md)).
+7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation.
+8. **Coordinator recovery in Compose:** `-data-dir` on a volume.
+9. **Evaluation:** experiments E0–E5 of
+   [design.md](design.md#performance-evaluation), with plots in
+   `bench/README.md`.
+10. **README:** what to build, what to install, how to upload the example
+    data, how to write a job file and how to submit it, all from the host.
+
+Items 1 and 2 are done. Phase 5, the rest of Phase 6 and #59 stay stretch
+goals.
 
 ## Context
 

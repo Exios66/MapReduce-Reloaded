@@ -19,9 +19,11 @@ F1–F23 (see the [paper mapping](docs/paper-mapping.md)), and survive worker
 crashes, coordinator restarts, slow machines and bad input records. The
 chaos test passes 50 seeded runs.
 
-The benchmark harness and data generators are done. The experiments that
-reproduce the paper's §5 and the final report (#58 and #60) wait for the
-cluster VM. Python workers and Go↔Python interoperability (Phase 5) and the
+The benchmark harness and data generators are done. Next are the course
+deliverables: a host-side client with uploads to a shared `/data` mount, user
+job files submitted with each job, and the evaluation of the special features
+(see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
+and [design](docs/design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
 in plain language.
