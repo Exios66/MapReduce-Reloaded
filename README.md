@@ -53,10 +53,10 @@ diff -r /tmp/wc /tmp/wc-py && echo identical
 
 ### Run a job on a cluster
 
-The cluster runs in Docker Compose: one coordinator and four workers. It
-needs Docker with Compose, and about 3.7 GB of memory
-([cluster VM](docs/cluster-vm.md) has the budget and the setup for the course
-VM).
+The cluster runs in Docker Compose: one coordinator and four workers, each
+worker limited to one CPU. It needs Docker with Compose, 4 CPUs and about
+3.7 GB of memory ([cluster VM](docs/cluster-vm.md) has the budgets and the
+setup for the course VM).
 
 ```sh
 make cluster-up       # build the image; start the coordinator and 4 workers

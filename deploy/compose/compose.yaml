@@ -1,5 +1,6 @@
 # The cluster on one machine (docs/cluster-vm.md): one coordinator and four
-# workers. `make cluster-up` starts it, `make e2e` runs word count on it and
+# workers, each worker limited to one CPU so that a job is fastest when its
+# tasks are spread over all four (the VM has 4 vCPUs). `make cluster-up` starts it, `make e2e` runs word count on it and
 # `make cluster-down` removes it. `make monitoring-up` adds Prometheus and
 # Grafana with a dashboard of the cluster's metrics, and `make e2e-s3` runs
 # the same job against an S3 store in the s3 profile.
@@ -36,6 +37,7 @@ services:
     <<: *node
     command: [worker, -coordinator, "coordinator:7070", -http, ":8081"] # /metrics inside the network
     mem_limit: 768m
+    cpus: 1
     deploy:
       replicas: 4
     depends_on: [coordinator]

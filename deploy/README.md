@@ -1,7 +1,7 @@
 # Deployment
 
 How the cluster is built and run. See [cluster VM](../docs/cluster-vm.md) for
-the memory budget and the setup of the course VM.
+the CPU and memory budgets and the setup of the course VM.
 
 | Path | Contents |
 |---|---|
@@ -11,13 +11,13 @@ the memory budget and the setup of the course VM.
 
 ## Services
 
-| Service | Profile | `mem_limit` | Notes |
-|---|---|---|---|
-| `coordinator` | default | 256 MB | gRPC on 18770 and the status page on 18780, both on loopback |
-| `worker` | default | 768 MB | 4 replicas; scale with `--scale worker=N`; serves `/metrics` on 8081 inside the network |
-| `mr` | `tools` | 128 MB | Runs one CLI command, e.g. `docker compose ... run --rm mr submit ...` |
-| `s3` | `s3` | 256 MB | An S3-compatible store (VersityGW) that serves the corpus and keeps output |
-| `prometheus`, `grafana` | `monitoring` | 256 MB each | At `127.0.0.1:19090` and `127.0.0.1:13000` |
+| Service | Profile | `mem_limit` | `cpus` | Notes |
+|---|---|---|---|---|
+| `coordinator` | default | 256 MB | — | gRPC on 18770 and the status page on 18780, both on loopback |
+| `worker` | default | 768 MB | 1 | 4 replicas, one per vCPU; scale with `--scale worker=N`; serves `/metrics` on 8081 inside the network |
+| `mr` | `tools` | 128 MB | — | Runs one CLI command, e.g. `docker compose ... run --rm mr submit ...` |
+| `s3` | `s3` | 256 MB | — | An S3-compatible store (VersityGW) that serves the corpus and keeps output |
+| `prometheus`, `grafana` | `monitoring` | 256 MB each | — | At `127.0.0.1:19090` and `127.0.0.1:13000` |
 
 The coordinator, the workers and `mr` see the test corpus at `/corpus` and
 job output in the `output` volume at `/out`; the `s3`, `prometheus` and
