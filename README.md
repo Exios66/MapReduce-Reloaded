@@ -179,10 +179,13 @@ make proto                     # regenerate code after editing proto/
 `make` runs Python as `python3`. To use another interpreter, e.g. a
 virtualenv's `python`, pass `PYTHON=...` (`make check PYTHON=python`).
 
-There is no automatic hosted CI. `make check`, run by the pre-push hook, is
-the gate: it checks the generated code, runs the linters, and runs every test,
-including a short chaos run that kills workers and restarts the coordinator
-during jobs. See [ADR 0002](docs/design/0002-local-quality-gate.md).
+`make check` is the gate: it checks the generated code, runs the linters,
+and runs every test, including a short chaos run that kills workers and
+restarts the coordinator during jobs. The pre-push hook runs it before every
+push, and GitHub Actions runs the same targets on every pull request. Work
+reaches `main` only through pull requests. See
+[ADR 0002](docs/design/0002-local-quality-gate.md) and
+[ADR 0014](docs/design/0014-ci-on-pull-requests.md).
 
 ## Documentation
 

@@ -1,6 +1,8 @@
 # ADR 0002 — Local quality gate instead of hosted CI
 
-**Status:** accepted · **Phase:** 0
+**Status:** superseded in part by [ADR 0014](0014-ci-on-pull-requests.md):
+CI runs on every pull request again. `make check` and the pre-push hook
+still apply. · **Phase:** 0
 
 ## Context
 
