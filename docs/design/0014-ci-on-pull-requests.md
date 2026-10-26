@@ -46,13 +46,19 @@ checks on the PR.
   `CI_RUNNER` to `self-hosted`. Self-hosted runners do not use hosted
   minutes. The VM needs Linux x64, `git`, `make`, `curl`,
   `tar` and `unzip`; the setup actions install Go and Python. Docker is not
-  needed. Unset the variable to go back to hosted runners.
+  needed. Unset the variable to go back to hosted runners. The repository
+  is public, so a pull request from a fork would run its code on the VM:
+  under Settings, Actions, General, require approval for workflows from
+  all outside collaborators. Hosted runners are free for public
+  repositories, so the failure is an account lock rather than spent
+  minutes, and a lock may stop self-hosted jobs too.
 - **Local report.** `make ci-report` runs `make check` on a clean clone of
   `HEAD` and posts a commit status `local-ci/make-check` (pending, then
   success or failure, with duration and host) through the GitHub API. It
   needs `GITHUB_TOKEN` or `GH_TOKEN`: a fine-grained token with "Commit
   statuses: write" on this repository. It refuses to run with uncommitted
   changes, and never prints the token. Run it after the last push to a PR.
+  It does not depend on Actions at all, so it is the dependable option.
 
 ## Alternatives considered
 
