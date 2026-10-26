@@ -21,15 +21,15 @@ Each requirement of the assignment, and where this repository meets it.
 
 | Requirement | Where | State |
 |---|---|---|
-| Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml), [cluster VM](cluster-vm.md) | built |
+| Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
 | Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | planned (#164) |
 | Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | planned |
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file and exact M planned |
-| README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](../README.md), rewritten for the host client | planned |
+| README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
 | At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation) | features built; evaluation planned |
-| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](design/0014-ci-on-pull-requests.md) | in place; CI in #165 |
-| Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
+| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place; CI in #165 |
+| Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
 ## Key decisions
 
@@ -38,7 +38,7 @@ Each requirement of the assignment, and where this repository meets it.
 The client is the `mr` command, built for the VM itself with `make mr` and
 run outside every container. It talks to the coordinator at
 `127.0.0.1:18770`, which Compose publishes on loopback only
-([ADR 0016](design/0016-shared-storage-and-host-client.md)). This is the
+([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)). This is the
 default address for `mr submit` and `mr status`; `-coordinator` overrides it.
 
 ```sh
@@ -58,7 +58,7 @@ bin/mr cat /data/out/wc | head                    # read the output             
 |---|---|
 | where inputs are in shared storage | trailing arguments: paths or globs under `/data` (or `s3://…`) |
 | where outputs go in shared storage | the output directory, e.g. `/data/out/wc` |
-| a file with map and reduce functions | a `.go` job file, read on the client and sent with the job ([ADR 0015](design/0015-user-job-files.md)) **(planned)** |
+| a file with map and reduce functions | a `.go` job file, read on the client and sent with the job ([ADR 0015](docs/design/0015-user-job-files.md)) **(planned)** |
 | the number of map tasks | `-m M`, made exact **(planned)**; today it sets an approximate split size |
 | the number of reduce tasks | `-r R` |
 
@@ -69,7 +69,7 @@ can stand in for the job file; the benchmarks use them.
 
 A job file's `Reduce` takes `values func(yield func([]byte) bool)`, not the
 compiled API's `iter.Seq[[]byte]`, because Yaegi cannot range over a
-function ([ADR 0015](design/0015-user-job-files.md)). Each worker interprets
+function ([ADR 0015](docs/design/0015-user-job-files.md)). Each worker interprets
 the source once per job. `Combine` must be pure and associative: a bad
 combiner silently changes the output, and so the E1 results.
 
@@ -87,12 +87,12 @@ write the same API the built-in programs use.
 Python 3.11+ is a second, reference implementation of the API, the file
 format, the partition hash and local mode. It checks the shared contract
 byte for byte; it does not run on the cluster
-([ADR 0001](design/0001-languages-and-shared-contract.md)).
+([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
 
 ### Communication
 
-gRPC with protobuf messages, defined once in [`proto/`](../proto/) and
-generated for Go and Python ([ADR 0003](design/0003-rpc-contract.md)). The
+gRPC with protobuf messages, defined once in [`proto/`](proto/) and
+generated for Go and Python ([ADR 0003](docs/design/0003-rpc-contract.md)). The
 assignment's "boss" is our coordinator. Boss → workers runs in the replies:
 a worker asks with `RequestTask` and the coordinator answers with a task, so
 only workers open connections to the coordinator.
@@ -101,7 +101,7 @@ only workers open connections to the coordinator.
 |---|---|---|
 | client → coordinator | `SubmitJob`, `GetJobStatus` | `-wait` polls status until the job ends |
 | worker → coordinator | `RegisterWorker`, `Heartbeat`, `RequestTask`, `ReportTask` | Workers pull tasks. The coordinator never opens a connection to a worker, so a worker behind a restart just registers again |
-| worker → worker | `ShuffleService.FetchPartition` | Server-streaming, 64 KiB chunks, resumable from a byte offset ([ADR 0008](design/0008-shuffle.md)) |
+| worker → worker | `ShuffleService.FetchPartition` | Server-streaming, 64 KiB chunks, resumable from a byte offset ([ADR 0008](docs/design/0008-shuffle.md)) |
 
 ### Shared storage
 
@@ -110,7 +110,7 @@ coordinator and every worker **(planned; today the corpus is mounted at
 `/corpus` and output goes to a named volume at `/out`)**. The assignment
 allows a shared volume mount on a single VM; it lets the host client upload
 input with a plain copy and read output without a container
-([ADR 0016](design/0016-shared-storage-and-host-client.md)).
+([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)).
 
 - Inputs and outputs live in shared storage. A path in a job is the path
   every container sees, such as `/data/out/wc`.
@@ -120,16 +120,16 @@ input with a plain copy and read output without a container
   reader never sees a partial file.
 - S3-compatible object storage (VersityGW, Compose profile `s3`) is built as
   an alternative for `s3://` paths
-  ([ADR 0013](design/0013-commit-on-object-storage.md)).
+  ([ADR 0013](docs/design/0013-commit-on-object-storage.md)).
 
 ### Data formats
 
 | Data | Format |
 |---|---|
 | Input | Text, one record per line (key = byte offset, value = line), or MRKV records (`-input-format kv`) |
-| Intermediate | MRKV: our block format of length-prefixed key/value records, with a CRC-32C per block and a footer; blocks optionally compressed with zstd or Snappy ([spec](file-format.md), [ADR 0004](design/0004-intermediate-file-format.md)). One sorted file per map task and reduce partition |
+| Intermediate | MRKV: our block format of length-prefixed key/value records, with a CRC-32C per block and a footer; blocks optionally compressed with zstd or Snappy ([spec](docs/file-format.md), [ADR 0004](docs/design/0004-intermediate-file-format.md)). One sorted file per map task and reduce partition |
 | Output | Text, `key<TAB>value` per line, one `part-r-NNNNN` per reduce task (default), or MRKV (`-output-format kv`) |
-| Job file | Go source ([ADR 0015](design/0015-user-job-files.md)) **(planned)** |
+| Job file | Go source ([ADR 0015](docs/design/0015-user-job-files.md)) **(planned)** |
 | RPC messages | Protobuf |
 
 MRKV was chosen over Arrow or Parquet because keys and values are opaque
@@ -140,7 +140,7 @@ resume a broken fetch at a byte offset and detect corruption.
 
 Every check is a make target. `make check` runs them before every push, and
 GitHub Actions runs them on every pull request, on pushes to `main`, and
-on manual dispatches ([ADR 0014](design/0014-ci-on-pull-requests.md)).
+on manual dispatches ([ADR 0014](docs/design/0014-ci-on-pull-requests.md)).
 
 | Kind | What it checks | Where |
 |---|---|---|
@@ -164,21 +164,21 @@ planned. Each has an experiment and a plot below.
 
 Locality is a scheduler hook only. On one VM every container reads the same
 disk, so there is no locality to exploit or measure
-([ADR 0016](design/0016-shared-storage-and-host-client.md)). User job files
+([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)). User job files
 are not a special feature: the assignment requires them.
 
 1. **Combiners** (§4.3). A map task runs the job's combiner on each sorted
    spill, so fewer bytes cross the shuffle.
 2. **Backup tasks for stragglers** (§3.6). When no task of the current phase
    is idle, an idle worker gets a second attempt of the oldest running task;
-   the first to finish wins ([ADR 0010](design/0010-backup-tasks.md)).
+   the first to finish wins ([ADR 0010](docs/design/0010-backup-tasks.md)).
 3. **Worker failure handling** (§3.3). Heartbeats detect a dead worker; its
    running tasks and its completed map tasks (whose output was on its disk)
-   run again elsewhere ([ADR 0009](design/0009-failure-detection.md)).
+   run again elsewhere ([ADR 0009](docs/design/0009-failure-detection.md)).
 4. **Coordinator recovery**, beyond the paper. With `-data-dir` the
    coordinator logs every decision before replying, and a restarted
    coordinator replays the log and finishes the job
-   ([ADR 0007](design/0007-write-ahead-log.md)). **(Planned: Compose starts
+   ([ADR 0007](docs/design/0007-write-ahead-log.md)). **(Planned: Compose starts
    the coordinator with `-data-dir` on a volume.)**
 
 Bad-record skipping, counters, side outputs, compression, a status page with
@@ -246,7 +246,7 @@ four engineering practices:
 - **Actions run tests on pull requests.** `.github/workflows/ci.yml` runs the
   `make check` targets on every PR. While the account's hosted runners fail,
   `make ci-report` runs the same checks and records the result on the PR's
-  commit ([ADR 0014](design/0014-ci-on-pull-requests.md), #165).
+  commit ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165).
 - **Many small pull requests.** One concern each, as the roadmap's
   course-deliverable items are listed.
 - **Feedback sought and given.** An AI agent reviews my pull requests with
@@ -259,13 +259,13 @@ four engineering practices:
 
 - **Coordinator** (`go/cmd/coordinator`, `go/internal/coordinator`). The
   paper's master (§3.2). It holds the task table, the worker registry and the
-  job. One mutex guards all state ([ADR 0006](design/0006-coordinator-concurrency.md)).
+  job. One mutex guards all state ([ADR 0006](docs/design/0006-coordinator-concurrency.md)).
   With `-data-dir`, it logs every decision to a write-ahead log
-  (`go/internal/wal`, [ADR 0007](design/0007-write-ahead-log.md)).
+  (`go/internal/wal`, [ADR 0007](docs/design/0007-write-ahead-log.md)).
 - **Worker** (`go/cmd/worker`, `go/internal/worker`). It registers, sends
   heartbeats, asks for tasks, runs them with `go/internal/task` and reports
   the result. Workers pull work; the coordinator never calls them
-  ([ADR 0003](design/0003-rpc-contract.md)).
+  ([ADR 0003](docs/design/0003-rpc-contract.md)).
 - **Shuffle server** (`go/internal/shuffle`). Each worker serves its own map
   output over `ShuffleService.FetchPartition`. Reducers fetch from it
   directly, so no data passes through the coordinator. A worker started with
@@ -277,7 +277,7 @@ four engineering practices:
 - **Python reference** (`python/mapreduce_reloaded`). A second implementation
   of the API, splitting, partition hash, sort, combiner, file format and
   local mode. It shares the proto contract and the MRKV format with Go
-  ([ADR 0001](design/0001-languages-and-shared-contract.md)).
+  ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
 
 ## A job's lifecycle
 
@@ -286,7 +286,7 @@ The steps follow §3.1 of the paper. Function names are in Go. RPCs belong to
 
 ### 1. Split the input
 
-`mr submit` calls `SubmitJob` (`-m` sets an approximate M through `split.SizeFor`, to become exact as [ADR 0016](design/0016-shared-storage-and-host-client.md) describes, and `-r` sets R; `-intermediate-codec` and `-output-codec` choose compression, as in [the file format](file-format.md#codecs)). The coordinator fills in R if it is zero:
+`mr submit` calls `SubmitJob` (`-m` sets an approximate M through `split.SizeFor`, to become exact as [ADR 0016](docs/design/0016-shared-storage-and-host-client.md) describes, and `-r` sets R; `-intermediate-codec` and `-output-codec` choose compression, as in [the file format](docs/file-format.md#codecs)). The coordinator fills in R if it is zero:
 `split.DefaultR` returns twice the number of registered workers (§3.5). It
 then calls `split.Plan`, which expands the input patterns and cuts each file
 into splits of `split.DefaultSize` (64 MiB) unless the job sets another
@@ -424,7 +424,7 @@ sequenceDiagram
 ```
 
 `FetchPartition` is a server-streaming RPC
-([ADR 0008](design/0008-shuffle.md)). The server reads the MRKV file
+([ADR 0008](docs/design/0008-shuffle.md)). The server reads the MRKV file
 from `offset` and sends chunks of at most `shuffle.ChunkSize` (64 KiB), so
 memory per fetch is bounded.
 
@@ -511,7 +511,7 @@ reducer writes the same bytes in both; a nondeterministic one can leave the
 rejected attempt's bytes in the final file. The loser's temporary name no longer
 exists after its rename, and `job.cleanup` removes anything left in
 `_temporary` when the job ends (see
-[the backup tasks explainer](explainers/20-backup-tasks.md)).
+[the backup tasks explainer](docs/explainers/20-backup-tasks.md)).
 
 A losing map attempt is different. Its files stay on its worker's disk, and
 no reducer is told about them.
@@ -520,30 +520,30 @@ no reducer is told about them.
 
 | Paper (§) | This system | Why | Record |
 |---|---|---|---|
-| Google's internal RPC (§3.1) | gRPC and protobuf, with Go and Python generated from `proto/` | Both languages must speak one wire contract, and the shuffle needs streaming. | [ADR 0003](design/0003-rpc-contract.md), [explainer](explainers/03-rpc-contract.md) |
-| GFS holds input and output (§3.1) | A host directory bind-mounted at `/data` in every container (planned; today `/corpus` and `/out`), read and written through `internal/storage`, or S3-compatible object storage (`s3://bucket/key`, configured by the standard AWS environment variables). Without a rename, an S3 commit is a server-side copy, then a delete. | GFS is not available, the cluster runs on one VM, and the client on the host must reach the same files. | [ADR 0016](design/0016-shared-storage-and-host-client.md), [cluster VM](cluster-vm.md), [ADR 0013](design/0013-commit-on-object-storage.md) |
-| Intermediate records in files of undescribed format (§3.1) | MRKV: checksummed blocks of records with a footer, each block optionally compressed with zstd or Snappy (#42). | Go and Python must agree byte for byte (uncompressed) or record for record (compressed), corruption must be detected, and fetches must resume. | [ADR 0004](design/0004-intermediate-file-format.md), [file format](file-format.md), [explainer](explainers/04-file-format.md) |
-| Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](design/0007-write-ahead-log.md), [explainer](explainers/18-coordinator-recovery.md) |
-| Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](design/0003-rpc-contract.md), [explainer](explainers/16-worker-failure.md), [ADR 0009](design/0009-failure-detection.md) |
-| Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle, oldest attempt first. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](explainers/20-backup-tasks.md), [ADR 0010](design/0010-backup-tasks.md) |
-| A signal handler sends the bad record's number by UDP (§4.6) | The worker recovers the panic and reports the record in `ReportTask`. The coordinator skips it after two crashes. | Go can recover a panic, and the report already reaches the coordinator. | [explainer](explainers/19-bad-records.md), [ADR 0011](design/0011-bad-records.md) |
-| Master sums counters from task reports and ignores duplicates (§4.9) | Only the accepted attempt's counters are kept. A re-run map replaces its earlier counts. | A task may run more than once, and adding every attempt would over-count. | [explainer](explainers/21-counters.md) |
-| Master serves HTTP status pages (§4.8) | A status page and Prometheus `/metrics` on the coordinator, `/metrics` on workers, JSON logs, and a Grafana dashboard in the Compose monitoring profile. | These are standard tools, and per-attempt logs stay on each worker. | [explainer](explainers/24-status.md), [ADR 0012](design/0012-observability.md) |
-| Master places map tasks near GFS replicas (§3.4) | A scheduler hook: `Config.Locate` labels splits, and `LocalityWait` holds tasks back. Nothing sets `Locate` in Compose, so there is no location source. | All Compose workers share one volume, so there is nothing to exploit until a store knows where data lives (#41). | [explainer](explainers/23-locality.md), [paper mapping](paper-mapping.md) (F11) |
-| Keys and values are strings (§2) | `[]byte` in Go and `bytes` in Python. User code encodes its own data. | Both languages then sort and hash identically, with no extra rules. | [ADR 0005](design/0005-programming-api.md), [explainer](explainers/07-programming-api.md) |
-| Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](file-format.md), [explainer](explainers/09-external-sort.md) |
-| M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is to become an exact M (planned). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](explainers/12-splits.md) |
-| User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. (planned) | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](design/0015-user-job-files.md) |
-| One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](design/0001-languages-and-shared-contract.md), [explainer](explainers/11-local-mode.md) |
-| Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB of RAM: one coordinator and four workers, each limited to one CPU. | It is the hardware available, it still exercises every protocol path, and the CPU limits make spreading tasks over workers pay off. | [cluster VM](cluster-vm.md), [explainer](explainers/14-cluster.md) |
+| Google's internal RPC (§3.1) | gRPC and protobuf, with Go and Python generated from `proto/` | Both languages must speak one wire contract, and the shuffle needs streaming. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/03-rpc-contract.md) |
+| GFS holds input and output (§3.1) | A host directory bind-mounted at `/data` in every container (planned; today `/corpus` and `/out`), read and written through `internal/storage`, or S3-compatible object storage (`s3://bucket/key`, configured by the standard AWS environment variables). Without a rename, an S3 commit is a server-side copy, then a delete. | GFS is not available, the cluster runs on one VM, and the client on the host must reach the same files. | [ADR 0016](docs/design/0016-shared-storage-and-host-client.md), [cluster VM](docs/cluster-vm.md), [ADR 0013](docs/design/0013-commit-on-object-storage.md) |
+| Intermediate records in files of undescribed format (§3.1) | MRKV: checksummed blocks of records with a footer, each block optionally compressed with zstd or Snappy (#42). | Go and Python must agree byte for byte (uncompressed) or record for record (compressed), corruption must be detected, and fetches must resume. | [ADR 0004](docs/design/0004-intermediate-file-format.md), [file format](docs/file-format.md), [explainer](docs/explainers/04-file-format.md) |
+| Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](docs/design/0007-write-ahead-log.md), [explainer](docs/explainers/18-coordinator-recovery.md) |
+| Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/16-worker-failure.md), [ADR 0009](docs/design/0009-failure-detection.md) |
+| Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle, oldest attempt first. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](docs/explainers/20-backup-tasks.md), [ADR 0010](docs/design/0010-backup-tasks.md) |
+| A signal handler sends the bad record's number by UDP (§4.6) | The worker recovers the panic and reports the record in `ReportTask`. The coordinator skips it after two crashes. | Go can recover a panic, and the report already reaches the coordinator. | [explainer](docs/explainers/19-bad-records.md), [ADR 0011](docs/design/0011-bad-records.md) |
+| Master sums counters from task reports and ignores duplicates (§4.9) | Only the accepted attempt's counters are kept. A re-run map replaces its earlier counts. | A task may run more than once, and adding every attempt would over-count. | [explainer](docs/explainers/21-counters.md) |
+| Master serves HTTP status pages (§4.8) | A status page and Prometheus `/metrics` on the coordinator, `/metrics` on workers, JSON logs, and a Grafana dashboard in the Compose monitoring profile. | These are standard tools, and per-attempt logs stay on each worker. | [explainer](docs/explainers/24-status.md), [ADR 0012](docs/design/0012-observability.md) |
+| Master places map tasks near GFS replicas (§3.4) | A scheduler hook: `Config.Locate` labels splits, and `LocalityWait` holds tasks back. Nothing sets `Locate` in Compose, so there is no location source. | All Compose workers share one volume, so there is nothing to exploit until a store knows where data lives (#41). | [explainer](docs/explainers/23-locality.md), [paper mapping](docs/paper-mapping.md) (F11) |
+| Keys and values are strings (§2) | `[]byte` in Go and `bytes` in Python. User code encodes its own data. | Both languages then sort and hash identically, with no extra rules. | [ADR 0005](docs/design/0005-programming-api.md), [explainer](docs/explainers/07-programming-api.md) |
+| Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](docs/file-format.md), [explainer](docs/explainers/09-external-sort.md) |
+| M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is to become an exact M (planned). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](docs/explainers/12-splits.md) |
+| User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. (planned) | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](docs/design/0015-user-job-files.md) |
+| One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
+| Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB of RAM: one coordinator and four workers, each limited to one CPU. | It is the hardware available, it still exercises every protocol path, and the CPU limits make spreading tasks over workers pay off. | [cluster VM](docs/cluster-vm.md), [explainer](docs/explainers/14-cluster.md) |
 
 ## Where to look next
 
-- [Paper mapping](paper-mapping.md): each paper feature, its code and the
+- [Paper mapping](docs/paper-mapping.md): each paper feature, its code and the
   test that proves it.
-- [Design records](design/): ADRs 0001 to 0016, one per decision that
+- [Design records](docs/design/): ADRs 0001 to 0016, one per decision that
   shaped the code.
-- [Explainers](explainers/): one plain-language page per feature, from the
+- [Explainers](docs/explainers/): one plain-language page per feature, from the
   RPC contract (03) to the status page (24).
-- [File format](file-format.md): the MRKV specification.
-- [Cluster VM](cluster-vm.md): how the Compose cluster is set up.
+- [File format](docs/file-format.md): the MRKV specification.
+- [Cluster VM](docs/cluster-vm.md): how the Compose cluster is set up.

@@ -2,9 +2,9 @@
 
 Where to start depends on the question.
 
-- **What are the key decisions, and how will they be evaluated?** [Design](design.md#key-decisions):
+- **What are the key decisions, and how will they be evaluated?** [Design](../design.md#key-decisions):
   the client, language, communication, storage, formats, tests and evaluation.
-- **How does a job run, and how does it differ from the paper?** [Design](design.md).
+- **How does a job run, and how does it differ from the paper?** [Design](../design.md).
 - **Is feature F*n* of the paper built, and where?** [Paper mapping](paper-mapping.md).
   A test checks that every code path and test it names exists.
 - **What is the plan, and what is done?** [Roadmap](roadmap.md), or [the
