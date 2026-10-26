@@ -71,10 +71,13 @@ bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head
 **M is exact (planned).** `-m` will request an exact number of map tasks.
 The target behavior is proportional allocation among input files by size
 (largest remainder, at least one split per file), with each file cut into
-the allocated number of splits on record boundaries. The implementation
-will need to handle inputs with more files than M or too few records for
-the requested splits, and report the resulting count. Today `-m` sets an
-approximate split size; exact allocation and its reporting are planned.
+the allocated number of splits on record boundaries. Two cases cannot
+give exactly M. With more files than M, every file still gets one split, so
+M is raised to the number of files. A file with fewer records than its
+allocated splits gets fewer splits, so M can come out lower. In both cases
+`mr submit` prints the actual M and `mr status` reports it. Today `-m` sets
+an approximate split size (`split.SizeFor`) and a file never gets fewer than
+one split; exact allocation and its reporting are planned.
 
 ## Alternatives considered
 
@@ -83,7 +86,7 @@ approximate split size; exact allocation and its reporting are planned.
 - **S3 as the default.** Closer to GFS, and already built. But it adds a
   service to every run, and uploads need an S3 client or an `mr upload` that
   speaks S3. It stays available as a profile.
-- **HDFS.** A NameNode and DataNodes in a 16 GB VM, and Java, for a
+- **HDFS.** A NameNode and DataNodes in an 8 GB VM, and Java, for a
   benefit (locality) that one VM cannot show.
 - **The client inside a container.** Simpler, but not what the assignment
   asks for.
