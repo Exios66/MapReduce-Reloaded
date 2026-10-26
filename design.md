@@ -4,7 +4,7 @@ This repository recreates the system in Dean and Ghemawat,
 [*MapReduce: Simplified Data Processing on Large Clusters*](https://research.google.com/archive/mapreduce-osdi04.pdf)
 (OSDI 2004), for Honors Project 1: a MapReduce that runs with Docker Compose
 on one VM with 4 vCPUs and 8 GB, as four worker containers limited to one
-CPU each **(planned, #164: Compose sets no CPU limit today)**.
+CPU each.
 It is a solo project.
 
 The first section answers the assignment's design questions, with the
@@ -22,7 +22,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Requirement | Where | State |
 |---|---|---|
 | Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
-| Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | planned (#164) |
+| Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | built |
 | Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | planned |
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file and exact M planned |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
@@ -198,8 +198,8 @@ Prometheus and Grafana, and a locality-aware scheduler hook are also built.
 ### Performance evaluation
 
 All runs use the Compose cluster on the course VM: four workers at one CPU
-each (planned, #164), 8 GB of memory and a disk of about 16 GB (to be
-confirmed). `make bench` already generates the inputs, samples every worker's
+each, 8 GB of memory (7,940 MB usable) and a 35 GB disk with about 7 GB
+free ([the VM](docs/cluster-vm.md#the-vm)). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
 the machine in `result.json`. Every point is the median of three runs, with
 the range shown as an error bar. Each plot's caption states the input size,
