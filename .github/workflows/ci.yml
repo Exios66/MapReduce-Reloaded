@@ -20,7 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # proto-breaking compares with origin/main
+          fetch-depth: 0 # fetch origin/main while checkout still has credentials
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
@@ -29,12 +30,15 @@ jobs:
           python-version: "3.13"
       - run: pip install -e "python[dev]"
       - run: make tools
-      - run: make proto-check PYTHON=python
+      # Use checkout's fresh origin/main without another authenticated fetch.
+      - run: make proto-check PYTHON=python PROTO_FETCH=false
 
   go:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
@@ -49,6 +53,8 @@ jobs:
         python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}

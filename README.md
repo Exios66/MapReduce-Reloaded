@@ -19,9 +19,11 @@ F1–F23 (see the [paper mapping](docs/paper-mapping.md)), and survive worker
 crashes, coordinator restarts, slow machines and bad input records. The
 chaos test passes 50 seeded runs.
 
-The benchmark harness and data generators are done. The experiments that
-reproduce the paper's §5 and the final report (#58 and #60) wait for the
-cluster VM. Python workers and Go↔Python interoperability (Phase 5) and the
+The benchmark harness and data generators are done. Next are the course
+deliverables: a host-side client with uploads to a shared `/data` mount, user
+job files submitted with each job, and the evaluation of the special features
+(see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
+and [design](docs/design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
 in plain language.
@@ -65,6 +67,15 @@ docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr \
     submit -coordinator coordinator:7070 -wait wordcount /out/wc '/corpus/*.txt'
 make cluster-down     # remove the containers and the output volume
 ```
+
+To read the output today, copy it out of the volume: `docker compose -p
+mapreduce -f deploy/compose/compose.yaml cp coordinator:/out/wc ./wc` (or
+run a short container that mounts the `output` volume). There is no upload
+step yet: input is the corpus mounted at `/corpus`.
+
+Planned ([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)):
+`make mr`, `bin/mr upload`, job files, and `bin/mr cat`, against a host
+`data/` directory mounted at `/data`. Those commands are not built yet.
 
 Every container sees the test corpus at `/corpus` and writes job output to
 the `output` volume at `/out`. While a job runs, the status page and

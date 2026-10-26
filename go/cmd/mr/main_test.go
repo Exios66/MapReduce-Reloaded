@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"net"
 	"os"
 	"path/filepath"
@@ -11,6 +13,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 
 	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
@@ -20,6 +26,129 @@ import (
 )
 
 const raven = "../../../testdata/corpus/raven.txt"
+
+func TestCoordinatorDefaultHelp(t *testing.T) {
+	for _, command := range []string{"submit", "status"} {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr strings.Builder
+			if err := run([]string{command, "-h"}, &stdout, &stderr); !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("help returned %v, want flag.ErrHelp", err)
+			}
+			if !strings.Contains(stderr.String(), `coordinator address (default "127.0.0.1:18770")`) {
+				t.Fatalf("help does not advertise the host endpoint: %q", stderr.String())
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("help wrote to stdout: %q", stdout.String())
+			}
+		})
+	}
+}
+
+// Resolve each CLI target to an ephemeral listener, so testing the default
+// does not require binding the host's real coordinator port.
+type coordinatorAddressResolver struct {
+	address string
+	targets chan string
+}
+
+func (r *coordinatorAddressResolver) Scheme() string { return "mr-coordinator-test" }
+
+func (r *coordinatorAddressResolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	r.targets <- target.Endpoint()
+	b := manual.NewBuilderWithScheme(r.Scheme())
+	b.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: r.address}}})
+	return b.Build(target, cc, opts)
+}
+
+type addressCoordinator struct {
+	pb.UnimplementedCoordinatorServiceServer
+}
+
+func (addressCoordinator) SubmitJob(context.Context, *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
+	return &pb.SubmitJobResponse{JobId: "job-1"}, nil
+}
+
+func (addressCoordinator) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {
+	if req.GetJobId() != "job-1" {
+		return nil, status.Error(codes.NotFound, "unknown job")
+	}
+	return &pb.GetJobStatusResponse{JobId: "job-1", State: pb.JobState_JOB_STATE_MAPPING}, nil
+}
+
+func TestCoordinatorAddress(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := grpc.NewServer()
+	pb.RegisterCoordinatorServiceServer(gs, addressCoordinator{})
+	go func() { _ = gs.Serve(lis) }()
+	t.Cleanup(gs.Stop)
+
+	r := &coordinatorAddressResolver{address: lis.Addr().String(), targets: make(chan string, 1)}
+	resolver.Register(r)
+	// Keep these subtests sequential: the default scheme is process-wide.
+	previousScheme := resolver.GetDefaultScheme()
+	resolver.SetDefaultScheme(r.Scheme())
+	t.Cleanup(func() { resolver.SetDefaultScheme(previousScheme) })
+
+	for _, tc := range []struct {
+		name, address string
+		flags         []string
+	}{
+		{name: "default", address: "127.0.0.1:18770"},
+		{name: "compose", address: "coordinator:7070", flags: []string{"-coordinator", "coordinator:7070"}},
+		{name: "custom-port", address: "127.0.0.1:27070", flags: []string{"-coordinator=127.0.0.1:27070"}},
+		{name: "ipv6", address: "[::1]:7070", flags: []string{"-coordinator", "[::1]:7070"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkTarget := func() {
+				t.Helper()
+				select {
+				case got := <-r.targets:
+					if got != tc.address {
+						t.Fatalf("RPC target %q, want %q", got, tc.address)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("RPC did not resolve a coordinator target")
+				}
+			}
+			var stdout strings.Builder
+			args := append([]string{"submit"}, tc.flags...)
+			args = append(args, "wordcount", filepath.Join(t.TempDir(), "out"), raven)
+			err := run(args, &stdout, new(strings.Builder))
+			checkTarget()
+			if err != nil {
+				t.Fatal(err)
+			}
+			jobID := strings.TrimSpace(stdout.String())
+			if stdout.String() != "job-1\n" {
+				t.Fatalf("submit printed %q", stdout.String())
+			}
+
+			stdout.Reset()
+			args = append([]string{"status"}, tc.flags...)
+			err = run(append(args, jobID), &stdout, new(strings.Builder))
+			checkTarget()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(stdout.String(), jobID+"\tMAPPING\n") {
+				t.Fatalf("status printed %q", stdout.String())
+			}
+
+			stdout.Reset()
+			err = run(append(args, "missing"), &stdout, new(strings.Builder))
+			checkTarget()
+			if status.Code(err) != codes.NotFound {
+				t.Fatalf("missing job returned %v, want NotFound", err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("failed status wrote %q", stdout.String())
+			}
+		})
+	}
+}
 
 // test.param emits the value of its "key" parameter once per line.
 func init() {

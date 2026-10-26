@@ -156,6 +156,9 @@ failing, and jobs still finish correctly.*
 
 ## The 6-week schedule
 
+*The course's own dates and the work still due are in
+[the roadmap's course deliverables](roadmap.md#course-deliverables-honors-project-1).*
+
 The full roadmap is about 20 weeks of work. The available time is about 6,
 so the scope is **all 23 paper features in Go, the Python half of the shared
 contract and single-machine mode, two modern extensions, and benchmarks with

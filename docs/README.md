@@ -2,6 +2,8 @@
 
 Where to start depends on the question.
 
+- **What are the key decisions, and how will they be evaluated?** [Design](design.md#key-decisions):
+  the client, language, communication, storage, formats, tests and evaluation.
 - **How does a job run, and how does it differ from the paper?** [Design](design.md).
 - **Is feature F*n* of the paper built, and where?** [Paper mapping](paper-mapping.md).
   A test checks that every code path and test it names exists.
@@ -34,6 +36,8 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0012](design/0012-observability.md) | Status page, hand-written metrics and structured logs |
 | [0013](design/0013-commit-on-object-storage.md) | Committing output on object storage |
 | [0014](design/0014-ci-on-pull-requests.md) | CI on every pull request (supersedes part of 0002) |
+| [0015](design/0015-user-job-files.md) | User job files, interpreted by the workers |
+| [0016](design/0016-shared-storage-and-host-client.md) | Shared storage is a host directory, and the client runs on the host |
 
 ## Explainers
 
