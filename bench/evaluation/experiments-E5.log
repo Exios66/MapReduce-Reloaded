@@ -1,0 +1,16 @@
+a11f818 E5: compiled word count against the same program as a job file
+E5 exit=0 1535s
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E5,compiled,wordcount,4,1,1073741824,32,4,,SUCCEEDED,38.124,38.245,3,0,88755466,1,job-5
+E5,interpreted,wordcount,4,1,1073741824,32,4,,SUCCEEDED,402.742,402.750,4,0,88755466,1,job-6
+E5,interpreted,wordcount,4,2,1073741824,32,4,,SUCCEEDED,403.330,403.310,6,0,88755466,1,job-7
+E5,compiled,wordcount,4,2,1073741824,32,4,,SUCCEEDED,38.579,38.614,3,0,88755466,1,job-8
+E5,compiled,wordcount,4,3,1073741824,32,4,,SUCCEEDED,38.414,38.464,6,0,88755466,1,job-9
+E5,interpreted,wordcount,4,3,1073741824,32,4,,SUCCEEDED,406.016,406.103,5,0,88755466,1,job-10
+E5
+
+| Setting | Program | Workers | Job time (s) | Valid runs |
+|---|---|---:|---|---:|
+| compiled | wordcount | 4 | 38.46 (38.24–38.61) | 3 of 3 |
+| interpreted | wordcount | 4 | 403.31 (402.75–406.10) | 3 of 3 |
+E5-DONE

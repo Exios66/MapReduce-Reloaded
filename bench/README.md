@@ -118,7 +118,7 @@ What the numbers show:
     cost time. The Phase 7 benchmarks (#57, #58) will measure that across
     machines.
 
-## Evaluation (E0–E4)
+## Evaluation (E0–E5)
 
 The performance evaluation in [design](../design.md#performance-evaluation),
 run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,
@@ -137,6 +137,8 @@ Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/supers
 its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
+E5 ran at `a11f818`; its harness log is
+[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log).
 
 ### E0: scaling over workers
 
@@ -240,3 +242,27 @@ record the offset between those two clocks.
   coordinator replays its log and keeps every task that had finished; the
   plot's flat step at the restart is the time the coordinator was down and
   the workers' reconnects.
+
+### E5: what an interpreted job file costs
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E5-dark.png">
+  <img alt="E5: job time and map-phase time for word count compiled and as an interpreted job file" src="evaluation/E5.png">
+</picture>
+
+| Setting | Job time (s) | Map phase (s) |
+|---|---|---|
+| compiled `wordcount` | 38.41 (38.12–38.58) | 37.5 |
+| job file, `examples/wordcount.go` at `a11f818` | 403.33 (402.74–406.02) | 397.0 |
+
+- The job file makes word count 10.5× slower, and nearly all of it is in the
+  map phase (map and combine), where the interpreted code runs once per
+  word; the reduce phase takes about 6 s instead of 1 s. Both give the same
+  output, and the map output is the same 88.8 MB.
+- The job time is the coordinator's; the map phase runs from the first map
+  task's start until every map task is done, from the coordinator's task
+  counts.
+- A profile of the map function (ADR 0015) found the cost was mostly the job
+  file's own word test, which `bytes.FieldsFunc` called back into the
+  interpreter for every byte, not the call into the job file. Compiled
+  helpers for that work (`api.Words`, `api.Sum`) followed this run.

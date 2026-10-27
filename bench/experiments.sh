@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The performance evaluation (design.md, "Performance evaluation") on
-# the Compose cluster: experiments E0 to E4, each run REPEAT times
+# the Compose cluster: experiments E0 to E5, each run REPEAT times
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
-# Usage: bench/experiments.sh E0|E1|E2|E3|E4|all
+# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
@@ -15,6 +15,8 @@
 #   job time, and with no kill.
 # - E4: distsort with the coordinator's write-ahead log, restarted at 50% of
 #   the normal job time, and with no restart.
+# - E5: Zipf word count compiled into the workers, against the same program
+#   as a job file (examples/wordcount.go) that the workers interpret.
 #
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
@@ -32,6 +34,7 @@ cd "$(dirname "$0")/.."
 repeat=${REPEAT:-3}
 zipf=1.0      # word count's Zipf exponent; E1 varies it
 submit_flags=() # extra mr submit flags; E1 sets -combiner=false
+jobfile=        # a job file to submit in place of the program; E5 sets it
 size=${SIZE:-1073741824}
 m=${M:-32}
 r=${R:-4}
@@ -186,8 +189,9 @@ run() {
     log "$exp $setting $program run $n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
-    job=$("${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "$program" "$out" "$in" 2>/dev/null | tail -1)
+    # A job file is read from the repository's examples/, mounted read-only.
+    job=$("${compose[@]}" run --rm -q -v "$PWD/examples:/examples:ro" mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
+        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>/dev/null | tail -1)
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
         exit 1
@@ -375,12 +379,35 @@ fresh_log() {
     configure 4
 }
 
+# E5 runs Zipf word count as the compiled-in program and as the job file
+# examples/wordcount.go, which every worker interprets (ADR 0015), on the
+# same input; the outputs must match. It alternates which runs first, as E1
+# does, and samples the coordinator's task counts for the map phase's end.
+e5() {
+    begin E5
+    configure 4
+    local n kind order
+    for n in $(seq "$repeat"); do
+        order="compiled interpreted"
+        [ $((n % 2)) = 1 ] || order="interpreted compiled"
+        for kind in $order; do
+            jobfile=
+            [ "$kind" = compiled ] || jobfile=/examples/wordcount.go
+            start_sampler tasks "bench/results/E5/tasks-$kind-$n.csv"
+            run E5 "$kind" wordcount "$n" 4 ""
+            stop_sampler
+        done
+    done
+    jobfile=
+}
+
 case ${1:-} in
 E0) e0 ;;
 E1) e1 ;;
 E2) e2 ;;
 E3) e3 ;;
 E4) e4 ;;
+E5) e5 ;;
 all)
     # Not an && list: set -e does not apply to a function called there.
     e0
@@ -388,9 +415,10 @@ all)
     e2
     e3
     e4
+    e5
     ;;
 *)
-    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|all" >&2
+    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|all" >&2
     exit 2
     ;;
 esac

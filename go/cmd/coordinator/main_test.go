@@ -20,18 +20,18 @@ import (
 
 func TestParseDefaults(t *testing.T) {
 	o, err := parse(nil, io.Discard)
-	want := options{addr: ":7070", httpAddr: ":8080", logFormat: "text", backups: true, keepJobs: 100}
+	want := options{addr: ":7070", httpAddr: ":8080", logFormat: "text", backups: true, keepJobs: 100, maxTaskFailures: 8}
 	if err != nil || o != want {
 		t.Fatalf("parse() = %+v, %v; want %+v", o, err, want)
 	}
 	cfg := config(o)
-	if cfg.HeartbeatInterval != 3*time.Second || cfg.WorkerTimeout != 10*time.Second || !cfg.Backups || cfg.KeepJobs != 100 {
+	if cfg.HeartbeatInterval != 3*time.Second || cfg.WorkerTimeout != 10*time.Second || !cfg.Backups || cfg.KeepJobs != 100 || cfg.MaxTaskFailures != 8 {
 		t.Fatalf("config %+v", cfg)
 	}
 }
 
 func TestParseFlags(t *testing.T) {
-	o, err := parse([]string{"-addr", ":1", "-http", "", "-data-dir", "d", "-backups=false", "-keep-jobs", "0", "-log-format", "json"}, io.Discard)
+	o, err := parse([]string{"-addr", ":1", "-http", "", "-data-dir", "d", "-backups=false", "-keep-jobs", "0", "-max-task-failures", "0", "-log-format", "json"}, io.Discard)
 	want := options{addr: ":1", dataDir: "d", logFormat: "json", keepJobs: 0}
 	if err != nil || o != want {
 		t.Fatalf("parse = %+v, %v; want %+v", o, err, want)
@@ -51,6 +51,7 @@ func TestStartErrors(t *testing.T) {
 		{[]string{"-nope"}, 2, "flag provided but not defined: -nope"},
 		{[]string{"extra"}, 2, `unexpected arguments ["extra"]`},
 		{[]string{"-keep-jobs", "-1"}, 2, "-keep-jobs is -1"},
+		{[]string{"-max-task-failures", "2"}, 2, "-max-task-failures is 2"},
 		{[]string{"-log-format", "xml"}, 1, `log format "xml"`},
 		{[]string{"-addr", "nowhere:-1", "-http", ""}, 1, "coordinator: listen tcp"},
 		{[]string{"-h"}, 0, "Usage of coordinator"},

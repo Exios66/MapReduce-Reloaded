@@ -64,6 +64,13 @@ func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.Worke
 	return &Worker{coordinator: coordinator, workDir: workDir, info: info, logger: slog.Default(), freeBytes: freeBytes}
 }
 
+// fatalError is the error of an attempt that no attempt of the job can
+// avoid: the worker cannot load or validate the job's program (#176).
+type fatalError struct{ err error }
+
+func (e *fatalError) Error() string { return e.err.Error() }
+func (e *fatalError) Unwrap() error { return e.err }
+
 // errForgotten means the coordinator no longer knows this worker: it
 // declared it dead (§3.3), or restarted.
 var errForgotten = errors.New("the coordinator forgot this worker")
@@ -299,7 +306,7 @@ func (w *Worker) attemptLogger(attempt *pb.TaskAttemptId) *slog.Logger {
 func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, &fatalError{err}
 	}
 	id, err := wire.TaskID(m.GetAttempt())
 	if err != nil {
@@ -340,7 +347,7 @@ func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([
 func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logger) (counts map[string]int64, err error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
-		return nil, err
+		return nil, &fatalError{err}
 	}
 	id, err := wire.TaskID(m.GetAttempt())
 	if err != nil {
@@ -392,6 +399,8 @@ func (w *Worker) report(id *pb.TaskAttemptId, log *slog.Logger, outputs []*pb.Pa
 		if errors.As(err, &lost) {
 			failure.LostOutput = lost.src
 		}
+		var fatal *fatalError
+		failure.Fatal = errors.As(err, &fatal)
 		var crash *task.CrashError
 		if errors.As(err, &crash) {
 			failure.FailedRecord = &crash.Record

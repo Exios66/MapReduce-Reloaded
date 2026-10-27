@@ -57,6 +57,7 @@ def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(experimen
         e2() { printf 'E2|%s|%s\n' "$zipf" "${submit_flags[*]-}"; }
         e3() { echo E3; }
         e4() { echo E4; }
+        e5() { echo E5; }
         """,
         argument,
         after='printf \'defaults|%s|%s\\n\' "$zipf" "${submit_flags[*]-}"',
@@ -68,8 +69,38 @@ def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(experimen
             flag = "" if combiner == "on" else "-combiner=false"
             expected.append(f"E1|s{exponent}-{combiner}|wordcount|{run}|4||{exponent}|{flag}")
     if argument == "all":
-        expected = ["E0", *expected, "E2|1.0|", "E3", "E4"]
+        expected = ["E0", *expected, "E2|1.0|", "E3", "E4", "E5"]
     assert lines == [*expected, "defaults|1.0|"]
+
+
+def test_e5_alternates_compiled_and_job_file_and_clears_it(experiment):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        begin() { printf 'begin|%s\n' "$1"; }
+        configure() { printf 'configure|%s\n' "$1"; }
+        start_sampler() { printf 'sample|%s\n' "$2"; }
+        stop_sampler() { :; }
+        run() { printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$4" "$jobfile"; }
+        """,
+        "E5",
+        after="printf 'defaults|%s\\n' \"$jobfile\"",
+    )
+    expected = ["begin|E5", "configure|4"]
+    for run, kind in (
+        (1, "compiled"),
+        (1, "interpreted"),
+        (2, "interpreted"),
+        (2, "compiled"),
+        (3, "compiled"),
+        (3, "interpreted"),
+    ):
+        jobfile = "/examples/wordcount.go" if kind == "interpreted" else ""
+        expected += [
+            f"sample|bench/results/E5/tasks-{kind}-{run}.csv",
+            f"E5|{kind}|wordcount|{run}|{jobfile}",
+        ]
+    assert result.stdout.splitlines() == [*expected, "defaults|"]
 
 
 @pytest.mark.parametrize("exponent", ["0.5", "1.0", "1.5"])
@@ -129,7 +160,7 @@ def test_checksum_references_are_per_input_and_reject_mismatches(experiment):
 @pytest.mark.parametrize("combiner", ["on", "off"])
 @pytest.mark.parametrize("free_kib", [(5 << 20) - 1, 5 << 20, (5 << 20) + 1])
 def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
-    experiment, monkeypatch, combiner, free_kib
+    experiment, monkeypatch, tmp_path, combiner, free_kib
 ):
     invoke, log = experiment
     monkeypatch.setenv("COMBINER", combiner)
@@ -183,7 +214,8 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
                 "restart worker",
                 "ready:4",
                 "disk:-Pk /",
-                "run --rm -q mr submit -coordinator coordinator:7070 -m 2 -r 3 "
+                f"run --rm -q -v {tmp_path}/examples:/examples:ro "
+                "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"{flag}wordcount /out/exp-E1-s{exponent}-{combiner}-1 "
                 f"/out/exp-input-wordcount-100-{exponent}.txt",
             ]

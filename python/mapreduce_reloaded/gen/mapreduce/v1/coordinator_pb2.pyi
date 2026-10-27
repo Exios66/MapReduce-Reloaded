@@ -116,14 +116,16 @@ class TaskSuccess(_message.Message):
     def __init__(self, outputs: _Optional[_Iterable[_Union[_types_pb2.PartitionLocation, _Mapping]]] = ..., counters: _Optional[_Union[_types_pb2.Counters, _Mapping]] = ...) -> None: ...
 
 class TaskFailure(_message.Message):
-    __slots__ = ("message", "failed_record", "lost_output")
+    __slots__ = ("message", "failed_record", "lost_output", "fatal")
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     FAILED_RECORD_FIELD_NUMBER: _ClassVar[int]
     LOST_OUTPUT_FIELD_NUMBER: _ClassVar[int]
+    FATAL_FIELD_NUMBER: _ClassVar[int]
     message: str
     failed_record: int
     lost_output: _types_pb2.PartitionLocation
-    def __init__(self, message: _Optional[str] = ..., failed_record: _Optional[int] = ..., lost_output: _Optional[_Union[_types_pb2.PartitionLocation, _Mapping]] = ...) -> None: ...
+    fatal: bool
+    def __init__(self, message: _Optional[str] = ..., failed_record: _Optional[int] = ..., lost_output: _Optional[_Union[_types_pb2.PartitionLocation, _Mapping]] = ..., fatal: _Optional[bool] = ...) -> None: ...
 
 class ReportTaskResponse(_message.Message):
     __slots__ = ("accepted",)
