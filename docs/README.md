@@ -11,6 +11,8 @@ Where to start depends on the question.
   roadmap explained](roadmap-explained.md) in plain language.
 - **What do the files look like?** [File format](file-format.md): the MRKV
   block format, its codecs, and the partition hash.
+- **How is it tested, and how do I run each kind of test?** [Testing](testing.md),
+  with the coverage floors.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
