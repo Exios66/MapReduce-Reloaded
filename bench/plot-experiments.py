@@ -140,6 +140,15 @@ def e0(rows, out):
 
 
 def e1(rows, out):
+    """Saves E1 combiner comparisons from runs.csv rows to out.
+
+    Rows must be nonempty, with settings such as "s1.0-on" and "s1.0-off".
+    Only valid="1" runs contribute to median bars and minimum/maximum error
+    bars; groups without valid runs have no bar. Panels show map output in
+    decimal MB and coordinator job time in seconds.
+    Missing fields and invalid numbers propagate KeyError and ValueError;
+    errors saving the figure also propagate.
+    """
     exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     panels = (("map_output_bytes", 1e6, "Bytes shuffled (MB)"), ("seconds", 1, "Job time (s)"))
@@ -262,6 +271,13 @@ def e4(rows, results, out):
 
 
 def table(exp, rows):
+    """Prints a Markdown job-time table grouped by setting, program, and workers.
+
+    Uses coordinator seconds for E0, E1, and E2 and wall_seconds otherwise.
+    Each group shows the median and range of valid="1" runs and their count
+    out of all runs; groups without valid runs show an em dash for time.
+    Missing fields, invalid numbers, and output errors propagate.
+    """
     field = "seconds" if exp in ("E0", "E1", "E2") else "wall_seconds"
     print(f"\n{exp}\n")
     print("| Setting | Program | Workers | Job time (s) | Valid runs |")
@@ -284,6 +300,14 @@ def table(exp, rows):
 
 
 def main():
+    """Reads optional results/output paths from sys.argv, plots, and prints tables.
+
+    Results default to bench/results; output defaults to the results path.
+    Creates the output directory, writes an EXPERIMENT.png for each nonempty
+    E0 to E4 runs.csv, replacing existing plots, and prints tables to stdout.
+    Missing or empty CSVs are skipped. Filesystem, CSV parsing, plotting,
+    and table errors propagate.
+    """
     results = Path(sys.argv[1]) if len(sys.argv) > 1 else BENCH / "results"
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else results
     out.mkdir(parents=True, exist_ok=True)

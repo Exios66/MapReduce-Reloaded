@@ -83,6 +83,8 @@ wait_workers() {
 }
 
 # input PROGRAM: generates PROGRAM's input once and prints its path.
+# Cached paths include size in bytes and, for word count, the current zipf
+# exponent used to generate the input.
 input() {
     # The size is in the name, so a run with another SIZE makes its own input.
     local path=/out/exp-input-$1-$size.txt gen
@@ -107,8 +109,9 @@ params() { [ "$1" = grep ] && echo "-param pattern=XYZ" || true; }
 
 checksum() { in_volume sh -c "cat $1/part-r-* | sha256sum | cut -d' ' -f1"; }
 
-# valid INPUT OUTPUT: the first normal run on each input sets its reference
-# checksum, which every later run on that input must match.
+# valid INPUT OUTPUT: prints 1 if OUTPUT matches the reference checksum for
+# INPUT's basename, or 0 otherwise. The first call for that basename saves
+# OUTPUT's checksum as the reference in $tmp.
 valid() {
     local sum ref=$tmp/ref-${1##*/}
     sum=$(checksum "$2")
@@ -144,6 +147,8 @@ stop_sampler() {
 # and appends its row to runs.csv. EVENT is a command run in the background
 # EVENT_AT seconds after the job is submitted. The job is polled with
 # mr status, which, unlike submit -wait, outlives a coordinator restart.
+# The job uses the current submit_flags; its output directory is removed
+# before and after the run.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
@@ -219,7 +224,8 @@ e0() {
     done
 }
 
-# E1 runs combiner on first for each exponent, so its output is the reference.
+# E1 compares word count with the combiner on and off on four workers at
+# Zipf exponents 0.5, 1.0 and 1.5, running combiner on first for each exponent.
 e1() {
     begin E1
     configure 4
