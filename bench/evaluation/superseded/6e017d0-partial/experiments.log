@@ -1,0 +1,56 @@
+[18:23:21] generating 1073741824 bytes for grep
+[18:23:32] E0 w4 grep run 1
+[18:23:35] E0 w4 grep run 2
+[18:23:37] E0 w4 grep run 3
+[18:23:42] E0 w2 grep run 1
+[18:23:45] E0 w2 grep run 2
+[18:23:48] E0 w2 grep run 3
+[18:23:53] E0 w1 grep run 1
+[18:23:57] E0 w1 grep run 2
+[18:24:01] E0 w1 grep run 3
+[18:24:06] generating 1073741824 bytes for distsort
+[18:24:22] E0 w4 distsort run 1
+[18:24:45] E0 w4 distsort run 2
+[18:25:17] E0 w4 distsort run 3
+[18:25:55] E0 w2 distsort run 1
+[18:26:29] E0 w2 distsort run 2
+[18:27:02] E0 w2 distsort run 3
+[18:27:39] E0 w1 distsort run 1
+[18:28:30] E0 w1 distsort run 2
+[18:29:21] E0 w1 distsort run 3
+[18:30:15] generating 1073741824 bytes for wordcount
+[18:32:05] E0 w4 wordcount run 1
+[18:32:46] E0 w4 wordcount run 2
+[18:33:27] E0 w4 wordcount run 3
+[18:34:10] E0 w2 wordcount run 1
+[18:35:26] E0 w2 wordcount run 2
+[18:36:41] E0 w2 wordcount run 3
+[18:38:00] E0 w1 wordcount run 1
+[18:40:26] E0 w1 wordcount run 2
+[18:42:54] E0 w1 wordcount run 3
+[18:45:26] E2 normal distsort run 1
+[18:45:53] E2 normal distsort run 2
+[18:46:26] E2 normal distsort run 3
+[18:47:01] E2 straggler-backups distsort run 1
+[18:47:31] E2 straggler-backups distsort run 2
+[18:48:06] E2 straggler-backups distsort run 3
+[18:48:45] E2 straggler-no-backups distsort run 1
+[18:49:17] E2 straggler-no-backups distsort run 2
+[18:49:56] E2 straggler-no-backups distsort run 3
+[18:50:41] E3 normal distsort run 1
+[18:51:03] E3 normal distsort run 2
+[18:51:37] E3 normal distsort run 3
+[18:52:10] E3 kill-25 distsort run 1
+[18:53:08] E3 kill-25 distsort run 2
+[18:53:50] E3 kill-25 distsort run 3
+[18:54:29] E3 kill-50 distsort run 1
+[18:55:09] E3 kill-50 distsort run 2
+[18:56:06] E3 kill-50 distsort run 3
+[18:56:57] E3 kill-75 distsort run 1
+[18:57:55] E3 kill-75 distsort run 2
+Traceback (most recent call last):
+  File "/home/jjburleson@ad.wisc.edu/MapReduce-Reloaded/bench/scrape-metrics.py", line 59, in <module>
+    main()
+  File "/home/jjburleson@ad.wisc.edu/MapReduce-Reloaded/bench/scrape-metrics.py", line 52, in main
+    sys.stdout.flush()
+OSError: [Errno 28] No space left on device

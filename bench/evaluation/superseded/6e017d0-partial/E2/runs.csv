@@ -1,0 +1,10 @@
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E2,normal,distsort,4,1,1073741824,32,4,,SUCCEEDED,10.468,10.365,5,0,1084682711,1,job-1
+E2,normal,distsort,4,2,1073741824,32,4,,SUCCEEDED,11.656,11.680,5,0,1084682711,1,job-2
+E2,normal,distsort,4,3,1073741824,32,4,,SUCCEEDED,10.687,10.644,4,0,1084682711,1,job-3
+E2,straggler-backups,distsort,4,1,1073741824,32,4,,SUCCEEDED,14.236,14.289,4,2,1084682711,1,job-1
+E2,straggler-backups,distsort,4,2,1073741824,32,4,,SUCCEEDED,13.555,13.501,5,3,1084682711,1,job-2
+E2,straggler-backups,distsort,4,3,1073741824,32,4,,SUCCEEDED,15.392,15.300,5,3,1084682711,1,job-3
+E2,straggler-no-backups,distsort,4,1,1073741824,32,4,,SUCCEEDED,22.191,22.109,0,0,1084682711,1,job-1
+E2,straggler-no-backups,distsort,4,2,1073741824,32,4,,SUCCEEDED,21.058,21.071,0,0,1084682711,1,job-2
+E2,straggler-no-backups,distsort,4,3,1073741824,32,4,,SUCCEEDED,20.680,20.580,0,0,1084682711,1,job-3

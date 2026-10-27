@@ -133,7 +133,7 @@ succeeded, and every run's output matched the normal run's checksum.
 python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 ```
 
-E0, E1, E2 and E4 ran at commit `4b5a235`; E3 ran again at `9a3cd42`, after
+Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1, E2 and E4 ran at commit `4b5a235`; E3 ran again at `9a3cd42`, after
 its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
