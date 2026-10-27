@@ -9,8 +9,6 @@
 package urlfreq
 
 import (
-	"bytes"
-
 	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
@@ -28,7 +26,7 @@ var one = []byte("1")
 
 // Map emits (URL, "1") for a request.
 func Map(_ api.Context, _, line []byte, out api.Emitter) error {
-	fields := bytes.Fields(line)
+	fields := wordcount.Words(line) // ASCII spaces only, as in the Python twin
 	if len(fields) < 7 {
 		return nil
 	}

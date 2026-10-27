@@ -241,7 +241,7 @@ M, R and the commit.
 | E2 | Do backup tasks hide a straggler? | sort, 1 GiB, M = 32; one worker throttled to 0.2 CPU (`docker update --cpus 0.2`) at the start; coordinator `-backups` on and off; also no straggler | Tasks completed against time, one line per setting, as the paper's Figure 3; job-time bars beside it |
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
-| E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` | Job time and map-phase time, bars |
+| E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled
@@ -286,8 +286,10 @@ fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
 to 44% faster. E2's straggler cost 33% with backups and 101% without. E3 cost
 about the 10 s detection timeout when the kill came early and 27 s at 75%,
 when finished map output was lost. E4's restart cost 1.6 s. E5's job file
-made word count 10.5× slower (403 s against 38 s), nearly all in the map
-phase; a profile traced most of it to the job file's per-byte word test.
+made word count 10.5× slower (399 s against 38 s), nearly all in the map
+phase; a profile traced most of it to the job file's per-byte word test, and
+with the compiled helpers `api.Words` and `api.Sum` the job file takes 91 s
+(2.4×).
 
 ### Process
 

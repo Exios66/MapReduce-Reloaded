@@ -36,9 +36,11 @@ playing that role on a solo project) cannot see that the checks passed.
 ## Workaround while hosted runners are unavailable
 
 On the owner's account every GitHub-hosted job currently fails within
-seconds, before any step runs. This is an account or billing problem, not a
-problem in the code. There are two ways round it, and both record the same
-checks on the PR.
+seconds, before any step runs. The jobs have no log, but each one's check
+run has an annotation that names the cause (confirmed 2026-10-27, #181):
+"The job was not started because your account is locked due to a billing
+issue." Only the account owner can clear it, under Settings, Billing.
+There are two ways round it, and both record the same checks on the PR.
 
 - **Self-hosted runner.** Every job uses `runs-on: ${{ vars.CI_RUNNER ||
   'ubuntu-latest' }}`. Register a self-hosted runner on the course VM
@@ -59,6 +61,14 @@ checks on the PR.
   statuses: write" on this repository. It refuses to run with uncommitted
   changes, and never prints the token. Run it after the last push to a PR.
   It does not depend on Actions at all, so it is the dependable option.
+  Since #189 every PR has been merged on this status: `make check` runs on
+  the course VM in a clean worktree of the PR's head commit, and the
+  status is posted through the API, where it shows on the PR. The status
+  is narrower than the workflow in one way: the Python checks run under
+  the VM's one interpreter, 3.12, where the workflow's matrix runs 3.11 and
+  3.13. A change that breaks only one of those versions can pass it, so
+  until Actions run again, a change to the Python package that uses
+  version-specific features is also tested under 3.11 by hand.
 
 ## Alternatives considered
 

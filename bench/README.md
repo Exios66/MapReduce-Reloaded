@@ -137,7 +137,7 @@ Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/supers
 its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
-E5 ran at `a11f818`; its harness log is
+E5 ran at `6b6c7be`; its harness log is
 [`evaluation/experiments-E5.log`](evaluation/experiments-E5.log).
 
 ### E0: scaling over workers
@@ -247,22 +247,25 @@ record the offset between those two clocks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E5-dark.png">
-  <img alt="E5: job time and map-phase time for word count compiled and as an interpreted job file" src="evaluation/E5.png">
+  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="evaluation/E5.png">
 </picture>
 
 | Setting | Job time (s) | Map phase (s) |
 |---|---|---|
-| compiled `wordcount` | 38.41 (38.12–38.58) | 37.5 |
-| job file, `examples/wordcount.go` at `a11f818` | 403.33 (402.74–406.02) | 397.0 |
+| compiled `wordcount` | 38.12 (38.09–38.77) | 37.0 |
+| job file, `examples/wordcount.go` (`api.Words`, `api.Sum`) | 91.08 (90.69–91.28) | 84.0 |
+| job file, `bench/jobs/wordcount-naive.go` (its own word test) | 398.97 (395.71–399.10) | 391.5 |
 
-- The job file makes word count 10.5× slower, and nearly all of it is in the
-  map phase (map and combine), where the interpreted code runs once per
-  word; the reduce phase takes about 6 s instead of 1 s. Both give the same
-  output, and the map output is the same 88.8 MB.
+- A job file costs 2.4× the compiled job when it uses the compiled helpers,
+  and 10.5× when it splits words itself. Nearly all of the difference is in
+  the map phase (map and combine), where the interpreted code runs once per
+  line or per word; the reduce phase takes about 7 s instead of 1 s. All
+  three give the same output, and the map output is the same 88.8 MB.
 - The job time is the coordinator's; the map phase runs from the first map
   task's start until every map task is done, from the coordinator's task
   counts.
 - A profile of the map function (ADR 0015) found the cost was mostly the job
   file's own word test, which `bytes.FieldsFunc` called back into the
-  interpreter for every byte, not the call into the job file. Compiled
-  helpers for that work (`api.Words`, `api.Sum`) followed this run.
+  interpreter for every byte, not the call into the job file. The compiled
+  helpers for that work (`api.Words`, `api.Sum`) cut the job from 399 s to
+  91 s.
