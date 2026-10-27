@@ -29,6 +29,7 @@ import (
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
+	"github.com/exios66/mapreduce-reloaded/go/internal/rpcguard"
 	"github.com/exios66/mapreduce-reloaded/go/internal/statusweb"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wal"
 )
@@ -87,7 +88,7 @@ func run(addr, httpAddr, dataDir string, backups bool, keepJobs int) (err error)
 	if err != nil {
 		return err
 	}
-	gs := grpc.NewServer()
+	gs := grpc.NewServer(rpcguard.ServerOptions()...)
 	pb.RegisterCoordinatorServiceServer(gs, srv)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
