@@ -70,6 +70,12 @@ go test ./internal/worker -run TestChaos -chaos.runs=50           # 50 seeded ru
 go test ./internal/worker -run TestChaos -chaos.seed=7 -chaos.runs=1   # replay seed 7
 ```
 
+`TestModel` in `internal/coordinator` drives the coordinator's RPCs with
+seeded random calls (several workers, duplicate, late and stale reports,
+lost map output, expiring workers, restarts from the log) and checks every
+reply and the job's status against a model of the job. It runs 15 seeds in
+`make check`; `-model.runs` and `-model.seed` run more or replay one.
+
 `internal/e2e` runs the built `coordinator`, `worker` and `mr` commands as
 separate processes on localhost ports: word count against the golden output,
 every example program, a worker killed with `SIGKILL` mid-job, a coordinator
