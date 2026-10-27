@@ -216,7 +216,7 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	plan, err := split.Plan(ctx, in, spec.Inputs, spec.SplitSize)
+	plan, err := split.ForSpec(ctx, in, spec)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}

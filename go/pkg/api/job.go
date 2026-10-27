@@ -33,6 +33,9 @@ type JobSpec struct {
 	// SplitSize is the target size of an input split in bytes, which
 	// determines M, the number of map tasks (§3.1). 0 means 64 MiB.
 	SplitSize uint64
+	// M, when positive, is the number of map tasks to cut the input into
+	// (ADR 0016), and SplitSize is ignored.
+	M int
 	// R is the number of reduce tasks and output files.
 	R uint32
 	// InputFormat and OutputFormat name the record formats (§4.4). Empty

@@ -61,6 +61,7 @@ func JobSpec(m *pb.JobSpec) (api.JobSpec, error) {
 		Inputs:            inputs,
 		Output:            output,
 		SplitSize:         m.GetSplitSizeBytes(),
+		M:                 int(m.GetNumMapTasks()),
 		R:                 m.GetNumReduceTasks(),
 		InputFormat:       m.GetInputFormat(),
 		OutputFormat:      m.GetOutputFormat(),
