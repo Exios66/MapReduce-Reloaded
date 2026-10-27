@@ -86,6 +86,7 @@ e2e: cluster-up mr
 e2e-s3: cluster-up
 	$(COMPOSE) --profile s3 up -d --wait s3
 	scripts/e2e.sh s3
+	cd go && go test -count=1 ./internal/storage -run TestGatewayContract -s3.endpoint=http://127.0.0.1:18790
 
 # One of the paper's benchmarks, with its data rates over time
 # (bench/README.md): make bench SCENARIO=grep|sort|zipf.

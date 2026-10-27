@@ -106,7 +106,7 @@ func (b *S3) Size(ctx context.Context, name string) (int64, error) {
 	}
 	out, err := c.HeadObject(ctx, &s3.HeadObjectInput{Bucket: &bucket, Key: &key})
 	if err != nil {
-		return 0, err
+		return 0, notExist(name, err)
 	}
 	return aws.ToInt64(out.ContentLength), nil
 }
@@ -122,9 +122,20 @@ func (b *S3) Open(ctx context.Context, name string, offset int64) (io.ReadCloser
 	}
 	out, err := c.GetObject(ctx, in)
 	if err != nil {
-		return nil, err
+		return nil, notExist(name, err)
 	}
 	return out.Body, nil
+}
+
+// notExist adds fs.ErrNotExist to an error that says the object is missing,
+// as the local backend's errors say it.
+func notExist(name string, err error) error {
+	var noKey *types.NoSuchKey
+	var notFound *types.NotFound
+	if errors.As(err, &noKey) || errors.As(err, &notFound) {
+		return fmt.Errorf("storage: %s: %w: %w", name, fs.ErrNotExist, err)
+	}
+	return err
 }
 
 // Create spools the file to a local temporary file, which Close uploads in
