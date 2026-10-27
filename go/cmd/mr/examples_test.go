@@ -58,10 +58,7 @@ func (job example) args(program, out string, m, r int, format string) []string {
 		args = append(args, "--param", name+"="+job.Params[name])
 	}
 	args = append(args, program, out)
-	for _, in := range job.Inputs {
-		args = append(args, in)
-	}
-	return args
+	return append(args, job.Inputs...)
 }
 
 func runGo(t *testing.T, job example, program string, m, r int, format string) string {
