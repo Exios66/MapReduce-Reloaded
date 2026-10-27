@@ -225,15 +225,21 @@ e0() {
 }
 
 # E1 compares word count with the combiner on and off on four workers at
-# Zipf exponents 0.5, 1.0 and 1.5, running combiner on first for each exponent.
+# Zipf exponents 0.5, 1.0 and 1.5. It pairs settings within each run and swaps
+# which goes first on even runs to balance page cache effects.
 e1() {
     begin E1
     configure 4
+    local n combiner order
     for zipf in 0.5 1.0 1.5; do
-        for combiner in on off; do
-            submit_flags=()
-            [ "$combiner" = on ] || submit_flags=(-combiner=false)
-            for n in $(seq "$repeat"); do run E1 "s$zipf-$combiner" wordcount "$n" 4 ""; done
+        for n in $(seq "$repeat"); do
+            order="on off"
+            [ $((n % 2)) = 1 ] || order="off on"
+            for combiner in $order; do
+                submit_flags=()
+                [ "$combiner" = on ] || submit_flags=(-combiner=false)
+                run E1 "s$zipf-$combiner" wordcount "$n" 4 ""
+            done
         done
     done
     zipf=1.0 submit_flags=()
