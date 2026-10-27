@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
@@ -174,5 +176,89 @@ func TestReplayWithoutTimes(t *testing.T) {
 	}
 	if st := jobStatus(t, s, "job-1"); st.GetSubmittedAt() != nil || st.GetFinishedAt() != nil {
 		t.Fatalf("status %v; want no times", st)
+	}
+}
+
+// The log keeps only the jobs the coordinator keeps (#178): after many
+// jobs its size follows KeepJobs, and a restart recovers the kept jobs and
+// the running one, forgets the rest, never reuses a job ID, and still
+// numbers workers past every restart.
+func TestCompactLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{KeepJobs: 2}
+	s := recoverServer(t, cfg, path)
+	w := register(t, s)
+	submit := func() string {
+		t.Helper()
+		sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+			Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sub.GetJobId()
+	}
+	run := func() string {
+		t.Helper()
+		job := submit()
+		succeed(t, s, w, next(t, s, w), outputs(0, 1))
+		succeed(t, s, w, next(t, s, w), nil)
+		if jobStatus(t, s, job).GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+			t.Fatalf("%s did not finish", job)
+		}
+		return job
+	}
+	logSize := func() int64 {
+		t.Helper()
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.Size()
+	}
+
+	for range 5 {
+		run()
+	}
+	after5 := logSize()
+	var ended []string
+	for range 20 {
+		ended = append(ended, run())
+	}
+	// Records carry times, so sizes vary by a few bytes.
+	if after25 := logSize(); after25 > after5+after5/4 {
+		t.Fatalf("log is %d bytes after 25 jobs, %d after 5; want it bounded by KeepJobs", after25, after5)
+	}
+	running := submit()
+	succeed(t, s, w, next(t, s, w), outputs(0, 1)) // its map task is done
+
+	s = recoverServer(t, cfg, path)
+	for _, job := range ended[:len(ended)-2] {
+		if _, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: job}); status.Code(err) != codes.NotFound {
+			t.Fatalf("forgotten %s: got %v, want NotFound", job, err)
+		}
+	}
+	for _, job := range ended[len(ended)-2:] {
+		if st := jobStatus(t, s, job); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+			t.Fatalf("kept %s recovered as %v", job, st)
+		}
+	}
+	if st := jobStatus(t, s, running); st.GetState() != pb.JobState_JOB_STATE_REDUCING || st.GetMapTasksCompleted() != 1 {
+		t.Fatalf("running %s recovered as %v; want reducing, its map done", running, st)
+	}
+	if w = register(t, s); w != "r2-w1" {
+		t.Fatalf("worker ID %s after the first restart, want r2-w1", w)
+	}
+	succeed(t, s, w, next(t, s, w), nil)
+	if job := run(); job != "job-27" {
+		t.Fatalf("next job is %s, want job-27", job)
+	}
+	s = recoverServer(t, cfg, path)
+	if w := register(t, s); w != "r3-w1" {
+		t.Fatalf("worker ID %s after the second restart, want r3-w1", w)
 	}
 }

@@ -138,3 +138,66 @@ func TestErrors(t *testing.T) {
 		t.Error("appended after a failed append")
 	}
 }
+
+// Compact keeps the chosen records in order; appends continue after them,
+// and a reopened log replays exactly those.
+func TestCompact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log")
+	l, _ := open(t, path)
+	appendAll(t, l, "a1", "b1", "a2", "b2", "a3")
+	before := size(t, path)
+	if err := l.Compact(func(p []byte) (bool, error) { return p[0] == 'a', nil }); err != nil {
+		t.Fatal(err)
+	}
+	if size(t, path) >= before {
+		t.Errorf("size %d after compaction, %d before", size(t, path), before)
+	}
+	appendAll(t, l, "c1")
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, got := open(t, path); !slices.Equal(got, []string{"a1", "a2", "a3", "c1"}) {
+		t.Fatalf("replayed %q", got)
+	}
+	if _, err := os.Stat(path + compactSuffix); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("temporary file left: %v", err)
+	}
+}
+
+// A compaction that fails leaves the log as it was, still appendable.
+func TestCompactFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log")
+	l, _ := open(t, path)
+	appendAll(t, l, "a", "b")
+	boom := errors.New("boom")
+	if err := l.Compact(func([]byte) (bool, error) { return false, boom }); !errors.Is(err, boom) {
+		t.Fatalf("Compact returned %v", err)
+	}
+	appendAll(t, l, "c")
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, got := open(t, path); !slices.Equal(got, []string{"a", "b", "c"}) {
+		t.Fatalf("replayed %q", got)
+	}
+}
+
+// A crash during compaction, before the rename, leaves the old log and a
+// temporary file, which Open removes.
+func TestOpenRemovesStaleCompaction(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log")
+	l, _ := open(t, path)
+	appendAll(t, l, "a")
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+compactSuffix, []byte("partial"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, got := open(t, path); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("replayed %q", got)
+	}
+	if _, err := os.Stat(path + compactSuffix); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("stale temporary file kept: %v", err)
+	}
+}

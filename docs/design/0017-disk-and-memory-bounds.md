@@ -83,9 +83,10 @@ must remain unselected.
   only, plus job output, which stays until the user deletes it.
 - Map output of an ended job cannot be inspected afterwards. Tests that
   read it set `Worker.KeepEndedJobs`.
-- The write-ahead log (`-data-dir`, on by default in Compose) still grows
-  with every job; it has no compaction (#178). One log record per task event is small next to job data, and
-  the log is deleted with the output volume.
+- The write-ahead log (`-data-dir`, on by default in Compose) holds the
+  `-keep-jobs` jobs and the running one: forgetting a job drops its
+  records (ADR 0007, #178). One log record per task event is small next
+  to job data, and the log is deleted with the output volume.
 - If every worker is short of disk while a job runs, the job waits until
   space is freed. The worker's warning log and its metrics say why.
 
