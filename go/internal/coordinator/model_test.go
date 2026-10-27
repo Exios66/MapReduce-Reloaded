@@ -12,15 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 )
 
 var (
-	modelRuns = flag.Int("model.runs", 15, "random call sequences TestModel runs")
+	modelRuns = flag.Uint64("model.runs", 15, "random call sequences TestModel runs")
 	modelSeed = flag.Uint64("model.seed", 0, "seed of TestModel's first sequence; the failure message names it")
 )
 
@@ -79,7 +77,7 @@ func (md *model) total() map[string]int64 {
 // call it checks the reply and the job's status against the model, and
 // after each restart that the recovered state equals the state before it.
 func TestModel(t *testing.T) {
-	for i := range uint64(*modelRuns) {
+	for i := range *modelRuns {
 		seed := *modelSeed + i
 		if !t.Run(fmt.Sprint(seed), func(t *testing.T) { runModel(t, seed) }) {
 			t.Fatalf("seed %d failed; replay it with -model.seed=%d -model.runs=1", seed, seed)
@@ -91,7 +89,15 @@ func runModel(t *testing.T, seed uint64) {
 	rng := rand.New(rand.NewPCG(seed, 1))
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "coordinator.log")
-	cfg := Config{Backups: true, WorkerTimeout: time.Hour, RetryAfter: time.Second}
+	located := 0 // splits so far, which go to host-0, host-1 and host-2 in turn
+	cfg := Config{Backups: true, WorkerTimeout: time.Hour, RetryAfter: time.Second,
+		// so that the status counts local and remote assignments, which a
+		// restart must keep too
+		Locate: func(*pb.InputSplit) []string {
+			located++
+			return []string{fmt.Sprint("host-", located%3)}
+		},
+	}
 	s, log, err := Recover(cfg, logPath)
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +184,8 @@ func runModel(t *testing.T, seed uint64) {
 		}
 		switch op := rng.IntN(20); {
 		case op < 2 || len(md.workers) == 0: // a worker joins
-			reg, err := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
+			host := fmt.Sprint("host-", rng.IntN(4)) // host-3 holds no split
+			reg, err := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{Host: host}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -187,11 +194,7 @@ func runModel(t *testing.T, seed uint64) {
 		case op < 8: // a worker asks for a task
 			w := md.workers[rng.IntN(len(md.workers))]
 			resp, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
-			if status.Code(err) == codes.NotFound {
-				md.workers = slices.DeleteFunc(md.workers, func(x string) bool { return x == w })
-				continue
-			}
-			if err != nil {
+			if err != nil { // NotFound too: the model drops workers when the coordinator does
 				fail("step %d: request: %v", step, err)
 			}
 			id := resp.GetMapTask().GetAttempt()
@@ -218,7 +221,7 @@ func runModel(t *testing.T, seed uint64) {
 			for k := range md.live {
 				keys = append(keys, k)
 			}
-			for k := range md.issued {
+			for _, k := range slices.Sorted(maps.Keys(md.issued)) {
 				if !md.reported[k] && md.live[k].id == nil && rng.IntN(4) == 0 {
 					keys = append(keys, k) // a late report of an attempt given up
 				}
@@ -273,7 +276,7 @@ func runModel(t *testing.T, seed uint64) {
 			w := md.workers[rng.IntN(len(md.workers))]
 			var running []*pb.TaskProgress
 			want := map[string]bool{}
-			for k := range md.issued {
+			for _, k := range slices.Sorted(maps.Keys(md.issued)) {
 				a, ok := md.live[k]
 				if ok && a.worker != w {
 					continue
@@ -291,8 +294,7 @@ func runModel(t *testing.T, seed uint64) {
 				t.Fatal(err)
 			}
 			if resp.GetReregister() {
-				md.workers = slices.DeleteFunc(md.workers, func(x string) bool { return x == w })
-				continue
+				fail("step %d: heartbeat from %s: told to reregister, but it is registered", step, w)
 			}
 			got := map[string]bool{}
 			for _, id := range resp.GetCancel() {
@@ -373,6 +375,10 @@ func (md *model) check(t *testing.T, seed uint64, step int, s *Server) {
 	case succeeded:
 		ok = state == pb.JobState_JOB_STATE_SUCCEEDED
 		md.ended = true
+	case int(maps) == md.m:
+		ok = state == pb.JobState_JOB_STATE_REDUCING
+	default:
+		ok = state == pb.JobState_JOB_STATE_MAPPING
 	}
 	if !ok {
 		t.Fatalf("seed %d step %d: state %v with %d/%d maps and %d/%d reduces done, failed %v",
