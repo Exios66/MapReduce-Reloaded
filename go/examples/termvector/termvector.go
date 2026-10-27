@@ -79,10 +79,13 @@ func Reduce(ctx api.Context, host []byte, vectors iter.Seq[[]byte], out api.Emit
 	return out.Emit(host, v.encode(minCount))
 }
 
+// sum adds encoded vectors. Pairs are split as words are, on ASCII
+// whitespace only: a term may hold a Unicode space such as U+00A0, which
+// bytes.Fields would split it on.
 func sum(vectors iter.Seq[[]byte]) (vector, error) {
 	v := vector{}
 	for enc := range vectors {
-		for _, pair := range bytes.Fields(enc) {
+		for _, pair := range wordcount.Words(enc) {
 			i := bytes.LastIndexByte(pair, ':')
 			n, err := strconv.Atoi(string(pair[i+1:]))
 			if i < 0 || err != nil {
