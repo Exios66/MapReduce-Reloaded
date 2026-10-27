@@ -63,7 +63,12 @@ There are two ways round it, and both record the same checks on the PR.
   It does not depend on Actions at all, so it is the dependable option.
   Since #189 every PR has been merged on this status: `make check` runs on
   the course VM in a clean worktree of the PR's head commit, and the
-  status is posted through the API, where it shows on the PR.
+  status is posted through the API, where it shows on the PR. The status
+  is narrower than the workflow in one way: the Python checks run under
+  the VM's one interpreter, 3.12, where the workflow's matrix runs 3.11 and
+  3.13. A change that breaks only one of those versions can pass it, so
+  until Actions run again, a change to the Python package that uses
+  version-specific features is also tested under 3.11 by hand.
 
 ## Alternatives considered
 
