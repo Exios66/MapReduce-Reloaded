@@ -30,7 +30,9 @@ output goes too, which is right: nothing can read it any more.
 **A worker low on disk stops taking tasks.** Before each task request it
 checks the work directory's free space; under `-min-free-mib` (default
 1024) it waits, still sending heartbeats so it is not declared dead, and
-counts `mr_worker_disk_waits_total`. A nearly full disk then stalls the
+counts `mr_worker_disk_waits_total`. While waiting, it also polls
+`RequestTask` with `paused=true`, which returns wait or shutdown without
+assigning work, so coordinator shutdown remains reachable. A nearly full disk then stalls the
 job instead of failing task after task. The check is made before a task,
 not while it runs, so the margin must hold one task's output (a map task's
 spills or a reduce task's fetched input); a task that still runs out of
@@ -47,9 +49,13 @@ job's ID is never used again.
 when full.
 
 **Compose bounds logs and metrics.** Every container's log rotates at
-10 MB, three files kept, and Prometheus keeps at most 512 MB of samples.
-`make clean-output` deletes job output from the output volume, keeping the
-experiments' cached inputs and the write-ahead log.
+10 MB, three files kept, and Prometheus has a 512 MB retention target.
+WAL and head chunks may temporarily exceed that target, so operators must
+reserve additional free space ([Prometheus storage](https://prometheus.io/docs/prometheus/latest/storage/)).
+`make clean-output CLEAN_OUTPUTS='completed-directory'` deletes only
+explicitly selected completed output directories from the output volume.
+Inputs, the write-ahead log, and unselected outputs stay; active job outputs
+must remain unselected.
 
 ## Consequences
 

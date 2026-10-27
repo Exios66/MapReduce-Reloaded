@@ -45,11 +45,17 @@ cluster-up: data
 cluster-down:
 	$(COMPOSE) --profile monitoring --profile s3 down -v --remove-orphans
 
-# Delete job output from the output volume, keeping the experiments' cached
-# inputs and the write-ahead log, and show what is left on the disk.
+# Select completed job directory names explicitly, e.g.
+# make clean-output CLEAN_OUTPUTS='sort-kill-123 exp-E0-w4-1'
+# Never select an active job. Inputs, the log, and unselected outputs stay.
+export CLEAN_OUTPUTS
 clean-output:
-	docker run --rm -v mapreduce_output:/out golang:1.26-alpine \
-		find /out -mindepth 1 -maxdepth 1 ! -name 'exp-input-*' ! -name wal -exec rm -rf {} +
+	@test -n "$$CLEAN_OUTPUTS" || { echo 'select completed output directories with CLEAN_OUTPUTS' >&2; exit 1; }
+	set -f; docker run --rm -v mapreduce_output:/out golang:1.26-alpine \
+		sh -eu -c 'for name do case "$$name" in \
+			wal|exp-input-*|sort-1g.txt|*[!a-zA-Z0-9_.-]*|""|.|..|[-_]*) echo "invalid output directory: $$name" >&2; exit 1;; \
+		esac; done; for name do find /out -mindepth 1 -maxdepth 1 -type d -name "$$name" -exec rm -rf {} +; done' \
+		sh $$CLEAN_OUTPUTS
 	@df -h /
 	@docker system df
 

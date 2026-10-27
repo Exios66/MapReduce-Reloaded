@@ -192,6 +192,11 @@ were restarted after the sampler started). The `dirty` flag in their
 
 ![E3](evaluation/E3.png)
 
+The rate panel uses seconds since sampling began. Its shaded band marks
+the observed worker loss between 6.5 and 7.0 seconds on that clock. The
+table's kill times are measured from submission; the saved data does not
+record the offset between those two clocks.
+
 | Worker killed at | Job time (s) | Cost |
 |---|---|---:|
 | no failure | 11.62 (11.59–12.65) | |

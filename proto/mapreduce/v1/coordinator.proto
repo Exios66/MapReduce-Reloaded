@@ -55,6 +55,8 @@ message RegisterWorkerResponse {
 message RequestTaskRequest {
   // ID from RegisterWorkerResponse.
   string worker_id = 1;
+  // Poll for shutdown without taking a task, e.g. while waiting for disk space.
+  bool paused = 2;
 }
 
 message RequestTaskResponse {

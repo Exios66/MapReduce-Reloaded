@@ -81,8 +81,9 @@ func dirSize(dir string) uint64 {
 
 // waitForDisk returns once the work directory's file system has at least
 // MinFreeDisk bytes free, or ctx is done. Heartbeats go on while it waits,
-// so the coordinator does not declare the worker dead. If free space
-// cannot be read, it does not wait.
+// so the coordinator does not declare the worker dead. Paused task requests
+// still receive shutdown, returned as errShutdown. If free space cannot be
+// read, it does not wait.
 func (w *Worker) waitForDisk(ctx context.Context) error {
 	waiting := false
 	for {
@@ -101,6 +102,13 @@ func (w *Worker) waitForDisk(ctx context.Context) error {
 			w.logger.Warn("disk nearly full; not taking tasks", "free_bytes", free, "min_free_bytes", w.MinFreeDisk)
 			w.stats.diskWaits.Add(1)
 			waiting = true
+		}
+		resp, err := w.requestTask(ctx, true)
+		if err != nil {
+			return err
+		}
+		if resp.GetShutdown() != nil {
+			return errShutdown
 		}
 		select {
 		case <-ctx.Done():

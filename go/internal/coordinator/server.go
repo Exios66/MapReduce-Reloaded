@@ -272,7 +272,11 @@ func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 // forget drops the oldest ended jobs beyond cfg.KeepJobs. The active job,
 // the newest, is never dropped.
 func (s *Server) forget() {
-	for s.cfg.KeepJobs > 0 && len(s.order) > s.cfg.KeepJobs+1 && s.order[0] != s.active {
+	limit := s.cfg.KeepJobs
+	if s.active != nil {
+		limit++
+	}
+	for s.cfg.KeepJobs > 0 && len(s.order) > limit && s.order[0] != s.active {
 		delete(s.jobs, s.order[0].id)
 		s.order[0] = nil
 		s.order = s.order[1:]
@@ -295,7 +299,7 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	if s.stopping {
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Shutdown{Shutdown: &pb.ShutdownInstruction{}}}, nil
 	}
-	if s.active != nil {
+	if s.active != nil && !req.GetPaused() {
 		info := s.workerInfo(worker)
 		t, ok := s.active.tasks.Next(func(i uint32) int { return int(locality(s.active.splits[i], info)) })
 		switch {
@@ -455,6 +459,7 @@ func (s *Server) end(j *job, err string, at time.Time) {
 	j.err, j.finished = err, at
 	j.cleanup()
 	s.active = nil
+	s.forget()
 }
 
 func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {

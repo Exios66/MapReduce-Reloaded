@@ -53,8 +53,8 @@ before it merges ([design.md](../design.md#process)):
 Items 1 and 2 are done (#164, #165). Item 8 is in part: the Compose
 override `deploy/compose/wal.yaml` runs the coordinator with `-data-dir`,
 and making it the default is still to do. Item 9 is in part: E0–E4
-run with `bench/experiments.sh`; E5 waits on item 6. Phase 5, the rest of Phase 6 and #59 stay stretch
-goals.
+run with `bench/experiments.sh`; E5 (interpreted job files) has not yet been
+run. Phase 5, the rest of Phase 6 and #59 stay stretch goals.
 
 ## Context
 

@@ -69,8 +69,12 @@ can stand in for the job file; the benchmarks use them.
 
 A job file's `Reduce` takes `values func(yield func([]byte) bool)`, not the
 compiled API's `iter.Seq[[]byte]`, because Yaegi cannot range over a
-function ([ADR 0015](docs/design/0015-user-job-files.md)). Each worker interprets
-the source once per job. `Combine` must be pure and associative: a bad
+function ([ADR 0015](docs/design/0015-user-job-files.md)). During submission,
+`wire.JobSpec` calls `jobfile.Load` in the coordinator: job-file code,
+including package-level initializers and `init` functions, executes there
+before any worker execution. Each worker then interprets the source once
+per job. The accepted risk is a single-user VM with submission exposed on
+loopback only; the interpreter is not a sandbox. `Combine` must be pure and associative: a bad
 combiner silently changes the output, and so the E1 results.
 
 Today the README's quick start runs `mr` in a container against `/corpus`

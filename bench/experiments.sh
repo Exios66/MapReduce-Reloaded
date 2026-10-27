@@ -126,9 +126,18 @@ counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 # them: each run then starts from the same state and the disk does not fill.
 # A run's samplers start after this, so their clock starts with the run.
 fresh() {
-    "${compose[@]}" restart worker >/dev/null 2>&1
+    if ! "${compose[@]}" restart worker >/dev/null; then
+        echo "experiments: worker restart failed; stopping" >&2
+        exit 1
+    fi
     wait_workers "$1"
-    if [ "$(df -Pk / | awk 'NR == 2 { print $4 }')" -lt $((5 << 20)) ]; then
+    local free
+    free=$(df -Pk / | awk 'NR == 2 { print $4 }') || free=
+    if [[ ! "$free" =~ ^[0-9]+$ ]]; then
+        echo "experiments: cannot determine free space on /; stopping" >&2
+        exit 1
+    fi
+    if ! [ "$free" -ge $((5 << 20)) ]; then
         echo "experiments: under 5 GB free on /; stopping" >&2
         exit 1
     fi

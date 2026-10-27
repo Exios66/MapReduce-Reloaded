@@ -639,6 +639,38 @@ func TestClusterWaitsForDisk(t *testing.T) {
 	assertGolden(t, c.output())
 }
 
+// Even a worker whose disk never recovers must receive coordinator shutdown.
+func TestClusterShutdownWhileWaitingForDisk(t *testing.T) {
+	defer worker.SetDiskPoll(5 * time.Millisecond)()
+	c := newCluster(t)
+	checked := make(chan struct{}, 1)
+	c.setup = func(w *worker.Worker) {
+		w.MinFreeDisk = 1 << 30
+		worker.SetFreeBytes(w, func(string) (uint64, error) {
+			select {
+			case checked <- struct{}{}:
+			default:
+			}
+			return 0, nil
+		})
+	}
+	c.addWorker()
+	select {
+	case <-checked:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not check disk space")
+	}
+	c.srv.Shutdown()
+	select {
+	case err := <-c.live[0]:
+		if err != nil {
+			t.Fatalf("shutdown returned %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("worker did not shut down while waiting for disk")
+	}
+}
+
 func modTimes(t *testing.T, files []string) map[string]time.Time {
 	t.Helper()
 	times := map[string]time.Time{}

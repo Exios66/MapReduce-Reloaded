@@ -44,7 +44,13 @@ func TestExampleMatchesGolden(t *testing.T) {
 		if _, err := local.Run(spec, t.TempDir()); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		want, _ := filepath.Glob(filepath.Join(corpus, "expected", "*"))
+		want, err := filepath.Glob(filepath.Join(corpus, "expected", "*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(want) == 0 {
+			t.Fatal("no golden files found")
+		}
 		for _, w := range want {
 			a, errA := os.ReadFile(w)
 			b, errB := os.ReadFile(filepath.Join(out, filepath.Base(w)))
