@@ -41,6 +41,7 @@ compose=("${base[@]}")
 metrics=http://127.0.0.1:18780/metrics
 tmp=$(mktemp -d)
 sampler=
+ready=
 slow= # the worker E2 throttles, restored however the script exits
 cleanup() {
     [ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
@@ -121,7 +122,21 @@ valid() {
 
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 
-start_sampler() { # tasks|bytes FILE
+# fresh WORKERS: workers delete map output only when they exit, so restart
+# them: each run then starts from the same state and the disk does not fill.
+# A run's samplers start after this, so their clock starts with the run.
+fresh() {
+    "${compose[@]}" restart worker >/dev/null 2>&1
+    wait_workers "$1"
+    if [ "$(df -Pk / | awk 'NR == 2 { print $4 }')" -lt $((5 << 20)) ]; then
+        echo "experiments: under 5 GB free on /; stopping" >&2
+        exit 1
+    fi
+    ready=1
+}
+
+start_sampler() { # tasks|bytes FILE; the experiments that sample use 4 workers
+    [ -n "$ready" ] || fresh 4
     if [ "$1" = tasks ]; then
         python3 bench/scrape-tasks.py "$interval" 86400 "$metrics" > "$2" &
     else
@@ -154,14 +169,8 @@ run() {
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
     in=$(input "$program")
     in_volume rm -rf "$out"
-    # Workers delete map output only when they exit, so restart them: each
-    # run then starts from the same state and the disk does not fill.
-    "${compose[@]}" restart worker >/dev/null 2>&1
-    wait_workers "$workers"
-    if [ "$(df -Pk / | awk 'NR == 2 { print $4 }')" -lt $((5 << 20)) ]; then
-        echo "experiments: under 5 GB free on /; stopping before $exp $setting run $n" >&2
-        exit 1
-    fi
+    [ -n "$ready" ] || fresh "$workers"
+    ready=
     log "$exp $setting $program run $n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046

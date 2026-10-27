@@ -170,7 +170,7 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
     calls = log.read_text().splitlines()
     if free_kib < 5 << 20:
         assert result.returncode == 1
-        assert "under 5 GB free on /; stopping before E1" in result.stderr
+        assert "under 5 GB free on /; stopping" in result.stderr
         assert calls == ["restart worker", "ready:4", "disk:-Pk /"]
         assert result.stdout == ""
         return
@@ -238,3 +238,24 @@ def test_run_does_not_submit_when_workers_cannot_restart_or_register(
     if failure == "registration":
         expected.append("ready:4")
     assert log.read_text().splitlines() == expected
+
+
+def test_sampled_run_restarts_workers_once_before_sampling(experiment):
+    invoke, log = experiment
+    invoke(
+        """
+        compose_stub() { printf '%s\\n' "$*" >> "$CALL_LOG"; }
+        wait_workers() { printf 'ready:%s\\n' "$1" >> "$CALL_LOG"; }
+        df() { printf 'h\\ndisk 1 0 %s 0%% /\\n' $((6 << 20)); }
+        python3() { printf 'sampler\\n' >> "$CALL_LOG"; }
+        input() { :; }
+        in_volume() { :; }
+        log() { printf 'submit\\n' >> "$CALL_LOG"; exit 0; }
+        compose=(compose_stub)
+        start_sampler tasks bench/samples.csv
+        wait
+        run E2 normal distsort 1 4 ""
+        """
+    )
+    calls = log.read_text().splitlines()
+    assert calls == ["restart worker", "ready:4", "sampler", "submit"]
