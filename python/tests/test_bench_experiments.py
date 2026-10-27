@@ -51,15 +51,15 @@ def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(experimen
         configure() { printf 'configure|%s\n' "$1"; }
         run() {
             printf '%s|%s|%s|%s|%s|%s|%s|%s\n' \
-                "$1" "$2" "$3" "$4" "$5" "$6" "$zipf" "${submit_flags[*]}"
+                "$1" "$2" "$3" "$4" "$5" "$6" "$zipf" "${submit_flags[*]-}"
         }
         e0() { echo E0; }
-        e2() { printf 'E2|%s|%s\n' "$zipf" "${submit_flags[*]}"; }
+        e2() { printf 'E2|%s|%s\n' "$zipf" "${submit_flags[*]-}"; }
         e3() { echo E3; }
         e4() { echo E4; }
         """,
         argument,
-        after='printf \'defaults|%s|%s\\n\' "$zipf" "${submit_flags[*]}"',
+        after='printf \'defaults|%s|%s\\n\' "$zipf" "${submit_flags[*]-}"',
     )
     lines = result.stdout.splitlines()
     expected = ["begin|E1", "configure|4"]
