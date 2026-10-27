@@ -81,8 +81,8 @@ func TestLoad(t *testing.T) {
 	}
 	wg.Wait()
 	elapsed := time.Since(start)
-	if !done() {
-		t.Fatalf("job not done after %v: %v", elapsed, jobStatus(t, s, job))
+	if !done() || elapsed > limit {
+		t.Fatalf("job done %v after %v, limit %v: %v", done(), elapsed, limit, jobStatus(t, s, job))
 	}
 	slices.Sort(waits)
 	at := func(q float64) time.Duration { return waits[int(q*float64(len(waits)-1))] }
