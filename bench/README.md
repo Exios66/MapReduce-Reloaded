@@ -140,7 +140,10 @@ were restarted after the sampler started). The `dirty` flag in their
 
 ### E0: scaling over workers
 
-![E0](evaluation/E0.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E0-dark.png">
+  <img alt="E0: speed-up over one worker" src="evaluation/E0.png">
+</picture>
 
 | Program | 1 worker (s) | 2 workers (s) | 4 workers (s) | Speed-up at 4 |
 |---|---|---|---|---:|
@@ -158,7 +161,10 @@ were restarted after the sampler started). The `dirty` flag in their
 
 ### E1: what the combiner saves
 
-![E1](evaluation/E1.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E1-dark.png">
+  <img alt="E1: bytes shuffled and job time, combiner on and off" src="evaluation/E1.png">
+</picture>
 
 | Zipf exponent | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
 |---|---:|---:|---:|---|---|---:|
@@ -174,7 +180,10 @@ were restarted after the sampler started). The `dirty` flag in their
 
 ### E2: backup tasks and a straggler
 
-![E2](evaluation/E2.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E2-dark.png">
+  <img alt="E2: tasks completed over time and job time with a straggler" src="evaluation/E2.png">
+</picture>
 
 | Setting | Job time (s) | Backups run | Backups won |
 |---|---|---:|---:|
@@ -190,7 +199,10 @@ were restarted after the sampler started). The `dirty` flag in their
 
 ### E3: losing a worker
 
-![E3](evaluation/E3.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E3-dark.png">
+  <img alt="E3: job time with a worker killed, and data rates" src="evaluation/E3.png">
+</picture>
 
 The rate panel uses seconds since sampling began. Its shaded band marks
 the observed worker loss between 6.5 and 7.0 seconds on that clock. The
@@ -214,7 +226,10 @@ record the offset between those two clocks.
 
 ### E4: a coordinator restart
 
-![E4](evaluation/E4.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E4-dark.png">
+  <img alt="E4: tasks completed over time and job time across a restart" src="evaluation/E4.png">
+</picture>
 
 | Setting | Job time (s) |
 |---|---|
