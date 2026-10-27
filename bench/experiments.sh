@@ -226,8 +226,36 @@ run() {
     in_volume rm -rf "$out"
 }
 
+# prune_volume EXPERIMENT: deletes what earlier runs left in the output
+# volume that no run of this size reads: this experiment's outputs from
+# interrupted runs, and inputs of other sizes or older names. Inputs of
+# this size stay cached.
+prune_volume() {
+    # shellcheck disable=SC2016 # expanded by the container's shell
+    in_volume sh -c 'cd /out && for f in exp-input-*; do
+        case $f in
+        exp-input-grep-"$1".txt | exp-input-distsort-"$1".txt | exp-input-wordcount-"$1"-*.txt) ;;
+        *) rm -f -- "$f" ;;
+        esac
+    done
+    rm -rf -- exp-"$2"-*' sh "$size" "$1"
+}
+
+# begin EXPERIMENT: starts the experiment's results. Results of an earlier
+# run move to bench/results/previous/, which keeps the last three per
+# experiment; results worth keeping go in bench/evaluation/ (bench/README.md).
 begin() { # EXPERIMENT
-    local dir=bench/results/$1
+    local dir=bench/results/$1 old=()
+    if [ -f "$dir/runs.csv" ]; then
+        mkdir -p bench/results/previous
+        mv "$dir" "bench/results/previous/$1-$(date +%Y%m%d-%H%M%S)"
+        old=("bench/results/previous/$1-"*) # oldest first: the names sort by time
+        while [ "${#old[@]}" -gt 3 ]; do
+            rm -rf "${old[0]}"
+            old=("${old[@]:1}")
+        done
+    fi
+    prune_volume "$1"
     mkdir -p "$dir"
     echo "experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job" > "$dir/runs.csv"
     python3 - "$(git rev-parse HEAD)" "$(git status --porcelain | wc -l)" "$(docker version --format '{{.Server.Version}}')" > "$dir/machine.json" <<'EOF'

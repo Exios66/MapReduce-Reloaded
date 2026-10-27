@@ -49,6 +49,25 @@ job's ID is never used again.
 **The job-file cache is an LRU** of 16 programs, instead of emptying itself
 when full.
 
+**A dead worker's directory is deleted by the next worker to start.** A
+worker without `-work-dir` keeps its map output in a new temporary
+directory, removed when it exits cleanly. A killed worker cannot remove it,
+and its restarted process makes another, so pruning, which looks only in
+its own directory, never sees the old one: on the course VM, nine E3 kills
+left 1.9 GB in one worker container. Each worker now holds a lock
+(`flock`) on a file in its directory while it runs; a starting worker
+deletes every `mr-worker-*` directory whose lock it can take, since the
+kernel drops a lock when its process dies. A directory without the lock
+file is kept: its worker may still be starting. Nothing reads a dead
+worker's output, since the coordinator reruns its map tasks (§3.3).
+
+**Experiments prune what they leave.** `bench/experiments.sh` moves an
+experiment's earlier results to `bench/results/previous/`, keeping the last
+three, so a rerun does not overwrite them, and deletes from the output
+volume the outputs of its interrupted runs and the inputs no run of the
+current size reads. Results that are reported are copied to
+`bench/evaluation/` and committed.
+
 **Compose bounds logs and metrics.** Every container's log rotates at
 10 MB, three files kept, and Prometheus has a 512 MB retention target.
 WAL and head chunks may temporarily exceed that target, so operators must

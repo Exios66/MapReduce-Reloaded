@@ -65,7 +65,8 @@ func main() {
 
 // run serves map output and runs tasks using c, checking c.minFreeMiB
 // (in MiB) before requesting work. An empty workDir creates a temporary
-// directory removed on return; an empty listen requires a shared workDir.
+// directory removed on return, after deleting those that dead workers left
+// behind; an empty listen requires a shared workDir.
 // It returns setup and worker errors, joined with temporary-directory
 // cleanup errors. A signal ends worker execution successfully, though
 // cleanup can still fail. Background shuffle and metrics server errors
@@ -77,10 +78,11 @@ func run(c config) (err error) {
 	case c.listen == "" && c.workDir == "":
 		return errors.New(`-listen "" needs a shared -work-dir`)
 	case c.workDir == "":
-		if c.workDir, err = os.MkdirTemp("", "mr-worker-"); err != nil {
+		var release func() error
+		if c.workDir, release, err = tempWorkDir(""); err != nil {
 			return err
 		}
-		defer func() { err = errors.Join(err, os.RemoveAll(c.workDir)) }()
+		defer func() { err = errors.Join(err, release()) }()
 	}
 	if c.listen != "" {
 		lis, err := net.Listen("tcp", c.listen)

@@ -315,3 +315,38 @@ def test_sampled_run_restarts_workers_once_before_sampling(experiment):
     )
     calls = log.read_text().splitlines()
     assert calls == ["restart worker", "ready:4", "sampler", "submit"]
+
+
+def test_begin_keeps_three_previous_results_and_prunes_the_volume(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        date() {
+            c=$(( $(cat "$CALL_LOG.n" 2>/dev/null || echo 0) + 1 ))
+            echo "$c" > "$CALL_LOG.n"
+            echo "20260101-00000$c"
+        }
+        in_volume() { printf 'volume:%s\\n' "$*" >> "$CALL_LOG"; }
+        git() { :; }
+        docker() { :; }
+        python3() { cat > /dev/null; }
+        for i in 1 2 3 4 5; do
+            begin E1
+            echo "run $i" > bench/results/E1/marker
+        done
+        ls bench/results/previous
+        cat bench/results/previous/*/marker bench/results/E1/marker
+        """
+    )
+    assert result.stdout.splitlines() == [
+        "E1-20260101-000002",
+        "E1-20260101-000003",
+        "E1-20260101-000004",
+        "run 2",
+        "run 3",
+        "run 4",
+        "run 5",
+    ]
+    calls = log.read_text().splitlines()
+    assert sum(c.startswith("volume:sh -c cd /out") for c in calls) == 5
+    assert sum(c.endswith(" sh 100 E1") for c in calls) == 5
