@@ -154,6 +154,14 @@ run() {
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
     in=$(input "$program")
     in_volume rm -rf "$out"
+    # Workers delete map output only when they exit, so restart them: each
+    # run then starts from the same state and the disk does not fill.
+    "${compose[@]}" restart worker >/dev/null 2>&1
+    wait_workers "$workers"
+    if [ "$(df -Pk / | awk 'NR == 2 { print $4 }')" -lt $((5 << 20)) ]; then
+        echo "experiments: under 5 GB free on /; stopping before $exp $setting run $n" >&2
+        exit 1
+    fi
     log "$exp $setting $program run $n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
