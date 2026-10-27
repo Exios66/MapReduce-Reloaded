@@ -38,7 +38,7 @@ job instead of failing task after task. The check is made before a task,
 not while it runs, so the margin must hold one task's output (a map task's
 spills or a reduce task's fetched input); a task that still runs out of
 space fails and is retried, on this worker once space is back or on
-another. `mr_worker_disk_free_bytes` shows the space.
+another; these failures count toward `-max-task-failures`. `mr_worker_disk_free_bytes` shows the space.
 
 **The coordinator forgets old jobs.** It keeps the `-keep-jobs` (default
 100) most recent ended jobs for `mr status` and the status page; older ones

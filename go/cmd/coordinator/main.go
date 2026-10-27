@@ -39,7 +39,7 @@ import (
 type options struct {
 	addr, httpAddr, dataDir, logFormat string
 	backups                            bool
-	keepJobs                           int
+	keepJobs, maxTaskFailures          int
 }
 
 // main runs the coordinator until interrupted or terminated. It exits with
@@ -82,6 +82,7 @@ func parse(args []string, stderr io.Writer) (options, error) {
 	fs.StringVar(&o.dataDir, "data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
 	fs.BoolVar(&o.backups, "backups", true, "run backup attempts of the last tasks of each phase")
 	fs.IntVar(&o.keepJobs, "keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
+	fs.IntVar(&o.maxTaskFailures, "max-task-failures", 8, "fail the job once one task has failed this many times (0: retry for ever)")
 	fs.StringVar(&o.logFormat, "log-format", "text", "log format: text or json")
 	err := fs.Parse(args)
 	if err == nil && fs.NArg() > 0 {
@@ -89,6 +90,10 @@ func parse(args []string, stderr io.Writer) (options, error) {
 	}
 	if err == nil && o.keepJobs < 0 {
 		err = fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", o.keepJobs)
+	}
+	if err == nil && o.maxTaskFailures != 0 && o.maxTaskFailures <= coordinator.SkipAfter {
+		// Skipping a bad record takes SkipAfter crashes, then one more attempt.
+		err = fmt.Errorf("-max-task-failures is %d; it must be 0 (no limit) or more than %d", o.maxTaskFailures, coordinator.SkipAfter)
 	}
 	return o, err
 }
@@ -101,6 +106,7 @@ func config(o options) coordinator.Config {
 		RetryAfter:        time.Second,
 		Backups:           o.backups,
 		KeepJobs:          o.keepJobs,
+		MaxTaskFailures:   o.maxTaskFailures,
 	}
 }
 

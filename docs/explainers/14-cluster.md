@@ -47,7 +47,9 @@ one map path (`task.Map`), not just a final answer.
 ## What happens when things go wrong
 
 - A task that fails is reported as failed and becomes idle again, so
-  another attempt runs it.
+  another attempt runs it. After 8 failures of one task
+  (`coordinator -max-task-failures`) the job fails with the last error,
+  and a job that cannot be loaded at all fails at once.
 - Workers may start before the coordinator; they wait for it.
 - Workers may join at any time, and leave between tasks.
 - A worker that dies is declared dead when its heartbeats stop, and its
