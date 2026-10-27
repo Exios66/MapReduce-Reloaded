@@ -69,6 +69,13 @@ func Join(name string, elems ...string) string {
 	return strings.Join(append([]string{strings.TrimSuffix(name, "/")}, elems...), "/")
 }
 
+// Escape returns name with the characters that List treats as pattern syntax
+// escaped, so that it matches only itself. Use it on the literal part of a
+// pattern, such as a directory a caller chose.
+func Escape(name string) string {
+	return strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`, `[`, `\[`).Replace(name)
+}
+
 // List returns the names that match pattern, sorted.
 func List(ctx context.Context, pattern string) ([]string, error) {
 	b, err := For(pattern)

@@ -176,3 +176,15 @@ func TestPlanMSkipsEmptyFilesAndRejectsZero(t *testing.T) {
 		t.Fatal("m = 0: no error")
 	}
 }
+
+// Plan stops once the files so far make more than api.MaxMapTasks splits,
+// though each file alone is under the limit.
+func TestPlanStopsAtMaxMapTasks(t *testing.T) {
+	pattern := writeFiles(t, 60_000, 60_000)
+	if _, err := Plan(t.Context(), formats.Text{}, []string{pattern}, 1); err == nil || !strings.Contains(err.Error(), "map tasks") {
+		t.Fatalf("got %v, want a map task limit error", err)
+	}
+	if got, err := Plan(t.Context(), formats.Text{}, []string{pattern}, 2); err != nil || len(got) != 60_000 {
+		t.Fatalf("2-byte splits: %d splits, %v", len(got), err)
+	}
+}

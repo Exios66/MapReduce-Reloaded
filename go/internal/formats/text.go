@@ -37,9 +37,37 @@ func (Text) Open(ctx context.Context, s Split) (RecordReader, error) {
 	}
 	r := &textReader{f: f, br: bufio.NewReader(f), pos: pos, end: s.End}
 	if s.Start > 0 {
-		r.readLine()
+		r.skipPartialLine(s.End - s.Start)
 	}
 	return r, nil
+}
+
+// skipPartialLine discards the line that began before the split, without
+// reading past the split's end. limit is how many bytes from pos can end it,
+// the newline at the latest being the split's second-to-last byte: a line
+// ending later starts beyond the split, so none starts in it, and the
+// reader is left empty. Without the bound, every split of a very long line
+// would read the rest of it.
+func (r *textReader) skipPartialLine(limit int64) {
+	var read int64
+	for read <= limit {
+		frag, err := r.br.ReadSlice('\n')
+		read += int64(len(frag))
+		switch {
+		case err == bufio.ErrBufferFull:
+			continue
+		case err != nil:
+			if err != io.EOF {
+				r.err = err
+			}
+			r.pos = r.end
+			return
+		case read <= limit:
+			r.pos += read
+			return
+		}
+	}
+	r.pos = r.end
 }
 
 type textReader struct {

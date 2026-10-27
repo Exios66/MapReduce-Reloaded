@@ -9,6 +9,13 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 )
 
+// Limits on a job's task counts. The coordinator allocates state for every
+// task before any runs, so a submission must not choose how much.
+const (
+	MaxReduceTasks = 10_000
+	MaxMapTasks    = formats.MaxSplits
+)
+
 // Program is a user's MapReduce code: what runs, as opposed to the data it
 // runs on.
 type Program struct {
@@ -72,6 +79,12 @@ func (s *JobSpec) Validate() error {
 	}
 	if s.R == 0 {
 		errs = append(errs, errors.New("number of reduce tasks R must be at least 1"))
+	}
+	if s.R > MaxReduceTasks {
+		errs = append(errs, fmt.Errorf("number of reduce tasks R is %d; the most is %d", s.R, MaxReduceTasks))
+	}
+	if s.M > MaxMapTasks {
+		errs = append(errs, fmt.Errorf("number of map tasks M is %d; the most is %d", s.M, MaxMapTasks))
 	}
 	if _, err := formats.Input(s.InputFormat); err != nil {
 		errs = append(errs, err)

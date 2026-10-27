@@ -42,6 +42,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0015](design/0015-user-job-files.md) | User job files, interpreted by the workers |
 | [0016](design/0016-shared-storage-and-host-client.md) | Shared storage is a host directory, and the client runs on the host |
 | [0017](design/0017-disk-and-memory-bounds.md) | Workers delete ended jobs' map output; disk, memory and logs are bounded |
+| [0018](design/0018-trust-model.md) | The cluster trusts its network; what that costs, and what is bounded |
 
 ## Explainers
 

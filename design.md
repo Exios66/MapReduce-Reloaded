@@ -98,7 +98,9 @@ gRPC with protobuf messages, defined once in [`proto/`](proto/) and
 generated for Go and Python ([ADR 0003](docs/design/0003-rpc-contract.md)). The
 assignment's "boss" is our coordinator. Boss → workers runs in the replies:
 a worker asks with `RequestTask` and the coordinator answers with a task, so
-only workers open connections to the coordinator.
+only workers open connections to the coordinator. The RPCs are not encrypted
+or authenticated: the cluster trusts its network, and Compose publishes the
+coordinator on the VM's loopback only ([ADR 0018](docs/design/0018-trust-model.md)).
 
 | From → to | RPCs | Notes |
 |---|---|---|

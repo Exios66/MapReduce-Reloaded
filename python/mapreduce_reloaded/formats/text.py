@@ -42,7 +42,15 @@ class Text:
             pos = max(split.start - 1, 0)
             f.seek(pos)
             if split.start > 0:
-                pos += len(f.readline())
+                # The partial line may end only within the split; a line
+                # ending later starts beyond it, so none starts in it. Bounding
+                # the read keeps every split of a very long line from reading
+                # the rest of it.
+                limit = split.end - split.start
+                skipped = f.readline(limit)
+                if not skipped.endswith(b"\n"):
+                    return
+                pos += len(skipped)
             while pos < split.end and (line := f.readline()):
                 yield str(pos).encode(), line.removesuffix(b"\n").removesuffix(b"\r")
                 pos += len(line)

@@ -8,10 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 )
+
+// MaxSplits is the most splits one file may be cut into. It is the limit on
+// a job's map tasks (api.MaxMapTasks), enforced here because the list of
+// splits is built in memory before the job can be rejected.
+const MaxSplits = 100_000
 
 // Split is the byte range [Start, End) of one input file, the unit of work of
 // one map task. Path names the file in storage.
@@ -93,7 +99,16 @@ func byteSplits(ctx context.Context, path string, splitSize int64) ([]Split, err
 	if err != nil {
 		return nil, err
 	}
-	var splits []Split
+	// Count before allocating: a tiny split size on a large file would
+	// otherwise build the whole list before any limit could reject it.
+	n := size / splitSize
+	if size%splitSize != 0 {
+		n++
+	}
+	if n > MaxSplits {
+		return nil, fmt.Errorf("formats: %s would be cut into %d splits; the most is %d (raise the split size)", path, n, MaxSplits)
+	}
+	splits := slices.Grow([]Split(nil), int(n))
 	for start := int64(0); start < size; start += splitSize {
 		splits = append(splits, Split{path, start, min(start+splitSize, size)})
 	}
