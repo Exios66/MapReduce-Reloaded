@@ -146,8 +146,10 @@ proto-check: proto-lint proto-breaking proto
 # cache does not track; -count=1 runs it every time. -shuffle=on runs each
 # package's tests in a random order, so that no test depends on another; a
 # failure prints the seed, and -shuffle=SEED repeats the order.
+# MR_PYTHON lets go/cmd/mr compare the Go examples with Python's (#153); a
+# relative PYTHON is a command name, looked up on the PATH.
 go-test:
-	cd go && go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
