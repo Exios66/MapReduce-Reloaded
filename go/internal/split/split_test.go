@@ -31,6 +31,7 @@ func fileName(i int) string { return fmt.Sprintf("f%d.txt", i) }
 // Splits cover every file exactly, in order, with no gaps or overlaps, and
 // none is larger than the split size.
 func TestPlanCoversInput(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(1, 2))
 	for range 200 {
 		sizes := make([]int, rng.IntN(4)+1)
@@ -60,6 +61,7 @@ func TestPlanCoversInput(t *testing.T) {
 }
 
 func TestPlanDefaultSize(t *testing.T) {
+	t.Parallel()
 	splits, err := Plan(t.Context(), formats.Text{}, []string{writeFiles(t, 10)}, 0)
 	if err != nil || len(splits) != 1 {
 		t.Fatalf("got %v, %v; want one split", splits, err)
@@ -67,6 +69,7 @@ func TestPlanDefaultSize(t *testing.T) {
 }
 
 func TestSizeFor(t *testing.T) {
+	t.Parallel()
 	glob := writeFiles(t, 100, 1)
 	for _, m := range []int{1, 3, 7, 101, 500} {
 		size, err := SizeFor(t.Context(), []string{glob}, m)
@@ -84,12 +87,14 @@ func TestSizeFor(t *testing.T) {
 }
 
 func TestDefaultR(t *testing.T) {
+	t.Parallel()
 	if DefaultR(0) != 2 || DefaultR(4) != 8 {
 		t.Fatalf("DefaultR(0), DefaultR(4) = %d, %d", DefaultR(0), DefaultR(4))
 	}
 }
 
 func TestExpandErrors(t *testing.T) {
+	t.Parallel()
 	for pattern, want := range map[string]string{
 		filepath.Join(t.TempDir(), "*"): "no input matches",
 		"[":                             "syntax error",
@@ -101,6 +106,7 @@ func TestExpandErrors(t *testing.T) {
 }
 
 func TestAllocate(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		sizes []int64
 		m     int
@@ -125,6 +131,7 @@ func TestAllocate(t *testing.T) {
 // PlanM gives exactly m splits for files that can be cut that finely,
 // covering each file in order.
 func TestPlanM(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(3, 4))
 	for range 200 {
 		sizes := make([]int, rng.IntN(4)+1)
@@ -155,6 +162,7 @@ func TestPlanM(t *testing.T) {
 }
 
 func TestPlanMSkipsEmptyFilesAndRejectsZero(t *testing.T) {
+	t.Parallel()
 	glob := writeFiles(t, 0, 100)
 	splits, err := PlanM(t.Context(), formats.Text{}, []string{glob}, 2)
 	if err != nil || len(splits) != 2 || filepath.Base(splits[0].Path) != fileName(1) {

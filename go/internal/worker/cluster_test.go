@@ -43,6 +43,10 @@ var inputs = []string{filepath.Join(corpus, "*.txt")}
 // pass under go test -count=N.
 var mapStuck, reduceStuck = make(chan struct{}, 1), make(chan struct{}, 1)
 
+// unhang is closed when every test has run, so that user code that hangs
+// on purpose returns before the leak check (leak_test.go).
+var unhang = make(chan struct{})
+
 // The first attempt of map task 0 of test.pause-map, and of reduce task 0 of
 // test.pause-reduce, also sends on its channel, then fails once resume is
 // sent on.
@@ -83,7 +87,7 @@ func init() {
 	hangMap.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
 		if first(ctx, api.MapTask) {
 			mapStuck <- struct{}{}
-			select {}
+			<-unhang // hangs for the rest of the package's tests
 		}
 		return wordcount.Map(ctx, key, value, out)
 	})
@@ -93,7 +97,7 @@ func init() {
 	hangReduce.Reducer = api.ReduceFunc(func(ctx api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
 		if first(ctx, api.ReduceTask) {
 			reduceStuck <- struct{}{}
-			select {}
+			<-unhang // hangs for the rest of the package's tests
 		}
 		return wordcount.Program.Reducer.Reduce(ctx, key, values, out)
 	})
