@@ -346,8 +346,9 @@ e3() {
 
 e4() {
     begin E4
+    # A fresh log, so the restarts below replay this experiment's jobs only.
     in_volume rm -rf /out/wal
-    configure 4 wal.yaml
+    configure 4
     for n in $(seq "$repeat"); do
         start_sampler tasks "bench/results/E4/tasks-normal-$n.csv"
         run E4 normal distsort "$n" 4 ""
@@ -364,8 +365,8 @@ e4() {
         stop_sampler
         wait_workers 4
     done
-    configure 4
     in_volume rm -rf /out/wal
+    configure 4
 }
 
 case ${1:-} in

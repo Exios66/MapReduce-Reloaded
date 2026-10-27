@@ -166,9 +166,8 @@ The assignment asks for at least one feature beyond basic MapReduce, and
 names four examples: combiners, extra tasks for stragglers, handling worker
 failures, and scheduling tasks where their data is. We do the first three,
 plus a fourth of our own, coordinator recovery. All four are built in code.
-Compose runs the coordinator with `-data-dir` through the override
-[`deploy/compose/wal.yaml`](deploy/compose/wal.yaml), and with backups off
-through [`backups-off.yaml`](deploy/compose/backups-off.yaml); the
+Compose runs the coordinator with `-data-dir` by default, and with backups
+off through the override [`backups-off.yaml`](deploy/compose/backups-off.yaml); the
 combiner's switch is `mr submit -combiner=false`. Each feature has an
 experiment and a plot below.
 
@@ -188,9 +187,9 @@ are not a special feature: the assignment requires them.
 4. **Coordinator recovery**, beyond the paper. With `-data-dir` the
    coordinator logs every decision before replying, and a restarted
    coordinator replays the log and finishes the job
-   ([ADR 0007](docs/design/0007-write-ahead-log.md)). Under Compose, the
-   `wal.yaml` override keeps the log in the output volume. **(Planned: the
-   default Compose file does too.)**
+   ([ADR 0007](docs/design/0007-write-ahead-log.md)). Compose keeps the log
+   at `/out/wal` in the output volume, and `make e2e` checks that a job
+   survives a coordinator crash.
 
 Bad-record skipping, counters, side outputs, compression, a status page with
 Prometheus and Grafana, and a locality-aware scheduler hook are also built.
@@ -271,8 +270,8 @@ intermediate files in the workers' containers and the output on the same
 disk, about 3 GiB, within the disk budget in
 [cluster VM](docs/cluster-vm.md#disk-budget). E0 runs on 1 and 2 workers with
 `docker compose up --scale worker=N`, which keeps the one-CPU limit. E2 and
-E4 change coordinator flags, so they use the Compose overrides
-`backups-off.yaml` (`-backups=false`) and `wal.yaml` (`-data-dir`). E1's "bytes shuffled" is the map output bytes after the
+E2 changes a coordinator flag, so it uses the Compose override
+`backups-off.yaml` (`-backups=false`); E4 starts from an empty log. E1's "bytes shuffled" is the map output bytes after the
 combiner, an existing counter. The Zipf generator takes its exponent as a
 parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.

@@ -9,7 +9,12 @@
 # storage that bin/mr upload and bin/mr cat reach from the host (ADR 0016);
 # make cluster-up creates it. The test corpus is also at /corpus, and the
 # output volume at /out holds the experiments' inputs and output and the
-# write-ahead log. Job specs carry absolute paths. Map output stays inside each worker and is
+# write-ahead log. Job specs carry absolute paths.
+#
+# The coordinator logs every decision to /out/wal before replying (ADR
+# 0007), so after a crash or `docker restart` it replays the log, keeps the
+# jobs it knew and resumes a running one. make cluster-down deletes the log
+# with the output volume. Map output stays inside each worker and is
 # fetched over the network (§3.1 step 5); a worker deletes a job's map output
 # once the job ends, and takes no task while under 1 GiB of disk is free.
 #
@@ -44,7 +49,7 @@ services:
     build:
       context: ../../go
       dockerfile: ../deploy/docker/Dockerfile
-    command: [coordinator, -addr, ":7070", -http, ":8080"]
+    command: [coordinator, -addr, ":7070", -http, ":8080", -data-dir, /out/wal]
     ports:
       - "127.0.0.1:18770:7070"
       - "127.0.0.1:18780:8080" # status page and /metrics
