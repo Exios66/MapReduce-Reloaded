@@ -346,8 +346,8 @@ e3() {
 
 e4() {
     begin E4
-    in_volume rm -rf /out/wal
-    configure 4 wal.yaml
+    # A fresh log, so the restarts below replay this experiment's jobs only.
+    fresh_log
     for n in $(seq "$repeat"); do
         start_sampler tasks "bench/results/E4/tasks-normal-$n.csv"
         run E4 normal distsort "$n" 4 ""
@@ -364,8 +364,15 @@ e4() {
         stop_sampler
         wait_workers 4
     done
-    configure 4
+    fresh_log
+}
+
+# fresh_log: stops the coordinator, so that nothing is appended to its log
+# after it is deleted, deletes the log and starts four workers.
+fresh_log() {
+    "${base[@]}" stop coordinator >/dev/null 2>&1
     in_volume rm -rf /out/wal
+    configure 4
 }
 
 case ${1:-} in

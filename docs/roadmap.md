@@ -41,7 +41,7 @@ before it merges ([design.md](../design.md#process)):
    failure is still to do).
 7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation
    (done).
-8. **Coordinator recovery in Compose:** `-data-dir` on a volume.
+8. **Coordinator recovery in Compose:** `-data-dir` on a volume (done).
 9. **Evaluation:** experiments E0–E5 of
    [design.md](../design.md#performance-evaluation), with plots in
    `bench/README.md`.
@@ -50,9 +50,9 @@ before it merges ([design.md](../design.md#process)):
 11. **Feedback given:** review at least one pull request written by an AI
     agent, with comments on it ([design.md](../design.md#process)).
 
-Items 1 and 2 are done (#164, #165). Item 8 is in part: the Compose
-override `deploy/compose/wal.yaml` runs the coordinator with `-data-dir`,
-and making it the default is still to do. Item 9 is in part: E0–E4
+Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
+item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
+Item 9 is in part: E0–E4
 run with `bench/experiments.sh`; E5 (interpreted job files) has not yet been
 run. Phase 5, the rest of Phase 6 and #59 stay stretch goals.
 

@@ -6,6 +6,10 @@
 // payload, and the payload. Every append is synced to disk before it
 // returns. A crash can leave the last record incomplete: Open drops such a
 // torn tail, but reports damage anywhere else as an error.
+//
+// Compact rewrites the log with only the records a caller keeps, into a
+// temporary file that replaces the log by a rename, so a crash leaves
+// either the old log or the new one, never a mix.
 package wal
 
 import (
@@ -30,14 +34,22 @@ var ErrCorrupt = errors.New("wal: corrupt record")
 
 // Log is an open log file, positioned to append.
 type Log struct {
-	f   *os.File
-	err error // sticky: after a failed append, the file's end is unknown
+	path string
+	f    *os.File
+	err  error // sticky: after a failed append, the file's end is unknown
 }
+
+// compactSuffix names the temporary file Compact writes next to the log.
+const compactSuffix = ".compact"
 
 // Open opens the log at path, creating it if needed, and calls replay with
 // each record's payload in order. The payload is only valid during the
 // call. A torn last record is removed from the file.
 func Open(path string, replay func(payload []byte) error) (*Log, error) {
+	// A compaction that crashed before its rename left the log untouched.
+	if err := os.Remove(path + compactSuffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return nil, err
@@ -52,7 +64,7 @@ func Open(path string, replay func(payload []byte) error) (*Log, error) {
 	if err != nil {
 		return nil, errors.Join(err, f.Close())
 	}
-	return &Log{f: f}, nil
+	return &Log{path: path, f: f}, nil
 }
 
 // readAll replays f's records and returns the offset where the valid
@@ -141,13 +153,78 @@ func (l *Log) Append(payload []byte) error {
 	if l.err != nil {
 		return l.err
 	}
-	buf := make([]byte, headerSize, headerSize+len(payload))
-	binary.LittleEndian.PutUint32(buf, uint32(len(payload)))
-	binary.LittleEndian.PutUint32(buf[4:], crc32.Checksum(payload, crc))
-	if _, l.err = l.f.Write(append(buf, payload...)); l.err == nil {
+	if l.err = l.write(payload); l.err == nil {
 		l.err = l.f.Sync()
 	}
 	return l.err
+}
+
+// Compact rewrites the log with the records for which keep returns true,
+// in order, then appends go on after them. If it fails before the new log
+// replaces the old one, the old log is left as it was and stays usable; if
+// it fails after, every later Append fails too. keep must not use the
+// payload after it returns.
+func (l *Log) Compact(keep func(payload []byte) (bool, error)) (err error) {
+	if l.err != nil {
+		return l.err
+	}
+	tmp := l.path + compactSuffix
+	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = out.Close()
+			_ = os.Remove(tmp)
+		}
+	}()
+	w := &Log{f: out}
+	if _, err = readAll(l.f, func(payload []byte) error {
+		ok, err := keep(payload)
+		if err == nil && ok {
+			err = w.write(payload)
+		}
+		return err
+	}); err != nil {
+		return err
+	}
+	if err = out.Sync(); err != nil {
+		return err
+	}
+	if err = out.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(tmp, l.path); err != nil {
+		return err
+	}
+	// The new log is in place; from here a failure leaves the file's end
+	// unknown, so the log refuses further appends.
+	l.err = syncDir(l.path)
+	if l.err == nil {
+		var f *os.File
+		if f, l.err = os.OpenFile(l.path, os.O_RDWR, 0); l.err == nil {
+			if _, l.err = f.Seek(0, io.SeekEnd); l.err != nil {
+				_ = f.Close()
+			} else {
+				_ = l.f.Close()
+				l.f = f
+			}
+		}
+	}
+	return l.err
+}
+
+// write frames payload and writes it, without syncing.
+func (l *Log) write(payload []byte) error {
+	if len(payload) == 0 || len(payload) > math.MaxUint32 {
+		return fmt.Errorf("wal: record of %d bytes", len(payload))
+	}
+	buf := make([]byte, headerSize, headerSize+len(payload))
+	binary.LittleEndian.PutUint32(buf, uint32(len(payload)))
+	binary.LittleEndian.PutUint32(buf[4:], crc32.Checksum(payload, crc))
+	_, err := l.f.Write(append(buf, payload...))
+	return err
 }
 
 // Close closes the log file.

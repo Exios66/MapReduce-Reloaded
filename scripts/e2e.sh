@@ -8,7 +8,8 @@
 # uploads to shared storage, and the output is read and then deleted from
 # data/ by the host user (ADR 0016). With the argument s3, the job is
 # submitted from the mr container and reads and writes the s3 profile's
-# store (#41).
+# store (#41). Afterwards the coordinator is killed and started again, and
+# must still report the job SUCCEEDED, read back from its write-ahead log.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,7 +29,9 @@ trap 'rm -rf "$got"' EXIT
 # the memory check below then says why.
 submitted=0
 [ "${1:-local}" = s3 ] || bin/mr upload 'testdata/corpus/*.txt' /data/input/e2e-corpus >/dev/null
-timeout 600 "${submit[@]}" -m 7 -r 4 -wait wordcount "$job" "$input" || submitted=$?
+result=$(timeout 600 "${submit[@]}" -m 7 -r 4 -wait wordcount "$job" "$input") || submitted=$?
+printf '%s\n' "$result"
+id=${result%%$'\t'*}
 
 containers=$("${compose[@]}" ps -aq)
 if [ -z "$containers" ]; then
@@ -64,4 +67,19 @@ if [ "${done_reduces##* }" != 4 ]; then
     echo "e2e: /metrics does not show the job's 4 reduce tasks completed" >&2
     exit 1
 fi
-echo "e2e: output matches the golden output"
+
+# A crash, not a clean stop: a stopping coordinator tells its workers to exit.
+coordinator=$("${compose[@]}" ps -q coordinator)
+docker kill "$coordinator" >/dev/null
+docker start "$coordinator" >/dev/null
+state=
+for _ in $(seq 60); do
+    # The whole reply, then its first line: head could close the pipe early.
+    state=$("${compose[@]}" run --rm -q mr status -coordinator coordinator:7070 "$id" 2>/dev/null) && state=${state%%$'\n'*} && break
+    sleep 1
+done
+if [ "${state##*$'\t'}" != SUCCEEDED ]; then
+    echo "e2e: after a restart the coordinator reports job $id as '${state:-nothing}', not SUCCEEDED" >&2
+    exit 1
+fi
+echo "e2e: output matches the golden output, and the job survived a coordinator restart"

@@ -36,6 +36,18 @@ append takes milliseconds, and something has to order the appends.
    of the log, so the log must keep failing (`*wal.Log` does). Every later
    change fails with `Unavailable` until the coordinator is restarted from
    its log.
+4. **The log keeps only the jobs the coordinator keeps** (#178). When
+   `-keep-jobs` makes the coordinator forget ended jobs, it rewrites the
+   log under the lock without their records (`wal.Log.Compact`), and once
+   more at startup, after replay. The new log is written to a temporary
+   file and renamed over the old one, so a crash leaves one or the other;
+   `wal.Open` deletes a temporary file a crash left behind. Every
+   `Restarted` record is kept, since worker IDs are numbered by them, and a
+   `WorkerLost` record is kept with the job submitted before it, the only
+   one it can have applied to. Job IDs are numbered from the highest ID
+   replayed, not from a count of jobs, so a compacted log never leads to a
+   reused ID. A failed compaction is logged; if it failed after the
+   rename, the log refuses appends, as in 3.
 
 ## Alternatives rejected
 
@@ -56,3 +68,6 @@ append takes milliseconds, and something has to order the appends.
   limit if needed.
 - Logging a report that changes nothing, such as a duplicate, is
   harmless: replaying it changes nothing either.
+- The log's size follows `-keep-jobs` (100 by default), not the number of
+  jobs ever run. Each compaction rewrites the kept jobs' records with one
+  fsync, under the lock, once per job that ends past the limit.

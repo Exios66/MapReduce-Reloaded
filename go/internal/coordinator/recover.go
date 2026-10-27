@@ -36,6 +36,7 @@ func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
 		return nil, nil, err
 	}
 	s.cfg.Log = log
+	s.compact() // replay may have forgotten jobs while the log was not set
 	rec := &pb.LogRecord{Record: &pb.LogRecord_Restarted{Restarted: &pb.Restarted{}}}
 	if err := s.record(rec, time.Now()); err != nil {
 		return nil, nil, errors.Join(err, log.Close())

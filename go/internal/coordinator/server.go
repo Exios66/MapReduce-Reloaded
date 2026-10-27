@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -268,22 +270,76 @@ func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 	}
 	s.jobs[j.id], s.active = j, j
 	s.order = append(s.order, j)
-	s.seq++
+	// From the ID, not a count: a compacted log no longer holds every job.
+	n, err := strconv.Atoi(strings.TrimPrefix(j.id, "job-"))
+	if err != nil {
+		n = s.seq + 1
+	}
+	s.seq = max(s.seq+1, n)
 	s.forget()
 }
 
-// forget drops the oldest ended jobs beyond cfg.KeepJobs. The active job,
-// the newest, is never dropped.
+// forget drops the oldest ended jobs beyond cfg.KeepJobs, and their
+// records from the log. The active job, the newest, is never dropped.
 // It is called with a newly active job; a nonpositive limit retains all jobs.
 func (s *Server) forget() {
 	limit := s.cfg.KeepJobs
 	if s.active != nil {
 		limit++
 	}
+	dropped := false
 	for s.cfg.KeepJobs > 0 && len(s.order) > limit && s.order[0] != s.active {
 		delete(s.jobs, s.order[0].id)
 		s.order[0] = nil
 		s.order = s.order[1:]
+		dropped = true
+	}
+	if dropped {
+		s.compact()
+	}
+}
+
+// compacter is a Log that can drop records; *wal.Log is one.
+type compacter interface {
+	Compact(keep func(record []byte) (bool, error)) error
+}
+
+// compact rewrites the log with the records of the jobs still kept, so its
+// size follows KeepJobs rather than every job ever run (#178). It keeps
+// every Restarted record, which Recover counts to name workers, and a
+// WorkerLost record only if the job submitted before it is kept: jobs run
+// one at a time, so that is the job it applied to, if any. Replaying the
+// result rebuilds the same jobs. A failure is logged; the log is either
+// unchanged or, if the failure came after its replacement, refuses
+// further records, which stops the coordinator taking new decisions.
+func (s *Server) compact() {
+	c, ok := s.cfg.Log.(compacter)
+	if !ok || s.cfg.KeepJobs <= 0 {
+		return
+	}
+	kept := func(job string) bool { return s.jobs[job] != nil }
+	last := ""
+	err := c.Compact(func(b []byte) (bool, error) {
+		rec := &pb.LogRecord{}
+		if err := proto.Unmarshal(b, rec); err != nil {
+			return false, err
+		}
+		switch r := rec.GetRecord().(type) {
+		case *pb.LogRecord_JobSubmitted:
+			last = r.JobSubmitted.GetJobId()
+			return kept(last), nil
+		case *pb.LogRecord_TaskAssigned:
+			return kept(r.TaskAssigned.GetAttempt().GetTask().GetJobId()), nil
+		case *pb.LogRecord_TaskReported:
+			return kept(r.TaskReported.GetAttempt().GetTask().GetJobId()), nil
+		case *pb.LogRecord_WorkerLost:
+			return kept(last), nil
+		default: // Restarted, and anything newer: keep what is not understood
+			return true, nil
+		}
+	})
+	if err != nil {
+		slog.Error("compacting the coordinator log", "err", err)
 	}
 }
 
