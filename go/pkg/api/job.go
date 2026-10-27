@@ -13,7 +13,7 @@ import (
 // task before any runs, so a submission must not choose how much.
 const (
 	MaxReduceTasks = 10_000
-	MaxMapTasks    = 100_000
+	MaxMapTasks    = formats.MaxSplits
 )
 
 // Program is a user's MapReduce code: what runs, as opposed to the data it

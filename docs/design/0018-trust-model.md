@@ -44,8 +44,11 @@ rest of the report is fixed, so that one submission cannot exhaust the
 coordinator or a worker:
 
 - **Task counts.** `R` is at most 10,000 and `M` at most 100,000
-  (`api.MaxReduceTasks`, `api.MaxMapTasks`), checked at submission and in the
-  local runner, before any state is allocated. A log written before the limit
+  (`api.MaxReduceTasks`, `api.MaxMapTasks`). `JobSpec.Validate` checks both
+  for the coordinator and the local runner. When the split size, not `M`,
+  sets the number of map tasks, the planner counts a file's splits from its
+  size and stops once the plan passes the limit, so an input cannot build
+  the list before it is rejected. A log written before the limit
   existed is trusted when the coordinator restarts.
 - **Failing tasks.** A task that fails `-max-task-failures` times (default 8)
   fails the job; it no longer returns to the queue for ever.

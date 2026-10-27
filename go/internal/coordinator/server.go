@@ -21,7 +21,6 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"
 	mrtask "github.com/exios66/mapreduce-reloaded/go/internal/task"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
-	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
 // Config configures a Server.
@@ -230,9 +229,6 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 	}
 	if len(plan) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "the input is empty")
-	}
-	if len(plan) > api.MaxMapTasks {
-		return nil, status.Errorf(codes.InvalidArgument, "the input splits into %d map tasks; the most is %d (raise the split size)", len(plan), api.MaxMapTasks)
 	}
 	splits := make([]*pb.InputSplit, len(plan))
 	for i, sp := range plan {

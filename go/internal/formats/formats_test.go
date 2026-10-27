@@ -213,3 +213,25 @@ func TestTextAlignmentStaysInSplit(t *testing.T) {
 		})
 	}
 }
+
+// A file that would be cut into more than MaxSplits splits is rejected from
+// its size, before the list of splits is allocated.
+func TestByteSplitsLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sparse")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(MaxSplits + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Text{}).Splits(t.Context(), path, 1); err == nil || !strings.Contains(err.Error(), "the most is") {
+		t.Fatalf("1-byte splits: got %v, want a split limit error", err)
+	}
+	if got, err := (Text{}).Splits(t.Context(), path, 2); err != nil || len(got) != MaxSplits/2+1 {
+		t.Fatalf("2-byte splits: %d splits, %v", len(got), err)
+	}
+}

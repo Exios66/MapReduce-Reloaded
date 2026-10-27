@@ -41,9 +41,17 @@ func Plan(ctx context.Context, in formats.InputFormat, patterns []string, size u
 		if err != nil {
 			return nil, err
 		}
-		splits = append(splits, s...)
+		if splits = append(splits, s...); len(splits) > api.MaxMapTasks {
+			return nil, errTooManySplits(len(splits))
+		}
 	}
 	return splits, nil
+}
+
+// errTooManySplits reports a plan past api.MaxMapTasks, which the planners
+// stop at instead of building the rest of the list.
+func errTooManySplits(n int) error {
+	return fmt.Errorf("split: the input splits into more than %d map tasks (%d so far); raise the split size", api.MaxMapTasks, n)
 }
 
 // ForSpec returns the splits of spec's input: PlanM with spec.M if set,
@@ -85,7 +93,9 @@ func PlanM(ctx context.Context, in formats.InputFormat, patterns []string, m int
 		if err != nil {
 			return nil, err
 		}
-		splits = append(splits, s...)
+		if splits = append(splits, s...); len(splits) > api.MaxMapTasks {
+			return nil, errTooManySplits(len(splits))
+		}
 	}
 	return splits, nil
 }

@@ -606,3 +606,21 @@ func TestSubmitJobTaskCountLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestSubmitJobRejectsTooManySplits(t *testing.T) {
+	in := filepath.Join(t.TempDir(), "big.txt")
+	f, err := os.Create(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(api.MaxMapTasks + 1); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	job := &pb.JobSpec{Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1, SplitSizeBytes: 1}
+	_, err = NewServer(Config{}).SubmitJob(ctx, &pb.SubmitJobRequest{Job: job})
+	assertCode(t, err, codes.InvalidArgument)
+	if !strings.Contains(err.Error(), "map tasks") && !strings.Contains(err.Error(), "the most is") {
+		t.Fatalf("got %v, want a split limit error", err)
+	}
+}
