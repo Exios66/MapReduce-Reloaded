@@ -46,6 +46,21 @@ files: its partitions are written under attempt names and committed
 together, so a failure halfway frees what it wrote (#183).
 `mr_worker_disk_free_bytes` shows the space.
 
+**The margin, measured** (#183). On the course VM, sampling free space on
+the root file system every 0.2 s with four workers, M = 32 and R = 4:
+1 GiB distsort used at most 2.75 GB at once (1.08 GB of map output,
+1.08 GB of part files, and 0.6 GB of temporary files while tasks ran), and 1 GiB
+word count 96 MB, its combiner having shrunk the map output to 89 MB. The
+largest single task is a distsort reduce, whose part file is a quarter of
+the input, 271 MB; a map task writes about its 32 MiB split. So the
+default of 1024 MiB holds the largest task of these jobs about four times
+over for a worker with a disk of its own. Under Compose the four workers
+share one disk and each checks it alone, so all four could start such a
+task together: Compose sets 2048 MiB, which holds four of them. A job
+whose reduce tasks are larger, because its input is larger or its R
+smaller, needs a larger margin, roughly the input size divided by R per
+worker sharing the disk.
+
 **The coordinator forgets old jobs.** It keeps the `-keep-jobs` (default
 100) most recent ended jobs for `mr status` and the status page; older ones
 are forgotten, oldest first; 0 keeps all of them, and a negative value is

@@ -1,0 +1,11 @@
+plain words here
+
+
+noÂ break space andâ€ƒem space
+verticaltab and formfeed split
+tab	inside	the line, said the tester
+not utf-8: ÿş said €
+  leading and trailing spaces  
+said
+said
+last line without a newline

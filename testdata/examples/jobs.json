@@ -1,0 +1,43 @@
+{
+  "grep": {
+    "inputs": [
+      "testdata/corpus/raven.txt",
+      "testdata/examples/edge.txt"
+    ],
+    "params": {
+      "pattern": "said"
+    }
+  },
+  "invertedindex": {
+    "inputs": [
+      "testdata/corpus/raven.txt",
+      "testdata/examples/edge.txt"
+    ],
+    "params": {}
+  },
+  "distsort": {
+    "inputs": [
+      "testdata/corpus/raven.txt",
+      "testdata/examples/edge.txt"
+    ],
+    "params": {}
+  },
+  "urlfreq": {
+    "inputs": [
+      "testdata/examples/urlfreq/input/*"
+    ],
+    "params": {}
+  },
+  "reverselinks": {
+    "inputs": [
+      "testdata/examples/reverselinks/input/*"
+    ],
+    "params": {}
+  },
+  "termvector": {
+    "inputs": [
+      "testdata/examples/termvector/input/*"
+    ],
+    "params": {}
+  }
+}

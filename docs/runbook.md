@@ -168,7 +168,7 @@ python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 SSH drops. The plots land in `bench/plots/E0.png` … `E5.png`, and the
 script prints the tables that go in [`bench/README.md`](../bench/README.md#experiments).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
-E5 is the slowest: its three job-file runs take about 7 minutes each.
+E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 
 ### 5.7 Monitoring (optional)
 

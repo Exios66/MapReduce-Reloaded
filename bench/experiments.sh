@@ -16,7 +16,9 @@
 # - E4: distsort with the coordinator's write-ahead log, restarted at 50% of
 #   the normal job time, and with no restart.
 # - E5: Zipf word count compiled into the workers, against the same program
-#   as a job file (examples/wordcount.go) that the workers interpret.
+#   as a job file that the workers interpret: examples/wordcount.go, which
+#   calls the compiled helpers api.Words and api.Sum, and
+#   bench/jobs/wordcount-naive.go, which does not.
 #
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
@@ -189,8 +191,9 @@ run() {
     log "$exp $setting $program run $n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
-    # A job file is read from the repository's examples/, mounted read-only.
-    job=$("${compose[@]}" run --rm -q -v "$PWD/examples:/examples:ro" mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
+    # A job file is read from the repository's examples/ or bench/jobs/,
+    # mounted read-only.
+    job=$("${compose[@]}" run --rm -q -v "$PWD/examples:/examples:ro" -v "$PWD/bench/jobs:/jobs:ro" mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
         $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>/dev/null | tail -1)
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
@@ -379,20 +382,27 @@ fresh_log() {
     configure 4
 }
 
-# E5 runs Zipf word count as the compiled-in program and as the job file
-# examples/wordcount.go, which every worker interprets (ADR 0015), on the
-# same input; the outputs must match. It alternates which runs first, as E1
-# does, and samples the coordinator's task counts for the map phase's end.
+# E5 runs Zipf word count as the compiled-in program and as two job files,
+# which every worker interprets (ADR 0015), on the same input; the outputs
+# must match. "interpreted" is examples/wordcount.go, "naive" is
+# bench/jobs/wordcount-naive.go. It rotates which runs first and samples the
+# coordinator's task counts for the map phase's end.
 e5() {
     begin E5
     configure 4
     local n kind order
     for n in $(seq "$repeat"); do
-        order="compiled interpreted"
-        [ $((n % 2)) = 1 ] || order="interpreted compiled"
+        case $((n % 3)) in
+        1) order="compiled interpreted naive" ;;
+        2) order="interpreted naive compiled" ;;
+        *) order="naive compiled interpreted" ;;
+        esac
         for kind in $order; do
-            jobfile=
-            [ "$kind" = compiled ] || jobfile=/examples/wordcount.go
+            case $kind in
+            compiled) jobfile= ;;
+            interpreted) jobfile=/examples/wordcount.go ;;
+            naive) jobfile=/jobs/wordcount-naive.go ;;
+            esac
             start_sampler tasks "bench/results/E5/tasks-$kind-$n.csv"
             run E5 "$kind" wordcount "$n" 4 ""
             stop_sampler
