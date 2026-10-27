@@ -206,6 +206,26 @@ func TestFailedAttemptLeavesNoFiles(t *testing.T) {
 	}
 }
 
+// A map attempt that fails after writing some of its partitions, as one
+// out of disk space would, leaves none of them (#183).
+func TestFailedMapLeavesNoPartitions(t *testing.T) {
+	spec, split := setup(t, "a b\n")
+	spec.Program.Partitioner = api.PartitionFunc(func(key []byte, _ uint32) uint32 { return uint32(key[0] - 'a') })
+	spec.Program.Combiner = api.ReduceFunc(func(_ api.Context, key []byte, values iter.Seq[[]byte], out api.Emitter) error {
+		if string(key) == "b" { // in partition 1, written after partition 0
+			return errBoom
+		}
+		return wordcount.Sum(nil, key, values, out)
+	})
+	dir := t.TempDir()
+	if _, _, err := Map(t.Context(), spec, api.TaskID{Kind: api.MapTask}, split, dir, nil, quiet); !errors.Is(err, errBoom) {
+		t.Fatalf("Map error = %v", err)
+	}
+	if names := dirNames(t, dir); len(names) != 0 {
+		t.Fatalf("failed map left %v", names)
+	}
+}
+
 func TestContext(t *testing.T) {
 	spec, split := setup(t, "x\n")
 	spec.Params = map[string]string{"k": "v"}
