@@ -23,9 +23,9 @@ Each requirement of the assignment, and where this repository meets it.
 |---|---|---|
 | Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
 | Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | built |
-| Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | planned |
-| Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file built; exact M planned |
-| README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
+| Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | built |
+| Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
+| README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
 | At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 run, [results](bench/README.md#evaluation-e0e4); E5 planned |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
@@ -43,13 +43,13 @@ default address for `mr submit` and `mr status`; `-coordinator` overrides it.
 
 ```sh
 make cluster-up                                   # build the image; start 1 coordinator + 4 workers
-make mr                                           # build the client into bin/mr          (planned)
-make upload-example                               # bundled corpus and web log into /data/input (planned)
-bin/mr upload ~/my-logs /data/input/logs          # upload your own data                  (planned)
+make mr                                           # build the client into bin/mr
+make upload-example                               # bundled corpus and web log into /data/input
+bin/mr upload ~/my-logs /data/input/logs          # upload your own data
 bin/mr submit -m 8 -r 4 -wait \
     examples/wordcount.go /data/out/wc '/data/input/corpus/*.txt'   # a job file
 bin/mr status job-1                               # state, progress, backups, counters
-bin/mr cat /data/out/wc | head                    # read the output                       (planned)
+bin/mr cat /data/out/wc | head                    # read the output
 ```
 
 `mr submit` takes the five things the assignment lists:
@@ -59,7 +59,7 @@ bin/mr cat /data/out/wc | head                    # read the output             
 | where inputs are in shared storage | trailing arguments: paths or globs under `/data` (or `s3://…`) |
 | where outputs go in shared storage | the output directory, e.g. `/data/out/wc` |
 | a file with map and reduce functions | a `.go` job file, read on the client and sent with the job ([ADR 0015](docs/design/0015-user-job-files.md)) |
-| the number of map tasks | `-m M`, made exact **(planned)**; today it sets an approximate split size |
+| the number of map tasks | `-m M`, exact: the input is cut into M splits, shared among the files by size, at least one each |
 | the number of reduce tasks | `-r R` |
 
 Optional flags choose input and output formats, compression and the
@@ -77,9 +77,8 @@ per job. The accepted risk is a single-user VM with submission exposed on
 loopback only; the interpreter is not a sandbox. `Combine` must be pure and associative: a bad
 combiner silently changes the output, and so the E1 results.
 
-Today the README's quick start runs `mr` in a container against `/corpus`
-and `/out`. The host-client commands above work only after the planned items
-land.
+The README's [quick start](README.md#quick-start) runs these commands, and
+`make e2e` submits through `bin/mr` and deletes the output as the host user.
 
 ### Language
 
@@ -110,8 +109,10 @@ only workers open connections to the coordinator.
 ### Shared storage
 
 A host directory, `data/` in the repository, bind-mounted at `/data` in the
-coordinator and every worker **(planned; today the corpus is mounted at
-`/corpus` and output goes to a named volume at `/out`)**. The assignment
+coordinator and every worker. Directories the containers create
+there are writable by everyone, so the host user can delete output the
+containers wrote. The experiments keep their 1 GiB inputs and outputs in
+a named volume at `/out` instead, out of the way of user data. The assignment
 allows a shared volume mount on a single VM; it lets the host client upload
 input with a plain copy and read output without a container
 ([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)).
@@ -153,10 +154,11 @@ on manual dispatches ([ADR 0014](docs/design/0014-ci-on-pull-requests.md)).
 | Golden | Local mode and the cluster give identical output for every example program | `go/internal/worker/examples_test.go` |
 | In-process cluster | A coordinator and workers in one test: word count, retries, bad records, worker loss, backups, locality, counters | `go/internal/worker/cluster_test.go` |
 | Chaos | Random worker kills and freezes and coordinator restarts during a job; output must equal the golden files. 3 seeded runs in `make check`, 50 as a soak | `go/internal/worker/chaos_test.go` |
-| End to end | Word count on the Compose cluster, compared with the golden output, and no container over its memory limit | `make e2e`, `make e2e-s3` |
+| End to end | Word count submitted by the host client over uploaded input, compared with the golden output and deleted by the host user, and no container over its memory limit | `make e2e`, `make e2e-s3` |
+| Client | Upload of files, directories and globs, `/data` path resolution and its errors, `cat` order, an exact M through a real coordinator, the M allocation (proportional, at least one per file, more files than M) | `go/cmd/mr`, `go/internal/split` |
 | Docs | Every code path and test named in the paper mapping exists | `go/internal/papermap` |
 | Job files | `examples/wordcount.go` gives the golden output with and without its combiner; a file that does not parse, lacks Map or Reduce, or has the wrong types is rejected with a reason, and the coordinator refuses its submit (`InvalidArgument`); a panic in `Map` is an error, not a crash | `go/internal/jobfile`, `go/internal/wire`, `go/cmd/mr` |
-| **(planned)** | A worker that cannot load a job file fails the job (`TaskFailure.fatal`). Client: upload and path resolution; exact M. `make e2e` through the host client | |
+| **(planned)** | A worker that cannot load a job file fails the job (`TaskFailure.fatal`) | |
 
 ### Special features
 
@@ -571,7 +573,7 @@ no reducer is told about them.
 | Paper (§) | This system | Why | Record |
 |---|---|---|---|
 | Google's internal RPC (§3.1) | gRPC and protobuf, with Go and Python generated from `proto/` | Both languages must speak one wire contract, and the shuffle needs streaming. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/03-rpc-contract.md) |
-| GFS holds input and output (§3.1) | A host directory bind-mounted at `/data` in every container (planned; today `/corpus` and `/out`), read and written through `internal/storage`, or S3-compatible object storage (`s3://bucket/key`, configured by the standard AWS environment variables). Without a rename, an S3 commit is a server-side copy, then a delete. | GFS is not available, the cluster runs on one VM, and the client on the host must reach the same files. | [ADR 0016](docs/design/0016-shared-storage-and-host-client.md), [cluster VM](docs/cluster-vm.md), [ADR 0013](docs/design/0013-commit-on-object-storage.md) |
+| GFS holds input and output (§3.1) | A host directory bind-mounted at `/data` in every container , read and written through `internal/storage`, or S3-compatible object storage (`s3://bucket/key`, configured by the standard AWS environment variables). Without a rename, an S3 commit is a server-side copy, then a delete. | GFS is not available, the cluster runs on one VM, and the client on the host must reach the same files. | [ADR 0016](docs/design/0016-shared-storage-and-host-client.md), [cluster VM](docs/cluster-vm.md), [ADR 0013](docs/design/0013-commit-on-object-storage.md) |
 | Intermediate records in files of undescribed format (§3.1) | MRKV: checksummed blocks of records with a footer, each block optionally compressed with zstd or Snappy (#42). | Go and Python must agree byte for byte (uncompressed) or record for record (compressed), corruption must be detected, and fetches must resume. | [ADR 0004](docs/design/0004-intermediate-file-format.md), [file format](docs/file-format.md), [explainer](docs/explainers/04-file-format.md) |
 | Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](docs/design/0007-write-ahead-log.md), [explainer](docs/explainers/18-coordinator-recovery.md) |
 | Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/16-worker-failure.md), [ADR 0009](docs/design/0009-failure-detection.md) |
@@ -582,7 +584,7 @@ no reducer is told about them.
 | Master places map tasks near GFS replicas (§3.4) | A scheduler hook: `Config.Locate` labels splits, and `LocalityWait` holds tasks back. Nothing sets `Locate` in Compose, so there is no location source. | All Compose workers share one volume, so there is nothing to exploit until a store knows where data lives (#41). | [explainer](docs/explainers/23-locality.md), [paper mapping](docs/paper-mapping.md) (F11) |
 | Keys and values are strings (§2) | `[]byte` in Go and `bytes` in Python. User code encodes its own data. | Both languages then sort and hash identically, with no extra rules. | [ADR 0005](docs/design/0005-programming-api.md), [explainer](docs/explainers/07-programming-api.md) |
 | Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](docs/file-format.md), [explainer](docs/explainers/09-external-sort.md) |
-| M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is to become an exact M (planned). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](docs/explainers/12-splits.md) |
+| M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is an exact M (ADR 0016). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](docs/explainers/12-splits.md) |
 | User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. (planned) | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](docs/design/0015-user-job-files.md) |
 | One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
 | Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB of RAM: one coordinator and four workers, each limited to one CPU. | It is the hardware available, it still exercises every protocol path, and the CPU limits make spreading tasks over workers pay off. | [cluster VM](docs/cluster-vm.md), [explainer](docs/explainers/14-cluster.md) |

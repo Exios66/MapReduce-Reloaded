@@ -1,6 +1,6 @@
 # ADR 0016 — Shared storage is a host directory, and the client runs on the host
 
-**Status:** accepted · **Phase:** course deliverable
+**Status:** accepted, built (#173, #174, #175) · **Phase:** course deliverable
 
 ## Context
 
@@ -17,15 +17,16 @@ container (`docker compose run --rm mr …`).
 
 ## Decision
 
-**Shared storage (planned).** A directory on the VM, `data/` at the repository
-root (git-ignored), will be bind-mounted at `/data` in the coordinator and
-every worker. It will be the cluster's shared storage: the assignment names
+**Shared storage.** A directory on the VM, `data/` at the repository
+root (git-ignored), is bind-mounted at `/data` in the coordinator and
+every worker. It is the cluster's shared storage: the assignment names
 "a shared volume mount across all containers" as an acceptable choice for a
-single-VM deployment. Job inputs, job outputs and nothing else will live there.
-Today Compose still mounts `/corpus` and `/out`; `/data` job paths require
-the planned mounts and client path handling.
+single-VM deployment. Job inputs and job outputs live there. Compose also
+keeps the test corpus at `/corpus` and the named volume `output` at `/out`,
+which holds the experiments' 1 GiB inputs and outputs and the write-ahead
+log, apart from user data.
 
-- A path in a job will be a shared-storage path, as every container sees it:
+- A path in a job is a shared-storage path, as every container sees it:
   `/data/input/corpus/*.txt`, `/data/out/wc`.
 - Intermediate data does not use shared storage. Map output stays on each
   worker's own disk and reducers fetch it over gRPC
@@ -33,19 +34,22 @@ the planned mounts and client path handling.
 - The containers run as the distroless `nonroot` user (UID 65532). `make
   data` creates `data/` with `input/` and `out/`, and makes `out/` writable
   by that UID. `make cluster-up` runs `make data` before starting Compose;
-  the directories are prepared for the planned mount. A bare
+  Compose mounts what it made. A bare
   `docker compose up` skips `make data`, and Docker then creates `data/` as
   root, so the cluster cannot write to it; use `make cluster-up`.
-- Ownership (planned): output files are created by UID 65532. The planned
-  design assumes a host umask of 022, so `mr cat` can read them, and says
-  that deleting `data/out/…` may need `sudo` on the VM. Running the
-  containers as the host user (`user: "${UID}:${GID}"`) would remove both
-  problems and the `chmod`; it is the alternative if this proves awkward.
+- Ownership: output files are created by UID 65532, readable by everyone
+  under the containers' umask of 022, so `mr cat` and the host user can
+  read them. Every directory the coordinator and workers create in local
+  storage is made mode 0777 (`storage.Local.MkdirAll`), so the host user
+  can delete a job's output without `sudo`: deleting a file needs write
+  permission on its directory, not on the file. Running the containers as
+  the host user (`user: "${UID}:${GID}"`) would avoid this, but the
+  `output` volume and the write-ahead log in it belong to UID 65532.
 - The S3 profile ([ADR 0013](0013-commit-on-object-storage.md)) stays as an
   option for `s3://` paths.
 
-**The client.** Building `mr` for the host with `make mr` (into `bin/mr`)
-is planned. `mr submit` and `mr status` default to `127.0.0.1:18770`, which
+**The client.** `make mr` builds `mr` for the host into `bin/mr`, with the
+host's Go, or in the `golang` image when the host has none. `mr submit` and `mr status` default to `127.0.0.1:18770`, which
 Compose publishes on loopback only; `-coordinator` overrides the address.
 `mr submit` never touches `data/` itself: the coordinator expands globs, so
 the client sends container-side paths such as `/data/input/…` unchanged.
@@ -53,10 +57,11 @@ Only `mr upload` and `mr cat` resolve `/data` to `MR_DATA_DIR`, and they fail
 if that directory does not exist, so a run from another directory does not
 silently use the wrong one.
 
-The upload, job-file submission and output-reading workflow below is planned:
+The upload, job-file submission and output-reading workflow:
 
-- `mr upload <local files or dirs…> <shared dir>` copies files into shared
-  storage. On the VM this is a copy into `data/` (`MR_DATA_DIR`, by default
+- `mr upload <local files, dirs or globs…> <shared dir>` copies files into
+  shared storage, a directory's contents keeping their layout, each through
+  a temporary file so a job never reads a partial copy. On the VM this is a copy into `data/` (`MR_DATA_DIR`, by default
   `./data`). The client resolves `/data/...` to that directory, so the user
   types the same path for upload and for the job.
 - `make upload-example` uploads the bundled corpus and a generated web log
@@ -69,8 +74,7 @@ The upload, job-file submission and output-reading workflow below is planned:
 - `docker compose run --rm mr …` keeps working, for machines without Go.
   Pass `-coordinator coordinator:7070` inside the Compose network.
 
-Planned host-client quick start, once the `/data` mounts and client path
-handling are available:
+The host-client quick start, run on the course VM:
 
 ```sh
 make cluster-up                      # initialize data/, build the image, start 1 coordinator and 4 workers
@@ -80,16 +84,17 @@ bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/co
 bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head
 ```
 
-**M is exact (planned).** `-m` will request an exact number of map tasks.
-The target behavior is proportional allocation among input files by size
-(largest remainder, at least one split per file), with each file cut into
-the allocated number of splits on record boundaries. Two cases cannot
-give exactly M. With more files than M, every file still gets one split, so
-M is raised to the number of files. A file with fewer records than its
-allocated splits gets fewer splits, so M can come out lower. In both cases
-`mr submit` prints the actual M and `mr status` reports it. Today `-m` sets
-an approximate split size (`split.SizeFor`) and a file never gets fewer than
-one split; exact allocation and its reporting are planned.
+**M is exact.** `-m` requests an exact number of map tasks, sent as
+`JobSpec.num_map_tasks`; the coordinator cuts the input
+(`split.PlanM`), so the client does not need to read it. M is divided among
+the non-empty input files in proportion to their sizes by largest
+remainder, and a file left with none takes one from the file with the most
+(`split.Allocate`). Each file is then cut into byte ranges of
+ceil(size / k), aligned to records when read. Two cases cannot give exactly
+M. With more files than M, every file still gets one split, so M is raised
+to the number of files. A file too small to cut k ways, or a `kv` file,
+which is never cut, gets fewer. `mr submit` prints the M that resulted on
+standard error, and `mr status` reports it as the map task total.
 
 ## Alternatives considered
 

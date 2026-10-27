@@ -19,10 +19,9 @@ F1–F23 (see the [paper mapping](docs/paper-mapping.md)), and survive worker
 crashes, coordinator restarts, slow machines and bad input records. The
 chaos test passes 50 seeded runs.
 
-The benchmark harness, user job files submitted with each job, and the
-evaluation of the special features (E0–E4, [below](#results)) are done. Next
-are the remaining course deliverables: a host-side client with uploads to a
-shared `/data` mount, and experiment E5 (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
+The host client with uploads to a shared `/data` mount, user job files
+submitted with each job, the benchmark harness and the evaluation of the
+special features (E0–E4, [below](#results)) are done. Next is experiment E5 (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
 and [design](design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
@@ -30,21 +29,157 @@ in plain language.
 
 ## Quick start
 
-You need Go 1.26+ and Python 3.11+. Run these from the repository root.
+From a fresh clone to a job's output, with host commands only. The cluster
+runs in Docker Compose on one machine: one coordinator and four workers,
+each limited to one CPU. The client, `bin/mr`, runs on the host, outside
+every container. Run every command from the repository root.
 
-### Run a job on one machine
+### What to install
+
+| What | Why | On the course VM |
+|---|---|---|
+| Docker Engine with the Compose plugin, and your user in the `docker` group | runs the cluster | already there |
+| GNU `make` | the build and run targets | `sudo apt-get install -y make` |
+| Python 3.11+ | `make upload-example` generates a web log with it | already there (3.12) |
+| Go 1.26+ (optional) | builds `bin/mr`; without it, `make mr` builds it in Docker | `scripts/vm-setup.sh --install` |
+
+The cluster needs 4 CPUs, about 3.7 GB of memory and a few GB of disk.
+[Cluster VM](docs/cluster-vm.md) has the budgets and the setup for the
+course VM, and the [runbook](docs/runbook.md) goes from SSH to a full demo.
+
+### 1. Build and start
+
+```sh
+git clone https://github.com/Exios66/MapReduce-Reloaded.git
+cd MapReduce-Reloaded
+make cluster-up       # create data/, build the image, start the coordinator and 4 workers
+make mr               # build the client into bin/mr
+```
+
+### 2. Upload the example data
+
+Shared storage is the directory `data/`, which every container sees at
+`/data` ([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)).
+`bin/mr upload` copies files into it; you name the destination by the path
+the containers see, and the same path goes in the job.
+
+```sh
+make upload-example   # the corpus (3 books) to /data/input/corpus, a 10 MB web log to /data/input/weblog
+bin/mr upload ~/my-logs /data/input/logs      # your own files, directories or quoted globs
+```
+
+### 3. Write a job
+
+A job is one Go file, `package job`, with a `Map` and a `Reduce`
+function ([ADR 0015](docs/design/0015-user-job-files.md)). The client reads
+it and sends it with the job, and every worker interprets it, so there is
+nothing to compile or upload. [`examples/wordcount.go`](examples/wordcount.go)
+is a complete one that works with the example data:
+
+```go
+package job
+
+import (
+	"bytes"
+	"strconv"
+
+	"mapreduce/api"
+)
+
+// Map is called once per input line: key is the line's byte offset, value the line.
+func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
+	for _, w := range bytes.FieldsFunc(value, isSpace) {
+		if err := out.Emit(w, []byte("1")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
+
+// Reduce is called once per key, with every value emitted for it.
+func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), out api.Emitter) error {
+	var n int64
+	values(func(v []byte) bool {
+		x, _ := strconv.ParseInt(string(v), 10, 64)
+		n += x
+		return true
+	})
+	return out.Emit(key, strconv.AppendInt(nil, n, 10))
+}
+
+// Combine is optional: it runs on each map task's output before the shuffle.
+var Combine = Reduce
+```
+
+`Map` and `Reduce` emit keys and values as bytes. Only the standard library
+and `mapreduce/api` can be imported. `ctx.Param("name")` reads a
+`-param name=value` given at submission.
+
+### 4. Submit it
+
+```sh
+bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/corpus/*.txt'
+```
+
+```
+mr: 8 map tasks (-m 8)
+job-1   SUCCEEDED
+map     8/8
+reduce  4/4
+...
+```
+
+`mr submit [flags] <job file> <output dir> <inputs…>`:
+
+| Argument or flag | Meaning |
+|---|---|
+| `<job file>` | A `.go` job file, or the name of a built-in program (`wordcount`, `grep`, `urlfreq`, …; see [Example programs](#example-programs)) |
+| `<output dir>` | Where the output goes in shared storage, such as `/data/out/wc`. It must not already hold output |
+| `<inputs…>` | Input files or globs in shared storage. Quote globs, so the coordinator expands them as the containers see them |
+| `-m M` | The number of map tasks. The input is cut into M splits, shared among the files by size; each file gets at least one. Default: one per 64 MiB |
+| `-r R` | The number of reduce tasks, and of output files. Default: 2 per worker |
+| `-wait` | Wait for the job to end and print its status and counters. Without it, `mr submit` prints the job's id |
+| `-combiner=false` | Do not run the job's `Combine` |
+| `-param name=value` | A parameter for the job's code; may be repeated |
+
+`bin/mr status job-1` prints a job's state, progress, backup tasks and
+counters at any time. While a job runs, the status page is at
+<http://127.0.0.1:18780/>.
+
+### 5. Read the output
+
+Reduce task r writes `part-r-0000r` in the output directory, one
+`key<TAB>value` line per key, sorted by key within each file. `bin/mr cat`
+prints them in order; they are also plain files under `data/out/`.
+
+```sh
+bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -3      # the most frequent words
+bin/mr submit -m 6 -wait urlfreq /data/out/urls /data/input/weblog/access.log
+bin/mr cat /data/out/urls | sort -t$'\t' -k2 -nr | head -3    # the most requested pages
+rm -r data/out/wc data/out/urls                               # output is yours to delete
+make cluster-down                                             # remove the containers; data/ stays
+```
+
+`make e2e` checks the cluster end to end: it submits word count with
+`bin/mr` and compares the output with the golden files byte for byte.
+`make monitoring-up` adds Prometheus (`127.0.0.1:19090`) and a Grafana
+dashboard (`127.0.0.1:13000`), and `make e2e-s3` runs the same job with its
+input and output in an S3-compatible store.
+
+### Run a job on one machine, without Docker
 
 Local mode runs every task in one process (§4.7). It is the oracle that
-cluster runs are checked against.
+cluster runs are checked against, and it needs only Go.
 
 ```sh
 cd go
-go run ./cmd/mr run -local -m 3 -r 4 wordcount /tmp/wc '../testdata/corpus/*.txt'
+go run ./cmd/mr run -local -m 3 -r 4 ../examples/wordcount.go /tmp/wc '../testdata/corpus/*.txt'
 head -3 /tmp/wc/part-r-00000
 ```
 
-The job's counters print to standard error, and each reduce task writes one
-`part-r-NNNNN` file. The Python implementation gives the same files:
+The Python implementation gives the same files for built-in programs:
 
 ```sh
 cd python
@@ -52,38 +187,6 @@ pip install -e .
 python3 -m mapreduce_reloaded run --local -m 3 -r 4 wordcount /tmp/wc-py '../testdata/corpus/*.txt'
 diff -r /tmp/wc /tmp/wc-py && echo identical
 ```
-
-### Run a job on a cluster
-
-The cluster runs in Docker Compose: one coordinator and four workers, each
-worker limited to one CPU. It needs Docker with Compose, 4 CPUs and about
-3.7 GB of memory ([cluster VM](docs/cluster-vm.md) has the budgets and the
-setup for the course VM, and the [runbook](docs/runbook.md) goes from SSH to
-a full demo).
-
-```sh
-make cluster-up       # build the image; start the coordinator and 4 workers
-make e2e              # run word count on the cluster and compare with the golden output
-docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr \
-    submit -coordinator coordinator:7070 -wait wordcount /out/wc '/corpus/*.txt'
-make cluster-down     # remove the containers and the output volume
-```
-
-To read the output today, copy it out of the volume: `docker compose -p
-mapreduce -f deploy/compose/compose.yaml cp coordinator:/out/wc ./wc` (or
-run a short container that mounts the `output` volume). There is no upload
-step yet: input is the corpus mounted at `/corpus`.
-
-Planned ([ADR 0016](docs/design/0016-shared-storage-and-host-client.md)):
-`make mr`, `bin/mr upload` and `bin/mr cat`, against a host
-`data/` directory mounted at `/data`. Those commands are not built yet.
-
-Every container sees the test corpus at `/corpus` and writes job output to
-the `output` volume at `/out`. While a job runs, the status page and
-Prometheus metrics are at `127.0.0.1:18780` (`/` and `/metrics`). `make
-monitoring-up` adds Prometheus (`127.0.0.1:19090`) and a Grafana dashboard
-(`127.0.0.1:13000`). `make e2e-s3` runs the same job with its input and output
-in an S3-compatible store.
 
 ## How a job runs
 
@@ -141,9 +244,11 @@ Programs written in Go register themselves with the `api` package; see
 mr run -local [job flags] <program | job.go> <output-dir> <inputs>
 mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program | job.go> <output-dir> <inputs>
 mr status [-coordinator addr] <job-id>
+mr upload <local files, dirs or globs...> </data/dir>
+mr cat </data/output-dir>
 
 job flags:
-  -m M  -r R  -param name=value (repeatable)
+  -m M (exact number of map tasks)  -r R  -param name=value (repeatable)
   -input-format text|kv  -output-format text|kv
   -intermediate-codec none|zstd|snappy  -output-codec none|zstd|snappy
   -combiner=false (run without the program's combiner)
@@ -151,7 +256,8 @@ job flags:
 
 Inputs are files or glob patterns, or `s3://` URIs on a cluster with an
 object store. `mr status` and `mr submit -wait` print the job's state, its
-progress, its backup attempts, its duration and its counters.
+progress, its backup attempts, its duration and its counters. `mr upload`
+and `mr cat` resolve `/data/...` to `$MR_DATA_DIR` (default `./data`).
 
 ## Results
 

@@ -93,20 +93,24 @@ Each ends with `e2e: output matches the golden output`. The golden output
 is what local mode produces, so this also shows the cluster agrees with
 the single-process oracle (§4.7).
 
-### 5.3 Submit a job and read its output
+### 5.3 Upload data, submit a job file and read its output
 
 ```sh
-OUT=/out/wc-$(date +%s)      # a new path each time: output directories are never overwritten
-JOB=$($C run --rm -q mr submit -coordinator coordinator:7070 -m 8 -r 4 \
-    wordcount "$OUT" '/corpus/*.txt' | tail -1)
-$C run --rm mr status -coordinator coordinator:7070 "$JOB"
-rm -rf wc && $C cp "coordinator:$OUT" ./wc && head wc/part-r-00000
+make mr                      # the host client, bin/mr
+make upload-example          # the corpus to /data/input/corpus, a web log to /data/input/weblog
+OUT=/data/out/wc-$(date +%s) # a new path each time: output directories are never overwritten
+JOB=$(bin/mr submit -m 8 -r 4 examples/wordcount.go "$OUT" '/data/input/corpus/*.txt')
+bin/mr status "$JOB"
+bin/mr cat "$OUT" | sort -t$'\t' -k2 -nr | head
 ```
 
-Without `-wait`, `mr submit` prints the job's id; run `mr status` again
+The client runs on the VM, outside every container, and `/data` is the
+repository's `data/` directory, mounted in every container. `mr submit`
+prints `mr: 8 map tasks (-m 8)` and the job's id; run `mr status` again
 until the job says `SUCCEEDED`. `mr status` prints the job's state, task
-progress, backup tasks and counters. While a job runs, open <http://127.0.0.1:18780/> on your laptop
-(through the SSH forward) for the status page; `/metrics` is next to it.
+progress, backup tasks and counters. While a job runs, open
+<http://127.0.0.1:18780/> on your laptop (through the SSH forward) for the
+status page; `/metrics` is next to it.
 
 ### 5.4 A worker dies in the middle of a job
 
@@ -116,12 +120,10 @@ VM; generating the input takes about 15 s and needs about 3 GB of disk, so
 check `df -h /` first).
 
 ```sh
-python3 bench/gen-sort.py 1073741824 42 > ~/sort-1g.txt
-$C cp ~/sort-1g.txt coordinator:/out/sort-1g.txt && rm ~/sort-1g.txt
+python3 bench/gen-sort.py 1073741824 42 > data/input/sort-1g.txt
 
 ( sleep 5; docker kill mapreduce-worker-4 ) &
-$C run --rm mr submit -coordinator coordinator:7070 -m 64 -r 4 -wait \
-    distsort "/out/sort-kill-$(date +%s)" /out/sort-1g.txt
+bin/mr submit -m 64 -r 4 -wait distsort "/data/out/sort-kill-$(date +%s)" /data/input/sort-1g.txt
 docker logs mapreduce-coordinator-1 2>&1 | grep 'worker lost' | tail -1
 $C up -d worker              # bring the fourth worker back
 ```
@@ -157,7 +159,7 @@ python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 SSH drops. The plots land in `bench/plots/E0.png` … `E4.png`, and the
 script prints the tables that go in [`bench/README.md`](../bench/README.md#experiments).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
-E5 (job files) waits on job files.
+E5 (the cost of interpreting a job file) is not in the script yet (#179).
 
 ### 5.7 Monitoring (optional)
 
@@ -175,13 +177,15 @@ make cluster-down
 ```
 
 This removes only this project's containers and its `output` and
-`s3-output` volumes, including any job output and the 1 GiB sort input. It
-never touches other coursework containers. Delete old `bench/results/`
-directories as you go to keep disk free. To keep the cluster but drop old
-job output, select only completed job directories, for example
-`make clean-output CLEAN_OUTPUTS='sort-kill-123'`; it also prints the disk use.
-Leave active job outputs unselected. Inputs (including `/out/sort-1g.txt`),
-the write-ahead log, and all unselected directories are preserved.
+`s3-output` volumes, with the experiments' inputs and outputs. It never
+touches other coursework containers, and it keeps `data/`: job output in
+`data/out/` and inputs in `data/input/` are yours to delete with `rm -r`,
+for example `rm -r data/out/sort-kill-* data/input/sort-1g.txt`. Delete old
+`bench/results/` directories as you go to keep disk free. To drop old
+output from the `output` volume while the cluster runs, select only
+completed directories, for example `make clean-output
+CLEAN_OUTPUTS='exp-E0-w4-1'`; it also prints the disk use. Inputs, the
+write-ahead log, and all unselected directories are preserved.
 
 ## Troubleshooting
 
@@ -191,16 +195,7 @@ the write-ahead log, and all unselected directories are preserved.
 | `go: command not found` | `export PATH="$HOME/.local/go/bin:$PATH"` (step 2 adds it to `~/.bashrc`) |
 | `ssh: Could not resolve hostname` or a timeout | Connect to the VPN |
 | A container exits with `OOMKilled` | Check `free -m`; stop other coursework containers, or skip the monitoring profile |
-| `no space left on device` | `make clean-output CLEAN_OUTPUTS='completed-directory'`; if that is not enough, `make cluster-down`, delete `bench/results/*`, then `docker image prune` |
+| `shared storage data is not a directory` | Run `bin/mr` from the repository root, after `make cluster-up` |
+| `no space left on device` | `rm -r data/out/<old jobs>`; `make clean-output CLEAN_OUTPUTS='completed-directory'`; if that is not enough, `make cluster-down`, delete `bench/results/*`, then `docker image prune` |
 | A worker logs `disk nearly full; not taking tasks` | Free space as above; the worker resumes by itself |
 | The status page does not load on the laptop | Reconnect with the `-L 18780:...` forward from step 1 |
-
-## Not built yet
-
-The course deliverables still to land
-([roadmap](roadmap.md#course-deliverables-honors-project-1)) change the
-demo. After they merge, steps 5.3 and 5.4 use the host client instead of
-`$C run --rm mr`: `make mr`, `make upload-example`, `bin/mr upload`, a job
-file such as `examples/wordcount.go`, `bin/mr cat`, and inputs and outputs
-under `/data` ([design](../design.md#client-interface)). Update this page in
-the same pull request as each of them.
