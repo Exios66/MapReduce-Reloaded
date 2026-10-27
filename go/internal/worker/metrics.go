@@ -27,6 +27,10 @@ type stats struct {
 	fetchedBytes   atomic.Uint64
 	outputBytes    atomic.Uint64
 	registrations  atomic.Uint64
+	prunedJobs     atomic.Uint64 // jobs whose map output was deleted
+	prunedBytes    atomic.Uint64
+	diskWaits      atomic.Uint64 // times the worker stopped taking tasks
+	diskFree       atomic.Uint64 // at the last check
 }
 
 // start counts a task of kind as running; done counts how it ended.
@@ -73,9 +77,14 @@ func (s *stats) metrics() []byte {
 		{"mr_worker_shuffle_fetched_bytes_total", "Bytes of map output fetched from workers.", &s.fetchedBytes},
 		{"mr_worker_reduce_output_bytes_total", "Bytes of keys and values reduced into the output, counted when each reduce task ends.", &s.outputBytes},
 		{"mr_worker_registrations_total", "Registrations with the coordinator.", &s.registrations},
+		{"mr_worker_pruned_jobs_total", "Ended jobs whose map output was deleted.", &s.prunedJobs},
+		{"mr_worker_pruned_bytes_total", "Bytes of map output deleted after their job ended.", &s.prunedBytes},
+		{"mr_worker_disk_waits_total", "Times the worker stopped taking tasks because its disk was nearly full.", &s.diskWaits},
 	} {
 		promtext.Family(&b, m.name, "counter", m.help)
 		fmt.Fprintf(&b, "%s %d\n", m.name, m.v.Load())
 	}
+	promtext.Family(&b, "mr_worker_disk_free_bytes", "gauge", "Free bytes on the work directory's file system, at the last task request.")
+	fmt.Fprintf(&b, "mr_worker_disk_free_bytes %d\n", s.diskFree.Load())
 	return b.Bytes()
 }

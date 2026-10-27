@@ -46,6 +46,10 @@ type Config struct {
 	// Log, if set, is the write-ahead log: every change to a job or its
 	// tasks is appended to it before any reply depends on it (§3.3).
 	Log Log
+	// KeepJobs is how many ended jobs stay in memory for GetJobStatus and
+	// the status page; older ones are forgotten, oldest first. Zero means
+	// all of them.
+	KeepJobs int
 }
 
 // Log is where a coordinator records its decisions. After a failed Append
@@ -67,7 +71,8 @@ type Server struct {
 	mu       sync.Mutex
 	workers  *Registry
 	jobs     map[string]*job
-	order    []*job       // every job, in the order submitted
+	order    []*job       // every job kept, in the order submitted
+	seq      int          // jobs submitted, for the next ID; never reused
 	active   *job         // the running job, or nil
 	lost     []LostWorker // since this process started, for Status
 	stopping bool
@@ -166,7 +171,10 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 	if !s.workers.Heartbeat(worker, time.Now()) {
 		return &pb.HeartbeatResponse{Reregister: true}, nil
 	}
-	resp := &pb.HeartbeatResponse{}
+	resp := &pb.HeartbeatResponse{ActiveJobs: &pb.ActiveJobs{}}
+	if s.active != nil {
+		resp.ActiveJobs.JobIds = []string{s.active.id}
+	}
 	for _, p := range req.GetRunning() {
 		if id := p.GetAttempt(); !s.runs(id, worker) {
 			resp.Cancel = append(resp.Cancel, id)
@@ -234,7 +242,7 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 	if err := mrtask.Setup(ctx, spec.Output); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
-	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", len(s.jobs)+1), Job: m, Splits: splits}
+	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", s.seq+1), Job: m, Splits: splits}
 	now := time.Now()
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}, now); err != nil {
 		return nil, err
@@ -257,6 +265,18 @@ func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 	}
 	s.jobs[j.id], s.active = j, j
 	s.order = append(s.order, j)
+	s.seq++
+	s.forget()
+}
+
+// forget drops the oldest ended jobs beyond cfg.KeepJobs. The active job,
+// the newest, is never dropped.
+func (s *Server) forget() {
+	for s.cfg.KeepJobs > 0 && len(s.order) > s.cfg.KeepJobs+1 && s.order[0] != s.active {
+		delete(s.jobs, s.order[0].id)
+		s.order[0] = nil
+		s.order = s.order[1:]
+	}
 }
 
 // RequestTask hands an idle worker its next task: map tasks first, the

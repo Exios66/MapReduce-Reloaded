@@ -46,13 +46,22 @@ type Worker struct {
 	id          string
 	logger      *slog.Logger
 	stats       stats
+	pruning     atomic.Bool // a prune is deleting ended jobs' map output
+	freeBytes   func(dir string) (uint64, error)
+
+	// MinFreeDisk is the free space, in bytes, the work directory's file
+	// system must have before the worker takes a task. Zero means any.
+	MinFreeDisk uint64
+	// KeepEndedJobs keeps the map output of jobs that have ended, for
+	// debugging and for tests that inspect it.
+	KeepEndedJobs bool
 }
 
 // New returns a worker that writes map output under workDir. If
 // info.ShuffleAddress is set, the caller serves workDir there with a
 // shuffle.Server.
 func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.WorkerInfo) *Worker {
-	return &Worker{coordinator: coordinator, workDir: workDir, info: info, logger: slog.Default()}
+	return &Worker{coordinator: coordinator, workDir: workDir, info: info, logger: slog.Default(), freeBytes: freeBytes}
 }
 
 // errForgotten means the coordinator no longer knows this worker: it
@@ -110,6 +119,9 @@ func (w *Worker) session(parent context.Context) error {
 // heartbeat cancels if the coordinator says to stop it.
 func (w *Worker) serve(ctx context.Context, cur *current) error {
 	for {
+		if err := w.waitForDisk(ctx); err != nil {
+			return err
+		}
 		resp, err := w.coordinator.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w.id})
 		if status.Code(err) == codes.NotFound {
 			return errForgotten
@@ -224,9 +236,10 @@ func (c *current) cancelled() bool {
 // heartbeat tells the coordinator every interval that worker id is alive,
 // and which attempt it runs, until ctx is done. Asking for a task counts as
 // a heartbeat too; these cover the time a task runs. The reply may say to
-// stop the attempt (§3.6), or to end the session with errForgotten. A
-// failed heartbeat is not retried: the next one, or the next task request,
-// tells the coordinator.
+// stop the attempt (§3.6), or to end the session with errForgotten, and
+// lists the jobs still running so the worker can delete the others' map
+// output. A failed heartbeat is not retried: the next one, or the next task
+// request, tells the coordinator.
 func (w *Worker) heartbeat(ctx context.Context, end context.CancelCauseFunc, id string, interval time.Duration, cur *current) {
 	if interval <= 0 {
 		return
@@ -238,6 +251,7 @@ func (w *Worker) heartbeat(ctx context.Context, end context.CancelCauseFunc, id 
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+			sent := time.Now()
 			resp, err := w.coordinator.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: id, Running: cur.running()})
 			switch {
 			case err != nil:
@@ -246,6 +260,9 @@ func (w *Worker) heartbeat(ctx context.Context, end context.CancelCauseFunc, id 
 				return
 			default:
 				cur.stop(resp.GetCancel())
+				if a := resp.GetActiveJobs(); a != nil {
+					w.prune(a.GetJobIds(), sent)
+				}
 			}
 		}
 	}

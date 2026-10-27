@@ -200,6 +200,23 @@ Prometheus and Grafana, and a locality-aware scheduler hook are also built.
 - After a coordinator restart, running attempts are stopped and workers
   register again under new IDs. Completed tasks stay completed.
 
+### Resource management
+
+The cluster shares one VM with other coursework, so nothing it keeps grows
+without bound ([ADR 0017](docs/design/0017-disk-and-memory-bounds.md)):
+
+| What | Bound |
+|---|---|
+| Map output on each worker | Deleted once the job ends: each heartbeat reply lists the active jobs, and the worker deletes the rest (§3.1 step 7) |
+| Worker disk | Under `-min-free-mib` free (default 1024), a worker takes no task until there is space |
+| Jobs in the coordinator's memory | The `-keep-jobs` most recent ended jobs (default 100) |
+| Job-file programs | An LRU of 16 per process |
+| Container logs | 10 MB × 3 files per container |
+| Prometheus samples | 512 MB |
+| Job output | Kept until deleted: `make clean-output` |
+
+The write-ahead log is not compacted; it is small next to job data.
+
 ### Performance evaluation
 
 All runs use the Compose cluster on the course VM: four workers at one CPU

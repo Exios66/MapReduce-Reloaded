@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -166,6 +167,8 @@ type cluster struct {
 	stop    func() // stops the coordinator
 	client  pb.CoordinatorServiceClient
 	workDir string
+	keep    bool                 // workers keep ended jobs' map output, for tests that read it
+	setup   func(*worker.Worker) // if set, runs on each new worker before it starts
 	workers []*worker.Worker
 	live    []chan error // Run results of the workers not killed
 	gates   []*gate      // of each worker
@@ -252,6 +255,10 @@ func (c *cluster) addWorkerOn(host string) (kill func()) {
 	c.t.Cleanup(func() { _ = conn.Close() })
 	ctx, cancel := context.WithCancel(c.ctx)
 	w := worker.New(pb.NewCoordinatorServiceClient(conn), dir, &pb.WorkerInfo{ShuffleAddress: addr, Host: host})
+	w.KeepEndedJobs = c.keep
+	if c.setup != nil {
+		c.setup(w)
+	}
 	done := make(chan error, 1)
 	go func() { done <- w.Run(ctx) }()
 	i := len(c.live)
@@ -394,7 +401,13 @@ func TestClusterSkipsBadRecords(t *testing.T) {
 // The cluster's map output is byte for byte what local mode writes for the
 // same splits, however the tasks were spread over the workers.
 func TestClusterMapOutputMatchesLocal(t *testing.T) {
-	c, job, _ := runJob(t, "wordcount", 3)
+	c := newCluster(t)
+	c.keep = true
+	job := c.submit("wordcount")
+	for range 3 {
+		c.addWorker()
+	}
+	c.wait(job)
 	localDir, _ := runLocal(t)
 	assertSameFiles(t, c.mapFiles(job), localDir)
 }
@@ -541,6 +554,7 @@ func scrape(t *testing.T, w *worker.Worker) string {
 // and the reduce task that was running is (§3.3).
 func TestClusterSurvivesCoordinatorRestart(t *testing.T) {
 	c := newCluster(t)
+	c.keep = true
 	job := c.submit("test.pause-reduce")
 	c.addWorker()
 	<-reduceStuck
@@ -555,6 +569,74 @@ func TestClusterSurvivesCoordinatorRestart(t *testing.T) {
 	if after := modTimes(t, c.mapFiles(job)); !maps.Equal(after, before) {
 		t.Fatal("map tasks ran again after the restart")
 	}
+}
+
+// Once a job ends, its workers delete its map output, and the next job
+// runs as before (§3.1 step 7).
+func TestClusterDeletesEndedJobsMapOutput(t *testing.T) {
+	c := newCluster(t)
+	c.addWorker()
+	c.addWorker()
+	for range 2 {
+		job := c.submit("wordcount")
+		c.succeeded(job)
+		assertGolden(t, c.output())
+		deadline := time.Now().Add(5 * time.Second)
+		for len(c.mapFiles(job)) > 0 {
+			if time.Now().After(deadline) {
+				t.Fatalf("map output of ended %s still there: %v", job, c.mapFiles(job))
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if err := os.RemoveAll(c.output()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var pruned int
+	for _, w := range c.workers {
+		if strings.Contains(scrape(t, w), "mr_worker_pruned_jobs_total 0\n") {
+			continue
+		}
+		pruned++
+	}
+	if pruned == 0 {
+		t.Error("no worker counted a deleted job in mr_worker_pruned_jobs_total")
+	}
+}
+
+// A worker whose disk is nearly full takes no task, but stays registered,
+// and takes tasks again once there is space.
+func TestClusterWaitsForDisk(t *testing.T) {
+	defer worker.SetDiskPoll(5 * time.Millisecond)()
+	c := newCluster(t)
+	var full atomic.Bool
+	full.Store(true)
+	c.setup = func(w *worker.Worker) {
+		w.MinFreeDisk = 1 << 30
+		worker.SetFreeBytes(w, func(string) (uint64, error) {
+			if full.Load() {
+				return 1 << 20, nil
+			}
+			return 2 << 30, nil
+		})
+	}
+	c.addWorker()
+	w := c.workers[0]
+	job := c.submit("wordcount")
+	time.Sleep(300 * time.Millisecond) // three worker timeouts
+	status, err := c.client.GetJobStatus(c.ctx, &pb.GetJobStatusRequest{JobId: job})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.GetMapTasksCompleted() != 0 {
+		t.Fatalf("a worker with a full disk ran %d map tasks", status.GetMapTasksCompleted())
+	}
+	if !strings.Contains(scrape(t, w), "mr_worker_disk_waits_total 1\n") {
+		t.Error("mr_worker_disk_waits_total is not 1")
+	}
+	full.Store(false)
+	c.wait(job)
+	assertGolden(t, c.output())
 }
 
 func modTimes(t *testing.T, files []string) map[string]time.Time {

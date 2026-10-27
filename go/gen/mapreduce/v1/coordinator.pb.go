@@ -986,7 +986,12 @@ type HeartbeatResponse struct {
 	// True if the coordinator does not recognise this worker (e.g. it
 	// restarted, or declared the worker dead). The worker must call
 	// RegisterWorker again.
-	Reregister    bool `protobuf:"varint,2,opt,name=reregister,proto3" json:"reregister,omitempty"`
+	Reregister bool `protobuf:"varint,2,opt,name=reregister,proto3" json:"reregister,omitempty"`
+	// The jobs whose map output may still be read. The worker deletes the
+	// map output of every other job, as the paper's intermediate files are
+	// deleted once the job is done. Unset means the coordinator does not say,
+	// and the worker deletes nothing.
+	ActiveJobs    *ActiveJobs `protobuf:"bytes,3,opt,name=active_jobs,json=activeJobs,proto3" json:"active_jobs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1035,6 +1040,59 @@ func (x *HeartbeatResponse) GetReregister() bool {
 	return false
 }
 
+func (x *HeartbeatResponse) GetActiveJobs() *ActiveJobs {
+	if x != nil {
+		return x.ActiveJobs
+	}
+	return nil
+}
+
+// ActiveJobs lists jobs that have not ended.
+type ActiveJobs struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Job IDs, from SubmitJobResponse.
+	JobIds        []string `protobuf:"bytes,1,rep,name=job_ids,json=jobIds,proto3" json:"job_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ActiveJobs) Reset() {
+	*x = ActiveJobs{}
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActiveJobs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActiveJobs) ProtoMessage() {}
+
+func (x *ActiveJobs) ProtoReflect() protoreflect.Message {
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActiveJobs.ProtoReflect.Descriptor instead.
+func (*ActiveJobs) Descriptor() ([]byte, []int) {
+	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ActiveJobs) GetJobIds() []string {
+	if x != nil {
+		return x.JobIds
+	}
+	return nil
+}
+
 type SubmitJobRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The job to run.
@@ -1045,7 +1103,7 @@ type SubmitJobRequest struct {
 
 func (x *SubmitJobRequest) Reset() {
 	*x = SubmitJobRequest{}
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[15]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1057,7 +1115,7 @@ func (x *SubmitJobRequest) String() string {
 func (*SubmitJobRequest) ProtoMessage() {}
 
 func (x *SubmitJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[15]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1070,7 +1128,7 @@ func (x *SubmitJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitJobRequest.ProtoReflect.Descriptor instead.
 func (*SubmitJobRequest) Descriptor() ([]byte, []int) {
-	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{15}
+	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SubmitJobRequest) GetJob() *JobSpec {
@@ -1090,7 +1148,7 @@ type SubmitJobResponse struct {
 
 func (x *SubmitJobResponse) Reset() {
 	*x = SubmitJobResponse{}
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[16]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1102,7 +1160,7 @@ func (x *SubmitJobResponse) String() string {
 func (*SubmitJobResponse) ProtoMessage() {}
 
 func (x *SubmitJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[16]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1115,7 +1173,7 @@ func (x *SubmitJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitJobResponse.ProtoReflect.Descriptor instead.
 func (*SubmitJobResponse) Descriptor() ([]byte, []int) {
-	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{16}
+	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SubmitJobResponse) GetJobId() string {
@@ -1135,7 +1193,7 @@ type GetJobStatusRequest struct {
 
 func (x *GetJobStatusRequest) Reset() {
 	*x = GetJobStatusRequest{}
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[17]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1147,7 +1205,7 @@ func (x *GetJobStatusRequest) String() string {
 func (*GetJobStatusRequest) ProtoMessage() {}
 
 func (x *GetJobStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[17]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1160,7 +1218,7 @@ func (x *GetJobStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetJobStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetJobStatusRequest) Descriptor() ([]byte, []int) {
-	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{17}
+	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetJobStatusRequest) GetJobId() string {
@@ -1205,7 +1263,7 @@ type GetJobStatusResponse struct {
 
 func (x *GetJobStatusResponse) Reset() {
 	*x = GetJobStatusResponse{}
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[18]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1217,7 +1275,7 @@ func (x *GetJobStatusResponse) String() string {
 func (*GetJobStatusResponse) ProtoMessage() {}
 
 func (x *GetJobStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[18]
+	mi := &file_mapreduce_v1_coordinator_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1230,7 +1288,7 @@ func (x *GetJobStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetJobStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetJobStatusResponse) Descriptor() ([]byte, []int) {
-	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{18}
+	return file_mapreduce_v1_coordinator_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetJobStatusResponse) GetJobId() string {
@@ -1388,12 +1446,17 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\arunning\x18\x02 \x03(\v2\x1a.mapreduce.v1.TaskProgressR\arunning\"j\n" +
 	"\fTaskProgress\x125\n" +
 	"\aattempt\x18\x01 \x01(\v2\x1b.mapreduce.v1.TaskAttemptIdR\aattempt\x12#\n" +
-	"\rfraction_done\x18\x02 \x01(\x02R\ffractionDone\"h\n" +
+	"\rfraction_done\x18\x02 \x01(\x02R\ffractionDone\"\xa3\x01\n" +
 	"\x11HeartbeatResponse\x123\n" +
 	"\x06cancel\x18\x01 \x03(\v2\x1b.mapreduce.v1.TaskAttemptIdR\x06cancel\x12\x1e\n" +
 	"\n" +
 	"reregister\x18\x02 \x01(\bR\n" +
-	"reregister\";\n" +
+	"reregister\x129\n" +
+	"\vactive_jobs\x18\x03 \x01(\v2\x18.mapreduce.v1.ActiveJobsR\n" +
+	"activeJobs\"%\n" +
+	"\n" +
+	"ActiveJobs\x12\x17\n" +
+	"\ajob_ids\x18\x01 \x03(\tR\x06jobIds\";\n" +
 	"\x10SubmitJobRequest\x12'\n" +
 	"\x03job\x18\x01 \x01(\v2\x15.mapreduce.v1.JobSpecR\x03job\"*\n" +
 	"\x11SubmitJobResponse\x12\x15\n" +
@@ -1447,7 +1510,7 @@ func file_mapreduce_v1_coordinator_proto_rawDescGZIP() []byte {
 }
 
 var file_mapreduce_v1_coordinator_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_mapreduce_v1_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_mapreduce_v1_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_mapreduce_v1_coordinator_proto_goTypes = []any{
 	(JobState)(0),                  // 0: mapreduce.v1.JobState
 	(*RegisterWorkerRequest)(nil),  // 1: mapreduce.v1.RegisterWorkerRequest
@@ -1465,64 +1528,66 @@ var file_mapreduce_v1_coordinator_proto_goTypes = []any{
 	(*HeartbeatRequest)(nil),       // 13: mapreduce.v1.HeartbeatRequest
 	(*TaskProgress)(nil),           // 14: mapreduce.v1.TaskProgress
 	(*HeartbeatResponse)(nil),      // 15: mapreduce.v1.HeartbeatResponse
-	(*SubmitJobRequest)(nil),       // 16: mapreduce.v1.SubmitJobRequest
-	(*SubmitJobResponse)(nil),      // 17: mapreduce.v1.SubmitJobResponse
-	(*GetJobStatusRequest)(nil),    // 18: mapreduce.v1.GetJobStatusRequest
-	(*GetJobStatusResponse)(nil),   // 19: mapreduce.v1.GetJobStatusResponse
-	(*WorkerInfo)(nil),             // 20: mapreduce.v1.WorkerInfo
-	(*durationpb.Duration)(nil),    // 21: google.protobuf.Duration
-	(*TaskAttemptId)(nil),          // 22: mapreduce.v1.TaskAttemptId
-	(*JobSpec)(nil),                // 23: mapreduce.v1.JobSpec
-	(*InputSplit)(nil),             // 24: mapreduce.v1.InputSplit
-	(*PartitionLocation)(nil),      // 25: mapreduce.v1.PartitionLocation
-	(*Counters)(nil),               // 26: mapreduce.v1.Counters
-	(*timestamppb.Timestamp)(nil),  // 27: google.protobuf.Timestamp
+	(*ActiveJobs)(nil),             // 16: mapreduce.v1.ActiveJobs
+	(*SubmitJobRequest)(nil),       // 17: mapreduce.v1.SubmitJobRequest
+	(*SubmitJobResponse)(nil),      // 18: mapreduce.v1.SubmitJobResponse
+	(*GetJobStatusRequest)(nil),    // 19: mapreduce.v1.GetJobStatusRequest
+	(*GetJobStatusResponse)(nil),   // 20: mapreduce.v1.GetJobStatusResponse
+	(*WorkerInfo)(nil),             // 21: mapreduce.v1.WorkerInfo
+	(*durationpb.Duration)(nil),    // 22: google.protobuf.Duration
+	(*TaskAttemptId)(nil),          // 23: mapreduce.v1.TaskAttemptId
+	(*JobSpec)(nil),                // 24: mapreduce.v1.JobSpec
+	(*InputSplit)(nil),             // 25: mapreduce.v1.InputSplit
+	(*PartitionLocation)(nil),      // 26: mapreduce.v1.PartitionLocation
+	(*Counters)(nil),               // 27: mapreduce.v1.Counters
+	(*timestamppb.Timestamp)(nil),  // 28: google.protobuf.Timestamp
 }
 var file_mapreduce_v1_coordinator_proto_depIdxs = []int32{
-	20, // 0: mapreduce.v1.RegisterWorkerRequest.worker:type_name -> mapreduce.v1.WorkerInfo
-	21, // 1: mapreduce.v1.RegisterWorkerResponse.heartbeat_interval:type_name -> google.protobuf.Duration
+	21, // 0: mapreduce.v1.RegisterWorkerRequest.worker:type_name -> mapreduce.v1.WorkerInfo
+	22, // 1: mapreduce.v1.RegisterWorkerResponse.heartbeat_interval:type_name -> google.protobuf.Duration
 	5,  // 2: mapreduce.v1.RequestTaskResponse.map_task:type_name -> mapreduce.v1.MapTask
 	6,  // 3: mapreduce.v1.RequestTaskResponse.reduce_task:type_name -> mapreduce.v1.ReduceTask
 	7,  // 4: mapreduce.v1.RequestTaskResponse.wait:type_name -> mapreduce.v1.WaitInstruction
 	8,  // 5: mapreduce.v1.RequestTaskResponse.shutdown:type_name -> mapreduce.v1.ShutdownInstruction
-	22, // 6: mapreduce.v1.MapTask.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	23, // 7: mapreduce.v1.MapTask.job:type_name -> mapreduce.v1.JobSpec
-	24, // 8: mapreduce.v1.MapTask.split:type_name -> mapreduce.v1.InputSplit
-	22, // 9: mapreduce.v1.ReduceTask.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	23, // 10: mapreduce.v1.ReduceTask.job:type_name -> mapreduce.v1.JobSpec
-	25, // 11: mapreduce.v1.ReduceTask.sources:type_name -> mapreduce.v1.PartitionLocation
-	21, // 12: mapreduce.v1.WaitInstruction.retry_after:type_name -> google.protobuf.Duration
-	22, // 13: mapreduce.v1.ReportTaskRequest.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	23, // 6: mapreduce.v1.MapTask.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	24, // 7: mapreduce.v1.MapTask.job:type_name -> mapreduce.v1.JobSpec
+	25, // 8: mapreduce.v1.MapTask.split:type_name -> mapreduce.v1.InputSplit
+	23, // 9: mapreduce.v1.ReduceTask.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	24, // 10: mapreduce.v1.ReduceTask.job:type_name -> mapreduce.v1.JobSpec
+	26, // 11: mapreduce.v1.ReduceTask.sources:type_name -> mapreduce.v1.PartitionLocation
+	22, // 12: mapreduce.v1.WaitInstruction.retry_after:type_name -> google.protobuf.Duration
+	23, // 13: mapreduce.v1.ReportTaskRequest.attempt:type_name -> mapreduce.v1.TaskAttemptId
 	10, // 14: mapreduce.v1.ReportTaskRequest.success:type_name -> mapreduce.v1.TaskSuccess
 	11, // 15: mapreduce.v1.ReportTaskRequest.failure:type_name -> mapreduce.v1.TaskFailure
-	25, // 16: mapreduce.v1.TaskSuccess.outputs:type_name -> mapreduce.v1.PartitionLocation
-	26, // 17: mapreduce.v1.TaskSuccess.counters:type_name -> mapreduce.v1.Counters
-	25, // 18: mapreduce.v1.TaskFailure.lost_output:type_name -> mapreduce.v1.PartitionLocation
+	26, // 16: mapreduce.v1.TaskSuccess.outputs:type_name -> mapreduce.v1.PartitionLocation
+	27, // 17: mapreduce.v1.TaskSuccess.counters:type_name -> mapreduce.v1.Counters
+	26, // 18: mapreduce.v1.TaskFailure.lost_output:type_name -> mapreduce.v1.PartitionLocation
 	14, // 19: mapreduce.v1.HeartbeatRequest.running:type_name -> mapreduce.v1.TaskProgress
-	22, // 20: mapreduce.v1.TaskProgress.attempt:type_name -> mapreduce.v1.TaskAttemptId
-	22, // 21: mapreduce.v1.HeartbeatResponse.cancel:type_name -> mapreduce.v1.TaskAttemptId
-	23, // 22: mapreduce.v1.SubmitJobRequest.job:type_name -> mapreduce.v1.JobSpec
-	0,  // 23: mapreduce.v1.GetJobStatusResponse.state:type_name -> mapreduce.v1.JobState
-	26, // 24: mapreduce.v1.GetJobStatusResponse.counters:type_name -> mapreduce.v1.Counters
-	27, // 25: mapreduce.v1.GetJobStatusResponse.submitted_at:type_name -> google.protobuf.Timestamp
-	27, // 26: mapreduce.v1.GetJobStatusResponse.finished_at:type_name -> google.protobuf.Timestamp
-	1,  // 27: mapreduce.v1.CoordinatorService.RegisterWorker:input_type -> mapreduce.v1.RegisterWorkerRequest
-	3,  // 28: mapreduce.v1.CoordinatorService.RequestTask:input_type -> mapreduce.v1.RequestTaskRequest
-	9,  // 29: mapreduce.v1.CoordinatorService.ReportTask:input_type -> mapreduce.v1.ReportTaskRequest
-	13, // 30: mapreduce.v1.CoordinatorService.Heartbeat:input_type -> mapreduce.v1.HeartbeatRequest
-	16, // 31: mapreduce.v1.CoordinatorService.SubmitJob:input_type -> mapreduce.v1.SubmitJobRequest
-	18, // 32: mapreduce.v1.CoordinatorService.GetJobStatus:input_type -> mapreduce.v1.GetJobStatusRequest
-	2,  // 33: mapreduce.v1.CoordinatorService.RegisterWorker:output_type -> mapreduce.v1.RegisterWorkerResponse
-	4,  // 34: mapreduce.v1.CoordinatorService.RequestTask:output_type -> mapreduce.v1.RequestTaskResponse
-	12, // 35: mapreduce.v1.CoordinatorService.ReportTask:output_type -> mapreduce.v1.ReportTaskResponse
-	15, // 36: mapreduce.v1.CoordinatorService.Heartbeat:output_type -> mapreduce.v1.HeartbeatResponse
-	17, // 37: mapreduce.v1.CoordinatorService.SubmitJob:output_type -> mapreduce.v1.SubmitJobResponse
-	19, // 38: mapreduce.v1.CoordinatorService.GetJobStatus:output_type -> mapreduce.v1.GetJobStatusResponse
-	33, // [33:39] is the sub-list for method output_type
-	27, // [27:33] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	23, // 20: mapreduce.v1.TaskProgress.attempt:type_name -> mapreduce.v1.TaskAttemptId
+	23, // 21: mapreduce.v1.HeartbeatResponse.cancel:type_name -> mapreduce.v1.TaskAttemptId
+	16, // 22: mapreduce.v1.HeartbeatResponse.active_jobs:type_name -> mapreduce.v1.ActiveJobs
+	24, // 23: mapreduce.v1.SubmitJobRequest.job:type_name -> mapreduce.v1.JobSpec
+	0,  // 24: mapreduce.v1.GetJobStatusResponse.state:type_name -> mapreduce.v1.JobState
+	27, // 25: mapreduce.v1.GetJobStatusResponse.counters:type_name -> mapreduce.v1.Counters
+	28, // 26: mapreduce.v1.GetJobStatusResponse.submitted_at:type_name -> google.protobuf.Timestamp
+	28, // 27: mapreduce.v1.GetJobStatusResponse.finished_at:type_name -> google.protobuf.Timestamp
+	1,  // 28: mapreduce.v1.CoordinatorService.RegisterWorker:input_type -> mapreduce.v1.RegisterWorkerRequest
+	3,  // 29: mapreduce.v1.CoordinatorService.RequestTask:input_type -> mapreduce.v1.RequestTaskRequest
+	9,  // 30: mapreduce.v1.CoordinatorService.ReportTask:input_type -> mapreduce.v1.ReportTaskRequest
+	13, // 31: mapreduce.v1.CoordinatorService.Heartbeat:input_type -> mapreduce.v1.HeartbeatRequest
+	17, // 32: mapreduce.v1.CoordinatorService.SubmitJob:input_type -> mapreduce.v1.SubmitJobRequest
+	19, // 33: mapreduce.v1.CoordinatorService.GetJobStatus:input_type -> mapreduce.v1.GetJobStatusRequest
+	2,  // 34: mapreduce.v1.CoordinatorService.RegisterWorker:output_type -> mapreduce.v1.RegisterWorkerResponse
+	4,  // 35: mapreduce.v1.CoordinatorService.RequestTask:output_type -> mapreduce.v1.RequestTaskResponse
+	12, // 36: mapreduce.v1.CoordinatorService.ReportTask:output_type -> mapreduce.v1.ReportTaskResponse
+	15, // 37: mapreduce.v1.CoordinatorService.Heartbeat:output_type -> mapreduce.v1.HeartbeatResponse
+	18, // 38: mapreduce.v1.CoordinatorService.SubmitJob:output_type -> mapreduce.v1.SubmitJobResponse
+	20, // 39: mapreduce.v1.CoordinatorService.GetJobStatus:output_type -> mapreduce.v1.GetJobStatusResponse
+	34, // [34:40] is the sub-list for method output_type
+	28, // [28:34] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_mapreduce_v1_coordinator_proto_init() }
@@ -1548,7 +1613,7 @@ func file_mapreduce_v1_coordinator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mapreduce_v1_coordinator_proto_rawDesc), len(file_mapreduce_v1_coordinator_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

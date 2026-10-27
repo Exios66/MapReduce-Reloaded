@@ -413,6 +413,55 @@ func TestHeartbeat(t *testing.T) {
 	}
 }
 
+// A heartbeat lists the jobs still running, so workers can delete the
+// map output of the others; none once the job has ended.
+func TestHeartbeatActiveJobs(t *testing.T) {
+	s, w, job := newJob(t, 1)
+	resp, _ := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w})
+	if got := resp.GetActiveJobs().GetJobIds(); !slices.Equal(got, []string{job}) {
+		t.Fatalf("active jobs %v, want [%s]", got, job)
+	}
+	s.mu.Lock()
+	s.end(s.active, "", time.Now())
+	s.mu.Unlock()
+	resp, _ = s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w})
+	if resp.GetActiveJobs() == nil || len(resp.GetActiveJobs().GetJobIds()) != 0 {
+		t.Fatalf("active jobs %v after the job ended, want an empty list", resp.GetActiveJobs())
+	}
+}
+
+// Only the KeepJobs most recent ended jobs are kept, and a forgotten job's
+// ID is not used again.
+func TestKeepJobs(t *testing.T) {
+	s, _, first := newJobWith(t, Config{KeepJobs: 2}, 1)
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ids := []string{first}
+	for range 3 {
+		s.mu.Lock()
+		s.end(s.active, "", time.Now())
+		s.mu.Unlock()
+		sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+			Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, sub.GetJobId())
+	}
+	if want := []string{"job-1", "job-2", "job-3", "job-4"}; !slices.Equal(ids, want) {
+		t.Fatalf("IDs %v, want %v", ids, want)
+	}
+	for i, id := range ids {
+		_, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: id})
+		if forgotten := i == 0; forgotten != (status.Code(err) == codes.NotFound) {
+			t.Errorf("GetJobStatus(%s): %v", id, err)
+		}
+	}
+}
+
 // A worker is told to stop the attempts it should no longer run (§3.6).
 func TestHeartbeatCancels(t *testing.T) {
 	s, w, _ := newJob(t, 1)

@@ -178,6 +178,17 @@ message HeartbeatResponse {
   // restarted, or declared the worker dead). The worker must call
   // RegisterWorker again.
   bool reregister = 2;
+  // The jobs whose map output may still be read. The worker deletes the
+  // map output of every other job, as the paper's intermediate files are
+  // deleted once the job is done. Unset means the coordinator does not say,
+  // and the worker deletes nothing.
+  ActiveJobs active_jobs = 3;
+}
+
+// ActiveJobs lists jobs that have not ended.
+message ActiveJobs {
+  // Job IDs, from SubmitJobResponse.
+  repeated string job_ids = 1;
 }
 
 message SubmitJobRequest {

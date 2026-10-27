@@ -7,11 +7,23 @@
 #
 # Every container sees the input at /corpus and job output at /out, because
 # job specs carry absolute paths. Map output stays inside each worker and is
-# fetched over the network (§3.1 step 5).
+# fetched over the network (§3.1 step 5); a worker deletes a job's map output
+# once the job ends, and takes no task while under 1 GiB of disk is free.
+#
+# Disk use is bounded elsewhere too: every container's log rotates at 10 MB,
+# three files kept, and Prometheus keeps at most 512 MB of samples. Job
+# output in the output volume stays until removed (docs/runbook.md).
 name: mapreduce
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
 
 x-node: &node
   image: mapreduce-reloaded
+  logging: *logging
   environment: # used only for s3:// names
     AWS_ENDPOINT_URL: http://s3:9000
     AWS_REGION: us-east-1
@@ -55,6 +67,7 @@ services:
   s3:
     image: versity/versitygw:v1.9.0
     profiles: [s3]
+    logging: *logging
     command: [--port, ":9000", posix, /data]
     environment:
       ROOT_ACCESS_KEY: mapreduce
@@ -74,6 +87,11 @@ services:
   prometheus:
     image: prom/prometheus:v3.5.0
     profiles: [monitoring]
+    logging: *logging
+    command: # the image's defaults, plus a cap on stored samples
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.size=512MB
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -83,6 +101,7 @@ services:
   grafana:
     image: grafana/grafana:12.1.0
     profiles: [monitoring]
+    logging: *logging
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true" # read-only, and bound to localhost
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer

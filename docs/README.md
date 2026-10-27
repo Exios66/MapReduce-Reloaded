@@ -39,6 +39,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0014](design/0014-ci-on-pull-requests.md) | CI on every pull request (supersedes part of 0002) |
 | [0015](design/0015-user-job-files.md) | User job files, interpreted by the workers |
 | [0016](design/0016-shared-storage-and-host-client.md) | Shared storage is a host directory, and the client runs on the host |
+| [0017](design/0017-disk-and-memory-bounds.md) | Workers delete ended jobs' map output; disk, memory and logs are bounded |
 
 ## Explainers
 

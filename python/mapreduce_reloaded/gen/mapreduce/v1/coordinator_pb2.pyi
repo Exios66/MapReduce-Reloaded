@@ -146,12 +146,20 @@ class TaskProgress(_message.Message):
     def __init__(self, attempt: _Optional[_Union[_types_pb2.TaskAttemptId, _Mapping]] = ..., fraction_done: _Optional[float] = ...) -> None: ...
 
 class HeartbeatResponse(_message.Message):
-    __slots__ = ("cancel", "reregister")
+    __slots__ = ("cancel", "reregister", "active_jobs")
     CANCEL_FIELD_NUMBER: _ClassVar[int]
     REREGISTER_FIELD_NUMBER: _ClassVar[int]
+    ACTIVE_JOBS_FIELD_NUMBER: _ClassVar[int]
     cancel: _containers.RepeatedCompositeFieldContainer[_types_pb2.TaskAttemptId]
     reregister: bool
-    def __init__(self, cancel: _Optional[_Iterable[_Union[_types_pb2.TaskAttemptId, _Mapping]]] = ..., reregister: _Optional[bool] = ...) -> None: ...
+    active_jobs: ActiveJobs
+    def __init__(self, cancel: _Optional[_Iterable[_Union[_types_pb2.TaskAttemptId, _Mapping]]] = ..., reregister: _Optional[bool] = ..., active_jobs: _Optional[_Union[ActiveJobs, _Mapping]] = ...) -> None: ...
+
+class ActiveJobs(_message.Message):
+    __slots__ = ("job_ids",)
+    JOB_IDS_FIELD_NUMBER: _ClassVar[int]
+    job_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, job_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class SubmitJobRequest(_message.Message):
     __slots__ = ("job",)
