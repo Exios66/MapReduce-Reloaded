@@ -25,7 +25,10 @@ INSTALL_GO = ROOT / "scripts/ci-install-go.sh"
 
 
 def go_mod_version() -> str:
-    return re.search(r"^go (\S+)$", (ROOT / "go/go.mod").read_text(), re.M).group(1)
+    """The Go release scripts/ci-install-go.sh wants: a toolchain line wins over go."""
+    mod = (ROOT / "go/go.mod").read_text()
+    toolchain = re.search(r"^toolchain go(\S+)$", mod, re.M)
+    return (toolchain or re.search(r"^go (\S+)$", mod, re.M)).group(1)
 
 
 def test_circleci_runs_the_four_required_checks():
