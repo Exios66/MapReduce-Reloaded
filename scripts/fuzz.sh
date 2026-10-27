@@ -9,6 +9,9 @@ cd "$(dirname "$0")/../go"
 time=${FUZZTIME:-20s}
 
 # go test -list prints a package's target names, then its "ok" line.
+# Listed first, so that set -e stops on a package that does not build
+# rather than fuzzing only the targets of the others.
+list=$(go test -list '^Fuzz' ./...)
 targets=()
 names=()
 while read -r first second _; do
@@ -19,7 +22,8 @@ while read -r first second _; do
         names=()
         ;;
     esac
-done < <(go test -list '^Fuzz' ./...)
+done <<< "$list"
+[ ${#targets[@]} -gt 0 ] || { echo "fuzz: no fuzz targets found" >&2; exit 1; }
 
 for target in "${targets[@]}"; do
     read -r pkg name <<< "$target"
