@@ -368,7 +368,7 @@ func (md *model) check(t *testing.T, seed uint64, step int, s *Server) {
 	}
 	succeeded := int(maps) == md.m && int(reduces) == md.r
 	state := st.GetState()
-	ok := state != pb.JobState_JOB_STATE_SUCCEEDED && state != pb.JobState_JOB_STATE_FAILED
+	var ok bool
 	switch {
 	case md.failed:
 		ok = state == pb.JobState_JOB_STATE_FAILED
