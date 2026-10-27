@@ -150,9 +150,9 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 		outputCodec: *f.outputCodec, combiner: *f.combiner,
 	}
 	if strings.HasSuffix(j.program, ".go") {
-		src, err := os.ReadFile(j.program)
+		src, err := readJobFile(j.program)
 		if err != nil {
-			return job{}, fmt.Errorf("job file: %w", err)
+			return job{}, err
 		}
 		j.program, j.source = filepath.Base(j.program), string(src)
 	}
@@ -163,6 +163,24 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 		}
 	}
 	return j, nil
+}
+
+// readJobFile reads a job file, refusing one over jobfile.MaxSize before
+// reading it all.
+func readJobFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("job file: %w", err)
+	}
+	defer f.Close()
+	src, err := io.ReadAll(io.LimitReader(f, jobfile.MaxSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("job file: %w", err)
+	}
+	if len(src) > jobfile.MaxSize {
+		return nil, fmt.Errorf("job file: %s is over the 1 MiB limit", path)
+	}
+	return src, nil
 }
 
 // load returns the job's program: its job file, interpreted, or the

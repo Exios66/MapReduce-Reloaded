@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/local"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
@@ -104,6 +105,28 @@ func TestLoadErrors(t *testing.T) {
 				t.Fatalf("got error %v, want one mentioning %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A job may use the API's task kinds, and os.Exit in it panics instead of
+// ending the process.
+func TestTaskKindsAndExit(t *testing.T) {
+	mustLoad(t, minimal+`
+func kind(ctx api.Context) bool { var k api.TaskKind = ctx.Task().Kind; return k == api.MapTask || k == api.ReduceTask }
+`)
+	_, err := Load(strings.Replace(minimal, `import "mapreduce/api"`, "import (\n\t\"mapreduce/api\"\n\t\"os\"\n)\n\nvar _ = exit()\n\nfunc exit() int { os.Exit(3); return 0 }", 1))
+	if err == nil || !strings.Contains(err.Error(), "os.Exit") {
+		t.Fatalf("got %v, want an error naming os.Exit", err)
+	}
+}
+
+// An initializer that never returns fails the load instead of hanging it.
+func TestLoadTimeout(t *testing.T) {
+	defer func(d time.Duration) { loadTimeout = d }(loadTimeout)
+	loadTimeout = 200 * time.Millisecond
+	_, err := Load(minimal + "\nvar _ = forever()\n\nfunc forever() int { select {} }\n")
+	if err == nil || !strings.Contains(err.Error(), "took over") {
+		t.Fatalf("got %v, want a timeout", err)
 	}
 }
 

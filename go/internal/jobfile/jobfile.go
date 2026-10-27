@@ -2,7 +2,8 @@
 // package job, with Map and Reduce and optionally Combine and Partition,
 // interpreted by Yaegi so workers run new code without a rebuild.
 //
-// A job file imports "mapreduce/api" for api.Context and api.Emitter, the
+// A job file imports "mapreduce/api" for api.Context, api.Emitter and the task
+// kinds (api.TaskKind, api.MapTask, api.ReduceTask), the
 // same interfaces compiled programs use, and the standard library; nothing
 // else. Reduce and Combine take values as a plain
 // func(yield func([]byte) bool), since Yaegi cannot import iter; the loader
@@ -19,6 +20,7 @@ import (
 	"iter"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
@@ -33,6 +35,11 @@ const MaxSize = 1 << 20
 // different job files does not grow without limit.
 const maxCached = 16
 
+// loadTimeout bounds interpreting a job file, which runs its package-level
+// initializers; a var or init that never returns must not hang the
+// coordinator's SubmitJob. Its goroutine is abandoned, not stopped.
+var loadTimeout = 10 * time.Second
+
 // The signatures a job file's functions must have.
 type (
 	mapFunc       = func(ctx api.Context, key, value []byte, out api.Emitter) error
@@ -43,9 +50,12 @@ type (
 // symbols is what "mapreduce/api" offers a job file.
 var symbols = interp.Exports{
 	"mapreduce/api/api": {
-		"Context": reflect.ValueOf((*api.Context)(nil)),
-		"Emitter": reflect.ValueOf((*api.Emitter)(nil)),
-		"TaskID":  reflect.ValueOf((*api.TaskID)(nil)),
+		"Context":    reflect.ValueOf((*api.Context)(nil)),
+		"Emitter":    reflect.ValueOf((*api.Emitter)(nil)),
+		"TaskID":     reflect.ValueOf((*api.TaskID)(nil)),
+		"TaskKind":   reflect.ValueOf((*api.TaskKind)(nil)),
+		"MapTask":    reflect.ValueOf(api.MapTask),
+		"ReduceTask": reflect.ValueOf(api.ReduceTask),
 	},
 }
 
@@ -57,25 +67,45 @@ var (
 // Load interprets src and returns its program. The same source is
 // interpreted once per process: the coordinator checks it when the job is
 // submitted, and a worker then uses one program for every task of the job.
+// The lock is not held while interpreting, so one slow file does not block
+// others; two callers may then both interpret the same new file.
 func Load(src string) (api.Program, error) {
 	if len(src) > MaxSize {
 		return api.Program{}, fmt.Errorf("job file is %d bytes; the limit is 1 MiB", len(src))
 	}
 	sum := sha256.Sum256([]byte(src))
 	mu.Lock()
-	defer mu.Unlock()
-	if p, ok := cache[sum]; ok {
+	p, ok := cache[sum]
+	mu.Unlock()
+	if ok {
 		return p, nil
 	}
-	p, err := load(src)
-	if err != nil {
-		return api.Program{}, err
+
+	type result struct {
+		p   api.Program
+		err error
 	}
+	done := make(chan result, 1)
+	go func() {
+		p, err := load(src)
+		done <- result{p, err}
+	}()
+	var r result
+	select {
+	case r = <-done:
+	case <-time.After(loadTimeout):
+		return api.Program{}, fmt.Errorf("job file: loading it took over %v; does a var or init never return?", loadTimeout)
+	}
+	if r.err != nil {
+		return api.Program{}, r.err
+	}
+	mu.Lock()
+	defer mu.Unlock()
 	if len(cache) >= maxCached {
 		clear(cache)
 	}
-	cache[sum] = p
-	return p, nil
+	cache[sum] = r.p
+	return r.p, nil
 }
 
 // cached reports how many programs are cached, for tests.
