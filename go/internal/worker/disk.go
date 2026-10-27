@@ -13,8 +13,9 @@ import (
 // directory per job under the work directory, is deleted once the
 // coordinator says the job has ended, as the paper deletes intermediate
 // files when a job is done. And a worker whose disk is nearly full stops
-// taking tasks until space comes back, so a full disk stalls the job
-// instead of failing its tasks or the host.
+// taking tasks until space comes back. The check is made before each task,
+// not during one, so -min-free-mib must leave room for one task's output; a
+// task that still runs out of space fails and is retried (§3.3).
 
 // jobDir matches the directories prune may delete: the coordinator's job
 // IDs, so a -work-dir that holds anything else keeps it.

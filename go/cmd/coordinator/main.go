@@ -52,6 +52,9 @@ func main() {
 }
 
 func run(addr, httpAddr, dataDir string, backups bool, keepJobs int) (err error) {
+	if keepJobs < 0 {
+		return fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", keepJobs)
+	}
 	cfg := coordinator.Config{
 		HeartbeatInterval: 3 * time.Second,
 		WorkerTimeout:     10 * time.Second, // three missed heartbeats

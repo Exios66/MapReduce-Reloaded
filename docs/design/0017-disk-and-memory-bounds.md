@@ -30,13 +30,17 @@ output goes too, which is right: nothing can read it any more.
 **A worker low on disk stops taking tasks.** Before each task request it
 checks the work directory's free space; under `-min-free-mib` (default
 1024) it waits, still sending heartbeats so it is not declared dead, and
-counts `mr_worker_disk_waits_total`. A full disk then stalls the job instead
-of failing its tasks, or filling the host. `mr_worker_disk_free_bytes`
-shows the space.
+counts `mr_worker_disk_waits_total`. A nearly full disk then stalls the
+job instead of failing task after task. The check is made before a task,
+not while it runs, so the margin must hold one task's output (a map task's
+spills or a reduce task's fetched input); a task that still runs out of
+space fails and is retried, on this worker once space is back or on
+another. `mr_worker_disk_free_bytes` shows the space.
 
 **The coordinator forgets old jobs.** It keeps the `-keep-jobs` (default
 100) most recent ended jobs for `mr status` and the status page; older ones
-are forgotten, oldest first. Job IDs come from a counter, so a forgotten
+are forgotten, oldest first; 0 keeps all of them, and a negative value is
+rejected. Job IDs come from a counter, so a forgotten
 job's ID is never used again.
 
 **The job-file cache is an LRU** of 16 programs, instead of emptying itself

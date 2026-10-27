@@ -208,7 +208,7 @@ without bound ([ADR 0017](docs/design/0017-disk-and-memory-bounds.md)):
 | What | Bound |
 |---|---|
 | Map output on each worker | Deleted once the job ends: each heartbeat reply lists the active jobs, and the worker deletes the rest (§3.1 step 7) |
-| Worker disk | Under `-min-free-mib` free (default 1024), a worker takes no task until there is space |
+| Worker disk | Under `-min-free-mib` free (default 1024), a worker takes no task until there is space; the margin must hold one task's output |
 | Jobs in the coordinator's memory | The `-keep-jobs` most recent ended jobs (default 100) |
 | Job-file programs | An LRU of 16 per process |
 | Container logs | 10 MB × 3 files per container |
