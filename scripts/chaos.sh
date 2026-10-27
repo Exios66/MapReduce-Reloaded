@@ -32,7 +32,7 @@ restore() {
 }
 trap restore EXIT
 
-if [ ! -d "data/input/chaos-$size" ]; then
+if [ ! -f "data/input/chaos-$size/zipf.txt" ]; then # the file, not the directory: an upload may have stopped half way
     log "generating $size bytes of input"
     tmp=$(mktemp -d)
     python3 bench/gen-zipf.py "$size" 42 1.0 > "$tmp/zipf.txt"
