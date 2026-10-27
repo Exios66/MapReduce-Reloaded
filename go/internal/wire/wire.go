@@ -12,16 +12,26 @@ import (
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/formats"
+	"github.com/exios66/mapreduce-reloaded/go/internal/jobfile"
 	"github.com/exios66/mapreduce-reloaded/go/internal/storage"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
 
-// JobSpec returns the job m describes, with its program looked up in the
-// registry by name. It validates the result.
+// JobSpec returns the job m describes, with its program loaded from its job
+// file (ADR 0015) or, without one, looked up in the registry by name. It
+// validates the result.
 func JobSpec(m *pb.JobSpec) (api.JobSpec, error) {
-	p, ok := api.Lookup(m.GetProgram())
-	if !ok {
-		return api.JobSpec{}, fmt.Errorf("wire: unknown program %q", m.GetProgram())
+	var p api.Program
+	if src := m.GetProgramSource(); src != "" {
+		var err error
+		if p, err = jobfile.Load(src); err != nil {
+			return api.JobSpec{}, fmt.Errorf("wire: %s: %w", m.GetProgram(), err)
+		}
+	} else {
+		var ok bool
+		if p, ok = api.Lookup(m.GetProgram()); !ok {
+			return api.JobSpec{}, fmt.Errorf("wire: unknown program %q", m.GetProgram())
+		}
 	}
 	switch name := m.GetPartitioner(); name {
 	case "": // the program's own, if it has one

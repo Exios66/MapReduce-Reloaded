@@ -37,7 +37,8 @@ before it merges ([design.md](../design.md#process)):
 5. **Exact M:** `-m` gives the number of map tasks (ADR 0016).
 6. **Job files:** `mr submit job.go …`, `JobSpec.program_source`, Yaegi in
    the worker, and `examples/wordcount.go`
-   ([ADR 0015](design/0015-user-job-files.md)).
+   ([ADR 0015](design/0015-user-job-files.md)) (done; the fatal task
+   failure is still to do).
 7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation
    (done).
 8. **Coordinator recovery in Compose:** `-data-dir` on a volume.

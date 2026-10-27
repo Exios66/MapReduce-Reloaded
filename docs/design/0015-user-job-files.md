@@ -73,13 +73,12 @@ var Combine = Reduce
   loader passes the framework's `iter.Seq[[]byte]` straight through, since
   the two types have the same underlying type.
 
-**How the file travels (planned).**
+**How the file travels.**
 
-- Once `JobSpec.program_source` is added to the protobuf contract,
-  `mr submit … ./wordcount.go …` will read the file on the client's machine
-  and send its source in that field. Setting `program` to the file's base
-  name for display is also planned.
-- The coordinator checks nothing beyond a size limit (1 MiB). It hands the
+- `mr submit … ./wordcount.go …` reads the file on the client's machine and
+  sends its source in `JobSpec.program_source`, with `program` set to the
+  file's base name for display.
+- The coordinator checks the size limit (1 MiB) and loads the source (below). It hands the
   `JobSpec` to every task, as it already does, so the write-ahead log's
   `JobSubmitted` record holds the source and a restarted coordinator can
   still run the job ([ADR 0007](0007-write-ahead-log.md)).
@@ -88,11 +87,11 @@ var Combine = Reduce
   lacks `Map` or `Reduce`, must not be treated as an ordinary task failure.
   Today `TaskTable.Fail` makes a failed task idle again, and only a
   bad-record limit (`MaxSkippedRecords`) ends a job, so the task would be
-  retried forever. The design (planned) has two parts:
-  - The coordinator loads the source with the same interpreter when it
+  retried forever. The design has two parts:
+  - (Built.) The coordinator loads the source with the same interpreter when it
     accepts the submit, and rejects the submit with the interpreter's error
     (`InvalidArgument`). Most errors never reach a worker.
-  - `TaskFailure` gets a `fatal` field (a proto change). A worker that fails
+  - (Planned.) `TaskFailure` gets a `fatal` field (a proto change). A worker that fails
     to load the source, which can happen only if the interpreter differs from
     the coordinator's, sets it. The coordinator then ends the job at once
     through the same path as the bad-record limit, with the message shown in

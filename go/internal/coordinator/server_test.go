@@ -75,6 +75,11 @@ func TestSubmitJob(t *testing.T) {
 
 	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{Program: "nope"}})
 	assertCode(t, err, codes.InvalidArgument)
+	// A job file that does not load is rejected at submission (ADR 0015).
+	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "bad.go", ProgramSource: "package job\nfunc Map(", Inputs: []string{"x"}, Output: "o",
+	}})
+	assertCode(t, err, codes.InvalidArgument)
 	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{})
 	assertCode(t, err, codes.InvalidArgument)
 

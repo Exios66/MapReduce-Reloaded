@@ -24,7 +24,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
 | Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | built |
 | Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | planned |
-| Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file and exact M planned |
+| Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file built; exact M planned |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
 | At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 scripted; E5 planned |
@@ -47,7 +47,7 @@ make mr                                           # build the client into bin/mr
 make upload-example                               # bundled corpus and web log into /data/input (planned)
 bin/mr upload ~/my-logs /data/input/logs          # upload your own data                  (planned)
 bin/mr submit -m 8 -r 4 -wait \
-    examples/wordcount.go /data/out/wc '/data/input/corpus/*.txt'   # job file: planned
+    examples/wordcount.go /data/out/wc '/data/input/corpus/*.txt'   # a job file
 bin/mr status job-1                               # state, progress, backups, counters
 bin/mr cat /data/out/wc | head                    # read the output                       (planned)
 ```
@@ -58,7 +58,7 @@ bin/mr cat /data/out/wc | head                    # read the output             
 |---|---|
 | where inputs are in shared storage | trailing arguments: paths or globs under `/data` (or `s3://…`) |
 | where outputs go in shared storage | the output directory, e.g. `/data/out/wc` |
-| a file with map and reduce functions | a `.go` job file, read on the client and sent with the job ([ADR 0015](docs/design/0015-user-job-files.md)) **(planned)** |
+| a file with map and reduce functions | a `.go` job file, read on the client and sent with the job ([ADR 0015](docs/design/0015-user-job-files.md)) |
 | the number of map tasks | `-m M`, made exact **(planned)**; today it sets an approximate split size |
 | the number of reduce tasks | `-r R` |
 
@@ -129,7 +129,7 @@ input with a plain copy and read output without a container
 | Input | Text, one record per line (key = byte offset, value = line), or MRKV records (`-input-format kv`) |
 | Intermediate | MRKV: our block format of length-prefixed key/value records, with a CRC-32C per block and a footer; blocks optionally compressed with zstd or Snappy ([spec](docs/file-format.md), [ADR 0004](docs/design/0004-intermediate-file-format.md)). One sorted file per map task and reduce partition |
 | Output | Text, `key<TAB>value` per line, one `part-r-NNNNN` per reduce task (default), or MRKV (`-output-format kv`) |
-| Job file | Go source ([ADR 0015](docs/design/0015-user-job-files.md)) **(planned)** |
+| Job file | Go source, package `job`, at most 1 MiB ([ADR 0015](docs/design/0015-user-job-files.md)) |
 | RPC messages | Protobuf |
 
 MRKV was chosen over Arrow or Parquet because keys and values are opaque
@@ -151,7 +151,8 @@ on manual dispatches ([ADR 0014](docs/design/0014-ci-on-pull-requests.md)).
 | Chaos | Random worker kills and freezes and coordinator restarts during a job; output must equal the golden files. 3 seeded runs in `make check`, 50 as a soak | `go/internal/worker/chaos_test.go` |
 | End to end | Word count on the Compose cluster, compared with the golden output, and no container over its memory limit | `make e2e`, `make e2e-s3` |
 | Docs | Every code path and test named in the paper mapping exists | `go/internal/papermap` |
-| **(planned)** | Job files: an interpreted word count equals the compiled one; a file that does not compile fails the job with a clear message; a panic in a job file triggers bad-record skipping. Client: upload and path resolution; exact M. `make e2e` through the host client | |
+| Job files | `examples/wordcount.go` gives the golden output with and without its combiner; a file that does not parse, lacks Map or Reduce, or has the wrong types is rejected with a reason, and the coordinator refuses its submit (`InvalidArgument`); a panic in `Map` is an error, not a crash | `go/internal/jobfile`, `go/internal/wire`, `go/cmd/mr` |
+| **(planned)** | A worker that cannot load a job file fails the job (`TaskFailure.fatal`). Client: upload and path resolution; exact M. `make e2e` through the host client | |
 
 ### Special features
 

@@ -1,13 +1,16 @@
 // Command mr runs MapReduce jobs, in this process or on a cluster.
 //
-//	mr run -local [job flags] <program> <output-dir> <inputs>
-//	mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program> <output-dir> <inputs>
+//	mr run -local [job flags] <program | job.go> <output-dir> <inputs>
+//	mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program | job.go> <output-dir> <inputs>
 //	mr status [-coordinator addr] <job-id>
 //
 // The job flags are -m M, -r R, -param name=value (repeatable),
-// -input-format, -output-format, -intermediate-codec and -output-codec.
+// -input-format, -output-format, -intermediate-codec, -output-codec and
+// -combiner=false.
 //
-// program is a registered program name, such as wordcount; inputs are one or
+// program is a registered program name, such as wordcount, or a path ending
+// in .go to a job file with Map and Reduce (ADR 0015), which mr reads and
+// sends with the job; inputs are one or
 // more files or glob patterns. Local mode (§4.7) runs every task in this
 // process and prints the counters to standard error. It skips no bad
 // records (§3.7): the first record that makes user code fail fails the job,
@@ -24,6 +27,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -34,6 +38,7 @@ import (
 
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/jobfile"
 	"github.com/exios66/mapreduce-reloaded/go/internal/local"
 	"github.com/exios66/mapreduce-reloaded/go/internal/split"
 	"github.com/exios66/mapreduce-reloaded/go/internal/wire"
@@ -41,8 +46,8 @@ import (
 )
 
 const usage = `usage:
-  mr run -local [job flags] <program> <output-dir> <inputs>
-  mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program> <output-dir> <inputs>
+  mr run -local [job flags] <program | job.go> <output-dir> <inputs>
+  mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program | job.go> <output-dir> <inputs>
   mr status [-coordinator addr] <job-id>
 job flags:
   -m M  -r R  -param name=value (repeatable)
@@ -85,6 +90,8 @@ type job struct {
 	// Codec and format names, checked when the job is validated.
 	inputFormat, intermediateCodec, outputFormat, outputCodec string
 	combiner                                                  bool
+	// source is the job file's Go source, when program names one (ADR 0015).
+	source string
 }
 
 // jobFlags are the flags that describe a job.
@@ -145,6 +152,13 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 		inputFormat: *f.inputFormat, intermediateCodec: *f.intermediateCodec, outputFormat: *f.outputFormat,
 		outputCodec: *f.outputCodec, combiner: *f.combiner,
 	}
+	if strings.HasSuffix(j.program, ".go") {
+		src, err := readJobFile(j.program)
+		if err != nil {
+			return job{}, err
+		}
+		j.program, j.source = filepath.Base(j.program), string(src)
+	}
 	if *f.m > 0 {
 		var err error
 		if j.splitSize, err = split.SizeFor(context.Background(), j.inputs, int(*f.m)); err != nil {
@@ -152,6 +166,37 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 		}
 	}
 	return j, nil
+}
+
+// readJobFile reads a job file, refusing one over jobfile.MaxSize before
+// reading it all.
+func readJobFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("job file: %w", err)
+	}
+	src, err := io.ReadAll(io.LimitReader(f, jobfile.MaxSize+1))
+	if err = errors.Join(err, f.Close()); err != nil {
+		return nil, fmt.Errorf("job file: %w", err)
+	}
+	if len(src) > jobfile.MaxSize {
+		return nil, fmt.Errorf("job file: %s is over the 1 MiB limit", path)
+	}
+	return src, nil
+}
+
+// load returns the job's program: its job file, interpreted, or the
+// registered program it names.
+func (j job) load() (api.Program, error) {
+	if j.source != "" {
+		return jobfile.Load(j.source)
+	}
+	p, ok := api.Lookup(j.program)
+	if !ok {
+		return api.Program{}, fmt.Errorf("unknown program %q; registered: %s, or a .go job file",
+			j.program, strings.Join(api.Programs(), ", "))
+	}
+	return p, nil
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
@@ -179,9 +224,9 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 	if err != nil {
 		return err
 	}
-	program, ok := api.Lookup(j.program)
-	if !ok {
-		return fmt.Errorf("unknown program %q; registered: %s", j.program, strings.Join(api.Programs(), ", "))
+	program, err := j.load()
+	if err != nil {
+		return err
 	}
 	if !j.combiner {
 		program.Combiner = nil
@@ -227,7 +272,8 @@ func submit(args []string, stdout, stderr io.Writer) error {
 	// same way whatever their working directory.
 	spec := &pb.JobSpec{
 		Program: j.program, SplitSizeBytes: j.splitSize, NumReduceTasks: j.r, UseCombiner: j.combiner, Params: j.params,
-		InputFormat: j.inputFormat, OutputFormat: j.outputFormat,
+		ProgramSource: j.source,
+		InputFormat:   j.inputFormat, OutputFormat: j.outputFormat,
 		IntermediateCodec: j.intermediateCodec, OutputCodec: j.outputCodec,
 	}
 	if *maxSkipped >= 0 {

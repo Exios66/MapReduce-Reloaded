@@ -562,7 +562,12 @@ type JobSpec struct {
 	IntermediateCodec string `protobuf:"bytes,12,opt,name=intermediate_codec,json=intermediateCodec,proto3" json:"intermediate_codec,omitempty"`
 	// Compression for output files, with the same names. Only the "kv" output
 	// format has blocks to compress.
-	OutputCodec   string `protobuf:"bytes,13,opt,name=output_codec,json=outputCodec,proto3" json:"output_codec,omitempty"`
+	OutputCodec string `protobuf:"bytes,13,opt,name=output_codec,json=outputCodec,proto3" json:"output_codec,omitempty"`
+	// Go source of a job file (ADR 0015): package job with Map and Reduce,
+	// and optionally Combine and Partition. When set, workers interpret it
+	// instead of looking up program, which then only names the job for
+	// display. At most 1 MiB.
+	ProgramSource string `protobuf:"bytes,14,opt,name=program_source,json=programSource,proto3" json:"program_source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -688,6 +693,13 @@ func (x *JobSpec) GetOutputCodec() string {
 	return ""
 }
 
+func (x *JobSpec) GetProgramSource() string {
+	if x != nil {
+		return x.ProgramSource
+	}
+	return ""
+}
+
 // Identity and capabilities of a worker.
 type WorkerInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -790,7 +802,7 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\x06values\x18\x01 \x03(\v2\".mapreduce.v1.Counters.ValuesEntryR\x06values\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xc9\x04\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xf0\x04\n" +
 	"\aJobSpec\x12\x18\n" +
 	"\aprogram\x18\x01 \x01(\tR\aprogram\x12\x16\n" +
 	"\x06inputs\x18\x02 \x03(\tR\x06inputs\x12\x16\n" +
@@ -805,7 +817,8 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	" \x03(\v2!.mapreduce.v1.JobSpec.ParamsEntryR\x06params\x123\n" +
 	"\x13max_skipped_records\x18\v \x01(\x04H\x00R\x11maxSkippedRecords\x88\x01\x01\x12-\n" +
 	"\x12intermediate_codec\x18\f \x01(\tR\x11intermediateCodec\x12!\n" +
-	"\foutput_codec\x18\r \x01(\tR\voutputCodec\x1a9\n" +
+	"\foutput_codec\x18\r \x01(\tR\voutputCodec\x12%\n" +
+	"\x0eprogram_source\x18\x0e \x01(\tR\rprogramSource\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x16\n" +
