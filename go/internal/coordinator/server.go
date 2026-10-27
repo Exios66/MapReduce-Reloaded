@@ -404,7 +404,10 @@ func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
 // It returns NotFound for an unknown job,
 // InvalidArgument for a report with no outcome or for task or output
 // validation errors, and Unavailable if
-// recording the report fails. A log error does not undo the report's effects.
+// recording the report fails. A log error does not undo the report's effects,
+// but a report that ends the job cleans up its output only once the log
+// holds it: a coordinator that dies in between replays a running job, whose
+// reduce attempts still need the job's TempDir (#182).
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -416,30 +419,35 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 		return nil, status.Error(codes.InvalidArgument, "report has neither success nor failure")
 	}
 	now := time.Now()
-	accepted, err := s.report(j, req, now)
+	accepted, ended, err := s.report(j, req, now)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskReported{TaskReported: req}}, now); err != nil {
 		return nil, err
 	}
+	if ended {
+		j.cleanup()
+	}
 	return &pb.ReportTaskResponse{Accepted: accepted}, nil
 }
 
 // report applies req, received at at, to j, and says whether it completed
-// its task.
+// its task and whether it ended the job, whose output the caller then
+// cleans up.
 // Failure reports and stale attempts return false; invalid tasks or map
 // outputs return an error. If the report ends the active job, at is its
 // finish time.
-func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accepted bool, err error) {
+func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accepted, ended bool, err error) {
 	id := req.GetAttempt()
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
+	active := s.active == j
 	if f := req.GetFailure(); f != nil {
 		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
 		if limit := j.spec.MaxSkippedRecords; limit != nil && uint64(j.tasks.Skipped()) > *limit {
 			s.end(j, fmt.Sprintf("more than %d bad records to skip", *limit), at)
 		}
-		return false, err
+		return false, active && s.active != j, err
 	}
 	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
 	if accepted {
@@ -450,18 +458,17 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 			s.end(j, "", at)
 		}
 	}
-	return accepted, err
+	return accepted, active && s.active != j, err
 }
 
 // end ends j at at if it is the active job: it failed with err, or
 // succeeded if err is empty. Attempts still running may report, but its
-// state no longer changes.
+// state no longer changes. The caller cleans up j's output.
 func (s *Server) end(j *job, err string, at time.Time) {
 	if s.active != j {
 		return
 	}
 	j.err, j.finished = err, at
-	j.cleanup()
 	s.active = nil
 	s.forget()
 }
@@ -556,8 +563,8 @@ func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 }
 
 // cleanup removes what dead or failed reduce attempts left in the job's
-// output. It runs under the lock, once per job, so that the job is never
-// reported done before its output is clean; the directory holds at most R
+// output. It runs under the lock, once the log holds the job's end, so that
+// the job is never reported done before its output is clean; the directory holds at most R
 // files. The job's outcome is already decided, so an error is only logged.
 func (j *job) cleanup() {
 	path, err := wire.Path(j.spec.GetOutput())
