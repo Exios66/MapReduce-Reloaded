@@ -38,7 +38,8 @@ before it merges ([design.md](../design.md#process)):
 6. **Job files:** `mr submit job.go …`, `JobSpec.program_source`, Yaegi in
    the worker, and `examples/wordcount.go`
    ([ADR 0015](design/0015-user-job-files.md)).
-7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation.
+7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation
+   (done).
 8. **Coordinator recovery in Compose:** `-data-dir` on a volume.
 9. **Evaluation:** experiments E0–E5 of
    [design.md](../design.md#performance-evaluation), with plots in
@@ -50,8 +51,8 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165). Item 8 is in part: the Compose
 override `deploy/compose/wal.yaml` runs the coordinator with `-data-dir`,
-and making it the default is still to do. Item 9 is in part: E0 and E2–E4
-run with `bench/experiments.sh` (#169); E1 and E5 wait on items 7 and 6. Phase 5, the rest of Phase 6 and #59 stay stretch
+and making it the default is still to do. Item 9 is in part: E0–E4
+run with `bench/experiments.sh`; E5 waits on item 6. Phase 5, the rest of Phase 6 and #59 stay stretch
 goals.
 
 ## Context

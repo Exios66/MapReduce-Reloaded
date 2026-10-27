@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # The performance evaluation (design.md, "Performance evaluation") on
-# the Compose cluster: experiments E0, E2, E3 and E4, each run REPEAT times
+# the Compose cluster: experiments E0 to E4, each run REPEAT times
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
-# Usage: bench/experiments.sh E0|E2|E3|E4|all
+# Usage: bench/experiments.sh E0|E1|E2|E3|E4|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
+# - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
+#   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU, with the
 #   coordinator's backup tasks on and off, and with no straggler.
 # - E3: distsort with one worker killed at 25%, 50% and 75% of the normal
@@ -20,13 +22,16 @@
 # (scrape-metrics.py) per run. bench/plot-experiments.py draws the plots.
 #
 # Every run's output is checksummed and compared with the first normal run
-# of the same program; a run that differs has valid=0 and is not plotted.
-# The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt between
+# on the same input; a run that differs has valid=0 and is not plotted.
+# The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt
+# (-SIZE-S.txt for word count's Zipf exponent S) between
 # experiments, and make cluster-down removes them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 repeat=${REPEAT:-3}
+zipf=1.0      # word count's Zipf exponent; E1 varies it
+submit_flags=() # extra mr submit flags; E1 sets -combiner=false
 size=${SIZE:-1073741824}
 m=${M:-32}
 r=${R:-4}
@@ -78,13 +83,18 @@ wait_workers() {
 }
 
 # input PROGRAM: generates PROGRAM's input once and prints its path.
+# Cached paths include size in bytes and, for word count, the current zipf
+# exponent used to generate the input.
 input() {
     # The size is in the name, so a run with another SIZE makes its own input.
     local path=/out/exp-input-$1-$size.txt gen
     case $1 in
     grep) gen=(bench/gen-grep.py "$size" 42) ;;
     distsort) gen=(bench/gen-sort.py "$size" 42) ;;
-    wordcount) gen=(bench/gen-zipf.py "$size" 42 1.0) ;;
+    wordcount)
+        gen=(bench/gen-zipf.py "$size" 42 "$zipf")
+        path=/out/exp-input-$1-$size-$zipf.txt
+        ;;
     esac
     if ! in_volume test -f "$path"; then
         log "generating $size bytes for $1"
@@ -99,9 +109,11 @@ params() { [ "$1" = grep ] && echo "-param pattern=XYZ" || true; }
 
 checksum() { in_volume sh -c "cat $1/part-r-* | sha256sum | cut -d' ' -f1"; }
 
-# The first normal run of each program sets its reference checksum.
+# valid INPUT OUTPUT: prints 1 if OUTPUT matches the reference checksum for
+# INPUT's basename, or 0 otherwise. The first call for that basename saves
+# OUTPUT's checksum as the reference in $tmp.
 valid() {
-    local sum ref=$tmp/ref-$1
+    local sum ref=$tmp/ref-${1##*/}
     sum=$(checksum "$2")
     [ -f "$ref" ] || echo "$sum" > "$ref"
     [ "$sum" = "$(cat "$ref")" ] && echo 1 || echo 0
@@ -135,16 +147,26 @@ stop_sampler() {
 # and appends its row to runs.csv. EVENT is a command run in the background
 # EVENT_AT seconds after the job is submitted. The job is polled with
 # mr status, which, unlike submit -wait, outlives a coordinator restart.
+# The job uses the current submit_flags; its output directory is removed
+# before and after the run.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
     in=$(input "$program")
     in_volume rm -rf "$out"
+    # Workers delete map output only when they exit, so restart them: each
+    # run then starts from the same state and the disk does not fill.
+    "${compose[@]}" restart worker >/dev/null 2>&1
+    wait_workers "$workers"
+    if [ "$(df -Pk / | awk 'NR == 2 { print $4 }')" -lt $((5 << 20)) ]; then
+        echo "experiments: under 5 GB free on /; stopping before $exp $setting run $n" >&2
+        exit 1
+    fi
     log "$exp $setting $program run $n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
     job=$("${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") "$program" "$out" "$in" 2>/dev/null | tail -1)
+        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "$program" "$out" "$in" 2>/dev/null | tail -1)
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
         exit 1
@@ -178,7 +200,7 @@ run() {
     [ -z "$pid" ] || wait "$pid" 2>/dev/null || true
     echo "$exp,$setting,$program,$workers,$n,$size,$m,$r,$at,$state,$(counter seconds)," \
         "$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }'),$(counter backups),$(counter backups_won)," \
-        "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$program" "$out"; else echo 0; fi),$job" |
+        "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$in" "$out"; else echo 0; fi),$job" |
         tr -d ' ' >> "$dir/runs.csv"
     in_volume rm -rf "$out"
 }
@@ -208,6 +230,27 @@ e0() {
             for n in $(seq "$repeat"); do run E0 "w$workers" "$program" "$n" "$workers" ""; done
         done
     done
+}
+
+# E1 compares word count with the combiner on and off on four workers at
+# Zipf exponents 0.5, 1.0 and 1.5. It pairs settings within each run and swaps
+# which goes first on even runs to balance page cache effects.
+e1() {
+    begin E1
+    configure 4
+    local n combiner order
+    for zipf in 0.5 1.0 1.5; do
+        for n in $(seq "$repeat"); do
+            order="on off"
+            [ $((n % 2)) = 1 ] || order="off on"
+            for combiner in $order; do
+                submit_flags=()
+                [ "$combiner" = on ] || submit_flags=(-combiner=false)
+                run E1 "s$zipf-$combiner" wordcount "$n" 4 ""
+            done
+        done
+    done
+    zipf=1.0 submit_flags=()
 }
 
 e2() {
@@ -278,12 +321,13 @@ e4() {
 
 case ${1:-} in
 E0) e0 ;;
+E1) e1 ;;
 E2) e2 ;;
 E3) e3 ;;
 E4) e4 ;;
-all) e0 && e2 && e3 && e4 ;;
+all) e0 && e1 && e2 && e3 && e4 ;;
 *)
-    echo "usage: bench/experiments.sh E0|E2|E3|E4|all" >&2
+    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|all" >&2
     exit 2
     ;;
 esac

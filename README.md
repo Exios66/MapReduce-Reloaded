@@ -146,6 +146,7 @@ job flags:
   -m M  -r R  -param name=value (repeatable)
   -input-format text|kv  -output-format text|kv
   -intermediate-codec none|zstd|snappy  -output-codec none|zstd|snappy
+  -combiner=false (run without the program's combiner)
 ```
 
 Inputs are files or glob patterns, or `s3://` URIs on a cluster with an

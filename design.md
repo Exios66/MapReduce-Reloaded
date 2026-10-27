@@ -27,7 +27,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file and exact M planned |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0 and E2–E4 scripted; E1 and E5 planned |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 scripted; E5 planned |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -63,8 +63,8 @@ bin/mr cat /data/out/wc | head                    # read the output             
 | the number of reduce tasks | `-r R` |
 
 Optional flags choose input and output formats, compression and the
-bad-record limit, and will turn the combiner off (`-combiner=false`,
-**planned**; today it is always on). A built-in program name (`wordcount`, `grep`, …)
+bad-record limit, and turn the combiner off (`-combiner=false`; it is on
+by default). A built-in program name (`wordcount`, `grep`, …)
 can stand in for the job file; the benchmarks use them.
 
 A job file's `Reduce` takes `values func(yield func([]byte) bool)`, not the
@@ -162,7 +162,7 @@ plus a fourth of our own, coordinator recovery. All four are built in code.
 Compose runs the coordinator with `-data-dir` through the override
 [`deploy/compose/wal.yaml`](deploy/compose/wal.yaml), and with backups off
 through [`backups-off.yaml`](deploy/compose/backups-off.yaml); the
-combiner's switch, `-combiner=false`, is planned. Each feature has an
+combiner's switch is `mr submit -combiner=false`. Each feature has an
 experiment and a plot below.
 
 Locality is a scheduler hook only. On one VM every container reads the same
@@ -212,7 +212,7 @@ M, R and the commit.
 | # | Question | Experiment | Plot |
 |---|---|---|---|
 | E0 | Is the job faster when its tasks are spread over all four 1-CPU workers, as the assignment's deployment intends? | grep, sort and Zipf word count (1 GiB) on 1, 2 and 4 workers | Job time against workers, one line per program, with ideal linear speed-up dashed |
-| E1 | How much does the combiner save? | Zipf word count, 1 GiB, Zipf exponent 0.5, 1.0 and 1.5, combiner on and off (`-combiner=false`, **planned**) | Two panels: bytes shuffled and job time, grouped bars per exponent |
+| E1 | How much does the combiner save? | Zipf word count, 1 GiB, Zipf exponent 0.5, 1.0 and 1.5, combiner on and off (`-combiner=false`), alternating which runs first | Two panels: bytes shuffled and job time, grouped bars per exponent |
 | E2 | Do backup tasks hide a straggler? | sort, 1 GiB, M = 32; one worker throttled to 0.2 CPU (`docker update --cpus 0.2`) at the start; coordinator `-backups` on and off; also no straggler | Tasks completed against time, one line per setting, as the paper's Figure 3; job-time bars beside it |
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
@@ -224,17 +224,18 @@ with the combiner, the saving growing with skew; E2, the throttled run
 close to the unthrottled one with backups on, and much slower with them
 off; E3 and E4, the job finishing with correct output and a delay of about
 the lost work plus the detection timeout (10 s for a worker). Every run's
-output is checksummed and compared with a normal run of the same program,
+output is checksummed and compared with a normal run on the
+same input,
 whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E2|E3|E4|all`
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|all`
 runs the experiments and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
 draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
-has the commands. E0 and E2 report the coordinator's job time; E3 and E4
+has the commands. E0, E1 and E2 report the coordinator's job time; E3 and E4
 report the time from submission until `mr status` sees the job finish,
 because a restarted coordinator times a job from its replay.
 
@@ -247,8 +248,8 @@ disk, about 3 GiB, within the disk budget in
 E4 change coordinator flags, so they use the Compose overrides
 `backups-off.yaml` (`-backups=false`) and `wal.yaml` (`-data-dir`). E1's "bytes shuffled" is the map output bytes after the
 combiner, an existing counter. The Zipf generator takes its exponent as a
-parameter and a seed; exponent 0.5 needs a custom sampler, which is checked
-before E1 is run.
+parameter and a seed, and samples from a finite vocabulary of 100,000
+words, so any exponent works, 0.5 included.
 
 The plots and their tables go in `bench/README.md` and the final report,
 with the commands that made them.
