@@ -59,6 +59,20 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 	tc := newContext(ctx, spec, id, skip, log)
 	tc.input = split.Path
 	defer tc.commitSide(&err)
+	// The partitions are written under attempt names and committed together
+	// once every one is written, after recovered has seen any panic, so an
+	// attempt that fails, e.g. out of disk space, leaves none behind (#183).
+	var tmps []string
+	defer func() {
+		for r, tmp := range tmps {
+			if err == nil {
+				err = os.Rename(tmp, MapOutput(dir, int(id.Index), r))
+			}
+			if err != nil {
+				_ = os.Remove(tmp)
+			}
+		}
+	}()
 	defer recovered(&err)
 	p := spec.Program
 	partitioner := p.Partitioner
@@ -108,7 +122,9 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 		if err != nil {
 			return nil, nil, err
 		}
-		if sizes[r], err = writeKV(MapOutput(dir, int(id.Index), r), id.Attempt, codec, sorted); err != nil {
+		tmp := attemptPath(MapOutput(dir, int(id.Index), r), id.Attempt)
+		tmps = append(tmps, tmp)
+		if sizes[r], err = writeKV(tmp, codec, sorted); err != nil {
 			return nil, nil, err
 		}
 		tc.Count(MapOutputBytes, sizes[r])
@@ -196,14 +212,13 @@ func OpenSources(paths []string) ([]extsort.Records, func() error, error) {
 }
 
 // writeKV writes records to a new MRKV file at path, compressed with codec,
-// and returns its size.
-func writeKV(path string, attempt uint32, codec kv.Codec, records extsort.Records) (size int64, err error) {
-	tmp := attemptPath(path, attempt)
-	f, err := os.Create(tmp)
+// and returns its size. The caller commits or removes the file.
+func writeKV(path string, codec kv.Codec, records extsort.Records) (size int64, err error) {
+	f, err := os.Create(path)
 	if err != nil {
 		return 0, err
 	}
-	defer commit(context.Background(), &err, f, tmp, path)
+	defer closeJoin(&err, f)
 	w := kv.NewWriterCodec(f, codec)
 	for records.Next() {
 		if err := w.Write(records.Key(), records.Value()); err != nil {

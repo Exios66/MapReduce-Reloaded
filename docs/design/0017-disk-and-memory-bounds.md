@@ -35,10 +35,16 @@ counts `mr_worker_disk_waits_total`. While waiting, it also polls
 `RequestTask` with `paused=true`, which returns wait or shutdown without
 assigning work, so coordinator shutdown remains reachable. A nearly full disk then stalls the
 job instead of failing task after task. The check is made before a task,
-not while it runs, so the margin must hold one task's output (a map task's
-spills or a reduce task's fetched input); a task that still runs out of
-space fails and is retried, on this worker once space is back or on
-another; these failures count toward `-max-task-failures`. `mr_worker_disk_free_bytes` shows the space.
+not while it runs, so the margin must hold what one task writes: a map
+task's spills and its partition files; a reduce task streams its input
+from the map workers and writes only its part file, to the output
+directory. A task that still runs out of space fails and is retried, on
+this worker once space is back or on another; these failures count toward
+`-max-task-failures`, so a task that fits on no worker fails its job with
+"no space left on device" as the reason. A failed map attempt leaves no
+files: its partitions are written under attempt names and committed
+together, so a failure halfway frees what it wrote (#183).
+`mr_worker_disk_free_bytes` shows the space.
 
 **The coordinator forgets old jobs.** It keeps the `-keep-jobs` (default
 100) most recent ended jobs for `mr status` and the status page; older ones
