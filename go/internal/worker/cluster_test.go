@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -57,6 +58,11 @@ var resume = make(chan struct{})
 // stopped.
 const slowRecord = 100 * time.Millisecond
 
+// diskFull is set by the first attempt of map task 0 of test.no-space,
+// which runs out of disk space on its second record, and is read by the
+// worker's free-space check in TestClusterOutOfSpaceMidTask.
+var diskFull atomic.Bool
+
 func init() {
 	first := func(ctx api.Context, kind api.TaskKind) bool {
 		id := ctx.Task()
@@ -71,6 +77,16 @@ func init() {
 		return wordcount.Map(ctx, key, value, out)
 	})
 	api.Register("test.flaky", flaky)
+
+	noSpace := wordcount.Program
+	noSpace.Mapper = api.MapFunc(func(ctx api.Context, key, value []byte, out api.Emitter) error {
+		if first(ctx, api.MapTask) && key[0] != '0' { // after the first record
+			diskFull.Store(true)
+			return &os.PathError{Op: "write", Path: "map-00000-r-00000.kv", Err: syscall.ENOSPC}
+		}
+		return wordcount.Map(ctx, key, value, out)
+	})
+	api.Register("test.no-space", noSpace)
 
 	// Every corpus file starts with an empty line, so skipping those lines
 	// leaves the word counts unchanged.
@@ -653,6 +669,44 @@ func TestClusterWaitsForDisk(t *testing.T) {
 		t.Error("mr_worker_disk_waits_total is not 1")
 	}
 	full.Store(false)
+	c.wait(job)
+	assertGolden(t, c.output())
+}
+
+// A task that runs out of disk space partway fails, leaving no files; its
+// worker then waits for space, still heartbeating, and the job finishes
+// once space is back (#183).
+func TestClusterOutOfSpaceMidTask(t *testing.T) {
+	defer worker.SetDiskPoll(5 * time.Millisecond)()
+	diskFull.Store(false)
+	c := newCluster(t)
+	c.setup = func(w *worker.Worker) {
+		w.MinFreeDisk = 1 << 30
+		worker.SetFreeBytes(w, func(string) (uint64, error) {
+			if diskFull.Load() {
+				return 1 << 20, nil
+			}
+			return 2 << 30, nil
+		})
+	}
+	c.addWorker()
+	w := c.workers[0]
+	job := c.submit("test.no-space")
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(scrape(t, w), "mr_worker_disk_waits_total 1\n") {
+		if time.Now().After(deadline) {
+			t.Fatal("the worker did not wait for disk space after running out")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond) // three worker timeouts
+	if st := c.srv.Status(); len(st.Workers) != 1 || len(st.Lost) != 0 {
+		t.Fatalf("a worker waiting for disk was lost: %d live, %d lost", len(st.Workers), len(st.Lost))
+	}
+	if files, _ := filepath.Glob(filepath.Join(c.workDir, "0", "*", "*.attempt-*")); len(files) != 0 {
+		t.Fatalf("the failed attempt left %v", files)
+	}
+	diskFull.Store(false)
 	c.wait(job)
 	assertGolden(t, c.output())
 }
