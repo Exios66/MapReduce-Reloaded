@@ -164,6 +164,8 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 // Heartbeat tells an unknown worker to register again, and a known one
 // which of the attempts it runs to stop: those no longer running on it, such
 // as a backup whose twin finished first (§3.6), or those of an ended job.
+// Known workers also receive the active job ID, or an empty list when idle,
+// so they can prune ended jobs' map output. It always returns a nil error.
 func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -251,7 +253,8 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 	return &pb.SubmitJobResponse{JobId: rec.GetJobId()}, nil
 }
 
-// submit makes the job rec describes, submitted at at, the active one.
+// submit makes the job rec describes, submitted at at, the active one,
+// advances the job sequence, and forgets old jobs according to cfg.KeepJobs.
 func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 	j := &job{
 		id:        rec.GetJobId(),
@@ -271,6 +274,7 @@ func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 
 // forget drops the oldest ended jobs beyond cfg.KeepJobs. The active job,
 // the newest, is never dropped.
+// It is called with a newly active job; a nonpositive limit retains all jobs.
 func (s *Server) forget() {
 	for s.cfg.KeepJobs > 0 && len(s.order) > s.cfg.KeepJobs+1 && s.order[0] != s.active {
 		delete(s.jobs, s.order[0].id)

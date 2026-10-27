@@ -117,6 +117,9 @@ func (w *Worker) session(parent context.Context) error {
 // serve runs tasks until the coordinator says to shut down, or ctx is
 // done, or an RPC fails. An attempt runs under its own context, which a
 // heartbeat cancels if the coordinator says to stop it.
+// It waits for disk space before each task request. Unknown-worker replies
+// return errForgotten; other RPC and context errors propagate. Task failures
+// are reported to the coordinator and do not themselves end the loop.
 func (w *Worker) serve(ctx context.Context, cur *current) error {
 	for {
 		if err := w.waitForDisk(ctx); err != nil {

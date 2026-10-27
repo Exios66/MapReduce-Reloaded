@@ -33,6 +33,8 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/wal"
 )
 
+// main parses coordinator flags and serves until interrupted, exiting with
+// status 1 after printing any logging setup or run error to stderr.
 func main() {
 	addr := flag.String("addr", ":7070", "address to listen on")
 	httpAddr := flag.String("http", ":8080", "address of the status page and /metrics (empty: none)")
@@ -51,6 +53,12 @@ func main() {
 	}
 }
 
+// run serves coordinator RPCs at addr until an interrupt or SIGTERM stops it.
+// A nonempty dataDir enables log recovery and persistence; a nonempty
+// httpAddr enables the status page and metrics. keepJobs limits retained
+// ended jobs when a new job starts; zero retains all and negative is invalid.
+// It returns configuration, storage, recovery, listen, and RPC server errors,
+// joined with any log close error. Status HTTP server errors do not stop RPCs.
 func run(addr, httpAddr, dataDir string, backups bool, keepJobs int) (err error) {
 	if keepJobs < 0 {
 		return fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", keepJobs)

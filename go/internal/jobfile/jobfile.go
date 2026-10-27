@@ -72,11 +72,13 @@ type entry struct {
 	p   api.Program
 }
 
-// Load interprets src and returns its program. The same source is
-// interpreted once per process: the coordinator checks it when the job is
-// submitted, and a worker then uses one program for every task of the job.
+// Load interprets src and returns its program, reusing a cached program
+// while it remains among the 16 most recently used sources. Cache misses
+// run package initializers, whose state is shared by users of that program.
 // The lock is not held while interpreting, so one slow file does not block
 // others; two callers may then both interpret the same new file.
+// It returns errors for source over MaxSize bytes, invalid job code, or
+// loading longer than 10 seconds. A timeout does not stop initialization.
 func Load(src string) (api.Program, error) {
 	if len(src) > MaxSize {
 		return api.Program{}, fmt.Errorf("job file is %d bytes; the limit is 1 MiB", len(src))
@@ -128,6 +130,10 @@ func cached() int {
 	return len(cache)
 }
 
+// load interprets package job, running its initializers, and requires Map
+// and Reduce with the supported signatures. Combine and Partition are optional.
+// Parse, symbol setup, evaluation, and signature errors are returned;
+// interpreter panics during setup or evaluation are converted to errors.
 func load(src string) (p api.Program, err error) {
 	f, err := parser.ParseFile(token.NewFileSet(), "job.go", src, parser.SkipObjectResolution)
 	if err != nil {
@@ -184,7 +190,8 @@ func load(src string) (p api.Program, err error) {
 	return p, nil
 }
 
-// lookup returns the job's top-level name as an F.
+// lookup returns the job's top-level name as a non-nil function of type F,
+// returning an error if evaluation fails or the value has the wrong type.
 func lookup[F any](i *interp.Interpreter, name string) (F, error) {
 	var zero F
 	v, err := i.Eval("job." + name)
