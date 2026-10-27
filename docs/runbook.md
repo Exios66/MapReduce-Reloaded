@@ -93,6 +93,15 @@ Each ends with `e2e: output matches the golden output`. The golden output
 is what local mode produces, so this also shows the cluster agrees with
 the single-process oracle (§4.7).
 
+```sh
+make chaos RUNS=5 SEED=1     # worker kills and pauses, coordinator crashes, mid-job
+```
+
+`make chaos` runs word count over a 256 MiB Zipf input once undisturbed,
+then RUNS times with three to five seeded events each, and ends with
+`chaos: 5 runs from seed 1, each with the reference output`. A failing
+run prints its seed; `scripts/chaos.sh 1 SEED` replays it.
+
 ### 5.3 Upload data, submit a job file and read its output
 
 ```sh
