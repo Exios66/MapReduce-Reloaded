@@ -346,7 +346,14 @@ E1) e1 ;;
 E2) e2 ;;
 E3) e3 ;;
 E4) e4 ;;
-all) e0 && e1 && e2 && e3 && e4 ;;
+all)
+    # Not an && list: set -e does not apply to a function called there.
+    e0
+    e1
+    e2
+    e3
+    e4
+    ;;
 *)
     echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|all" >&2
     exit 2

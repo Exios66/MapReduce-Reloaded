@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -104,6 +105,9 @@ func run(c config) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	w := worker.New(pb.NewCoordinatorServiceClient(conn), c.workDir, info)
+	if c.minFreeMiB > math.MaxUint64>>20 {
+		return fmt.Errorf("-min-free-mib %d is too large", c.minFreeMiB)
+	}
 	w.MinFreeDisk = c.minFreeMiB << 20
 	if c.http != "" {
 		metrics := &http.Server{Addr: c.http, Handler: w.MetricsHandler(), ReadHeaderTimeout: 5 * time.Second}

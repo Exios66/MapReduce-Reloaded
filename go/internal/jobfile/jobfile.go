@@ -62,9 +62,10 @@ var symbols = interp.Exports{
 }
 
 var (
-	mu    sync.Mutex
-	cache = map[[sha256.Size]byte]*list.Element{} // of entry, in lru
-	lru   = list.New()                            // most recently used first
+	mu      sync.Mutex
+	cache   = map[[sha256.Size]byte]*list.Element{} // of entry, in lru
+	lru     = list.New()                            // most recently used first
+	loading = map[[sha256.Size]byte]*loadCall{}     // loads in progress
 )
 
 type entry struct {
@@ -72,55 +73,63 @@ type entry struct {
 	p   api.Program
 }
 
+// loadCall is one interpretation of a source, shared by every caller that
+// asks for it while it runs.
+type loadCall struct {
+	done chan struct{} // closed when p and err are set
+	p    api.Program
+	err  error
+}
+
 // Load interprets src and returns its program, reusing a cached program
-// while it remains among the 16 most recently used sources. Cache misses
-// run package initializers, whose state is shared by users of that program.
-// The lock is not held while interpreting, so one slow file does not block
-// others; two callers may then both interpret the same new file.
+// while it remains among the 16 most recently used sources. Each source is
+// interpreted, and its package initializers run, once at a time: callers
+// that ask for a source while it loads wait for that load. The lock is not
+// held while interpreting, so one slow file does not block others.
 // It returns errors for source over MaxSize bytes, invalid job code, or
-// loading longer than 10 seconds. A timeout does not stop initialization.
+// loading longer than loadTimeout. A timeout does not stop initialization,
+// and later callers of that source wait on the same load.
 func Load(src string) (api.Program, error) {
 	if len(src) > MaxSize {
 		return api.Program{}, fmt.Errorf("job file is %d bytes; the limit is 1 MiB", len(src))
 	}
 	sum := sha256.Sum256([]byte(src))
 	mu.Lock()
-	e, ok := cache[sum]
-	if ok {
+	if e, ok := cache[sum]; ok {
 		lru.MoveToFront(e)
-	}
-	mu.Unlock()
-	if ok {
+		mu.Unlock()
 		return e.Value.(*entry).p, nil
 	}
-
-	type result struct {
-		p   api.Program
-		err error
+	c, ok := loading[sum]
+	if !ok {
+		c = &loadCall{done: make(chan struct{})}
+		loading[sum] = c
+		go c.run(sum, src)
 	}
-	done := make(chan result, 1)
-	go func() {
-		p, err := load(src)
-		done <- result{p, err}
-	}()
-	var r result
+	mu.Unlock()
+
 	select {
-	case r = <-done:
+	case <-c.done:
+		return c.p, c.err
 	case <-time.After(loadTimeout):
 		return api.Program{}, fmt.Errorf("job file: loading it took over %v; does a var or init never return?", loadTimeout)
 	}
-	if r.err != nil {
-		return api.Program{}, r.err
-	}
+}
+
+// run interprets src and caches the program if it loaded.
+func (c *loadCall) run(sum [sha256.Size]byte, src string) {
+	p, err := load(src)
 	mu.Lock()
-	defer mu.Unlock()
-	if _, ok := cache[sum]; !ok { // another caller may have loaded it too
-		cache[sum] = lru.PushFront(&entry{sum, r.p})
+	c.p, c.err = p, err
+	delete(loading, sum)
+	if err == nil {
+		cache[sum] = lru.PushFront(&entry{sum, p})
 		if lru.Len() > maxCached {
 			delete(cache, lru.Remove(lru.Back()).(*entry).sum)
 		}
 	}
-	return r.p, nil
+	mu.Unlock()
+	close(c.done)
 }
 
 // cached reports how many programs are cached, for tests.

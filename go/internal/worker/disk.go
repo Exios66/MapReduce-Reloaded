@@ -24,10 +24,16 @@ var jobDir = regexp.MustCompile(`^job-[0-9]+$`)
 // diskPoll is how often a worker waiting for disk space checks again.
 var diskPoll = time.Second
 
+// pruneSlack is how much older than the heartbeat a directory must be to be
+// deleted, since some file systems keep modification times in whole seconds
+// or two: a job's directory made just after the heartbeat was sent could
+// otherwise appear older than it.
+const pruneSlack = 3 * time.Second
+
 // prune asynchronously deletes job-[0-9]+ directories under the work
 // directory that are not in active, as of a heartbeat sent at sent.
-// A directory modified at or after sent is kept: it may belong to a job
-// submitted after the coordinator answered. Only one prune runs at a time, outside the
+// A directory modified less than pruneSlack before sent is kept: it may
+// belong to a job submitted after the coordinator answered. Only one prune runs at a time, outside the
 // heartbeat loop, so a large delete cannot delay a heartbeat.
 // KeepEndedJobs disables pruning. Filesystem errors are not returned;
 // unreadable entries are skipped and failed deletions may be retried later.
@@ -51,7 +57,7 @@ func (w *Worker) prune(active []string, sent time.Time) {
 				continue
 			}
 			info, err := e.Info()
-			if err != nil || !info.ModTime().Before(sent) {
+			if err != nil || !info.ModTime().Before(sent.Add(-pruneSlack)) {
 				continue
 			}
 			dir := filepath.Join(w.workDir, e.Name())

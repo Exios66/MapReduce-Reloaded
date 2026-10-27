@@ -19,7 +19,8 @@ Docker kept every container log, and Prometheus kept 15 days of samples.
 **Ended jobs' map output is deleted.** Each `HeartbeatResponse` carries
 `active_jobs`, the jobs that have not ended. A worker deletes each `job-N`
 directory in its work directory that is not active, unless it was written
-after the heartbeat was sent: that directory may belong to a job submitted
+after the heartbeat was sent, or less than 3 s before it (some file systems
+keep times in whole seconds): that directory may belong to a job submitted
 after the coordinator answered. An unset `active_jobs` (an older
 coordinator) deletes nothing. The delete runs outside the heartbeat loop, one
 at a time, so a large one cannot delay a heartbeat. It counts

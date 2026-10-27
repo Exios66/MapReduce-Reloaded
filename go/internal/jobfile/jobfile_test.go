@@ -3,7 +3,9 @@ package jobfile
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,5 +157,34 @@ func TestCache(t *testing.T) {
 	mustLoad(t, src)
 	if n := cached() - before; n != 1 {
 		t.Errorf("%d programs cached, want 1", n)
+	}
+}
+
+// Callers loading the same new source at once share one load, so its
+// initializers run once.
+func TestConcurrentLoadsRunInitOnce(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "inits")
+	src := strings.Replace(minimal, `import "mapreduce/api"`, `import (
+	"mapreduce/api"
+	"os"
+	"time"
+)
+
+var _ = initOnce()
+
+func initOnce() int {
+	f, _ := os.OpenFile(`+strconv.Quote(log)+`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f.WriteString("x")
+	f.Close()
+	time.Sleep(100 * time.Millisecond)
+	return 0
+}`, 1)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() { mustLoad(t, src) })
+	}
+	wg.Wait()
+	if b, err := os.ReadFile(log); err != nil || string(b) != "x" {
+		t.Fatalf("initializer ran %q times (%v), want once", b, err)
 	}
 }
