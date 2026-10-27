@@ -160,3 +160,60 @@ def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, 
     assert "\nE1\n" in table
     assert "| s1.0-on | wordcount | 4 | 2.00 (2.00–2.00) | 1 of 1 |" in table
     assert "| s1.0-off | wordcount | 4 | 4.00 (4.00–4.00) | 1 of 1 |" in table
+
+
+@pytest.mark.parametrize("field", ["seconds", "map_output_bytes"])
+@pytest.mark.parametrize("bad_value", [None, "not-a-number"])
+def test_e1_rejects_missing_or_invalid_measurements(plotter, tmp_path, field, bad_value):
+    module, pyplot = plotter
+    figure = Mock()
+    pyplot.subplots.return_value = figure, (Mock(), Mock())
+    measurement = row("s1.0-on")
+    if bad_value is None:
+        del measurement[field]
+    else:
+        measurement[field] = bad_value
+
+    with pytest.raises(KeyError if bad_value is None else ValueError):
+        module.e1([measurement], tmp_path / "E1.png")
+
+    figure.savefig.assert_not_called()
+
+
+def test_e1_propagates_save_errors(plotter, tmp_path):
+    module, pyplot = plotter
+    figure = Mock()
+    figure.savefig.side_effect = OSError("disk full")
+    pyplot.subplots.return_value = figure, (Mock(), Mock())
+
+    with pytest.raises(OSError, match="disk full"):
+        module.e1([row("s1.0-on")], tmp_path / "E1.png")
+
+
+@pytest.mark.parametrize("contents", ["", "setting,seconds,valid\n"])
+def test_main_skips_empty_e1_results(plotter, tmp_path, monkeypatch, capsys, contents):
+    module, pyplot = plotter
+    results = tmp_path / "results"
+    experiment = results / "E1"
+    experiment.mkdir(parents=True)
+    (experiment / "runs.csv").write_text(contents)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(results)])
+
+    module.main()
+
+    pyplot.subplots.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_e0_title_places_caption_on_a_second_line(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    axis.errorbar.return_value = [Mock()]
+    pyplot.subplots.return_value = figure, axis
+
+    module.e0([row("normal")], tmp_path / "E0.png")
+
+    axis.set_title.assert_called_once_with(
+        "E0: scaling over workers\n(input 1 GiB, M = 32, R = 4; dashed: ideal)"
+    )
+    figure.savefig.assert_called_once_with(tmp_path / "E0.png")

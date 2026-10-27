@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/examples/wordcount"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
+	"github.com/exios66/mapreduce-reloaded/go/internal/jobfile"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
@@ -411,6 +413,64 @@ func TestSubmitJobFile(t *testing.T) {
 	spec := <-c.specs
 	if spec.GetProgram() != "wordcount.go" || spec.GetProgramSource() != string(src) {
 		t.Fatalf("sent program %q with %d bytes of source", spec.GetProgram(), len(spec.GetProgramSource()))
+	}
+}
+
+func TestReadJobFileBoundaries(t *testing.T) {
+	for _, size := range []int{0, jobfile.MaxSize - 1, jobfile.MaxSize, jobfile.MaxSize + 1} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "job.go")
+			want := strings.Repeat("x", size)
+			if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readJobFile(path)
+			if size > jobfile.MaxSize {
+				if err == nil || !strings.Contains(err.Error(), "1 MiB limit") || got != nil {
+					t.Fatalf("oversized file: %d bytes, %v", len(got), err)
+				}
+			} else if err != nil || string(got) != want {
+				t.Fatalf("read %d bytes, error=%v; want %d", len(got), err, size)
+			}
+		})
+	}
+	if _, err := readJobFile(filepath.Join(t.TempDir(), "missing.go")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing file: %v", err)
+	}
+	if _, err := readJobFile(t.TempDir()); err == nil || !strings.Contains(err.Error(), "job file") {
+		t.Fatalf("directory accepted: %v", err)
+	}
+}
+
+// The display name must not expose the client directory, and loading
+// must use the captured source even if the file is later removed.
+func TestJobFlagsCaptureSource(t *testing.T) {
+	src, err := os.ReadFile(exampleJob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "my wordcount.go")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fs := newFlagSet("run", new(strings.Builder))
+	flags := addJobFlags(fs, 2)
+	if err := fs.Parse([]string{"-combiner=false", path, "output", raven}); err != nil {
+		t.Fatal(err)
+	}
+	j, err := flags.job(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j.program != "my wordcount.go" || j.source != string(src) || j.combiner {
+		t.Fatalf("captured job=%+v", j)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	p, err := j.load()
+	if err != nil || p.Mapper == nil || p.Reducer == nil || p.Combiner == nil {
+		t.Fatalf("load captured source: %+v, %v", p, err)
 	}
 }
 
