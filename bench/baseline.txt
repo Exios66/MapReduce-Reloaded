@@ -1,0 +1,138 @@
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/combine
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkCombine-4   	      18	  65895035 ns/op	 5455490 B/op	    2474 allocs/op
+BenchmarkCombine-4   	      16	  65380790 ns/op	 5454424 B/op	    2473 allocs/op
+BenchmarkCombine-4   	      16	  66639892 ns/op	 5454589 B/op	    2473 allocs/op
+BenchmarkCombine-4   	      18	  63836269 ns/op	 5454992 B/op	    2473 allocs/op
+BenchmarkCombine-4   	      18	  64745545 ns/op	 5452640 B/op	    2471 allocs/op
+BenchmarkCombine-4   	      18	  64832795 ns/op	 5454527 B/op	    2473 allocs/op
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/combine	6.889s
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/extsort
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkSortInMemory-4    	      16	  69858830 ns/op	 143.15 MB/s
+BenchmarkSortInMemory-4    	      16	  67279222 ns/op	 148.63 MB/s
+BenchmarkSortInMemory-4    	      18	  65882534 ns/op	 151.79 MB/s
+BenchmarkSortInMemory-4    	      16	  68008801 ns/op	 147.04 MB/s
+BenchmarkSortInMemory-4    	      15	  71523811 ns/op	 139.81 MB/s
+BenchmarkSortInMemory-4    	      18	  66128036 ns/op	 151.22 MB/s
+BenchmarkSortSpill-4       	      19	  59775267 ns/op	 167.29 MB/s
+BenchmarkSortSpill-4       	      19	  57824200 ns/op	 172.94 MB/s
+BenchmarkSortSpill-4       	      19	  59247460 ns/op	 168.78 MB/s
+BenchmarkSortSpill-4       	      19	  57787132 ns/op	 173.05 MB/s
+BenchmarkSortSpill-4       	      19	  58384881 ns/op	 171.28 MB/s
+BenchmarkSortSpill-4       	      19	  58596316 ns/op	 170.66 MB/s
+BenchmarkSortSpillZstd-4   	      18	  66318252 ns/op	 150.79 MB/s
+BenchmarkSortSpillZstd-4   	      16	  65252131 ns/op	 153.25 MB/s
+BenchmarkSortSpillZstd-4   	      18	  64589904 ns/op	 154.82 MB/s
+BenchmarkSortSpillZstd-4   	      16	  66371533 ns/op	 150.67 MB/s
+BenchmarkSortSpillZstd-4   	      16	  67435609 ns/op	 148.29 MB/s
+BenchmarkSortSpillZstd-4   	      18	  66461716 ns/op	 150.46 MB/s
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/extsort	21.061s
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/formats/kv
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkWrite/none-4         	    2588	    473674 ns/op	 824.64 MB/s
+BenchmarkWrite/none-4         	    2674	    447414 ns/op	 873.04 MB/s
+BenchmarkWrite/none-4         	    2726	    459013 ns/op	 850.98 MB/s
+BenchmarkWrite/none-4         	    2600	    475561 ns/op	 821.37 MB/s
+BenchmarkWrite/none-4         	    2708	    484476 ns/op	 806.26 MB/s
+BenchmarkWrite/none-4         	    2350	    492152 ns/op	 793.68 MB/s
+BenchmarkWrite/zstd-4         	     237	   4934987 ns/op	  79.15 MB/s
+BenchmarkWrite/zstd-4         	     237	   5098277 ns/op	  76.62 MB/s
+BenchmarkWrite/zstd-4         	     246	   4850969 ns/op	  80.52 MB/s
+BenchmarkWrite/zstd-4         	     250	   4779778 ns/op	  81.72 MB/s
+BenchmarkWrite/zstd-4         	     246	   4943546 ns/op	  79.01 MB/s
+BenchmarkWrite/zstd-4         	     243	   4849670 ns/op	  80.54 MB/s
+BenchmarkWrite/snappy-4       	     800	   1428752 ns/op	 273.39 MB/s
+BenchmarkWrite/snappy-4       	     823	   1433984 ns/op	 272.40 MB/s
+BenchmarkWrite/snappy-4       	     843	   1426783 ns/op	 273.77 MB/s
+BenchmarkWrite/snappy-4       	     840	   1446594 ns/op	 270.02 MB/s
+BenchmarkWrite/snappy-4       	     806	   1447562 ns/op	 269.84 MB/s
+BenchmarkWrite/snappy-4       	     824	   1439144 ns/op	 271.42 MB/s
+BenchmarkRead/none-4          	    8379	    150366 ns/op	2597.73 MB/s
+BenchmarkRead/none-4          	    7591	    148974 ns/op	2622.01 MB/s
+BenchmarkRead/none-4          	    7482	    147755 ns/op	2643.64 MB/s
+BenchmarkRead/none-4          	    8245	    146257 ns/op	2670.73 MB/s
+BenchmarkRead/none-4          	    7501	    152097 ns/op	2568.18 MB/s
+BenchmarkRead/none-4          	    8010	    148155 ns/op	2636.52 MB/s
+BenchmarkRead/zstd-4          	    1399	    854982 ns/op	 456.87 MB/s
+BenchmarkRead/zstd-4          	    1380	    854334 ns/op	 457.21 MB/s
+BenchmarkRead/zstd-4          	    1380	    847524 ns/op	 460.89 MB/s
+BenchmarkRead/zstd-4          	    1369	    851304 ns/op	 458.84 MB/s
+BenchmarkRead/zstd-4          	    1375	    852205 ns/op	 458.35 MB/s
+BenchmarkRead/zstd-4          	    1393	    845834 ns/op	 461.81 MB/s
+BenchmarkRead/snappy-4        	    1512	    752209 ns/op	 519.29 MB/s
+BenchmarkRead/snappy-4        	    1347	    792068 ns/op	 493.15 MB/s
+BenchmarkRead/snappy-4        	    1556	    764236 ns/op	 511.11 MB/s
+BenchmarkRead/snappy-4        	    1554	    749680 ns/op	 521.04 MB/s
+BenchmarkRead/snappy-4        	    1460	    753140 ns/op	 518.64 MB/s
+BenchmarkRead/snappy-4        	    1330	    763077 ns/op	 511.89 MB/s
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats/kv	42.519s
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/local
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkWordCount-4   	      26	  43714128 ns/op
+BenchmarkWordCount-4   	      25	  42230255 ns/op
+BenchmarkWordCount-4   	      27	  42568884 ns/op
+BenchmarkWordCount-4   	      27	  42817142 ns/op
+BenchmarkWordCount-4   	      26	  44573940 ns/op
+BenchmarkWordCount-4   	      25	  43679959 ns/op
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/local	6.796s
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/jobfile
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkCombine/compiled-4         	  766219	      1512 ns/op
+BenchmarkCombine/compiled-4         	  819033	      1516 ns/op
+BenchmarkCombine/compiled-4         	  811978	      1500 ns/op
+BenchmarkCombine/compiled-4         	  781065	      1529 ns/op
+BenchmarkCombine/compiled-4         	  783670	      1498 ns/op
+BenchmarkCombine/compiled-4         	  775232	      1528 ns/op
+BenchmarkCombine/example-4          	  785818	      1540 ns/op
+BenchmarkCombine/example-4          	  766130	      1526 ns/op
+BenchmarkCombine/example-4          	  695698	      1657 ns/op
+BenchmarkCombine/example-4          	  763453	      1551 ns/op
+BenchmarkCombine/example-4          	  782288	      1520 ns/op
+BenchmarkCombine/example-4          	  817741	      1540 ns/op
+BenchmarkCombine/naive-4            	    7168	    159651 ns/op
+BenchmarkCombine/naive-4            	    7574	    160968 ns/op
+BenchmarkCombine/naive-4            	    7539	    160537 ns/op
+BenchmarkCombine/naive-4            	    7071	    162130 ns/op
+BenchmarkCombine/naive-4            	    7420	    162675 ns/op
+BenchmarkCombine/naive-4            	    7455	    160682 ns/op
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/jobfile	21.512s
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/partition
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkPartition-4   	38987368	        30.74 ns/op	1041.03 MB/s
+BenchmarkPartition-4   	39246087	        30.49 ns/op	1049.44 MB/s
+BenchmarkPartition-4   	38678332	        30.93 ns/op	1034.69 MB/s
+BenchmarkPartition-4   	39216091	        30.61 ns/op	1045.45 MB/s
+BenchmarkPartition-4   	39057265	        30.55 ns/op	1047.32 MB/s
+BenchmarkPartition-4   	39282934	        30.60 ns/op	1045.66 MB/s
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/partition	7.193s
+goos: linux
+goarch: amd64
+pkg: github.com/exios66/mapreduce-reloaded/go/internal/shuffle
+cpu: INTEL(R) XEON(R) SILVER 4516Y+
+BenchmarkFetch-4   	       8	 129169607 ns/op	 519.54 MB/s
+BenchmarkFetch-4   	       9	 120820666 ns/op	 555.44 MB/s
+BenchmarkFetch-4   	       8	 126458695 ns/op	 530.68 MB/s
+BenchmarkFetch-4   	       9	 124221466 ns/op	 540.24 MB/s
+BenchmarkFetch-4   	       9	 122511856 ns/op	 547.77 MB/s
+BenchmarkFetch-4   	       9	 118031259 ns/op	 568.57 MB/s
+PASS
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/shuffle	7.116s

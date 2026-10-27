@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -103,6 +103,12 @@ bench:
 # Bytes shuffled and job time per intermediate codec (bench/README.md).
 bench-codecs: cluster-up
 	bench/codecs.sh
+
+# The Go benchmarks against bench/baseline.txt, failing on a slowdown of
+# more than THRESHOLD percent (default 20); PERF_UPDATE=1 rewrites the
+# baseline (#160). See scripts/perf.sh.
+perf:
+	PYTHON=$(PYTHON) scripts/perf.sh
 
 test: go-test py-test
 
