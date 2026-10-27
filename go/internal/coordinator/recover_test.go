@@ -435,7 +435,7 @@ func TestRecoverPreservesJobSource(t *testing.T) {
 	s := recoverServer(t, Config{}, path)
 	spec := &pb.JobSpec{
 		Program: "custom.go", ProgramSource: string(src), Inputs: []string{in}, Output: t.TempDir(),
-		NumReduceTasks: 1, UseCombiner: false, Params: map[string]string{"label": "recovered"},
+		NumReduceTasks: 1, UseCombiner: true, Params: map[string]string{"label": "recovered"},
 	}
 	if _, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: spec}); err != nil {
 		t.Fatal(err)

@@ -14,10 +14,14 @@ import (
 )
 
 // idleCoordinator answers the paused RequestTask polls that waitForDisk
-// makes with an empty response; any other call fails the test by panicking.
+// makes with an empty response; an unpaused poll could be handed a task the
+// worker would not run, so it panics, as does any other call.
 type idleCoordinator struct{ pb.CoordinatorServiceClient }
 
-func (idleCoordinator) RequestTask(context.Context, *pb.RequestTaskRequest, ...grpc.CallOption) (*pb.RequestTaskResponse, error) {
+func (idleCoordinator) RequestTask(_ context.Context, req *pb.RequestTaskRequest, _ ...grpc.CallOption) (*pb.RequestTaskResponse, error) {
+	if !req.GetPaused() {
+		panic("waitForDisk polled the coordinator without pausing")
+	}
 	return &pb.RequestTaskResponse{}, nil
 }
 
@@ -147,7 +151,7 @@ func TestWaitForDiskCancellation(t *testing.T) {
 func TestPruneSafeguards(t *testing.T) {
 	dir := t.TempDir()
 	sent := time.Unix(1_700_000_000, 0)
-	for _, name := range []string{"job-1", "job-2", "job-3", "job-x", "job-4-extra"} {
+	for _, name := range []string{"job-1", "job-2", "job-3", "job-6", "job-x", "job-4-extra"} {
 		path := filepath.Join(dir, name)
 		if err := os.Mkdir(path, 0o755); err != nil {
 			t.Fatal(err)
@@ -156,8 +160,11 @@ func TestPruneSafeguards(t *testing.T) {
 			t.Fatal(err)
 		}
 		at := sent.Add(-time.Minute)
-		if name == "job-3" {
+		switch name {
+		case "job-3":
 			at = sent
+		case "job-6": // inside pruneSlack: it may still be written
+			at = sent.Add(-pruneSlack / 2)
 		}
 		if err := os.Chtimes(path, at, at); err != nil {
 			t.Fatal(err)
@@ -176,7 +183,7 @@ func TestPruneSafeguards(t *testing.T) {
 	w := New(nil, dir, nil)
 	w.prune([]string{"job-2"}, sent)
 	waitForPrune(t, w)
-	for _, name := range []string{"job-2", "job-3", "job-x", "job-4-extra", "job-4", "job-5"} {
+	for _, name := range []string{"job-2", "job-3", "job-6", "job-x", "job-4-extra", "job-4", "job-5"} {
 		if _, err := os.Lstat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("%s removed: %v", name, err)
 		}
