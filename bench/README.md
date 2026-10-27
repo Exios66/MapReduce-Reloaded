@@ -132,7 +132,8 @@ The cluster runs above need Docker and a person to read them. These run in
   another CPU the comparison is printed but cannot fail. After a change
   that is meant to be slower or faster, `PERF_UPDATE=1 make perf` on the VM
   writes a new baseline, to commit with the change. If `benchstat` is
-  installed, its table is printed too.
+  installed, its table is printed too. Two runs on the VM in a row
+  differed by at most 3.6%.
 - `TestSortMemoryBounded` (`internal/extsort`) sorts 80 MB with a 4 MB
   budget and checks that the live heap stays under 16 MB while adding and
   while merging the 25 runs; measured 4.2 and 6.0 MB uncompressed, 6.2 and
