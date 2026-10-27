@@ -175,9 +175,8 @@ func readJobFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("job file: %w", err)
 	}
-	defer f.Close()
 	src, err := io.ReadAll(io.LimitReader(f, jobfile.MaxSize+1))
-	if err != nil {
+	if err = errors.Join(err, f.Close()); err != nil {
 		return nil, fmt.Errorf("job file: %w", err)
 	}
 	if len(src) > jobfile.MaxSize {
