@@ -163,6 +163,15 @@ def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsy
     ]
 
 
+def test_e5_table_reports_coordinator_time_as_its_plot_does(plotter, capsys):
+    module, _ = plotter
+    module.table("E5", [row("compiled", 38), row("interpreted", 403)])
+    assert capsys.readouterr().out.splitlines()[-2:] == [
+        "| compiled | wordcount | 4 | 38.00 (38.00–38.00) | 1 of 1 |",
+        "| interpreted | wordcount | 4 | 403.00 (403.00–403.00) | 1 of 1 |",
+    ]
+
+
 def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, capsys):
     module, pyplot = plotter
     results, out = tmp_path / "results", tmp_path / "plots"

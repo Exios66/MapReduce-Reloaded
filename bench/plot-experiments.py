@@ -609,12 +609,13 @@ def e5(rows, results, out, t):
 def table(exp, rows):
     """Prints a Markdown job-time table grouped by setting, program, and workers.
 
-    Uses coordinator seconds for E0, E1, and E2 and wall_seconds otherwise.
+    Uses coordinator seconds, as the plots do, except for E3 and E4, whose
+    kill or restart makes wall_seconds the job time.
     Each group shows the median and range of valid="1" runs and their count
     out of all runs; groups without valid runs show an em dash for time.
     Missing fields, invalid numbers, and output errors propagate.
     """
-    field = "seconds" if exp in ("E0", "E1", "E2") else "wall_seconds"
+    field = "wall_seconds" if exp in ("E3", "E4") else "seconds"
     print(f"\n{exp}\n")
     print("| Setting | Program | Workers | Job time (s) | Valid runs |")
     print("|---|---|---:|---|---:|")
