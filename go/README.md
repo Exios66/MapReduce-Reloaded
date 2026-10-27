@@ -69,3 +69,16 @@ random from a seed:
 go test ./internal/worker -run TestChaos -chaos.runs=50           # 50 seeded runs
 go test ./internal/worker -run TestChaos -chaos.seed=7 -chaos.runs=1   # replay seed 7
 ```
+
+Parsers and file formats also have fuzz targets: the WAL reader, the wire
+conversions, the shuffle reader, split planning, URI joining, metric labels,
+and the example programs' record parsers. `make fuzz` runs each one in turn
+for `FUZZTIME` (20s by default); a single target runs with `go test -fuzz`:
+
+```sh
+make fuzz FUZZTIME=1m
+go test ./internal/wal -run '^$' -fuzz '^FuzzOpen$' -fuzztime 30s
+```
+
+A crash is saved under the package's `testdata/fuzz/` and replays as an
+ordinary test from then on, so commit it with the fix.
