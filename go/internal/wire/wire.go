@@ -19,7 +19,9 @@ import (
 
 // JobSpec returns the job m describes, with its program loaded from its job
 // file (ADR 0015) or, without one, looked up in the registry by name. It
-// validates the result.
+// validates the result. A nonempty source takes precedence over the name
+// and may run package initializers. It returns load, unknown program or
+// partitioner, URI conversion, and job validation errors.
 func JobSpec(m *pb.JobSpec) (api.JobSpec, error) {
 	var p api.Program
 	if src := m.GetProgramSource(); src != "" {

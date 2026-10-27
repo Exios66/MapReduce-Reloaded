@@ -135,8 +135,10 @@ func (p params) Set(v string) error {
 
 // job returns the job described by the flags and arguments of a parsed fs.
 // With -m > 0 it inspects the inputs to compute a split size in bytes;
-// otherwise splitSize is zero for the runner's default. It returns errors
-// for missing arguments, oversized task counts, or input inspection failures.
+// otherwise splitSize is zero for the runner's default. A program ending
+// in .go is read as a job file and named by its basename, without validation.
+// It returns errors for missing arguments, oversized task counts, job file
+// reads or size limits, or input inspection failures.
 func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 	if fs.NArg() < 3 {
 		return job{}, errors.New(usage)
@@ -170,6 +172,7 @@ func (f jobFlags) job(fs *flag.FlagSet) (job, error) {
 
 // readJobFile reads a job file, refusing one over jobfile.MaxSize before
 // reading it all.
+// It returns open, read, close, or size-limit errors without validating Go code.
 func readJobFile(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -187,6 +190,7 @@ func readJobFile(path string) ([]byte, error) {
 
 // load returns the job's program: its job file, interpreted, or the
 // registered program it names.
+// It returns jobfile.Load errors or an error for an unknown registered name.
 func (j job) load() (api.Program, error) {
 	if j.source != "" {
 		return jobfile.Load(j.source)
@@ -205,11 +209,12 @@ func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
 	return fs
 }
 
-// runLocal parses mr run arguments, requires -local, and runs the registered
-// program in this process. It uses the program's combiner, if present,
-// unless -combiner=false is set. On success it writes the counters to stderr.
-// It returns argument, program lookup, execution, and counter write errors,
-// along with errors creating or removing its temporary intermediate files.
+// runLocal parses mr run arguments, requires -local, and runs a registered
+// program or interpreted job file in this process. It uses the program's
+// combiner, if present, unless -combiner=false is set. On success it writes
+// the counters to stderr. It returns argument, job file read or load,
+// program lookup, execution, and counter write errors, along with errors
+// creating or removing its temporary intermediate files.
 func runLocal(args []string, stderr io.Writer) (err error) {
 	fs := newFlagSet("run", stderr)
 	isLocal := fs.Bool("local", false, "run every task in this process")
@@ -250,11 +255,14 @@ func runLocal(args []string, stderr io.Writer) (err error) {
 
 // submit parses mr submit arguments and submits a job to the coordinator,
 // requesting the program's combiner unless -combiner=false is set.
+// A .go program path is read locally and its source sent for validation
+// by the coordinator.
 // Without -wait it writes the job ID to stdout; with -wait it waits for a
 // terminal state and writes status and counters instead, returning an error
 // if the job failed. Flag diagnostics go to stderr.
-// Argument, input inspection, URI conversion, connection, RPC, and output
-// write errors are returned to the caller. Waiting has no timeout.
+// Argument, job file read or size-limit, input inspection, URI conversion,
+// connection, RPC, and output write errors are returned to the caller.
+// Waiting has no timeout.
 func submit(args []string, stdout, stderr io.Writer) error {
 	fs := newFlagSet("submit", stderr)
 	addr := fs.String("coordinator", "127.0.0.1:18770", "coordinator address")

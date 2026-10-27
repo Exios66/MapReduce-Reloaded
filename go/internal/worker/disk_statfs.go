@@ -5,7 +5,7 @@ package worker
 import "syscall"
 
 // freeBytes returns the bytes free to unprivileged users on dir's file
-// system.
+// system, or the Statfs error if the query fails.
 func freeBytes(dir string) (uint64, error) {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(dir, &st); err != nil {

@@ -24,11 +24,13 @@ var jobDir = regexp.MustCompile(`^job-[0-9]+$`)
 // diskPoll is how often a worker waiting for disk space checks again.
 var diskPoll = time.Second
 
-// prune deletes the map output of every job under the work directory that
-// is not in active, as of a heartbeat sent at sent. A directory written
-// since sent is kept: it may belong to a job submitted after the
-// coordinator answered. Only one prune runs at a time, outside the
+// prune asynchronously deletes job-[0-9]+ directories under the work
+// directory that are not in active, as of a heartbeat sent at sent.
+// A directory modified at or after sent is kept: it may belong to a job
+// submitted after the coordinator answered. Only one prune runs at a time, outside the
 // heartbeat loop, so a large delete cannot delay a heartbeat.
+// KeepEndedJobs disables pruning. Filesystem errors are not returned;
+// unreadable entries are skipped and failed deletions may be retried later.
 func (w *Worker) prune(active []string, sent time.Time) {
 	if w.KeepEndedJobs || !w.pruning.CompareAndSwap(false, true) {
 		return
@@ -80,10 +82,11 @@ func dirSize(dir string) uint64 {
 }
 
 // waitForDisk returns once the work directory's file system has at least
-// MinFreeDisk bytes free, or ctx is done. Heartbeats go on while it waits,
-// so the coordinator does not declare the worker dead. Paused task requests
-// still receive shutdown, returned as errShutdown. If free space cannot be
-// read, it does not wait.
+// MinFreeDisk bytes free, returning nil, or ctx ends while waiting,
+// returning ctx.Err(). Heartbeats continue independently while it waits.
+// Paused task requests still receive shutdown, returned as errShutdown;
+// task-request errors propagate. No tasks execute while disk space is low.
+// If free space cannot be read, it returns nil without waiting.
 func (w *Worker) waitForDisk(ctx context.Context) error {
 	waiting := false
 	for {

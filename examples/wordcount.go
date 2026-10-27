@@ -13,7 +13,8 @@ import (
 	"mapreduce/api"
 )
 
-// Map is called once per input record. For text input, key is the byte
+// Map emits each ASCII-whitespace-delimited word in value with a count of 1,
+// returning the first emission error. For text input, key is the byte
 // offset of the line and value is the line.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
 	for _, w := range bytes.FieldsFunc(value, isSpace) {
@@ -28,8 +29,10 @@ func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
 // whitespace only, so both versions give the same output.
 func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
 
-// Reduce is called once per key. values yields each value in turn; return
-// false from the callback to stop early.
+// Reduce sums base-10 int64 counts for key and emits their decimal total,
+// returning any emission error. Numeric parse errors are ignored.
+// values yields each value in turn; returning false from its callback
+// would stop iteration early.
 func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), out api.Emitter) error {
 	var n int64
 	values(func(v []byte) bool {

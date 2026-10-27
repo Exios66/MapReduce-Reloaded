@@ -122,9 +122,9 @@ valid() {
 
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 
-# fresh WORKERS: workers delete map output only when they exit, so restart
-# them: each run then starts from the same state and the disk does not fill.
-# A run's samplers start after this, so their clock starts with the run.
+# fresh WORKERS: restarts workers to clear their temporary map output and
+# waits for WORKERS registrations before sampling. Exits if / has less
+# than 5 GiB free; marks the workers ready for the next run.
 fresh() {
     if ! "${compose[@]}" restart worker >/dev/null; then
         echo "experiments: worker restart failed; stopping" >&2
@@ -144,6 +144,9 @@ fresh() {
     ready=1
 }
 
+# start_sampler tasks|bytes FILE: prepares four workers unless already ready,
+# then samples coordinator tasks or worker byte counters into FILE in the
+# background. Saves the process ID in sampler for stop_sampler and cleanup.
 start_sampler() { # tasks|bytes FILE; the experiments that sample use 4 workers
     [ -n "$ready" ] || fresh 4
     if [ "$1" = tasks ]; then

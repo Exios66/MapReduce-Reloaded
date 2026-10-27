@@ -130,6 +130,13 @@ def caption(rows):
 
 
 def e0(rows, out):
+    """Saves E0 job time in seconds against worker count to out.
+
+    Rows must be nonempty. Only valid="1" runs contribute to medians and
+    minimum/maximum error bars; programs without valid runs are skipped.
+    Ideal scaling is drawn when a program has a one-worker measurement.
+    Missing fields, invalid numbers, and plotting or file errors propagate.
+    """
     fig, ax = plt.subplots(figsize=(6, 4))
     for program, name in PROGRAMS.items():
         workers = sorted({int(r["workers"]) for r in valid(rows, program=program)})
