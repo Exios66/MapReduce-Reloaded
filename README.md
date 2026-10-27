@@ -21,7 +21,7 @@ chaos test passes 50 seeded runs.
 
 The host client with uploads to a shared `/data` mount, user job files
 submitted with each job, the benchmark harness and the evaluation of the
-special features (E0–E4, [below](#results)) are done. Next is experiment E5 (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
+special features (E0–E5, [below](#results)) are done (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
 and [design](design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
@@ -264,7 +264,7 @@ and `mr cat` resolve `/data/...` to `$MR_DATA_DIR` (default `./data`).
 Measured on the course VM (4 vCPUs, 8 GB, four one-CPU workers) on 1 GiB
 inputs with M = 32 and R = 4; each number is the median of three runs, and
 every run's output matched the normal run's. The tables, the raw CSVs, the
-logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e4)
+logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e5)
 and [`bench/evaluation/`](bench/evaluation/).
 
 | Experiment | Result |
@@ -274,6 +274,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 | E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 23.7 s down to 15.7 s |
 | E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
+| E5: an interpreted job file | Word count as a job file takes 403 s against 38 s compiled (10.5×), almost all in the map phase |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
@@ -298,6 +299,11 @@ and [`bench/evaluation/`](bench/evaluation/).
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E4-dark.png">
   <img alt="E4: tasks completed over time and job time across a coordinator restart" src="bench/evaluation/E4.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E5-dark.png">
+  <img alt="E5: job time and map-phase time for word count compiled and as an interpreted job file" src="bench/evaluation/E5.png">
 </picture>
 
 ## Benchmarks

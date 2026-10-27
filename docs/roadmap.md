@@ -52,9 +52,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is in part: E0–E4
-run with `bench/experiments.sh`; E5 (interpreted job files) has not yet been
-run. Phase 5, the rest of Phase 6 and #59 stay stretch goals.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals.
 
 ## Context
 

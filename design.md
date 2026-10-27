@@ -27,7 +27,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 run, [results](bench/README.md#evaluation-e0e4); E5 planned |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e5) |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -255,12 +255,12 @@ whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|all`
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|all`
 runs the experiments and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
 draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
-has the commands. E0, E1 and E2 report the coordinator's job time; E3 and E4
+has the commands. E0, E1, E2 and E5 report the coordinator's job time; E3 and E4
 report the time from submission until `mr status` sees the job finish,
 because a restarted coordinator times a job from its replay.
 
@@ -277,7 +277,7 @@ parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
-[`bench/README.md`](bench/README.md#evaluation-e0e4), with the commands that
+[`bench/README.md`](bench/README.md#evaluation-e0e5), with the commands that
 made them; the data is in `bench/evaluation/`. What they showed (course VM,
 2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
 workers for word count but only 2.3× for grep, whose one-second job is mostly
@@ -285,7 +285,9 @@ fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
 15× to 78× fewer bytes with the combiner, more with more skew, and ran 18%
 to 44% faster. E2's straggler cost 33% with backups and 101% without. E3 cost
 about the 10 s detection timeout when the kill came early and 27 s at 75%,
-when finished map output was lost. E4's restart cost 1.6 s.
+when finished map output was lost. E4's restart cost 1.6 s. E5's job file
+made word count 10.5× slower (403 s against 38 s), nearly all in the map
+phase; a profile traced most of it to the job file's per-byte word test.
 
 ### Process
 
