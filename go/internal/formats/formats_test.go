@@ -1,8 +1,10 @@
 package formats
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -167,5 +169,47 @@ func TestOutputCodec(t *testing.T) {
 	}
 	if _, err := Output("text", kv.CodecZstd); err == nil {
 		t.Fatal("text output took a codec")
+	}
+}
+
+// countingReader counts the bytes read from r.
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// A split that starts inside a very long line looks for the next line only
+// up to its own end; reading to the end of the line would make every split
+// of it read the rest.
+func TestTextAlignmentStaysInSplit(t *testing.T) {
+	const start, end = 5000, 5100
+	for _, tc := range []struct {
+		name    string
+		data    string // from byte start-1
+		wantPos int64  // the first line's offset, or end if none starts in the split
+	}{
+		{"no newline in a long line", strings.Repeat("x", 1_000_000) + "\n", end},
+		{"newline inside the split", "xx\nnext\n", start + 2},
+		{"newline ends the previous byte", "\nnext\n", start},
+		{"newline on the last byte", strings.Repeat("x", end-start) + "\n", end},
+		{"end of file first", "xxx", end},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cr := &countingReader{r: strings.NewReader(tc.data)}
+			r := &textReader{br: bufio.NewReader(cr), pos: start - 1, end: end}
+			r.skipPartialLine(end - start)
+			if r.err != nil || r.pos != tc.wantPos {
+				t.Fatalf("pos = %d, err = %v; want %d", r.pos, r.err, tc.wantPos)
+			}
+			if cr.n > 2*4096 {
+				t.Fatalf("read %d bytes of a %d-byte split", cr.n, end-start)
+			}
+		})
 	}
 }
