@@ -35,6 +35,14 @@ func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// Clean up the ended jobs only now, when the log says which job runs:
+	// a later job may write to the same output, and needs its TempDir.
+	for _, j := range s.replayEnded {
+		if s.active == nil || s.active.spec.GetOutput() != j.spec.GetOutput() {
+			j.cleanup()
+		}
+	}
+	s.replayEnded = nil
 	s.cfg.Log = log
 	s.compact() // replay may have forgotten jobs while the log was not set
 	rec := &pb.LogRecord{Record: &pb.LogRecord_Restarted{Restarted: &pb.Restarted{}}}
@@ -83,7 +91,7 @@ func (s *Server) replay(rec *pb.LogRecord) error {
 			return fmt.Errorf("coordinator log: %w", err)
 		}
 		if ended { // the coordinator may have died before cleaning up
-			j.cleanup()
+			s.replayEnded = append(s.replayEnded, j)
 		}
 	case *pb.LogRecord_WorkerLost:
 		if s.active != nil {

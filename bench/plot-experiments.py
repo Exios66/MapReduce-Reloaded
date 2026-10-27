@@ -223,8 +223,9 @@ def e0(rows, out, t):
 
     Speed-up is the median one-worker job time over the median job time on
     N workers, with the range from the slowest and fastest N-worker runs.
-    Only valid="1" runs count; a program without a valid one-worker run is
-    skipped. Missing fields, invalid numbers, and file errors propagate.
+    Only valid="1" runs count; a program without a valid one-worker run, or
+    with a time of zero, is skipped. Missing fields, invalid numbers, and
+    file errors propagate.
     """
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     ax.plot([1, 4], [1, 4], "--", color=t["muted"], linewidth=1, zorder=1)
@@ -234,6 +235,8 @@ def e0(rows, out, t):
         if not workers or workers[0] != 1:
             continue
         stats = [spread(valid(rows, program=program, workers=str(w)), "seconds") for w in workers]
+        if any(st[1] <= 0 for st in stats):  # a time that rounds to zero has no ratio
+            continue
         one = stats[0][0]
         speedup = [one / s[0] for s in stats]
         ax.plot(workers, speedup, color=color, label=name, zorder=3)
@@ -396,7 +399,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None)
             color=t["ink"],
         )
     right.set_yticks(ys, labels)
-    right.set_xlim(0, max(s[2] for s in stats) * 1.3)
+    right.set_xlim(0, (max((s[2] for s in stats), default=0) or 1) * 1.3)  # no valid run: empty
     right.set_xlabel("Job time (s)")
     right.grid(axis="y", visible=False)
     right.tick_params(axis="y", length=0)
