@@ -47,8 +47,18 @@ func TestSum(t *testing.T) {
 	if want := (collect{{"w", "42"}}); !slices.Equal(out, want) {
 		t.Errorf("Sum emitted %v, want %v", out, want)
 	}
+	for _, values := range [][]string{{"x"}, {"9223372036854775807", "1"}, {"-9223372036854775808", "-1"}} {
+		out = nil
+		var vs [][]byte
+		for _, v := range values {
+			vs = append(vs, []byte(v))
+		}
+		if err := api.Sum(nil, []byte("w"), slices.Values(vs), &out); err == nil || len(out) != 0 {
+			t.Errorf("Sum%q: err %v, emitted %v; want an error and nothing", values, err, out)
+		}
+	}
 	out = nil
-	if err := api.Sum(nil, []byte("w"), slices.Values([][]byte{[]byte("x")}), &out); err == nil || len(out) != 0 {
-		t.Errorf("Sum of a bad count: err %v, emitted %v", err, out)
+	if err := api.Sum(nil, []byte("w"), slices.Values([][]byte{[]byte("9223372036854775807"), []byte("-1"), []byte("1")}), &out); err != nil {
+		t.Errorf("Sum near the limit: %v", err)
 	}
 }
