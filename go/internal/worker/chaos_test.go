@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 )
@@ -80,9 +81,12 @@ func pick(rng *rand.Rand, m map[int]func()) int {
 // the fetches it serves. Calls already under way carry on.
 // While fail is positive, each RequestTask fails with Internal, as from a
 // coordinator handler that panicked, and decrements it.
+// While dup is set, each ReportTask and Heartbeat is sent twice, as by a
+// client that retries a call whose reply was lost.
 type gate struct {
 	mu   sync.RWMutex
 	fail atomic.Int32
+	dup  atomic.Bool
 }
 
 func (g *gate) freeze() { g.mu.Lock() }
@@ -98,7 +102,11 @@ func (g *gate) unary(ctx context.Context, method string, req, reply any, cc *grp
 	if strings.HasSuffix(method, "/RequestTask") && g.fail.Add(-1) >= 0 {
 		return status.Error(codes.Internal, "panic in a handler")
 	}
-	return invoker(ctx, method, req, reply, cc, opts...)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	if g.dup.Load() && (strings.HasSuffix(method, "/ReportTask") || strings.HasSuffix(method, "/Heartbeat")) {
+		_ = invoker(ctx, method, req, proto.Clone(reply.(proto.Message)), cc, opts...)
+	}
+	return err
 }
 
 func (g *gate) stream(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

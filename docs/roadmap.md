@@ -266,7 +266,7 @@ Each phase ends in a runnable, tested state.
 - Heartbeats with timeouts, map re-execution on worker loss; reduce attempts get the new locations.
 - Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
-- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. Driving the same faults against the Compose cluster is #29.
+- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs and a torn log tail too (part of #155). Driving the same faults against the Compose cluster is #29.
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
 - Locality-aware scheduling, the status web UI, Prometheus `/metrics`, and all paper example programs.

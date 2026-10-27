@@ -63,7 +63,12 @@ Every package has tests next to its code. The slower ones are in
 `internal/worker`: they start a coordinator and several workers in one
 process and check that jobs finish with the right output when workers die, the
 coordinator restarts, tasks hang, or records are bad. `TestChaos` does this at
-random from a seed:
+random from a seed, for word count. `TestChaosPrograms` does it for every
+example program, with the combiner on or off, each intermediate codec and both
+output formats, and adds lost map output files, duplicate reports and
+heartbeats, and a torn record at the end of the coordinator's log; its output
+must match local mode's byte for byte. The same flags apply to both (the
+`-run TestChaos` below runs both):
 
 ```sh
 go test ./internal/worker -run TestChaos -chaos.runs=50           # 50 seeded runs
