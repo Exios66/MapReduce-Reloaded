@@ -78,8 +78,12 @@ func (s *Server) replay(rec *pb.LogRecord) error {
 		if !ok {
 			return fmt.Errorf("coordinator log: report for unknown job %q", job)
 		}
-		if _, err := s.report(j, r.TaskReported, at); err != nil {
+		_, ended, err := s.report(j, r.TaskReported, at)
+		if err != nil {
 			return fmt.Errorf("coordinator log: %w", err)
+		}
+		if ended { // the coordinator may have died before cleaning up
+			j.cleanup()
 		}
 	case *pb.LogRecord_WorkerLost:
 		if s.active != nil {

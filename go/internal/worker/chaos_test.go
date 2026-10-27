@@ -7,11 +7,15 @@ import (
 	"maps"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 )
@@ -74,7 +78,12 @@ func pick(rng *rand.Rand, m map[int]func()) int {
 // gate holds up a worker's RPCs while it is frozen, as if the worker's
 // process had been stopped: its heartbeats, task requests and reports, and
 // the fetches it serves. Calls already under way carry on.
-type gate struct{ mu sync.RWMutex }
+// While fail is positive, each RequestTask fails with Internal, as from a
+// coordinator handler that panicked, and decrements it.
+type gate struct {
+	mu   sync.RWMutex
+	fail atomic.Int32
+}
 
 func (g *gate) freeze() { g.mu.Lock() }
 func (g *gate) thaw()   { g.mu.Unlock() }
@@ -86,6 +95,9 @@ func (g *gate) pass() {
 
 func (g *gate) unary(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	g.pass()
+	if strings.HasSuffix(method, "/RequestTask") && g.fail.Add(-1) >= 0 {
+		return status.Error(codes.Internal, "panic in a handler")
+	}
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 

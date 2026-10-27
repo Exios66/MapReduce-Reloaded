@@ -275,15 +275,30 @@ and [`bench/evaluation/`](bench/evaluation/).
 | E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
 
-![E0: job time against the number of workers](bench/evaluation/E0.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
+  <img alt="E0: speed-up over one worker for grep, distsort and word count on 1, 2 and 4 workers" src="bench/evaluation/E0.png">
+</picture>
 
-![E1: bytes shuffled and job time with the combiner on and off](bench/evaluation/E1.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E1-dark.png">
+  <img alt="E1: bytes shuffled and job time with the combiner on and off" src="bench/evaluation/E1.png">
+</picture>
 
-![E2: job time with a straggler, with backups on and off](bench/evaluation/E2.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E2-dark.png">
+  <img alt="E2: tasks completed over time and job time with a straggler, backups on and off" src="bench/evaluation/E2.png">
+</picture>
 
-![E3: job time and rates when a worker is killed](bench/evaluation/E3.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E3-dark.png">
+  <img alt="E3: job time when one of four workers is killed, and data rates around the loss" src="bench/evaluation/E3.png">
+</picture>
 
-![E4: job time and rates across a coordinator restart](bench/evaluation/E4.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E4-dark.png">
+  <img alt="E4: tasks completed over time and job time across a coordinator restart" src="bench/evaluation/E4.png">
+</picture>
 
 ## Benchmarks
 

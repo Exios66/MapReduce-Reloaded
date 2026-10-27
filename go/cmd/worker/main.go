@@ -32,6 +32,7 @@ import (
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
+	"github.com/exios66/mapreduce-reloaded/go/internal/rpcguard"
 	"github.com/exios66/mapreduce-reloaded/go/internal/shuffle"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
 )
@@ -89,7 +90,7 @@ func run(c config) (err error) {
 		if err != nil {
 			return err
 		}
-		gs := grpc.NewServer()
+		gs := grpc.NewServer(rpcguard.ServerOptions()...)
 		pb.RegisterShuffleServiceServer(gs, shuffle.NewServer(c.workDir))
 		go func() { _ = gs.Serve(lis) }()
 		defer gs.Stop()

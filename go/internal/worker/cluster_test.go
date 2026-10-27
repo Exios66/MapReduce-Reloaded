@@ -532,6 +532,20 @@ func TestClusterReregistersOnHeartbeat(t *testing.T) {
 	}
 }
 
+// A worker whose call fails with Internal, as when a coordinator handler
+// panics, registers again instead of exiting.
+func TestClusterReregistersAfterInternal(t *testing.T) {
+	c := newCluster(t)
+	job := c.submit("wordcount")
+	c.addWorker()
+	c.gates[0].fail.Store(1)
+	c.wait(job)
+	assertGolden(t, c.output())
+	if body := scrape(t, c.workers[0]); !strings.Contains(body, "mr_worker_registrations_total 2\n") {
+		t.Fatalf("want one registration again:\n%s", body)
+	}
+}
+
 // scrape returns w's metrics.
 func scrape(t *testing.T, w *worker.Worker) string {
 	t.Helper()

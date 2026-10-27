@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	mrtask "github.com/exios66/mapreduce-reloaded/go/internal/task"
 )
 
 // recoverServer recovers a server from the log at path, and closes the
@@ -260,5 +261,63 @@ func TestCompactLog(t *testing.T) {
 	s = recoverServer(t, cfg, path)
 	if w := register(t, s); w != "r3-w1" {
 		t.Fatalf("worker ID %s after the second restart, want r3-w1", w)
+	}
+}
+
+// A job's output is cleaned up only once the log holds the report that
+// ended the job. A coordinator that dies before logging it comes back to a
+// running job whose reduce attempts still have the job's TempDir; one that
+// dies after logging it, but before cleaning up, cleans up as it replays
+// (#182).
+func TestCleanupAfterLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	temp := filepath.Join(out, mrtask.TempDir)
+
+	s, log, err := Recover(Config{}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := register(t, s)
+	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: []string{in}, Output: out, NumReduceTasks: 1,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := sub.GetJobId()
+	succeed(t, s, w, next(t, s, w), outputs(0, 1))
+	last := next(t, s, w) // reduce 0, whose report the log never holds
+	_ = log.Close()
+	_, err = s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: last, Outcome: &pb.ReportTaskRequest_Success{Success: &pb.TaskSuccess{}}})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("report with a closed log: %v, want Unavailable", err)
+	}
+	if _, err := os.Stat(temp); err != nil {
+		t.Fatalf("output cleaned up before the log held the job's end: %v", err)
+	}
+
+	s = recoverServer(t, Config{}, path)
+	if st := jobStatus(t, s, job); st.GetState() != pb.JobState_JOB_STATE_REDUCING {
+		t.Fatalf("recovered status %v; want reducing", st)
+	}
+	w = register(t, s)
+	if !succeed(t, s, w, next(t, s, w), nil) || jobStatus(t, s, job).GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+		t.Fatal("the job did not finish")
+	}
+	if _, err := os.Stat(temp); !os.IsNotExist(err) {
+		t.Fatalf("finished job's TempDir: %v, want it removed", err)
+	}
+
+	if err := os.Mkdir(temp, 0o755); err != nil { // as if the coordinator died before cleaning up
+		t.Fatal(err)
+	}
+	recoverServer(t, Config{}, path)
+	if _, err := os.Stat(temp); !os.IsNotExist(err) {
+		t.Fatalf("TempDir after replaying the job's end: %v, want it removed", err)
 	}
 }

@@ -530,6 +530,15 @@ Workers see `Unavailable` or `NotFound`, call `RegisterWorker` again and
 carry on. A map output that was lost meanwhile is found by the reduce task
 that cannot fetch it. Without `-data-dir`, a restart loses the job.
 
+*A bug in one request.* gRPC does not recover a panicking handler, so a
+bug that one request triggers would stop the whole process. The
+coordinator's and the worker's gRPC servers recover it
+([`internal/rpcguard`](go/internal/rpcguard/rpcguard.go)): the call fails
+with `Internal`, the panic and its stack are logged, and every other job
+and worker carries on. Handlers release their locks with `defer`, so a
+recovered panic leaves none held. A panic in user code is already an
+ordinary task failure (§3.7).
+
 ### Commit
 
 ```mermaid

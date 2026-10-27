@@ -5,7 +5,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -20,6 +20,8 @@ def plotter(tmp_path, monkeypatch):
     matplotlib.use = Mock()
     pyplot = ModuleType("matplotlib.pyplot")
     pyplot.subplots = Mock()
+    pyplot.close = Mock()
+    pyplot.rc_context = MagicMock()
     matplotlib.pyplot = pyplot
     monkeypatch.setitem(sys.modules, "matplotlib", matplotlib)
     monkeypatch.setitem(sys.modules, "matplotlib.pyplot", pyplot)
@@ -28,6 +30,10 @@ def plotter(tmp_path, monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module, pyplot
+
+
+def light(module):
+    return module.THEMES["light"]
 
 
 def row(setting, seconds=1, shuffled=1_000_000, valid="1"):
@@ -49,6 +55,7 @@ def row(setting, seconds=1, shuffled=1_000_000, valid="1"):
 def test_e1_grouped_bars_use_valid_medians_ranges_and_decimal_megabytes(plotter, tmp_path):
     module, pyplot = plotter
     figure, shuffled, seconds = Mock(), Mock(), Mock()
+    shuffled.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = figure, (shuffled, seconds)
     rows = [
         row("s1.5-off", 9, 20_000_000),
@@ -61,33 +68,46 @@ def test_e1_grouped_bars_use_valid_medians_ranges_and_decimal_megabytes(plotter,
         row("s0.5-on", "invalid", "invalid", valid="0"),
     ]
     out = tmp_path / "E1.png"
+    t = light(module)
 
-    module.e1(rows, out)
+    module.e1(rows, out, t)
 
-    for axis, medians, errors, ylabel in (
+    for axis, medians, errors, title in (
         (shuffled, ([4, 7], [13, 20]), ([[2, 0], [6, 0]], [[1, 0], [1, 0]]), "Bytes shuffled (MB)"),
         (seconds, ([4, 3], [7, 9]), ([[2, 0], [6, 0]], [[1, 0], [1, 0]]), "Job time (s)"),
     ):
         assert axis.bar.call_count == 2
-        for call, positions, heights, yerr, label in zip(
+        assert axis.errorbar.call_count == 2
+        for bar, err, positions, heights, yerr, label, color in zip(
             axis.bar.call_args_list,
-            ([-0.2, 0.8], [0.2, 1.2]),
+            axis.errorbar.call_args_list,
+            ([-0.16, 0.84], [0.16, 1.16]),
             medians,
             errors,
             ("combiner on", "combiner off"),
+            t["series"][:2],
             strict=True,
         ):
-            assert call.args[0] == pytest.approx(positions)
-            assert call.args[1] == pytest.approx(heights)
-            assert call.kwargs["yerr"] == yerr
-            assert call.kwargs["width"] == 0.4
-            assert call.kwargs["label"] == label
+            assert bar.args[0] == pytest.approx(positions)
+            assert bar.args[1] == pytest.approx(heights)
+            assert bar.kwargs["width"] == 0.32
+            assert bar.kwargs["label"] == label
+            assert bar.kwargs["color"] == color
+            assert bar.kwargs["edgecolor"] == t["surface"]
+            assert err.args[0] == pytest.approx(positions)
+            assert err.args[1] == pytest.approx(heights)
+            assert err.kwargs["yerr"] == yerr
+            assert err.kwargs["ecolor"] == t["ink2"]
         ticks, labels = axis.set_xticks.call_args.args
         assert list(ticks) == [0, 1]
         assert labels == ["S = 0.5", "S = 1.5"]
-        axis.set_ylabel.assert_called_once_with(ylabel)
-        axis.set_ylim.assert_called_once_with(bottom=0)
+        axis.set_title.assert_called_once_with(title)
+    # Each group with both bars is labeled with the saving.
+    savings = [c.args[2] for c in shuffled.text.call_args_list]
+    assert savings == ["3× fewer", "3× fewer"]
+    assert [c.args[2] for c in seconds.text.call_args_list] == ["43% faster", "67% faster"]
     figure.savefig.assert_called_once_with(out)
+    pyplot.close.assert_called_once_with(figure)
 
 
 @pytest.mark.parametrize("combiner", ["on", "off"])
@@ -97,24 +117,30 @@ def test_e1_handles_missing_groups_invalid_runs_and_zero_measurements(
 ):
     module, pyplot = plotter
     axes = Mock(), Mock()
+    axes[0].get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), axes
     # One group is absent, and the other either has no valid run or a real
-    # zero measurement. Neither may turn into a fabricated nonzero bar.
-    module.e1([row(f"s1.0-{combiner}", 0, 0, valid)], tmp_path / "E1.png")
+    # zero measurement. Neither may turn into a fabricated nonzero bar, a
+    # saving label, or a division by zero.
+    module.e1([row(f"s1.0-{combiner}", 0, 0, valid)], tmp_path / "E1.png", light(module))
 
     for axis in axes:
         for call, group in zip(axis.bar.call_args_list, ("on", "off"), strict=True):
             kept = valid == "1" and group == combiner
-            assert call.args[0] == ([-0.2 if group == "on" else 0.2] if kept else [])
+            assert call.args[0] == ([-0.16 if group == "on" else 0.16] if kept else [])
             assert call.args[1] == ([0] if kept else [])
-            assert call.kwargs["yerr"] == ([[0], [0]] if kept else [[], []])
+        for call in axis.errorbar.call_args_list:
+            assert call.kwargs["yerr"] in ([[0], [0]], [[], []])
+        axis.text.assert_not_called()
+        assert axis.set_ylim.call_args.args == (0, pytest.approx(1.18))
 
 
 def test_e1_sorts_exponents_numerically(plotter, tmp_path):
     module, pyplot = plotter
     axes = Mock(), Mock()
+    axes[0].get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), axes
-    module.e1([row("s10.0-on"), row("s2.0-on"), row("s0.5-on")], tmp_path / "E1.png")
+    module.e1([row("s10.0-on"), row("s2.0-on"), row("s0.5-on")], tmp_path / "E1.png", light(module))
     for axis in axes:
         assert axis.set_xticks.call_args.args[1] == ["S = 0.5", "S = 2.0", "S = 10.0"]
 
@@ -147,15 +173,24 @@ def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, 
         writer = csv.DictWriter(stream, fieldnames=rows[0])
         writer.writeheader()
         writer.writerows(rows)
-    figure = Mock()
-    pyplot.subplots.return_value = figure, (Mock(), Mock())
+    figure, left = Mock(), Mock()
+    left.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = figure, (left, Mock())
     monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(results), str(out)])
 
     module.main()
 
     assert out.is_dir()
-    pyplot.subplots.assert_called_once_with(1, 2, figsize=(10, 4))
-    figure.savefig.assert_called_once_with(out / "E1.png")
+    # One plot per theme, each drawn under that theme's style.
+    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (11, 4.6)})] * 2
+    assert [c.args[0] for c in figure.savefig.call_args_list] == [
+        out / "E1.png",
+        out / "E1-dark.png",
+    ]
+    assert [c.args[0]["axes.facecolor"] for c in pyplot.rc_context.call_args_list] == [
+        module.THEMES["light"]["surface"],
+        module.THEMES["dark"]["surface"],
+    ]
     table = capsys.readouterr().out
     assert "\nE1\n" in table
     assert "| s1.0-on | wordcount | 4 | 2.00 (2.00–2.00) | 1 of 1 |" in table
@@ -177,10 +212,11 @@ def test_e3_marks_worker_loss_on_the_sampling_clock(plotter, tmp_path):
                 writer.writerow([seconds, f"http://worker-{worker}", "metric", 0])
     run = row("kill-50") | {"run": "1", "event_at": "5.8", "wall_seconds": "23.5"}
 
-    module.e3([run], tmp_path, tmp_path / "E3.png")
+    t = light(module)
+    module.e3([run], tmp_path, tmp_path / "E3.png", t)
 
     right.axvspan.assert_called_once_with(
-        6.5, 7.0, color="red", alpha=0.2, label="worker loss observed"
+        6.5, 7.0, color=t["muted"], alpha=0.35, linewidth=0, zorder=1
     )
     right.axvline.assert_not_called()
 
