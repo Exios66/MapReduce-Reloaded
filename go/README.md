@@ -69,3 +69,11 @@ random from a seed:
 go test ./internal/worker -run TestChaos -chaos.runs=50           # 50 seeded runs
 go test ./internal/worker -run TestChaos -chaos.seed=7 -chaos.runs=1   # replay seed 7
 ```
+
+`internal/e2e` runs the built `coordinator`, `worker` and `mr` commands as
+separate processes on localhost ports: word count against the golden output,
+every example program, a worker killed with `SIGKILL` mid-job, a coordinator
+killed and restarted from its `-data-dir`, and `SIGTERM` stopping each
+process cleanly. It needs no Docker, so `make check` runs it; it takes about
+25 s, most of it the coordinator's 10 s wait before it declares the killed
+worker dead.
