@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -34,74 +35,122 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/wal"
 )
 
-// main parses coordinator flags and serves until interrupted, exiting with
-// status 1 after printing any logging setup or run error to stderr.
-func main() {
-	addr := flag.String("addr", ":7070", "address to listen on")
-	httpAddr := flag.String("http", ":8080", "address of the status page and /metrics (empty: none)")
-	dataDir := flag.String("data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
-	backups := flag.Bool("backups", true, "run backup attempts of the last tasks of each phase")
-	keepJobs := flag.Int("keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
-	logFormat := flag.String("log-format", "text", "log format: text or json")
-	flag.Parse()
-	err := logs.Setup(*logFormat)
-	if err == nil {
-		err = run(*addr, *httpAddr, *dataDir, *backups, *keepJobs)
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "coordinator:", err)
-		os.Exit(1)
-	}
+// options are the coordinator's flags.
+type options struct {
+	addr, httpAddr, dataDir, logFormat string
+	backups                            bool
+	keepJobs                           int
 }
 
-// run serves coordinator RPCs at addr until an interrupt or SIGTERM stops it.
-// A nonempty dataDir enables log recovery and persistence; a nonempty
-// httpAddr enables the status page and metrics. keepJobs limits retained
-// ended jobs when a new job starts; zero retains all and negative is invalid.
-// It returns configuration, storage, recovery, listen, and RPC server errors,
-// joined with any log close error. Status HTTP server errors do not stop RPCs.
-func run(addr, httpAddr, dataDir string, backups bool, keepJobs int) (err error) {
-	if keepJobs < 0 {
-		return fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", keepJobs)
+// main runs the coordinator until interrupted or terminated. It exits with
+// status 2 for bad flags and 1 for any other error, printed to stderr.
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := start(ctx, os.Args[1:], os.Stderr)
+	stop()
+	os.Exit(code)
+}
+
+// start parses args, sets up logging and runs the coordinator until ctx is
+// done, and returns the process's exit status, printing errors to stderr.
+func start(ctx context.Context, args []string, stderr io.Writer) int {
+	o, err := parse(args, stderr)
+	switch {
+	case errors.Is(err, flag.ErrHelp):
+		return 0
+	case err != nil:
+		_, _ = fmt.Fprintln(stderr, "coordinator:", err)
+		return 2
 	}
-	cfg := coordinator.Config{
+	if err = logs.Setup(o.logFormat); err == nil {
+		err = run(ctx, o, nil)
+	}
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "coordinator:", err)
+		return 1
+	}
+	return 0
+}
+
+// parse parses the coordinator's flags, writing usage to stderr on error.
+func parse(args []string, stderr io.Writer) (options, error) {
+	var o options
+	fs := flag.NewFlagSet("coordinator", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.StringVar(&o.addr, "addr", ":7070", "address to listen on")
+	fs.StringVar(&o.httpAddr, "http", ":8080", "address of the status page and /metrics (empty: none)")
+	fs.StringVar(&o.dataDir, "data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
+	fs.BoolVar(&o.backups, "backups", true, "run backup attempts of the last tasks of each phase")
+	fs.IntVar(&o.keepJobs, "keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
+	fs.StringVar(&o.logFormat, "log-format", "text", "log format: text or json")
+	err := fs.Parse(args)
+	if err == nil && fs.NArg() > 0 {
+		err = fmt.Errorf("unexpected arguments %q", fs.Args())
+	}
+	if err == nil && o.keepJobs < 0 {
+		err = fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", o.keepJobs)
+	}
+	return o, err
+}
+
+// config returns the coordinator's configuration for o.
+func config(o options) coordinator.Config {
+	return coordinator.Config{
 		HeartbeatInterval: 3 * time.Second,
 		WorkerTimeout:     10 * time.Second, // three missed heartbeats
 		RetryAfter:        time.Second,
-		Backups:           backups,
-		KeepJobs:          keepJobs,
+		Backups:           o.backups,
+		KeepJobs:          o.keepJobs,
 	}
+}
+
+// run serves coordinator RPCs at o.addr until ctx is done, then tells
+// workers to exit. A nonempty o.dataDir enables log recovery and
+// persistence; a nonempty o.httpAddr enables the status page and metrics.
+// If listening is not nil, run calls it with the RPC and HTTP addresses
+// (nil without -http) once both listen.
+// It returns storage, recovery, listen, and RPC server errors, joined with
+// any log close error. Status HTTP server errors do not stop RPCs.
+func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (err error) {
+	cfg := config(o)
 	var srv *coordinator.Server
-	if dataDir == "" {
+	if o.dataDir == "" {
 		srv = coordinator.NewServer(cfg)
 	} else {
-		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		if err := os.MkdirAll(o.dataDir, 0o755); err != nil {
 			return err
 		}
 		var log *wal.Log
-		if srv, log, err = coordinator.Recover(cfg, filepath.Join(dataDir, "coordinator.log")); err != nil {
+		if srv, log, err = coordinator.Recover(cfg, filepath.Join(o.dataDir, "coordinator.log")); err != nil {
 			return err
 		}
 		defer func() { err = errors.Join(err, log.Close()) }()
 	}
-	lis, err := net.Listen("tcp", addr)
+	lis, err := net.Listen("tcp", o.addr)
 	if err != nil {
 		return err
 	}
 	gs := grpc.NewServer(rpcguard.ServerOptions()...)
 	pb.RegisterCoordinatorServiceServer(gs, srv)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	var status *http.Server
-	if httpAddr != "" {
-		status = &http.Server{Addr: httpAddr, Handler: statusweb.Handler(srv), ReadHeaderTimeout: 5 * time.Second}
+	var statusAddr net.Addr
+	if o.httpAddr != "" {
+		hl, err := net.Listen("tcp", o.httpAddr)
+		if err != nil {
+			_ = lis.Close()
+			return err
+		}
+		statusAddr = hl.Addr()
+		status = &http.Server{Handler: statusweb.Handler(srv), ReadHeaderTimeout: 5 * time.Second}
 		go func() {
-			if err := status.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			if err := status.Serve(hl); !errors.Is(err, http.ErrServerClosed) {
 				slog.Error("status page", "err", err)
 			}
 		}()
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel() // stops Monitor if Serve fails
 	go srv.Monitor(ctx)
 	go func() {
 		<-ctx.Done()
@@ -114,5 +163,8 @@ func run(addr, httpAddr, dataDir string, backups bool, keepJobs int) (err error)
 		gs.GracefulStop()
 	}()
 	slog.Info("coordinator listening", "addr", lis.Addr())
+	if listening != nil {
+		listening(lis.Addr(), statusAddr)
+	}
 	return gs.Serve(lis)
 }
