@@ -87,6 +87,22 @@ def first_seen(path, job):
         return next((float(r["seconds"]) for r in csv.DictReader(f) if r["job"] == job), 0.0)
 
 
+def failure_interval(path, workers):
+    """Sampling times bracketing the first observed loss of a worker."""
+    rounds = {}
+    with open(path, newline="") as stream:
+        for row in csv.DictReader(stream):
+            rounds.setdefault(float(row["seconds"]), set()).add(row["url"])
+    previous = None
+    for seconds, urls in sorted(rounds.items()):
+        if len(urls) < workers:
+            if previous is not None:
+                return previous, seconds
+        else:
+            previous = seconds
+    return None
+
+
 def errorbar(ax, xs, stats, **kwargs):
     med = [s[0] for s in stats]
     lo = [s[0] - s[1] for s in stats]
@@ -114,6 +130,13 @@ def caption(rows):
 
 
 def e0(rows, out):
+    """Saves E0 job time in seconds against worker count to out.
+
+    Rows must be nonempty. Only valid="1" runs contribute to medians and
+    minimum/maximum error bars; programs without valid runs are skipped.
+    Ideal scaling is drawn when a program has a one-worker measurement.
+    Missing fields, invalid numbers, and plotting or file errors propagate.
+    """
     fig, ax = plt.subplots(figsize=(6, 4))
     for program, name in PROGRAMS.items():
         workers = sorted({int(r["workers"]) for r in valid(rows, program=program)})
@@ -133,7 +156,7 @@ def e0(rows, out):
     ax.set_xlabel("Workers (1 CPU each)")
     ax.set_ylabel("Job time (s)")
     ax.set_ylim(bottom=0)
-    ax.set_title(f"E0: scaling over workers ({caption(rows)}); dashed: ideal")
+    ax.set_title(f"E0: scaling over workers\n({caption(rows)}; dashed: ideal)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out)
@@ -245,7 +268,11 @@ def e3(rows, results, out):
         times = [float(r["seconds"]) for r in rates]
         for rate, color in (("input", "#4c72b0"), ("shuffle", "#dd8452"), ("output", "#55a868")):
             right.plot(times, [float(r[rate]) for r in rates], label=rate, color=color)
-        right.axvline(float(run["event_at"]), color="red", linestyle=":", label="worker killed")
+        # event_at is relative to submission, which starts after sampling.
+        # Historical runs lack that offset; mark the observed loss instead.
+        interval = failure_interval(path, int(run["workers"]))
+        if interval:
+            right.axvspan(*interval, color="red", alpha=0.2, label="worker loss observed")
         right.set_xlabel("Seconds since sampling began")
         right.set_ylabel("MB/s")
         right.set_ylim(bottom=0)

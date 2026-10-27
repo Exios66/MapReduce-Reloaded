@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -40,6 +41,8 @@ type config struct {
 	minFreeMiB                                               uint64
 }
 
+// main parses worker flags and runs the worker, exiting with status 1 after
+// printing any logging setup or run error to stderr.
 func main() {
 	var c config
 	flag.StringVar(&c.coordinator, "coordinator", "localhost:7070", "coordinator address")
@@ -60,6 +63,13 @@ func main() {
 	}
 }
 
+// run serves map output and runs tasks using c, checking c.minFreeMiB
+// (in MiB) before requesting work. An empty workDir creates a temporary
+// directory removed on return; an empty listen requires a shared workDir.
+// It returns setup and worker errors, joined with temporary-directory
+// cleanup errors. A signal ends worker execution successfully, though
+// cleanup can still fail. Background shuffle and metrics server errors
+// are not returned.
 func run(c config) (err error) {
 	host, _ := os.Hostname() // only a hint for locality scheduling (§3.4)
 	info := &pb.WorkerInfo{Host: host, Slots: 1}
@@ -95,6 +105,9 @@ func run(c config) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	w := worker.New(pb.NewCoordinatorServiceClient(conn), c.workDir, info)
+	if c.minFreeMiB > math.MaxUint64>>20 {
+		return fmt.Errorf("-min-free-mib %d is too large", c.minFreeMiB)
+	}
 	w.MinFreeDisk = c.minFreeMiB << 20
 	if c.http != "" {
 		metrics := &http.Server{Addr: c.http, Handler: w.MetricsHandler(), ReadHeaderTimeout: 5 * time.Second}

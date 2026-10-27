@@ -1,0 +1,92 @@
+[19:04:11] === E0 start (free: 14G)
+go: downloading github.com/traefik/yaegi v0.16.1
+[19:05:22] E0 w4 grep run 1
+[19:05:40] E0 w4 grep run 2
+[19:05:55] E0 w4 grep run 3
+[19:06:11] E0 w2 grep run 1
+[19:06:26] E0 w2 grep run 2
+[19:06:41] E0 w2 grep run 3
+[19:06:58] E0 w1 grep run 1
+[19:07:13] E0 w1 grep run 2
+[19:07:28] E0 w1 grep run 3
+[19:07:45] E0 w4 distsort run 1
+[19:08:27] E0 w4 distsort run 2
+[19:09:12] E0 w4 distsort run 3
+[19:09:59] E0 w2 distsort run 1
+[19:10:49] E0 w2 distsort run 2
+[19:11:40] E0 w2 distsort run 3
+[19:12:35] E0 w1 distsort run 1
+[19:13:41] E0 w1 distsort run 2
+[19:14:47] E0 w1 distsort run 3
+[19:15:45] generating 1073741824 bytes for wordcount
+[19:17:47] E0 w4 wordcount run 1
+[19:18:38] E0 w4 wordcount run 2
+[19:19:29] E0 w4 wordcount run 3
+[19:20:23] E0 w2 wordcount run 1
+[19:21:50] E0 w2 wordcount run 2
+[19:23:17] E0 w2 wordcount run 3
+[19:24:46] E0 w1 wordcount run 1
+[19:27:25] E0 w1 wordcount run 2
+[19:30:07] E0 w1 wordcount run 3
+[19:32:35] done
+[19:32:35] === E0 done
+[19:32:35] === E1 start (free: 12G)
+[19:32:43] generating 1073741824 bytes for wordcount
+[19:34:55] E1 s0.5-on wordcount run 1
+[19:35:43] E1 s0.5-off wordcount run 1
+[19:36:40] E1 s0.5-off wordcount run 2
+[19:37:40] E1 s0.5-on wordcount run 2
+[19:38:31] E1 s0.5-on wordcount run 3
+[19:39:22] E1 s0.5-off wordcount run 3
+[19:40:19] E1 s1.0-on wordcount run 1
+[19:41:10] E1 s1.0-off wordcount run 1
+[19:42:13] E1 s1.0-off wordcount run 2
+[19:43:16] E1 s1.0-on wordcount run 2
+[19:44:10] E1 s1.0-on wordcount run 3
+[19:45:01] E1 s1.0-off wordcount run 3
+[19:45:51] generating 1073741824 bytes for wordcount
+[19:47:52] E1 s1.5-on wordcount run 1
+[19:48:34] E1 s1.5-off wordcount run 1
+[19:49:40] E1 s1.5-off wordcount run 2
+[19:50:46] E1 s1.5-on wordcount run 2
+[19:51:30] E1 s1.5-on wordcount run 3
+[19:52:13] E1 s1.5-off wordcount run 3
+[19:53:04] done
+[19:53:04] === E1 done
+[19:53:04] === E2 start (free: 7.9G)
+[19:53:36] E2 normal distsort run 1
+[19:54:21] E2 normal distsort run 2
+[19:55:06] E2 normal distsort run 3
+[19:55:52] E2 straggler-backups distsort run 1
+[19:56:39] E2 straggler-backups distsort run 2
+[19:57:27] E2 straggler-backups distsort run 3
+[19:58:15] E2 straggler-no-backups distsort run 1
+[19:59:06] E2 straggler-no-backups distsort run 2
+[19:59:57] E2 straggler-no-backups distsort run 3
+[20:00:40] done
+[20:00:40] === E2 done
+[20:00:40] === E3 start (free: 11G)
+[20:00:55] E3 normal distsort run 1
+[20:01:40] E3 normal distsort run 2
+[20:02:25] E3 normal distsort run 3
+[20:03:11] E3 kill-25 distsort run 1
+[20:04:02] E3 kill-25 distsort run 2
+[20:04:52] E3 kill-25 distsort run 3
+[20:05:44] E3 kill-50 distsort run 1
+[20:06:40] E3 kill-50 distsort run 2
+[20:07:37] E3 kill-50 distsort run 3
+[20:08:32] E3 kill-75 distsort run 1
+[20:09:41] E3 kill-75 distsort run 2
+[20:10:49] E3 kill-75 distsort run 3
+[20:11:45] done
+[20:11:45] === E3 done
+[20:11:45] === E4 start (free: 7.8G)
+[20:12:02] E4 normal distsort run 1
+[20:12:47] E4 normal distsort run 2
+[20:13:32] E4 normal distsort run 3
+[20:14:17] E4 restart distsort run 1
+[20:15:03] E4 restart distsort run 2
+[20:15:50] E4 restart distsort run 3
+[20:16:29] done
+[20:16:29] === E4 done
+[20:16:29] === all experiments finished

@@ -164,6 +164,8 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 // Heartbeat tells an unknown worker to register again, and a known one
 // which of the attempts it runs to stop: those no longer running on it, such
 // as a backup whose twin finished first (§3.6), or those of an ended job.
+// Known workers also receive the active job ID, or an empty list when idle,
+// so they can prune ended jobs' map output. It always returns a nil error.
 func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -251,7 +253,8 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 	return &pb.SubmitJobResponse{JobId: rec.GetJobId()}, nil
 }
 
-// submit makes the job rec describes, submitted at at, the active one.
+// submit makes the job rec describes, submitted at at, the active one,
+// advances the job sequence, and forgets old jobs according to cfg.KeepJobs.
 func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 	j := &job{
 		id:        rec.GetJobId(),
@@ -271,8 +274,13 @@ func (s *Server) submit(rec *pb.JobSubmitted, at time.Time) {
 
 // forget drops the oldest ended jobs beyond cfg.KeepJobs. The active job,
 // the newest, is never dropped.
+// It is called with a newly active job; a nonpositive limit retains all jobs.
 func (s *Server) forget() {
-	for s.cfg.KeepJobs > 0 && len(s.order) > s.cfg.KeepJobs+1 && s.order[0] != s.active {
+	limit := s.cfg.KeepJobs
+	if s.active != nil {
+		limit++
+	}
+	for s.cfg.KeepJobs > 0 && len(s.order) > limit && s.order[0] != s.active {
 		delete(s.jobs, s.order[0].id)
 		s.order[0] = nil
 		s.order = s.order[1:]
@@ -295,7 +303,7 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	if s.stopping {
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Shutdown{Shutdown: &pb.ShutdownInstruction{}}}, nil
 	}
-	if s.active != nil {
+	if s.active != nil && !req.GetPaused() {
 		info := s.workerInfo(worker)
 		t, ok := s.active.tasks.Next(func(i uint32) int { return int(locality(s.active.splits[i], info)) })
 		switch {
@@ -455,6 +463,7 @@ func (s *Server) end(j *job, err string, at time.Time) {
 	j.err, j.finished = err, at
 	j.cleanup()
 	s.active = nil
+	s.forget()
 }
 
 func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {

@@ -78,7 +78,10 @@ var Combine = Reduce
 - `mr submit … ./wordcount.go …` reads the file on the client's machine and
   sends its source in `JobSpec.program_source`, with `program` set to the
   file's base name for display.
-- The coordinator checks the size limit (1 MiB) and loads the source (below). It hands the
+- The coordinator checks the size limit (1 MiB) and calls `jobfile.Load` in
+  `wire.JobSpec` during submission. Loading executes job-file code, including
+  package-level initializers and `init` functions, in the coordinator before
+  any worker execution; it is not just a syntax or type check. It hands the
   `JobSpec` to every task, as it already does, so the write-ahead log's
   `JobSubmitted` record holds the source and a restarted coordinator can
   still run the job ([ADR 0007](0007-write-ahead-log.md)).
@@ -125,9 +128,11 @@ var Combine = Reduce
   `go/internal/task/task_test.go` covers Map and Reduce panics. Once
   interpreted jobs are integrated, add Map and Reduce panic tests to
   establish their recovery behavior.
-- The interpreter runs user code with the worker's permissions. That is
-  acceptable on a single-user course VM, and it is no worse than the
-  compiled-in programs. A shared cluster would need a sandbox.
+- The interpreter runs job-file code with the coordinator's permissions
+  during submission, including package-level initializers and `init`
+  functions, and later with each worker's permissions. The single-user
+  course VM with submission exposed on loopback only is the accepted risk.
+  The interpreter is not a sandbox; a shared cluster would need one.
 - Yaegi has had no release since April 2024. The spike shows v0.16.1 works
   on Go 1.26 for the standard library a job file needs, with the restrictions
   above. If a future Go release breaks it, the Python streaming fallback

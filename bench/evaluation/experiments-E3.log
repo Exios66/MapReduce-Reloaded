@@ -1,0 +1,14 @@
+[20:20:30] E3 normal distsort run 1
+[20:21:15] E3 normal distsort run 2
+[20:22:00] E3 normal distsort run 3
+[20:22:48] E3 kill-25 distsort run 1
+[20:23:39] E3 kill-25 distsort run 2
+[20:24:26] E3 kill-25 distsort run 3
+[20:25:18] E3 kill-50 distsort run 1
+[20:26:11] E3 kill-50 distsort run 2
+[20:27:06] E3 kill-50 distsort run 3
+[20:28:00] E3 kill-75 distsort run 1
+[20:29:06] E3 kill-75 distsort run 2
+[20:30:12] E3 kill-75 distsort run 3
+[20:31:06] done
+=== E3 exit 0

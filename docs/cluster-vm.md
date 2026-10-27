@@ -92,9 +92,11 @@ benchmark shuffled 68 MB for a 64 MB input) and output. The experiments
 delete old output and `bench/results/` files as you go.
 
 Workers delete a job's map output once it ends and stop taking tasks under
-1 GiB free; logs and Prometheus are capped
+1 GiB free; logs rotate and Prometheus has a retention target
 ([ADR 0017](design/0017-disk-and-memory-bounds.md)). `make clean-output`
-deletes old job output and prints `df` and `docker system df`.
+requires explicit completed directories, e.g.
+`make clean-output CLEAN_OUTPUTS='sort-kill-123'`, and prints `df` and
+`docker system df`. Keep active job outputs unselected.
 
 ## One-time setup
 

@@ -377,7 +377,13 @@ func TestRunLocalJobFile(t *testing.T) {
 	if err := run(args, new(strings.Builder), new(strings.Builder)); err != nil {
 		t.Fatal(err)
 	}
-	want, _ := filepath.Glob("../../../testdata/corpus/expected/*")
+	want, err := filepath.Glob("../../../testdata/corpus/expected/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(want) == 0 {
+		t.Fatal("no golden files found")
+	}
 	for _, w := range want {
 		a, errA := os.ReadFile(w)
 		b, errB := os.ReadFile(filepath.Join(out, filepath.Base(w)))
@@ -385,7 +391,7 @@ func TestRunLocalJobFile(t *testing.T) {
 			t.Errorf("%s differs from the expected output", filepath.Base(w))
 		}
 	}
-	err := run([]string{"run", "-local", "missing.go", out + "2", raven}, new(strings.Builder), new(strings.Builder))
+	err = run([]string{"run", "-local", "missing.go", out + "2", raven}, new(strings.Builder), new(strings.Builder))
 	if err == nil || !strings.Contains(err.Error(), "missing.go") {
 		t.Errorf("a missing job file: got %v", err)
 	}

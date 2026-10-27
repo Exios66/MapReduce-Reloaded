@@ -170,7 +170,7 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
     calls = log.read_text().splitlines()
     if free_kib < 5 << 20:
         assert result.returncode == 1
-        assert "under 5 GB free on /; stopping before E1" in result.stderr
+        assert "under 5 GB free on /; stopping" in result.stderr
         assert calls == ["restart worker", "ready:4", "disk:-Pk /"]
         assert result.stdout == ""
         return
@@ -234,7 +234,84 @@ def test_run_does_not_submit_when_workers_cannot_restart_or_register(
         check=False,
     )
     assert result.returncode == 1
+    if failure == "restart":
+        assert "worker restart failed; stopping" in result.stderr
     expected = ["compose:restart worker"]
     if failure == "registration":
         expected.append("ready:4")
     assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("free", ["", "unknown", "-1", "5.5", "6000000x"])
+def test_fresh_rejects_unexpected_disk_output(experiment, monkeypatch, free):
+    invoke, log = experiment
+    monkeypatch.setenv("FREE_KIB", free)
+    result = invoke(
+        """
+        compose_stub() { :; }
+        compose=(compose_stub)
+        wait_workers() { :; }
+        df() {
+            printf 'header\n'
+            printf 'disk 1 0 %s 0%% /\n' "$FREE_KIB"
+        }
+        fresh 4
+        echo submitted >> "$CALL_LOG"
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "cannot determine free space" in result.stderr
+    assert log.read_text() == ""
+
+
+def test_fresh_reports_restart_errors_and_normalizes_exit_status(experiment):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        compose_stub() { echo 'restart diagnostic' >&2; return 42; }
+        compose=(compose_stub)
+        fresh 4
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "restart diagnostic" in result.stderr
+    assert "worker restart failed" in result.stderr
+
+
+def test_fresh_rejects_failed_df_even_with_plausible_output(experiment):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        compose_stub() { :; }
+        compose=(compose_stub)
+        wait_workers() { :; }
+        df() { printf 'header\ndisk 1 0 6000000 0%% /\n'; return 1; }
+        fresh 4
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "cannot determine free space" in result.stderr
+
+
+def test_sampled_run_restarts_workers_once_before_sampling(experiment):
+    invoke, log = experiment
+    invoke(
+        """
+        compose_stub() { printf '%s\\n' "$*" >> "$CALL_LOG"; }
+        wait_workers() { printf 'ready:%s\\n' "$1" >> "$CALL_LOG"; }
+        df() { printf 'h\\ndisk 1 0 %s 0%% /\\n' $((6 << 20)); }
+        python3() { printf 'sampler\\n' >> "$CALL_LOG"; }
+        input() { :; }
+        in_volume() { :; }
+        log() { printf 'submit\\n' >> "$CALL_LOG"; exit 0; }
+        compose=(compose_stub)
+        start_sampler tasks bench/samples.csv
+        wait
+        run E2 normal distsort 1 4 ""
+        """
+    )
+    calls = log.read_text().splitlines()
+    assert calls == ["restart worker", "ready:4", "sampler", "submit"]

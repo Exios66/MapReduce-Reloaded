@@ -68,6 +68,9 @@ func New(coordinator pb.CoordinatorServiceClient, workDir string, info *pb.Worke
 // declared it dead (§3.3), or restarted.
 var errForgotten = errors.New("the coordinator forgot this worker")
 
+// errShutdown ends a session when a disk-space poll receives shutdown.
+var errShutdown = errors.New("the coordinator is shutting down")
+
 // Run registers and runs tasks until the coordinator says to shut down, or
 // ctx is done, or an RPC fails. If the coordinator forgets the worker, or
 // cannot be reached, as while it restarts, the worker registers again
@@ -117,17 +120,20 @@ func (w *Worker) session(parent context.Context) error {
 // serve runs tasks until the coordinator says to shut down, or ctx is
 // done, or an RPC fails. An attempt runs under its own context, which a
 // heartbeat cancels if the coordinator says to stop it.
+// It waits for disk space before each task request. Unknown-worker replies
+// return errForgotten; other RPC and context errors propagate. Task failures
+// are reported to the coordinator and do not themselves end the loop.
 func (w *Worker) serve(ctx context.Context, cur *current) error {
 	for {
 		if err := w.waitForDisk(ctx); err != nil {
+			if errors.Is(err, errShutdown) {
+				return nil
+			}
 			return err
 		}
-		resp, err := w.coordinator.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w.id})
-		if status.Code(err) == codes.NotFound {
-			return errForgotten
-		}
+		resp, err := w.requestTask(ctx, false)
 		if err != nil {
-			return fmt.Errorf("request task: %w", err)
+			return err
 		}
 		var report *pb.ReportTaskRequest
 		switch a := resp.GetAssignment().(type) {
@@ -169,6 +175,17 @@ func (w *Worker) serve(ctx context.Context, cur *current) error {
 			return fmt.Errorf("report task: %w", err)
 		}
 	}
+}
+
+func (w *Worker) requestTask(ctx context.Context, paused bool) (*pb.RequestTaskResponse, error) {
+	resp, err := w.coordinator.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w.id, Paused: paused})
+	if status.Code(err) == codes.NotFound {
+		return nil, errForgotten
+	}
+	if err != nil {
+		return nil, fmt.Errorf("request task: %w", err)
+	}
+	return resp, nil
 }
 
 // finish returns the report on an attempt, or nil if the coordinator said

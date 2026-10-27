@@ -460,6 +460,36 @@ func TestKeepJobs(t *testing.T) {
 			t.Errorf("GetJobStatus(%s): %v", id, err)
 		}
 	}
+	s.mu.Lock()
+	s.end(s.active, "", time.Now())
+	s.mu.Unlock()
+	if len(s.jobs) != 2 || len(s.order) != 2 {
+		t.Fatalf("idle coordinator kept %d jobs and %d ordered entries, want 2", len(s.jobs), len(s.order))
+	}
+	for i, id := range ids {
+		_, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: id})
+		if forgotten := i < 2; forgotten != (status.Code(err) == codes.NotFound) {
+			t.Errorf("idle GetJobStatus(%s): %v", id, err)
+		}
+	}
+}
+
+func TestPausedTaskRequest(t *testing.T) {
+	s, w, _ := newJob(t, 1)
+	req := &pb.RequestTaskRequest{WorkerId: w, Paused: true}
+	resp, err := s.RequestTask(ctx, req)
+	if err != nil || resp.GetWait() == nil {
+		t.Fatalf("paused request: %v, %v; want wait", resp, err)
+	}
+	resp, err = s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	if err != nil || resp.GetMapTask() == nil || resp.GetMapTask().GetAttempt().GetAttempt() != 0 {
+		t.Fatalf("resumed request: %v, %v; want first map attempt", resp, err)
+	}
+	s.Shutdown()
+	resp, err = s.RequestTask(ctx, req)
+	if err != nil || resp.GetShutdown() == nil {
+		t.Fatalf("paused shutdown: %v, %v; want shutdown", resp, err)
+	}
 }
 
 // A worker is told to stop the attempts it should no longer run (§3.6).

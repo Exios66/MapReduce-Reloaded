@@ -160,3 +160,39 @@ def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, 
     assert "\nE1\n" in table
     assert "| s1.0-on | wordcount | 4 | 2.00 (2.00–2.00) | 1 of 1 |" in table
     assert "| s1.0-off | wordcount | 4 | 4.00 (4.00–4.00) | 1 of 1 |" in table
+
+
+def test_e3_marks_worker_loss_on_the_sampling_clock(plotter, tmp_path):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (left, right)
+    data = tmp_path / "E3"
+    data.mkdir()
+    samples = data / "samples-kill-50-1.csv"
+    with samples.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["seconds", "url", "metric", "value"])
+        for seconds, workers in ((0, 4), (6.5, 4), (7, 3), (7.5, 3)):
+            for worker in range(workers):
+                writer.writerow([seconds, f"http://worker-{worker}", "metric", 0])
+    run = row("kill-50") | {"run": "1", "event_at": "5.8", "wall_seconds": "23.5"}
+
+    module.e3([run], tmp_path, tmp_path / "E3.png")
+
+    right.axvspan.assert_called_once_with(
+        6.5, 7.0, color="red", alpha=0.2, label="worker loss observed"
+    )
+    right.axvline.assert_not_called()
+
+
+@pytest.mark.parametrize("counts", [(4, 4), (3, 3)])
+def test_failure_interval_requires_a_recorded_transition(plotter, tmp_path, counts):
+    module, _ = plotter
+    samples = tmp_path / "samples.csv"
+    with samples.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["seconds", "url"])
+        for seconds, workers in enumerate(counts):
+            for worker in range(workers):
+                writer.writerow([seconds, f"http://worker-{worker}"])
+    assert module.failure_interval(samples, 4) is None

@@ -41,6 +41,7 @@ compose=("${base[@]}")
 metrics=http://127.0.0.1:18780/metrics
 tmp=$(mktemp -d)
 sampler=
+ready=
 slow= # the worker E2 throttles, restored however the script exits
 cleanup() {
     [ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
@@ -121,7 +122,33 @@ valid() {
 
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 
-start_sampler() { # tasks|bytes FILE
+# fresh WORKERS: restarts workers to clear their temporary map output and
+# waits for WORKERS registrations before sampling. Exits if / has less
+# than 5 GiB free; marks the workers ready for the next run.
+fresh() {
+    if ! "${compose[@]}" restart worker >/dev/null; then
+        echo "experiments: worker restart failed; stopping" >&2
+        exit 1
+    fi
+    wait_workers "$1"
+    local free
+    free=$(df -Pk / | awk 'NR == 2 { print $4 }') || free=
+    if [[ ! "$free" =~ ^[0-9]+$ ]]; then
+        echo "experiments: cannot determine free space on /; stopping" >&2
+        exit 1
+    fi
+    if ! [ "$free" -ge $((5 << 20)) ]; then
+        echo "experiments: under 5 GB free on /; stopping" >&2
+        exit 1
+    fi
+    ready=1
+}
+
+# start_sampler tasks|bytes FILE: prepares four workers unless already ready,
+# then samples coordinator tasks or worker byte counters into FILE in the
+# background. Saves the process ID in sampler for stop_sampler and cleanup.
+start_sampler() { # tasks|bytes FILE; the experiments that sample use 4 workers
+    [ -n "$ready" ] || fresh 4
     if [ "$1" = tasks ]; then
         python3 bench/scrape-tasks.py "$interval" 86400 "$metrics" > "$2" &
     else
@@ -154,14 +181,8 @@ run() {
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
     in=$(input "$program")
     in_volume rm -rf "$out"
-    # Workers delete map output only when they exit, so restart them: each
-    # run then starts from the same state and the disk does not fill.
-    "${compose[@]}" restart worker >/dev/null 2>&1
-    wait_workers "$workers"
-    if [ "$(df -Pk / | awk 'NR == 2 { print $4 }')" -lt $((5 << 20)) ]; then
-        echo "experiments: under 5 GB free on /; stopping before $exp $setting run $n" >&2
-        exit 1
-    fi
+    [ -n "$ready" ] || fresh "$workers"
+    ready=
     log "$exp $setting $program run $n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
@@ -325,7 +346,14 @@ E1) e1 ;;
 E2) e2 ;;
 E3) e3 ;;
 E4) e4 ;;
-all) e0 && e1 && e2 && e3 && e4 ;;
+all)
+    # Not an && list: set -e does not apply to a function called there.
+    e0
+    e1
+    e2
+    e3
+    e4
+    ;;
 *)
     echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|all" >&2
     exit 2

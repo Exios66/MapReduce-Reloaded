@@ -27,7 +27,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | job file built; exact M planned |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md), rewritten for the host client | planned |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 scripted; E5 planned |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 run, [results](bench/README.md#evaluation-e0e4); E5 planned |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -69,8 +69,12 @@ can stand in for the job file; the benchmarks use them.
 
 A job file's `Reduce` takes `values func(yield func([]byte) bool)`, not the
 compiled API's `iter.Seq[[]byte]`, because Yaegi cannot range over a
-function ([ADR 0015](docs/design/0015-user-job-files.md)). Each worker interprets
-the source once per job. `Combine` must be pure and associative: a bad
+function ([ADR 0015](docs/design/0015-user-job-files.md)). During submission,
+`wire.JobSpec` calls `jobfile.Load` in the coordinator: job-file code,
+including package-level initializers and `init` functions, executes there
+before any worker execution. Each worker then interprets the source once
+per job. The accepted risk is a single-user VM with submission exposed on
+loopback only; the interpreter is not a sandbox. `Combine` must be pure and associative: a bad
 combiner silently changes the output, and so the E1 results.
 
 Today the README's quick start runs `mr` in a container against `/corpus`
@@ -269,8 +273,16 @@ combiner, an existing counter. The Zipf generator takes its exponent as a
 parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
-The plots and their tables go in `bench/README.md` and the final report,
-with the commands that made them.
+The plots and their tables are in
+[`bench/README.md`](bench/README.md#evaluation-e0e4), with the commands that
+made them; the data is in `bench/evaluation/`. What they showed (course VM,
+2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
+workers for word count but only 2.3× for grep, whose one-second job is mostly
+fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
+15× to 78× fewer bytes with the combiner, more with more skew, and ran 18%
+to 44% faster. E2's straggler cost 33% with backups and 101% without. E3 cost
+about the 10 s detection timeout when the kill came early and 27 s at 75%,
+when finished map output was lost. E4's restart cost 1.6 s.
 
 ### Process
 

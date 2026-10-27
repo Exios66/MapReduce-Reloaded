@@ -197,3 +197,62 @@ def test_proto_breaking_propagates_failures(make_project, monkeypatch, failure, 
     assert result.returncode != 0
     assert log.read_text().splitlines() == expected
     assert "skipping" not in result.stdout
+
+
+@pytest.fixture
+def cleanup_project(make_project, monkeypatch):
+    project, make, _ = make_project
+    volume = project / "volume"
+    volume.mkdir()
+    monkeypatch.setenv("OUTPUT_VOLUME", str(volume))
+    # Execute the container's actual shell/find command against a temporary
+    # volume. Only Docker transport and disk-usage reporting are replaced.
+    docker = project / "bin/docker"
+    docker.write_text(
+        f"#!{os.sys.executable}\n"
+        "import os, subprocess, sys\n"
+        "if sys.argv[1:3] == ['system', 'df']:\n"
+        "    sys.exit(0)\n"
+        "args = sys.argv[6:]\n"
+        "assert args[:3] == ['sh', '-eu', '-c']\n"
+        "args[3] = args[3].replace('/out', os.environ['OUTPUT_VOLUME'])\n"
+        "sys.exit(subprocess.run(args).returncode)\n"
+    )
+    for name in ("done-1", "done-2", "active-job", "wal", "exp-input-cached"):
+        directory = volume / name
+        directory.mkdir()
+        (directory / "part-r-00000").write_text(name)
+    (volume / "sort-1g.txt").write_text("input")
+    return volume, make
+
+
+def test_clean_output_requires_explicit_selection(cleanup_project):
+    volume, make = cleanup_project
+    before = sorted(p.relative_to(volume) for p in volume.rglob("*"))
+    result = make("clean-output", "CLEAN_OUTPUTS=", check=False)
+    assert result.returncode != 0
+    assert "select completed output directories" in result.stderr
+    assert sorted(p.relative_to(volume) for p in volume.rglob("*")) == before
+
+
+def test_clean_output_removes_only_selected_directories(cleanup_project):
+    volume, make = cleanup_project
+    make("clean-output", "CLEAN_OUTPUTS=done-1 done-2")
+    assert sorted(p.name for p in volume.iterdir()) == [
+        "active-job",
+        "exp-input-cached",
+        "sort-1g.txt",
+        "wal",
+    ]
+    assert (volume / "active-job/part-r-00000").read_text() == "active-job"
+    assert (volume / "sort-1g.txt").read_text() == "input"
+
+
+@pytest.mark.parametrize(
+    "name", ["wal", "sort-1g.txt", "exp-input-cached", "../volume", "/out", "*", ".", ".."]
+)
+def test_clean_output_rejects_protected_or_unsafe_names_before_deleting(cleanup_project, name):
+    volume, make = cleanup_project
+    result = make("clean-output", f"CLEAN_OUTPUTS=done-1 {name}", check=False)
+    assert result.returncode != 0
+    assert (volume / "done-1/part-r-00000").read_text() == "done-1"

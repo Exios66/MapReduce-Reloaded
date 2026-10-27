@@ -1,0 +1,7 @@
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E4,normal,distsort,4,1,1073741824,32,4,,SUCCEEDED,12.364,12.390,4,0,1084682711,1,job-1
+E4,normal,distsort,4,2,1073741824,32,4,,SUCCEEDED,11.763,11.908,6,0,1084682711,1,job-2
+E4,normal,distsort,4,3,1073741824,32,4,,SUCCEEDED,12.280,12.372,5,0,1084682711,1,job-3
+E4,restart,distsort,4,1,1073741824,32,4,6.2,SUCCEEDED,13.845,13.993,6,1,1084682711,1,job-4
+E4,restart,distsort,4,2,1073741824,32,4,6.2,SUCCEEDED,13.851,13.966,4,0,1084682711,1,job-5
+E4,restart,distsort,4,3,1073741824,32,4,6.2,SUCCEEDED,13.621,13.716,6,1,1084682711,1,job-6

@@ -196,7 +196,9 @@ func (x *RegisterWorkerResponse) GetHeartbeatInterval() *durationpb.Duration {
 type RequestTaskRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// ID from RegisterWorkerResponse.
-	WorkerId      string `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	WorkerId string `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	// Poll for shutdown without taking a task, e.g. while waiting for disk space.
+	Paused        bool `protobuf:"varint,2,opt,name=paused,proto3" json:"paused,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -236,6 +238,13 @@ func (x *RequestTaskRequest) GetWorkerId() string {
 		return x.WorkerId
 	}
 	return ""
+}
+
+func (x *RequestTaskRequest) GetPaused() bool {
+	if x != nil {
+		return x.Paused
+	}
+	return false
 }
 
 type RequestTaskResponse struct {
@@ -1398,9 +1407,10 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\x06worker\x18\x01 \x01(\v2\x18.mapreduce.v1.WorkerInfoR\x06worker\"\x7f\n" +
 	"\x16RegisterWorkerResponse\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12H\n" +
-	"\x12heartbeat_interval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x11heartbeatInterval\"1\n" +
+	"\x12heartbeat_interval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x11heartbeatInterval\"I\n" +
 	"\x12RequestTaskRequest\x12\x1b\n" +
-	"\tworker_id\x18\x01 \x01(\tR\bworkerId\"\x8a\x02\n" +
+	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x16\n" +
+	"\x06paused\x18\x02 \x01(\bR\x06paused\"\x8a\x02\n" +
 	"\x13RequestTaskResponse\x122\n" +
 	"\bmap_task\x18\x01 \x01(\v2\x15.mapreduce.v1.MapTaskH\x00R\amapTask\x12;\n" +
 	"\vreduce_task\x18\x02 \x01(\v2\x18.mapreduce.v1.ReduceTaskH\x00R\n" +

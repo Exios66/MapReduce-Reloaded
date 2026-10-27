@@ -42,10 +42,12 @@ class RegisterWorkerResponse(_message.Message):
     def __init__(self, worker_id: _Optional[str] = ..., heartbeat_interval: _Optional[_Union[datetime.timedelta, _duration_pb2.Duration, _Mapping]] = ...) -> None: ...
 
 class RequestTaskRequest(_message.Message):
-    __slots__ = ("worker_id",)
+    __slots__ = ("worker_id", "paused")
     WORKER_ID_FIELD_NUMBER: _ClassVar[int]
+    PAUSED_FIELD_NUMBER: _ClassVar[int]
     worker_id: str
-    def __init__(self, worker_id: _Optional[str] = ...) -> None: ...
+    paused: bool
+    def __init__(self, worker_id: _Optional[str] = ..., paused: _Optional[bool] = ...) -> None: ...
 
 class RequestTaskResponse(_message.Message):
     __slots__ = ("map_task", "reduce_task", "wait", "shutdown")
