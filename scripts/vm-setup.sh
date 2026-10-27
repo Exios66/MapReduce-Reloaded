@@ -219,11 +219,18 @@ check_python() {
     fi
     report OK python "Python $pyver"
 
-    if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest' 2>/dev/null; then
+    if [ -x "$VENV/bin/python" ] && venv_ok; then
         report OK venv "$VENV"
     else
-        report MISSING venv "project venv not set up (run with --install)"
+        report MISSING venv "project venv not set up, or missing a dev dependency (run with --install)"
     fi
+}
+
+# venv_ok: true if the venv has the package and the dev tools make check
+# runs. A venv made before a dev dependency was added fails it, so
+# --install installs into it again.
+venv_ok() {
+    "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest, coverage' 2>/dev/null
 }
 
 # python_ok: true if python3 is 3.11+ with venv support. When it is not,
@@ -233,7 +240,7 @@ python_ok() {
 }
 
 install_venv() {
-    if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest' 2>/dev/null; then
+    if [ -x "$VENV/bin/python" ] && venv_ok; then
         return 0
     fi
     python3 -m venv "$VENV"

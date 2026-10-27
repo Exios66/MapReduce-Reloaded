@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -161,8 +161,11 @@ proto-check: proto-lint proto-breaking proto
 # failure prints the seed, and -shuffle=SEED repeats the order.
 # MR_PYTHON lets go/cmd/mr compare the Go examples with Python's (#153); a
 # relative PYTHON is a command name, looked up on the PATH.
+# Each package's coverage must stay at or over its floor in go/cover-floors.txt
+# and python/cover-floors.txt (scripts/cover.py, #161).
 go-test:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap
+	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
@@ -178,7 +181,13 @@ go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
 
 py-test:
-	cd python && $(PYTHON) -m pytest -q
+	cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
+	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
+
+# The tests, then each package's coverage against its floor.
+cover: test
+	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt --report
+	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt --report
 
 py-lint:
 	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench

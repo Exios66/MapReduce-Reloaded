@@ -1,0 +1,38 @@
+# Coverage floors for make check (scripts/cover.py, #161): each package's
+# statements covered by its own tests, one point under the value measured
+# on 2026-10-27, rounded down. Raise a floor when a package's coverage
+# rises; lowering one needs a reason in the commit. "-" leaves a package
+# unchecked.
+cmd/coordinator 85
+cmd/mr 85
+cmd/worker 83
+examples/distsort 99
+examples/grep 89
+examples/internal/run -  # run by every example's tests
+examples/invertedindex 88
+examples/reverselinks 99
+examples/termvector 92
+examples/urlfreq 99
+examples/wordcount -  # the oracle of the cluster, local and golden tests
+gen/mapreduce/v1 -  # generated
+internal/combine 99
+internal/coordinator 93
+internal/extsort 90
+internal/formats 87
+internal/formats/kv 89
+internal/jobfile 91
+internal/local 89
+internal/logs 99
+internal/partition 99
+internal/promtext 99
+internal/rpcguard 99
+internal/shuffle 91
+internal/split 87
+internal/statusweb 96
+internal/storage 93
+internal/storage/s3test -  # a test helper
+internal/task 88
+internal/wal 84
+internal/wire 93
+internal/worker 92
+pkg/api 97
