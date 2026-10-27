@@ -5,8 +5,11 @@
 # Grafana with a dashboard of the cluster's metrics, and `make e2e-s3` runs
 # the same job against an S3 store in the s3 profile.
 #
-# Every container sees the input at /corpus and job output at /out, because
-# job specs carry absolute paths. Map output stays inside each worker and is
+# Every container sees the host's data/ directory at /data, the shared
+# storage that bin/mr upload and bin/mr cat reach from the host (ADR 0016);
+# make cluster-up creates it. The test corpus is also at /corpus, and the
+# output volume at /out holds the experiments' inputs and output and the
+# write-ahead log. Job specs carry absolute paths. Map output stays inside each worker and is
 # fetched over the network (§3.1 step 5); a worker deletes a job's map output
 # once the job ends, and takes no task while under 1 GiB of disk is free.
 #
@@ -31,6 +34,7 @@ x-node: &node
     AWS_ACCESS_KEY_ID: mapreduce
     AWS_SECRET_ACCESS_KEY: mapreduce-secret
   volumes:
+    - ../../data:/data
     - ../../testdata/corpus:/corpus:ro
     - output:/out
 

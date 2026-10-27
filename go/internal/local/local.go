@@ -29,7 +29,7 @@ func Run(spec api.JobSpec, workDir string) (map[string]int64, error) {
 		return nil, err
 	}
 	ctx := context.Background()
-	splits, err := split.Plan(ctx, in, spec.Inputs, spec.SplitSize)
+	splits, err := split.ForSpec(ctx, in, spec)
 	if err != nil {
 		return nil, err
 	}

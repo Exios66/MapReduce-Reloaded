@@ -568,6 +568,12 @@ type JobSpec struct {
 	// instead of looking up program, which then only names the job for
 	// display. At most 1 MiB.
 	ProgramSource string `protobuf:"bytes,14,opt,name=program_source,json=programSource,proto3" json:"program_source,omitempty"`
+	// Exact number of map tasks, M (ADR 0016): the input is cut into this
+	// many splits, shared among the files in proportion to their sizes. A
+	// file gets at least one, and one that cannot be cut that finely gets
+	// fewer, so the job's map_tasks_total is the M that resulted. 0 means
+	// split_size_bytes decides M. When both are set, num_map_tasks wins.
+	NumMapTasks   uint32 `protobuf:"varint,15,opt,name=num_map_tasks,json=numMapTasks,proto3" json:"num_map_tasks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -700,6 +706,13 @@ func (x *JobSpec) GetProgramSource() string {
 	return ""
 }
 
+func (x *JobSpec) GetNumMapTasks() uint32 {
+	if x != nil {
+		return x.NumMapTasks
+	}
+	return 0
+}
+
 // Identity and capabilities of a worker.
 type WorkerInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -802,7 +815,7 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\x06values\x18\x01 \x03(\v2\".mapreduce.v1.Counters.ValuesEntryR\x06values\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xf0\x04\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\x94\x05\n" +
 	"\aJobSpec\x12\x18\n" +
 	"\aprogram\x18\x01 \x01(\tR\aprogram\x12\x16\n" +
 	"\x06inputs\x18\x02 \x03(\tR\x06inputs\x12\x16\n" +
@@ -818,7 +831,8 @@ const file_mapreduce_v1_types_proto_rawDesc = "" +
 	"\x13max_skipped_records\x18\v \x01(\x04H\x00R\x11maxSkippedRecords\x88\x01\x01\x12-\n" +
 	"\x12intermediate_codec\x18\f \x01(\tR\x11intermediateCodec\x12!\n" +
 	"\foutput_codec\x18\r \x01(\tR\voutputCodec\x12%\n" +
-	"\x0eprogram_source\x18\x0e \x01(\tR\rprogramSource\x1a9\n" +
+	"\x0eprogram_source\x18\x0e \x01(\tR\rprogramSource\x12\"\n" +
+	"\rnum_map_tasks\x18\x0f \x01(\rR\vnumMapTasks\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x16\n" +

@@ -16,8 +16,9 @@ __pycache__/
 .ruff_cache/
 .hypothesis/
 
-# Job data and benchmark output
+# Job data, the host client and benchmark output
 /data/
+/bin/
 /bench/results/
 /tmp/
 

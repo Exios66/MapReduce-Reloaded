@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18mapreduce/v1/types.proto\x12\x0cmapreduce.v1\"M\n\x06TaskId\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12$\n\x04kind\x18\x02 \x01(\x0e\x32\x16.mapreduce.v1.TaskKind\x12\r\n\x05index\x18\x03 \x01(\r\"D\n\rTaskAttemptId\x12\"\n\x04task\x18\x01 \x01(\x0b\x32\x14.mapreduce.v1.TaskId\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\r\"L\n\nInputSplit\x12\x0b\n\x03uri\x18\x01 \x01(\t\x12\x0e\n\x06offset\x18\x02 \x01(\x04\x12\x0e\n\x06length\x18\x03 \x01(\x04\x12\x11\n\tlocations\x18\x04 \x03(\t\"r\n\x11PartitionLocation\x12\x11\n\tmap_index\x18\x01 \x01(\r\x12\x11\n\tpartition\x18\x02 \x01(\r\x12\x16\n\x0eworker_address\x18\x03 \x01(\t\x12\x12\n\nsize_bytes\x18\x04 \x01(\x04\x12\x0b\n\x03uri\x18\x05 \x01(\t\"m\n\x08\x43ounters\x12\x32\n\x06values\x18\x01 \x03(\x0b\x32\".mapreduce.v1.Counters.ValuesEntry\x1a-\n\x0bValuesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01\"\xac\x03\n\x07JobSpec\x12\x0f\n\x07program\x18\x01 \x01(\t\x12\x0e\n\x06inputs\x18\x02 \x03(\t\x12\x0e\n\x06output\x18\x03 \x01(\t\x12\x18\n\x10split_size_bytes\x18\x04 \x01(\x04\x12\x18\n\x10num_reduce_tasks\x18\x05 \x01(\r\x12\x14\n\x0cinput_format\x18\x06 \x01(\t\x12\x15\n\routput_format\x18\x07 \x01(\t\x12\x13\n\x0bpartitioner\x18\x08 \x01(\t\x12\x14\n\x0cuse_combiner\x18\t \x01(\x08\x12\x31\n\x06params\x18\n \x03(\x0b\x32!.mapreduce.v1.JobSpec.ParamsEntry\x12 \n\x13max_skipped_records\x18\x0b \x01(\x04H\x00\x88\x01\x01\x12\x1a\n\x12intermediate_codec\x18\x0c \x01(\t\x12\x14\n\x0coutput_codec\x18\r \x01(\t\x12\x16\n\x0eprogram_source\x18\x0e \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x42\x16\n\x14_max_skipped_records\"P\n\nWorkerInfo\x12\x17\n\x0fshuffle_address\x18\x01 \x01(\t\x12\x0c\n\x04host\x18\x02 \x01(\t\x12\x0c\n\x04zone\x18\x03 \x01(\t\x12\r\n\x05slots\x18\x04 \x01(\r*N\n\x08TaskKind\x12\x19\n\x15TASK_KIND_UNSPECIFIED\x10\x00\x12\x11\n\rTASK_KIND_MAP\x10\x01\x12\x14\n\x10TASK_KIND_REDUCE\x10\x02*r\n\tTaskState\x12\x1a\n\x16TASK_STATE_UNSPECIFIED\x10\x00\x12\x13\n\x0fTASK_STATE_IDLE\x10\x01\x12\x1a\n\x16TASK_STATE_IN_PROGRESS\x10\x02\x12\x18\n\x14TASK_STATE_COMPLETED\x10\x03*_\n\x08Locality\x12\x18\n\x14LOCALITY_UNSPECIFIED\x10\x00\x12\x11\n\rLOCALITY_HOST\x10\x01\x12\x11\n\rLOCALITY_ZONE\x10\x02\x12\x13\n\x0fLOCALITY_REMOTE\x10\x03\x42GZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18mapreduce/v1/types.proto\x12\x0cmapreduce.v1\"M\n\x06TaskId\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12$\n\x04kind\x18\x02 \x01(\x0e\x32\x16.mapreduce.v1.TaskKind\x12\r\n\x05index\x18\x03 \x01(\r\"D\n\rTaskAttemptId\x12\"\n\x04task\x18\x01 \x01(\x0b\x32\x14.mapreduce.v1.TaskId\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\r\"L\n\nInputSplit\x12\x0b\n\x03uri\x18\x01 \x01(\t\x12\x0e\n\x06offset\x18\x02 \x01(\x04\x12\x0e\n\x06length\x18\x03 \x01(\x04\x12\x11\n\tlocations\x18\x04 \x03(\t\"r\n\x11PartitionLocation\x12\x11\n\tmap_index\x18\x01 \x01(\r\x12\x11\n\tpartition\x18\x02 \x01(\r\x12\x16\n\x0eworker_address\x18\x03 \x01(\t\x12\x12\n\nsize_bytes\x18\x04 \x01(\x04\x12\x0b\n\x03uri\x18\x05 \x01(\t\"m\n\x08\x43ounters\x12\x32\n\x06values\x18\x01 \x03(\x0b\x32\".mapreduce.v1.Counters.ValuesEntry\x1a-\n\x0bValuesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x03:\x02\x38\x01\"\xc3\x03\n\x07JobSpec\x12\x0f\n\x07program\x18\x01 \x01(\t\x12\x0e\n\x06inputs\x18\x02 \x03(\t\x12\x0e\n\x06output\x18\x03 \x01(\t\x12\x18\n\x10split_size_bytes\x18\x04 \x01(\x04\x12\x18\n\x10num_reduce_tasks\x18\x05 \x01(\r\x12\x14\n\x0cinput_format\x18\x06 \x01(\t\x12\x15\n\routput_format\x18\x07 \x01(\t\x12\x13\n\x0bpartitioner\x18\x08 \x01(\t\x12\x14\n\x0cuse_combiner\x18\t \x01(\x08\x12\x31\n\x06params\x18\n \x03(\x0b\x32!.mapreduce.v1.JobSpec.ParamsEntry\x12 \n\x13max_skipped_records\x18\x0b \x01(\x04H\x00\x88\x01\x01\x12\x1a\n\x12intermediate_codec\x18\x0c \x01(\t\x12\x14\n\x0coutput_codec\x18\r \x01(\t\x12\x16\n\x0eprogram_source\x18\x0e \x01(\t\x12\x15\n\rnum_map_tasks\x18\x0f \x01(\r\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x42\x16\n\x14_max_skipped_records\"P\n\nWorkerInfo\x12\x17\n\x0fshuffle_address\x18\x01 \x01(\t\x12\x0c\n\x04host\x18\x02 \x01(\t\x12\x0c\n\x04zone\x18\x03 \x01(\t\x12\r\n\x05slots\x18\x04 \x01(\r*N\n\x08TaskKind\x12\x19\n\x15TASK_KIND_UNSPECIFIED\x10\x00\x12\x11\n\rTASK_KIND_MAP\x10\x01\x12\x14\n\x10TASK_KIND_REDUCE\x10\x02*r\n\tTaskState\x12\x1a\n\x16TASK_STATE_UNSPECIFIED\x10\x00\x12\x13\n\x0fTASK_STATE_IDLE\x10\x01\x12\x1a\n\x16TASK_STATE_IN_PROGRESS\x10\x02\x12\x18\n\x14TASK_STATE_COMPLETED\x10\x03*_\n\x08Locality\x12\x18\n\x14LOCALITY_UNSPECIFIED\x10\x00\x12\x11\n\rLOCALITY_HOST\x10\x01\x12\x11\n\rLOCALITY_ZONE\x10\x02\x12\x13\n\x0fLOCALITY_REMOTE\x10\x03\x42GZEgithub.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1;mapreducev1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,12 +36,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_COUNTERS_VALUESENTRY']._serialized_options = b'8\001'
   _globals['_JOBSPEC_PARAMSENTRY']._loaded_options = None
   _globals['_JOBSPEC_PARAMSENTRY']._serialized_options = b'8\001'
-  _globals['_TASKKIND']._serialized_start=1009
-  _globals['_TASKKIND']._serialized_end=1087
-  _globals['_TASKSTATE']._serialized_start=1089
-  _globals['_TASKSTATE']._serialized_end=1203
-  _globals['_LOCALITY']._serialized_start=1205
-  _globals['_LOCALITY']._serialized_end=1300
+  _globals['_TASKKIND']._serialized_start=1032
+  _globals['_TASKKIND']._serialized_end=1110
+  _globals['_TASKSTATE']._serialized_start=1112
+  _globals['_TASKSTATE']._serialized_end=1226
+  _globals['_LOCALITY']._serialized_start=1228
+  _globals['_LOCALITY']._serialized_end=1323
   _globals['_TASKID']._serialized_start=42
   _globals['_TASKID']._serialized_end=119
   _globals['_TASKATTEMPTID']._serialized_start=121
@@ -55,9 +55,9 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_COUNTERS_VALUESENTRY']._serialized_start=449
   _globals['_COUNTERS_VALUESENTRY']._serialized_end=494
   _globals['_JOBSPEC']._serialized_start=497
-  _globals['_JOBSPEC']._serialized_end=925
-  _globals['_JOBSPEC_PARAMSENTRY']._serialized_start=856
-  _globals['_JOBSPEC_PARAMSENTRY']._serialized_end=901
-  _globals['_WORKERINFO']._serialized_start=927
-  _globals['_WORKERINFO']._serialized_end=1007
+  _globals['_JOBSPEC']._serialized_end=948
+  _globals['_JOBSPEC_PARAMSENTRY']._serialized_start=879
+  _globals['_JOBSPEC_PARAMSENTRY']._serialized_end=924
+  _globals['_WORKERINFO']._serialized_start=950
+  _globals['_WORKERINFO']._serialized_end=1030
 # @@protoc_insertion_point(module_scope)
