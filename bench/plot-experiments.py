@@ -133,7 +133,7 @@ def e0(rows, out):
     ax.set_xlabel("Workers (1 CPU each)")
     ax.set_ylabel("Job time (s)")
     ax.set_ylim(bottom=0)
-    ax.set_title(f"E0: scaling over workers ({caption(rows)}); dashed: ideal")
+    ax.set_title(f"E0: scaling over workers\n({caption(rows)}; dashed: ideal)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out)

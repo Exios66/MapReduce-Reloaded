@@ -117,3 +117,106 @@ What the numbers show:
   - The paper's cluster shuffled over a real network (§5.1), where bytes
     cost time. The Phase 7 benchmarks (#57, #58) will measure that across
     machines.
+
+## Evaluation (E0–E4)
+
+The performance evaluation in [design](../design.md#performance-evaluation),
+run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,
+Docker 29.8.1, four workers of one CPU each. Each experiment ran as its own
+`bench/experiments.sh EN` invocation, on 1 GiB inputs with M = 32 and R = 4.
+Every number is the median of three runs, with the range; every run
+succeeded, and every run's output matched the normal run's checksum.
+[`evaluation/`](evaluation/) has the raw CSVs, each experiment's
+`machine.json` (with the commit) and the log; the plots were drawn with
+
+```sh
+python3 bench/plot-experiments.py bench/evaluation bench/evaluation
+```
+
+E0, E1, E2 and E4 ran at commit `4b5a235`; E3 ran again at `9a3cd42`, after
+its rate plot was found to mark the kill about 8 s too early (the workers
+were restarted after the sampler started). The `dirty` flag in their
+`machine.json` was set by an untracked backup directory, not a code change.
+
+### E0: scaling over workers
+
+![E0](evaluation/E0.png)
+
+| Program | 1 worker (s) | 2 workers (s) | 4 workers (s) | Speed-up at 4 |
+|---|---|---|---|---:|
+| grep | 1.96 (1.89–1.96) | 1.21 (1.21–1.67) | 0.84 (0.82–5.51) | 2.3× |
+| distsort | 36.74 (36.52–37.03) | 20.40 (19.79–20.62) | 12.54 (12.24–12.59) | 2.9× |
+| wordcount | 146.48 (145.53–148.70) | 74.18 (73.80–74.95) | 38.78 (38.37–39.16) | 3.8× |
+
+- Every job got faster with more workers. Word count, the most
+  CPU-bound, scales almost linearly (3.8× on 4).
+- grep scales least, not most as design.md predicted: it finds few matches,
+  so its job takes about a second and the fixed costs (task assignment,
+  heartbeats, one reduce wave) dominate. One 4-worker run took 5.5 s.
+- distsort (2.9×) moves its whole input through the shuffle, and the four
+  workers share one disk, which likely limits it more than CPU does.
+
+### E1: what the combiner saves
+
+![E1](evaluation/E1.png)
+
+| Zipf exponent | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
+|---|---:|---:|---:|---|---|---:|
+| 0.5 | 91,561,690 | 1,402,591,670 | 6.5% | 35.95 (35.88–38.60) | 43.85 (43.55–45.14) | 18% |
+| 1.0 | 88,755,466 | 1,512,014,251 | 5.9% | 39.03 (38.80–39.16) | 48.76 (48.56–48.90) | 20% |
+| 1.5 | 21,885,547 | 1,715,904,960 | 1.3% | 28.93 (28.61–30.64) | 51.64 (50.22–52.96) | 44% |
+
+- The combiner cuts the bytes shuffled by 15× to 78×, and the saving grows
+  with skew, as §4.3 says: the more often a word repeats within a map task,
+  the more records it folds into one.
+- Unlike compression (see Codecs above), this saves time too, because it
+  also saves the reduce tasks' sorting and reducing.
+
+### E2: backup tasks and a straggler
+
+![E2](evaluation/E2.png)
+
+| Setting | Job time (s) | Backups run | Backups won |
+|---|---|---:|---:|
+| no straggler | 11.80 (10.68–12.07) | 6 | 0 |
+| straggler, backups on | 15.68 (15.17–16.68) | 5–6 | 2–3 |
+| straggler, backups off | 23.68 (23.35–23.91) | 0 | 0 |
+
+- With one worker at 0.2 CPU, backups make the job a third faster
+  (15.7 s against 23.7 s), as in the paper's Figure 3(b).
+- It is still a third slower than with no straggler: the slow worker holds
+  some tasks for the whole map phase, and a backup only starts when the
+  phase is nearly done (§3.6).
+
+### E3: losing a worker
+
+![E3](evaluation/E3.png)
+
+| Worker killed at | Job time (s) | Cost |
+|---|---|---:|
+| no failure | 11.62 (11.59–12.65) | |
+| 2.9 s (25%) | 20.78 (20.52–20.80) | +9.2 s |
+| 5.8 s (50%) | 23.50 (23.17–23.68) | +11.9 s |
+| 8.7 s (75%) | 38.56 (38.04–38.85) | +26.9 s |
+
+- Every job finished with the right output on three workers.
+- The cost is the 10 s it takes the coordinator to declare the worker dead
+  (three missed heartbeats), plus the work that is lost. Killed early, the
+  worker has finished little, so the cost is about the timeout.
+- Killed at 75%, near the end of the map phase, the worker's finished map
+  tasks are lost too: their output lived on its disk, so they run again
+  (§3.3), and the reduce phase waits for them.
+
+### E4: a coordinator restart
+
+![E4](evaluation/E4.png)
+
+| Setting | Job time (s) |
+|---|---|
+| no restart | 12.37 (11.91–12.39) |
+| coordinator killed and restarted at 50% | 13.97 (13.72–13.99) |
+
+- A restart with the write-ahead log costs 1.6 s (13%). The restarted
+  coordinator replays its log and keeps every task that had finished; the
+  plot's flat step at the restart is the time the coordinator was down and
+  the workers' reconnects.
