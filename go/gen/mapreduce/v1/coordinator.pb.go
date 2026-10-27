@@ -775,7 +775,10 @@ type TaskFailure struct {
 	// output (worker_address is set) and it is still the task's output. An
 	// output on shared storage, or one that fails its checksum, is not
 	// reported here, and the map task is not run again.
-	LostOutput    *PartitionLocation `protobuf:"bytes,3,opt,name=lost_output,json=lostOutput,proto3" json:"lost_output,omitempty"`
+	LostOutput *PartitionLocation `protobuf:"bytes,3,opt,name=lost_output,json=lostOutput,proto3" json:"lost_output,omitempty"`
+	// The task cannot succeed on any attempt, as when the worker cannot load
+	// the job's program: the coordinator fails the job at once (#176).
+	Fatal         bool `protobuf:"varint,4,opt,name=fatal,proto3" json:"fatal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -829,6 +832,13 @@ func (x *TaskFailure) GetLostOutput() *PartitionLocation {
 		return x.LostOutput
 	}
 	return nil
+}
+
+func (x *TaskFailure) GetFatal() bool {
+	if x != nil {
+		return x.Fatal
+	}
+	return false
 }
 
 type ReportTaskResponse struct {
@@ -1442,12 +1452,13 @@ const file_mapreduce_v1_coordinator_proto_rawDesc = "" +
 	"\aoutcome\"|\n" +
 	"\vTaskSuccess\x129\n" +
 	"\aoutputs\x18\x01 \x03(\v2\x1f.mapreduce.v1.PartitionLocationR\aoutputs\x122\n" +
-	"\bcounters\x18\x02 \x01(\v2\x16.mapreduce.v1.CountersR\bcounters\"\xa5\x01\n" +
+	"\bcounters\x18\x02 \x01(\v2\x16.mapreduce.v1.CountersR\bcounters\"\xbb\x01\n" +
 	"\vTaskFailure\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12(\n" +
 	"\rfailed_record\x18\x02 \x01(\x04H\x00R\ffailedRecord\x88\x01\x01\x12@\n" +
 	"\vlost_output\x18\x03 \x01(\v2\x1f.mapreduce.v1.PartitionLocationR\n" +
-	"lostOutputB\x10\n" +
+	"lostOutput\x12\x14\n" +
+	"\x05fatal\x18\x04 \x01(\bR\x05fatalB\x10\n" +
 	"\x0e_failed_record\"0\n" +
 	"\x12ReportTaskResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\"e\n" +

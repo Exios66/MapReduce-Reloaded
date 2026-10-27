@@ -34,7 +34,10 @@ is needed.
 5. **A limit is optional.** A job may set `max_skipped_records` (`mr submit
    -max-skipped N`). When `TaskTable.Skipped` exceeds it, the job fails
    with the reason in `error`. By default there is no limit, as in the
-   paper.
+   paper. Separately, the coordinator's `-max-task-failures` (default 8)
+   fails a job whose task fails that many times; it must exceed
+   `SkipAfter`, so a bad record is always skipped before the cap is
+   reached ([ADR 0015](0015-user-job-files.md)).
 
 ## Alternatives rejected
 

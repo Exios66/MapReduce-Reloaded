@@ -52,6 +52,10 @@ type Config struct {
 	// the status page; older ones are forgotten, oldest first. Zero means
 	// all of them.
 	KeepJobs int
+	// MaxTaskFailures fails the job once one task has failed this many
+	// times, with the last error (#176). Attempts that could not fetch lost
+	// map output do not count. Zero means no limit.
+	MaxTaskFailures int
 }
 
 // Log is where a coordinator records its decisions. After a failed Append
@@ -500,8 +504,16 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 	active := s.active == j
 	if f := req.GetFailure(); f != nil {
+		counted := j.tasks.Runs(t, id.GetAttempt(), req.GetWorkerId())
 		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
-		if limit := j.spec.MaxSkippedRecords; limit != nil && uint64(j.tasks.Skipped()) > *limit {
+		n := j.tasks.Failures(t)
+		switch limit := j.spec.MaxSkippedRecords; {
+		case !counted || err != nil: // a stale or invalid report changes nothing
+		case f.GetFatal():
+			s.end(j, fmt.Sprintf("%v cannot run: %s", t, f.GetMessage()), at)
+		case s.cfg.MaxTaskFailures > 0 && n >= s.cfg.MaxTaskFailures && f.GetLostOutput() == nil:
+			s.end(j, fmt.Sprintf("%v failed %d times; the last error: %s", t, n, f.GetMessage()), at)
+		case limit != nil && uint64(j.tasks.Skipped()) > *limit:
 			s.end(j, fmt.Sprintf("more than %d bad records to skip", *limit), at)
 		}
 		return false, active && s.active != j, err

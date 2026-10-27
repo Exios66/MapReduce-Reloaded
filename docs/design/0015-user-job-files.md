@@ -88,17 +88,23 @@ var Combine = Reduce
 - Each worker interprets the source once per job, then uses the same
   `api.Program` for every task of that job. A file that does not compile, or
   lacks `Map` or `Reduce`, must not be treated as an ordinary task failure.
-  Today `TaskTable.Fail` makes a failed task idle again, and only a
-  bad-record limit (`MaxSkippedRecords`) ends a job, so the task would be
-  retried forever. The design has two parts:
+  `TaskTable.Fail` makes a failed task idle again, so without more the task
+  would be retried until the attempt cap ended the job. The design has two
+  parts:
   - (Built.) The coordinator loads the source with the same interpreter when it
     accepts the submit, and rejects the submit with the interpreter's error
     (`InvalidArgument`). Most errors never reach a worker.
-  - (Planned.) `TaskFailure` gets a `fatal` field (a proto change). A worker that fails
-    to load the source, which can happen only if the interpreter differs from
+  - (Built, #176.) `TaskFailure` has a `fatal` field. A worker that fails
+    to load the job, which can happen only if its interpreter differs from
     the coordinator's, sets it. The coordinator then ends the job at once
-    through the same path as the bad-record limit, with the message shown in
-    `mr status`, and does not requeue the task.
+    through the same path as the bad-record limit, with "cannot run: …"
+    shown in `mr status`, and does not requeue the task.
+  - (Built, #176.) Any other task failure is retried, but a task whose
+    attempts fail `-max-task-failures` times (default 8; 0 for no limit)
+    ends its job with the last error. Only failures reported by the
+    running attempt count, and not reduce failures that name a lost map
+    output, since those are another task's fault. The limit must exceed
+    `SkipAfter` (2), so a crashing record is still skipped first.
 - Registered program names still work. `mr` takes a `.go` path or a name in
   the same position, so the examples, the golden tests and the benchmarks
   keep running compiled code.
