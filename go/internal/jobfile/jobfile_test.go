@@ -15,6 +15,7 @@ import (
 
 const (
 	example = "../../../examples/wordcount.go"
+	naive   = "../../../bench/jobs/wordcount-naive.go" // E5's version without the helpers
 	corpus  = "../../../testdata/corpus"
 )
 
@@ -27,37 +28,41 @@ func mustLoad(t *testing.T, src string) api.Program {
 	return p
 }
 
-// The example job file gives the compiled wordcount's expected output, byte
-// for byte, with and without its combiner.
+// The example job file, and E5's version of it without the compiled
+// helpers, give the compiled wordcount's expected output, byte for byte,
+// with and without the combiner.
 func TestExampleMatchesGolden(t *testing.T) {
-	src, err := os.ReadFile(example)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := mustLoad(t, string(src))
-	if p.Combiner == nil {
-		t.Fatal("the example's Combine was not loaded")
-	}
-	noCombiner := p
-	noCombiner.Combiner = nil
-	for name, prog := range map[string]api.Program{"combiner": p, "no-combiner": noCombiner} {
-		out := t.TempDir()
-		spec := api.JobSpec{Program: prog, Inputs: []string{filepath.Join(corpus, "*.txt")}, Output: out, R: 4}
-		if _, err := local.Run(spec, t.TempDir()); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		want, err := filepath.Glob(filepath.Join(corpus, "expected", "*"))
+	for _, file := range []string{example, naive} {
+		src, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(want) == 0 {
-			t.Fatal("no golden files found")
+		p := mustLoad(t, string(src))
+		if p.Combiner == nil {
+			t.Fatalf("%s: Combine was not loaded", file)
 		}
-		for _, w := range want {
-			a, errA := os.ReadFile(w)
-			b, errB := os.ReadFile(filepath.Join(out, filepath.Base(w)))
-			if errA != nil || errB != nil || string(a) != string(b) {
-				t.Errorf("%s: %s differs from the expected output", name, filepath.Base(w))
+		noCombiner := p
+		noCombiner.Combiner = nil
+		for name, prog := range map[string]api.Program{"combiner": p, "no-combiner": noCombiner} {
+			name = filepath.Base(file) + ", " + name
+			out := t.TempDir()
+			spec := api.JobSpec{Program: prog, Inputs: []string{filepath.Join(corpus, "*.txt")}, Output: out, R: 4}
+			if _, err := local.Run(spec, t.TempDir()); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			want, err := filepath.Glob(filepath.Join(corpus, "expected", "*"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(want) == 0 {
+				t.Fatal("no golden files found")
+			}
+			for _, w := range want {
+				a, errA := os.ReadFile(w)
+				b, errB := os.ReadFile(filepath.Join(out, filepath.Base(w)))
+				if errA != nil || errB != nil || string(a) != string(b) {
+					t.Errorf("%s: %s differs from the expected output", name, filepath.Base(w))
+				}
 			}
 		}
 	}

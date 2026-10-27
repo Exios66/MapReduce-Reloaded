@@ -80,7 +80,6 @@ is a complete one that works with the example data:
 package job
 
 import (
-	"bytes"
 	"strconv"
 
 	"mapreduce/api"
@@ -88,15 +87,14 @@ import (
 
 // Map is called once per input line: key is the line's byte offset, value the line.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	for _, w := range bytes.FieldsFunc(value, isSpace) {
-		if err := out.Emit(w, []byte("1")); err != nil {
+	one := []byte("1")
+	for _, w := range api.Words(value) {
+		if err := out.Emit(w, one); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
 
 // Reduce is called once per key, with every value emitted for it.
 func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), out api.Emitter) error {
@@ -110,11 +108,16 @@ func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), o
 }
 
 // Combine is optional: it runs on each map task's output before the shuffle.
-var Combine = Reduce
+// api.Sum does what Reduce does, in compiled code.
+var Combine = api.Sum
 ```
 
 `Map` and `Reduce` emit keys and values as bytes. Only the standard library
-and `mapreduce/api` can be imported. `ctx.Param("name")` reads a
+and `mapreduce/api` can be imported. The job file is interpreted, so work done
+for every byte or every value is best left to compiled code: the standard
+library, `api.Words` (split a line on ASCII whitespace) and `api.Sum` (total
+base-10 counts, as a `Reduce` or `Combine`). Splitting lines with a function
+of your own instead makes word count's map 6× slower. `ctx.Param("name")` reads a
 `-param name=value` given at submission.
 
 ### 4. Submit it

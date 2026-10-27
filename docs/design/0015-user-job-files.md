@@ -122,7 +122,19 @@ var Combine = Reduce
 - Users write ordinary Go against a small API and submit a file. No rebuild
   and no restart.
 - Interpreted code is slower than compiled code. The evaluation measures
-  word count both ways, so the cost is known rather than guessed.
+  word count both ways, so the cost is known rather than guessed (E5). A
+  profile of word count's Map on 8 MiB of Zipf text (Apple M1) found most of
+  the cost was in calls from compiled code back into the interpreter, not in
+  the call into the job file: `bytes.FieldsFunc` with an interpreted
+  `isSpace` ran 92× slower than compiled, `bytes.Fields` 17×, and one
+  `Emit` per line 3×. So `mapreduce/api` offers compiled helpers for work
+  done per byte or per value: `api.Words` splits a line on ASCII whitespace
+  (the compiled wordcount's rule; `bytes.Fields` also splits on Unicode
+  spaces), and `api.Sum` totals counts, with a plain-func `values` so a job
+  file can use it as `Combine` or `Reduce`. With them the example's Map is
+  16× slower than compiled rather than 92×, and its Combine runs at
+  compiled speed. `bench/jobs/wordcount-naive.go` keeps the version
+  without them, and `BenchmarkMap` in `go/internal/jobfile` measures both.
 - Recovery and bad-record skipping ([ADR 0011](0011-bad-records.md)) are
   established for compiled `api.Program` callbacks: `TestBadRecords` in
   `go/internal/task/task_test.go` covers Map and Reduce panics. Once
