@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -195,29 +196,118 @@ func TestRunLocal(t *testing.T) {
 // E1: the output is the same, and no combine counters are counted.
 func TestCombinerSwitch(t *testing.T) {
 	dir := t.TempDir()
-	job := func(out string, flags ...string) string {
-		t.Helper()
-		var stderr strings.Builder
-		args := append(append([]string{"run", "-local"}, flags...), "wordcount", filepath.Join(dir, out), raven)
-		if err := run(args, new(strings.Builder), &stderr); err != nil {
-			t.Fatal(err)
-		}
-		return stderr.String()
-	}
-	with, without := job("with"), job("without", "-combiner=false")
-	if !strings.Contains(with, "combine.input.records\t") {
-		t.Errorf("combiner on, but no combine counters: %q", with)
-	}
-	if strings.Contains(without, "combine.") {
-		t.Errorf("-combiner=false, but combine counters: %q", without)
-	}
-	a, errA := os.ReadFile(filepath.Join(dir, "with", "part-r-00000"))
-	b, errB := os.ReadFile(filepath.Join(dir, "without", "part-r-00000"))
-	if err := errors.Join(errA, errB); err != nil {
+	input := filepath.Join(dir, "input.txt")
+	if err := os.WriteFile(input, []byte("alpha beta alpha\nbeta gamma\nalpha\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if string(a) != string(b) {
-		t.Error("the output differs with and without the combiner")
+	// Keep this sequence: disabling one job must not disable later jobs.
+	for _, tc := range []struct {
+		name  string
+		flags []string
+		want  bool
+	}{
+		{"disabled", []string{"-combiner=false"}, false},
+		{"default-after-disabled", nil, true},
+		{"enabled", []string{"-combiner=true"}, true},
+		{"re-enabled", []string{"-combiner=false", "-combiner=true"}, true},
+		{"disabled-last", []string{"-combiner=true", "-combiner=false"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := filepath.Join(dir, tc.name)
+			args := append([]string{"run", "-local", "-m", "2", "-r", "3"}, tc.flags...)
+			args = append(args, "wordcount", out, input)
+			var stderr strings.Builder
+			if err := run(args, new(strings.Builder), &stderr); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(stderr.String(), "combine.input.records\t"); got != tc.want {
+				t.Errorf("combiner counters present = %v, want %v: %q", got, tc.want, stderr.String())
+			}
+			if !tc.want && strings.Contains(stderr.String(), "combine.") {
+				t.Errorf("disabled combiner emitted counters: %q", stderr.String())
+			}
+			parts, err := filepath.Glob(filepath.Join(out, "part-r-*"))
+			if err != nil || len(parts) != 3 {
+				t.Fatalf("output parts = %v, error = %v; want 3 parts", parts, err)
+			}
+			got := map[string]string{}
+			for _, part := range parts {
+				data, err := os.ReadFile(part)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+					if line == "" {
+						continue
+					}
+					key, value, ok := strings.Cut(line, "\t")
+					if _, duplicate := got[key]; !ok || duplicate {
+						t.Fatalf("malformed or duplicate output record %q", line)
+					}
+					got[key] = value
+				}
+			}
+			if want := (map[string]string{"alpha": "3", "beta": "2", "gamma": "1"}); !maps.Equal(got, want) {
+				t.Errorf("word counts = %v, want %v", got, want)
+			}
+			if program, ok := api.Lookup("wordcount"); !ok || program.Combiner == nil {
+				t.Error("running a job changed the registered program's combiner")
+			}
+		})
+	}
+}
+
+func TestCombinerWithoutProgramCombiner(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "input.txt")
+	if err := os.WriteFile(input, []byte("hit\nmiss\nhit\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"true", "false"} {
+		t.Run(value, func(t *testing.T) {
+			out := filepath.Join(dir, value)
+			var stderr strings.Builder
+			args := []string{"run", "-local", "-combiner=" + value, "-param", "pattern=hit", "grep", out, input}
+			if err := run(args, new(strings.Builder), &stderr); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(out, "part-r-00000"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != "hit\t\nhit\t\n" {
+				t.Errorf("output = %q, want both matching lines", data)
+			}
+			if strings.Contains(stderr.String(), "combine.") {
+				t.Errorf("program without a combiner emitted combine counters: %q", stderr.String())
+			}
+		})
+	}
+}
+
+func TestCombinerInvalid(t *testing.T) {
+	for _, command := range []string{"run", "submit"} {
+		for _, value := range []string{"maybe", ""} {
+			t.Run(command+"/"+value, func(t *testing.T) {
+				out := filepath.Join(t.TempDir(), "out")
+				args := []string{command}
+				if command == "run" {
+					args = append(args, "-local")
+				}
+				args = append(args, "-combiner="+value, "wordcount", out, raven)
+				var stdout, stderr strings.Builder
+				err := run(args, &stdout, &stderr)
+				if err == nil || !strings.Contains(err.Error(), "invalid boolean value") {
+					t.Fatalf("error = %v, want invalid boolean value", err)
+				}
+				if stdout.Len() != 0 {
+					t.Errorf("invalid flag wrote to stdout: %q", stdout.String())
+				}
+				if _, err := os.Stat(out); !errors.Is(err, os.ErrNotExist) {
+					t.Errorf("invalid flag created output, stat error = %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -245,17 +335,35 @@ func TestSubmitCombiner(t *testing.T) {
 	t.Cleanup(gs.Stop)
 
 	for _, tc := range []struct {
+		name  string
 		flags []string
 		want  bool
-	}{{nil, true}, {[]string{"-combiner=false"}, false}} {
-		args := append(append([]string{"submit", "-coordinator", lis.Addr().String()}, tc.flags...),
-			"wordcount", filepath.Join(t.TempDir(), "out"), raven)
-		if err := run(args, new(strings.Builder), new(strings.Builder)); err != nil {
-			t.Fatal(err)
-		}
-		if got := (<-c.specs).GetUseCombiner(); got != tc.want {
-			t.Errorf("%v: use_combiner %v, want %v", tc.flags, got, tc.want)
-		}
+	}{
+		{"disabled", []string{"-combiner=false"}, false},
+		{"default-after-disabled", nil, true},
+		{"enabled", []string{"-combiner=true"}, true},
+		{"re-enabled", []string{"-combiner=false", "-combiner=true"}, true},
+		{"disabled-last", []string{"-combiner=true", "-combiner=false"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append([]string{"submit", "-coordinator", lis.Addr().String()}, tc.flags...)
+			args = append(args, "wordcount", filepath.Join(t.TempDir(), "out"), raven)
+			var stdout strings.Builder
+			if err := run(args, &stdout, new(strings.Builder)); err != nil {
+				t.Fatal(err)
+			}
+			if stdout.String() != "job-1\n" {
+				t.Errorf("submit printed %q, want job ID", stdout.String())
+			}
+			select {
+			case spec := <-c.specs:
+				if got := spec.GetUseCombiner(); got != tc.want {
+					t.Errorf("use_combiner %v, want %v", got, tc.want)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("coordinator received no job spec")
+			}
+		})
 	}
 }
 
