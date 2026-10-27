@@ -3,4 +3,4 @@
 # docker compose -p mapreduce -f compose.yaml -f backups-off.yaml up -d
 services:
   coordinator:
-    command: [coordinator, -addr, ":7070", -http, ":8080", -backups=false]
+    command: [coordinator, -addr, ":7070", -http, ":8080", -data-dir, /out/wal, -backups=false]

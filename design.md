@@ -269,8 +269,8 @@ once and kept in the output volume. A run holds the input, the
 intermediate files in the workers' containers and the output on the same
 disk, about 3 GiB, within the disk budget in
 [cluster VM](docs/cluster-vm.md#disk-budget). E0 runs on 1 and 2 workers with
-`docker compose up --scale worker=N`, which keeps the one-CPU limit. E2 and
-E2 changes a coordinator flag, so it uses the Compose override
+`docker compose up --scale worker=N`, which keeps the one-CPU limit. E2
+changes a coordinator flag, so it uses the Compose override
 `backups-off.yaml` (`-backups=false`); E4 starts from an empty log. E1's "bytes shuffled" is the map output bytes after the
 combiner, an existing counter. The Zipf generator takes its exponent as a
 parameter and a seed, and samples from a finite vocabulary of 100,000

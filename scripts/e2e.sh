@@ -74,7 +74,8 @@ docker kill "$coordinator" >/dev/null
 docker start "$coordinator" >/dev/null
 state=
 for _ in $(seq 60); do
-    state=$("${compose[@]}" run --rm -q mr status -coordinator coordinator:7070 "$id" 2>/dev/null | head -1) && break
+    # The whole reply, then its first line: head could close the pipe early.
+    state=$("${compose[@]}" run --rm -q mr status -coordinator coordinator:7070 "$id" 2>/dev/null) && state=${state%%$'\n'*} && break
     sleep 1
 done
 if [ "${state##*$'\t'}" != SUCCEEDED ]; then
