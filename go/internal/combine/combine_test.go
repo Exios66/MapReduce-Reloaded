@@ -1,6 +1,7 @@
 package combine_test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -163,3 +164,27 @@ func (c *testContext) Input() string                        { return "" }
 func (c *testContext) Count(name string, delta int64)       { c.counts[name] += delta }
 func (c *testContext) Logger() *slog.Logger                 { return slog.New(slog.DiscardHandler) }
 func (c *testContext) SideOutput(string) (io.Writer, error) { return io.Discard, nil }
+
+// BenchmarkCombine sorts 200,000 word-count records of 40 words with a
+// 1 MB budget, combining each spill.
+func BenchmarkCombine(b *testing.B) {
+	ws := words(200_000)
+	b.ReportAllocs()
+	for b.Loop() {
+		s := extsort.New(extsort.Config{Dir: b.TempDir(), Budget: 1 << 20, Combine: combine.Func(newContext(), sum)})
+		for _, w := range ws {
+			if err := s.Add([]byte(w), []byte("1")); err != nil {
+				b.Fatal(err)
+			}
+		}
+		r, err := s.Sorted()
+		if err != nil {
+			b.Fatal(err)
+		}
+		for r.Next() {
+		}
+		if err := errors.Join(r.Err(), s.Close()); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
