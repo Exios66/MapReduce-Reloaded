@@ -418,3 +418,25 @@ func TestCustomPartitioner(t *testing.T) {
 		}
 	}
 }
+
+// The output directory is a literal name, whatever characters it has: the
+// check must still see the part files in it.
+func TestCheckOutputLiteralDirectory(t *testing.T) {
+	for _, name := range []string{"out", "out[ab]", "out*", "out?", `out\x`} {
+		t.Run(name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), name)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := CheckOutput(t.Context(), dir); err != nil {
+				t.Fatalf("empty directory: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "part-r-00000"), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := CheckOutput(t.Context(), dir); err == nil {
+				t.Fatal("a directory with output passed the check")
+			}
+		})
+	}
+}
