@@ -40,24 +40,20 @@ def rates(rows):
     first seen late adds no bytes it counted before; a worker missing from
     a round counts with its last value; and a counter that drops, as when a
     worker restarts, counts from zero again."""
-    rounds, last, grown = {}, {}, {}
+    by_metric = {metric: rate for rate, metric in METRICS.items()}
+    rounds, last = {}, {}
     for row in rows:
-        rounds.setdefault(float(row["seconds"]), []).append(row)
+        if row["metric"] in by_metric:  # a metric that is never plotted keeps no state
+            rounds.setdefault(float(row["seconds"]), []).append(row)
     times, totals = sorted(rounds), []
+    sums = dict.fromkeys(METRICS, 0)
     for t in times:
         for row in rounds[t]:
             key, value = (row["url"], row["metric"]), int(row["value"])
             if key in last:
-                grown[key] += value - last[key] if value >= last[key] else value
-            else:
-                grown[key] = 0
+                sums[by_metric[key[1]]] += value - last[key] if value >= last[key] else value
             last[key] = value
-        totals.append(
-            {
-                rate: sum(v for (_, m), v in grown.items() if m == metric)
-                for rate, metric in METRICS.items()
-            }
-        )
+        totals.append(dict(sums))
     series = {rate: [] for rate in METRICS}
     for i in range(1, len(times)):
         dt = times[i] - times[i - 1]
