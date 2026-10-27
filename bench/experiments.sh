@@ -166,7 +166,7 @@ run() {
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
     job=$("${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") "${submit_flags[@]}" "$program" "$out" "$in" 2>/dev/null | tail -1)
+        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "$program" "$out" "$in" 2>/dev/null | tail -1)
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
         exit 1
