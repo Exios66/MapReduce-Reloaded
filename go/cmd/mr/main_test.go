@@ -547,3 +547,123 @@ func TestErrors(t *testing.T) {
 		}
 	}
 }
+
+// -m is the exact number of map tasks, and submit reports it.
+func TestSubmitExactM(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := coordinator.NewServer(coordinator.Config{RetryAfter: 10 * time.Millisecond})
+	gs := grpc.NewServer()
+	pb.RegisterCoordinatorServiceServer(gs, srv)
+	go func() { _ = gs.Serve(lis) }()
+	defer gs.Stop()
+	addr := lis.Addr().String()
+	client, closeConn, err := dial(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeConn()
+	done := make(chan error, 1)
+	go func() { done <- worker.New(client, t.TempDir(), &pb.WorkerInfo{}).Run(context.Background()) }()
+
+	out := filepath.Join(t.TempDir(), "out")
+	var stdout, stderr strings.Builder
+	if err := run([]string{"submit", "-coordinator", addr, "-m", "5", "-r", "1", "-wait", "wordcount", out, raven}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "\nmap\t5/5\n") || stderr.String() != "mr: 5 map tasks (-m 5)\n" {
+		t.Fatalf("submit printed %q, stderr %q", stdout.String(), stderr.String())
+	}
+	srv.Shutdown()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// upload copies files, directories and globs to where the containers see
+// /data/..., and cat prints a job's output files in order.
+func TestUploadAndCat(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("MR_DATA_DIR", data)
+	src := t.TempDir()
+	write := func(name, text string) {
+		t.Helper()
+		p := filepath.Join(src, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("a.txt", "a")
+	write("dir/b.txt", "b")
+	write("dir/sub/c.txt", "c")
+	write("g1.log", "g1")
+	write("g2.log", "g2")
+
+	var stdout strings.Builder
+	args := []string{"upload", filepath.Join(src, "a.txt"), filepath.Join(src, "dir"), filepath.Join(src, "*.log"), "/data/input/x"}
+	if err := run(args, &stdout, new(strings.Builder)); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"a.txt": "a", "b.txt": "b", "sub/c.txt": "c", "g1.log": "g1", "g2.log": "g2"} {
+		p := filepath.Join(data, "input", "x", name)
+		got, err := os.ReadFile(p)
+		if err != nil || string(got) != want {
+			t.Errorf("%s: got %q, %v; want %q", name, got, err, want)
+		}
+		if info, err := os.Stat(p); err == nil && info.Mode().Perm()&0o044 != 0o044 {
+			t.Errorf("%s: mode %v is not readable by the containers", name, info.Mode())
+		}
+	}
+	if n := strings.Count(stdout.String(), "\n"); n != 5 {
+		t.Errorf("upload printed %d lines, want 5: %q", n, stdout.String())
+	}
+	if tmp, _ := filepath.Glob(filepath.Join(data, "input", "x", ".upload-*")); len(tmp) != 0 {
+		t.Errorf("temporary files left: %v", tmp)
+	}
+
+	out := filepath.Join(data, "out", "wc")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, text := range map[string]string{"part-r-00001": "b\t2\n", "part-r-00000": "a\t1\n", "_SUCCESS": "x"} {
+		if err := os.WriteFile(filepath.Join(out, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stdout.Reset()
+	if err := run([]string{"cat", "/data/out/wc/"}, &stdout, new(strings.Builder)); err != nil {
+		t.Fatal(err)
+	}
+	if stdout.String() != "a\t1\nb\t2\n" {
+		t.Errorf("cat printed %q", stdout.String())
+	}
+}
+
+func TestSharedPathErrors(t *testing.T) {
+	t.Setenv("MR_DATA_DIR", t.TempDir())
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"cat", "/out/wc"}, "not in shared storage"},
+		{[]string{"cat", "/database/wc"}, "not in shared storage"},
+		{[]string{"cat", "/data/../etc"}, "not in shared storage"},
+		{[]string{"cat", "/data/out/none"}, "no part-r-* files"},
+		{[]string{"upload", "/no/such/file", "/data/input"}, "no such file"},
+		{[]string{"upload", "/data/input"}, "usage"},
+	} {
+		err := run(tc.args, new(strings.Builder), new(strings.Builder))
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%v: error %v, want %q", tc.args, err, tc.want)
+		}
+	}
+	t.Setenv("MR_DATA_DIR", filepath.Join(t.TempDir(), "missing"))
+	if err := run([]string{"cat", "/data/out/wc"}, new(strings.Builder), new(strings.Builder)); err == nil || !strings.Contains(err.Error(), "MR_DATA_DIR") {
+		t.Errorf("missing data directory: error %v", err)
+	}
+}

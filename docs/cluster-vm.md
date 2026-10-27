@@ -157,10 +157,14 @@ make bench-codecs     # bytes shuffled and job time per codec (bench/README.md)
 make cluster-down    # stop and remove only this project's containers and volume
 ```
 
-Run any `mr` command on the cluster with
-`docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr ...`, for example
-`mr status -coordinator coordinator:7070 job-1`. Every container sees the
-test corpus at `/corpus` and job output in the `output` volume at `/out`.
+Run `mr` on the VM itself: `make mr` builds it into `bin/mr`, and
+`bin/mr upload`, `bin/mr submit`, `bin/mr status` and `bin/mr cat` cover
+the workflow (README, [quick start](../README.md#quick-start)). Every
+container sees the repository's `data/` directory at `/data`, the shared
+storage for job input and output (ADR 0016), the test corpus at `/corpus`,
+and the experiments' `output` volume at `/out`. On a machine without Go,
+`docker compose -p mapreduce -f deploy/compose/compose.yaml run --rm mr
+submit -coordinator coordinator:7070 ...` runs `mr` in a container instead.
 In the `s3` profile, the store serves the corpus as `s3://corpus` and keeps
 output in `s3://out`; every node has its address and credentials in the
 `AWS_*` variables (ADR 0013).

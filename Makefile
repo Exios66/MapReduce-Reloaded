@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check data cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -33,11 +33,27 @@ vm-check:
 # named mapreduce, so cluster-down removes only this project's containers.
 COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
 
-# Prepare the host directories for the planned /data mount (ADR 0016).
+# The shared storage mounted at /data in every container (ADR 0016).
 # Distroless workers run as UID 65532 and need to write output here.
 data:
 	mkdir -p data/input data/out
 	chmod a+rwx data/out
+
+# The host client, bin/mr (ADR 0016), built with the host's Go if it has
+# one, otherwise in the same golang image the cluster's image is built from.
+mr:
+	@mkdir -p bin
+	if command -v go >/dev/null; then cd go && go build -o ../bin/mr ./cmd/mr; \
+	else docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 \
+		-v "$(CURDIR)/go:/src:ro" -v "$(CURDIR)/bin:/bin-out" -w /src \
+		golang:1.26-alpine go build -buildvcs=false -o /bin-out/mr ./cmd/mr; fi
+
+# Example input in shared storage: the test corpus at /data/input/corpus and
+# a 10 MB web log at /data/input/weblog/access.log.
+upload-example: data mr
+	bin/mr upload 'testdata/corpus/*.txt' /data/input/corpus
+	tmp=$$(mktemp -d) && $(PYTHON) bench/gen-weblog.py 10000000 > $$tmp/access.log && \
+		bin/mr upload $$tmp/access.log /data/input/weblog; status=$$?; rm -rf $$tmp; exit $$status
 
 cluster-up: data
 	$(COMPOSE) up -d --build
@@ -63,7 +79,7 @@ clean-output:
 monitoring-up:
 	$(COMPOSE) --profile monitoring up -d prometheus grafana
 
-e2e: cluster-up
+e2e: cluster-up mr
 	scripts/e2e.sh
 
 # The same job with input and output in the s3 profile's store.

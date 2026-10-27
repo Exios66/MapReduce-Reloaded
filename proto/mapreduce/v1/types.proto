@@ -147,6 +147,12 @@ message JobSpec {
   // instead of looking up program, which then only names the job for
   // display. At most 1 MiB.
   string program_source = 14;
+  // Exact number of map tasks, M (ADR 0016): the input is cut into this
+  // many splits, shared among the files in proportion to their sizes. A
+  // file gets at least one, and one that cannot be cut that finely gets
+  // fewer, so the job's map_tasks_total is the M that resulted. 0 means
+  // split_size_bytes decides M. When both are set, num_map_tasks wins.
+  uint32 num_map_tasks = 15;
 }
 
 // Identity and capabilities of a worker.

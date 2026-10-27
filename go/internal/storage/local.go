@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"syscall"
 )
 
 // Local stores files in the local file system, or a volume shared by every
@@ -46,6 +48,29 @@ func (Local) Commit(_ context.Context, tmp, name string) error { return os.Renam
 
 func (Local) Delete(_ context.Context, name string) error { return os.Remove(name) }
 
-func (Local) MkdirAll(_ context.Context, dir string) error { return os.MkdirAll(dir, 0o755) }
+// MkdirAll makes each directory it creates writable by everyone, whatever
+// the umask: the containers write job output as their own user, and the
+// host user must be able to delete it from the shared data/ directory
+// (ADR 0016).
+func (l Local) MkdirAll(ctx context.Context, dir string) error {
+	if info, err := os.Stat(dir); err == nil {
+		if !info.IsDir() {
+			return &os.PathError{Op: "mkdir", Path: dir, Err: syscall.ENOTDIR}
+		}
+		return nil
+	}
+	if parent := filepath.Dir(dir); parent != dir {
+		if err := l.MkdirAll(ctx, parent); err != nil {
+			return err
+		}
+	}
+	if err := os.Mkdir(dir, 0o777); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return nil // made by a concurrent call
+		}
+		return err
+	}
+	return os.Chmod(dir, 0o777)
+}
 
 func (Local) DeleteAll(_ context.Context, dir string) error { return os.RemoveAll(dir) }
