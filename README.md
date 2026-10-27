@@ -80,7 +80,6 @@ is a complete one that works with the example data:
 package job
 
 import (
-	"bytes"
 	"strconv"
 
 	"mapreduce/api"
@@ -88,15 +87,14 @@ import (
 
 // Map is called once per input line: key is the line's byte offset, value the line.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	for _, w := range bytes.FieldsFunc(value, isSpace) {
-		if err := out.Emit(w, []byte("1")); err != nil {
+	one := []byte("1")
+	for _, w := range api.Words(value) {
+		if err := out.Emit(w, one); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
 
 // Reduce is called once per key, with every value emitted for it.
 func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), out api.Emitter) error {
@@ -110,11 +108,16 @@ func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), o
 }
 
 // Combine is optional: it runs on each map task's output before the shuffle.
-var Combine = Reduce
+// api.Sum does what Reduce does, in compiled code.
+var Combine = api.Sum
 ```
 
 `Map` and `Reduce` emit keys and values as bytes. Only the standard library
-and `mapreduce/api` can be imported. `ctx.Param("name")` reads a
+and `mapreduce/api` can be imported. The job file is interpreted, so work done
+for every byte or every value is best left to compiled code: the standard
+library, `api.Words` (split a line on ASCII whitespace) and `api.Sum` (total
+base-10 counts, as a `Reduce` or `Combine`). Splitting lines with a function
+of your own instead makes word count's map 6× slower. `ctx.Param("name")` reads a
 `-param name=value` given at submission.
 
 ### 4. Submit it
@@ -274,7 +277,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 | E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 23.7 s down to 15.7 s |
 | E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
-| E5: an interpreted job file | Word count as a job file takes 403 s against 38 s compiled (10.5×), almost all in the map phase |
+| E5: an interpreted job file | Word count as a job file takes 91 s against 38 s compiled (2.4×) with the compiled helpers `api.Words` and `api.Sum`, and 399 s (10.5×) without them |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
@@ -303,7 +306,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E5-dark.png">
-  <img alt="E5: job time and map-phase time for word count compiled and as an interpreted job file" src="bench/evaluation/E5.png">
+  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="bench/evaluation/E5.png">
 </picture>
 
 ## Benchmarks

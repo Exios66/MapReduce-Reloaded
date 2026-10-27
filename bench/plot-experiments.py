@@ -546,13 +546,20 @@ def map_phase(path, job):
 
 def e5(rows, results, out, t):
     """Saves E5's comparison to out, in theme t: job time and map-phase time
-    of word count compiled into the workers and as an interpreted job file,
-    each with the job file's overhead. Only valid="1" runs count; a run
-    without a tasks file has no map-phase time. Missing fields, invalid
-    numbers, and file errors propagate."""
-    settings = {"compiled": "compiled", "interpreted": "job file\n(interpreted)"}
+    of word count compiled into the workers, as the example job file (which
+    calls the compiled helpers) and as the naive job file (which does not),
+    each labelled with its multiple of the compiled time. Settings with no
+    valid run are left out, so older results with two settings still plot.
+    Only valid="1" runs count; a run without a tasks file has no map-phase
+    time. Missing fields, invalid numbers, and file errors propagate."""
+    settings = {
+        "compiled": "compiled",
+        "interpreted": "job file\n(api.Words, api.Sum)",
+        "naive": "job file\n(own word test)",
+    }
+    present = [k for k in settings if valid(rows, setting=k)]
     phases = {}
-    for setting in settings:
+    for setting in present:
         times = []
         for r in valid(rows, setting=setting):
             path = results / "E5" / f"tasks-{setting}-{r['run']}.csv"
@@ -562,17 +569,21 @@ def e5(rows, results, out, t):
         phases[setting] = spread(times, "phase")
     fig, axes = plt.subplots(1, 2, figsize=(9, 4.4))
     for ax, title, stats in (
-        (axes[0], "Job time (s)", [spread(valid(rows, setting=k), "seconds") for k in settings]),
-        (axes[1], "Map phase (s)", [phases[k] for k in settings]),
+        (axes[0], "Job time (s)", [spread(valid(rows, setting=k), "seconds") for k in present]),
+        (axes[1], "Map phase (s)", [phases[k] for k in present]),
     ):
         kept = [(j, st) for j, st in enumerate(stats) if st]
         xs, med = [j for j, _ in kept], [st[0] for _, st in kept]
-        colors = [t["series"][j] for j in xs]
+        colors = [t["series"][list(settings).index(present[j])] for j in xs]
         ax.bar(xs, med, width=0.55, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2)
         ranges(ax, t, xs, med, [st[1] for _, st in kept], [st[2] for _, st in kept])
+        base = stats[0][0] if stats and stats[0] and present[0] == "compiled" else 0
         for j, st in kept:
+            label = f"{st[0]:.1f} s"
+            if j > 0 and base > 0:
+                label += f" ({st[0] / base:.1f}×)"
             ax.annotate(
-                f"{st[0]:.1f} s",
+                label,
                 (j, st[2]),
                 xytext=(0, 4),
                 textcoords="offset points",
@@ -581,27 +592,18 @@ def e5(rows, results, out, t):
                 fontsize=9,
             )
         top = max((st[2] for _, st in kept), default=0) or 1
-        if len(kept) == 2 and med[0] > 0:
-            ax.text(
-                0.5,
-                top * 1.14,
-                f"{med[1] / med[0] - 1:+.0%} with the job file",
-                ha="center",
-                color=t["ink"],
-                fontsize=9.5,
-            )
-        ax.set_xticks(range(len(settings)), list(settings.values()))
-        ax.set_xlim(-0.6, len(settings) - 0.4)
-        ax.set_ylim(0, top * 1.25)
+        ax.set_xticks(range(len(present)), [settings[k] for k in present])
+        ax.set_xlim(-0.6, len(present) - 0.4)
+        ax.set_ylim(0, top * 1.15)
         ax.set_title(title)
         ax.grid(axis="x", visible=False)
     heading(
         fig,
         t,
         "E5: what an interpreted job file costs in word count",
-        "The same program, compiled into the workers or sent as examples/wordcount.go.\n"
+        "The same program, compiled into the workers or sent as a job file the workers interpret.\n"
         + label_note(rows)
-        + ".",
+        + "; labels give the multiple of the compiled time.",
     )
     finish(fig, out, top=0.8)
 
