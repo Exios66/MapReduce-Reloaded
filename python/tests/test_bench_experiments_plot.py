@@ -296,18 +296,45 @@ def test_e5_compares_job_and_map_phase_times(plotter, tmp_path):
     (tmp_path / "E5").mkdir()
     rows = []
     for n, (setting, seconds, phase) in enumerate(
-        (("compiled", 10, 8), ("interpreted", 15, 12), ("interpreted", 99, 1)), start=1
+        (
+            ("compiled", 10, 8),
+            ("naive", 100, 80),
+            ("interpreted", 15, 12),
+            ("interpreted", 99, 1),
+        ),
+        start=1,
     ):
         job = f"job-{n}"
-        rows.append(row(setting, seconds, valid="0" if n == 3 else "1") | {"run": "1", "job": job})
+        rows.append(row(setting, seconds, valid="0" if n == 4 else "1") | {"run": "1", "job": job})
         tasks_file(tmp_path / "E5" / f"tasks-{setting}-1.csv", job, [(0, 0), (phase, 4)])
-    # Run 3 is invalid and overwrote nothing that counts: its file is for job-3.
-    tasks_file(tmp_path / "E5" / "tasks-interpreted-1.csv", "job-2", [(0, 0), (12, 4)])
+    # Run 4 is invalid and overwrote nothing that counts: its file is for job-4.
+    tasks_file(tmp_path / "E5" / "tasks-interpreted-1.csv", "job-3", [(0, 0), (12, 4)])
 
     module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
 
-    for axis, heights, overhead in ((jobs, [10, 15], "+50%"), (maps, [8, 12], "+50%")):
+    for axis, heights in ((jobs, [10, 15, 100]), (maps, [8, 12, 80])):
         call = axis.bar.call_args
-        assert call.args[0] == [0, 1]
+        assert call.args[0] == [0, 1, 2]
         assert call.args[1] == pytest.approx(heights)
-        assert axis.text.call_args.args[2] == f"{overhead} with the job file"
+        labels = [c.args[0] for c in axis.annotate.call_args_list]
+        assert labels == [
+            f"{heights[0]:.1f} s",
+            f"{heights[1]:.1f} s (1.5×)",
+            f"{heights[2]:.1f} s (10.0×)",
+        ]
+
+
+def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
+    module, pyplot = plotter
+    jobs, maps = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (jobs, maps)
+    rows = [
+        row("compiled", 10) | {"run": "1", "job": "job-1"},
+        row("interpreted", 105) | {"run": "1", "job": "job-2"},
+    ]
+
+    module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
+
+    assert jobs.bar.call_args.args[0] == [0, 1]
+    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words, api.Sum)"]
+    assert [c.args[0] for c in jobs.annotate.call_args_list] == ["10.0 s", "105.0 s (10.5×)"]

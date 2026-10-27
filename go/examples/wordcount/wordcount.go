@@ -6,9 +6,7 @@
 package wordcount
 
 import (
-	"bytes"
 	"iter"
-	"strconv"
 
 	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 )
@@ -35,19 +33,9 @@ func Map(_ api.Context, _, line []byte, out api.Emitter) error {
 }
 
 // Sum emits the sum of a word's counts.
-func Sum(_ api.Context, word []byte, counts iter.Seq[[]byte], out api.Emitter) error {
-	var total int64
-	for c := range counts {
-		n, err := strconv.ParseInt(string(c), 10, 64)
-		if err != nil {
-			return err
-		}
-		total += n
-	}
-	return out.Emit(word, strconv.AppendInt(nil, total, 10))
+func Sum(ctx api.Context, word []byte, counts iter.Seq[[]byte], out api.Emitter) error {
+	return api.Sum(ctx, word, counts, out)
 }
 
 // Words returns the words of a line.
-func Words(line []byte) [][]byte { return bytes.FieldsFunc(line, isSpace) }
-
-func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
+func Words(line []byte) [][]byte { return api.Words(line) }

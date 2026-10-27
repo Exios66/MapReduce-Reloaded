@@ -57,7 +57,9 @@ services:
 
   worker:
     <<: *node
-    command: [worker, -coordinator, "coordinator:7070", -http, ":8081"] # /metrics inside the network
+    # /metrics inside the network. The four workers share the host's disk, so
+    # each keeps room for all of them to run a task at once (ADR 0017).
+    command: [worker, -coordinator, "coordinator:7070", -http, ":8081", -min-free-mib, "2048"]
     mem_limit: 768m
     cpus: 1
     deploy:

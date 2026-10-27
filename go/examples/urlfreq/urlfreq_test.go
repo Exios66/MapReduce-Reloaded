@@ -19,3 +19,12 @@ a short line
 		t.Fatalf("got %q, %v; want %q", got, err, want)
 	}
 }
+
+// Fields are split on ASCII spaces only, as the Python twin splits them: a
+// URL with a no-break space in it is one field.
+func TestUnicodeSpaceInURL(t *testing.T) {
+	got, err := run.Local(t, urlfreq.Program, []string{run.Write(t, "a b c d e f /x y.html\n")}, 1, nil)
+	if want := "/x y.html\t1\n"; err != nil || string(got) != want {
+		t.Fatalf("got %q, %v; want %q", got, err, want)
+	}
+}

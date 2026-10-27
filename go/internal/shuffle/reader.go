@@ -18,10 +18,11 @@ import (
 
 // Retry policy for a fetch: after a transient error the reader reconnects,
 // resuming at the bytes it already has, up to MaxRetries times in a row.
-const (
-	MaxRetries = 4
-	baseDelay  = 100 * time.Millisecond
-)
+const MaxRetries = 4
+
+// baseDelay is the wait before the first reconnect, doubled for each
+// further one; a variable so the fuzz test need not wait.
+var baseDelay = 100 * time.Millisecond
 
 // IdleTimeout ends a fetch attempt that receives nothing for this long, as
 // from a frozen worker or a dead connection. It counts as a transient error.
