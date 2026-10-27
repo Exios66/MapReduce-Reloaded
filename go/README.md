@@ -76,6 +76,14 @@ lost map output, expiring workers, restarts from the log) and checks every
 reply and the job's status against a model of the job. It runs 15 seeds in
 `make check`; `-model.runs` and `-model.seed` run more or replay one.
 
+`internal/e2e` runs the built `coordinator`, `worker` and `mr` commands as
+separate processes on localhost ports: word count against the golden output,
+every example program, a worker killed with `SIGKILL` mid-job, a coordinator
+killed and restarted from its `-data-dir`, and `SIGTERM` stopping each
+process cleanly. It needs no Docker, so `make check` runs it; it takes about
+25 s, most of it the coordinator's 10 s wait before it declares the killed
+worker dead.
+
 Parsers and file formats also have fuzz targets: the WAL reader, the wire
 conversions, the shuffle reader, split planning, URI joining, metric labels,
 and the example programs' record parsers. `make fuzz` runs each one in turn
