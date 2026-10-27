@@ -39,9 +39,14 @@ data:
 	mkdir -p data/input data/out
 	chmod a+rwx data/out
 
-# The host client, bin/mr (ADR 0016).
+# The host client, bin/mr (ADR 0016), built with the host's Go if it has
+# one, otherwise in the same golang image the cluster's image is built from.
 mr:
-	cd go && go build -o ../bin/mr ./cmd/mr
+	@mkdir -p bin
+	if command -v go >/dev/null; then cd go && go build -o ../bin/mr ./cmd/mr; \
+	else docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 \
+		-v "$(CURDIR)/go:/src:ro" -v "$(CURDIR)/bin:/bin-out" -w /src \
+		golang:1.26-alpine go build -buildvcs=false -o /bin-out/mr ./cmd/mr; fi
 
 # Example input in shared storage: the test corpus at /data/input/corpus and
 # a 10 MB web log at /data/input/weblog/access.log.
