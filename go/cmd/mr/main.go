@@ -69,11 +69,16 @@ job flags:
 // pollInterval is how often submit -wait checks the job's status.
 const pollInterval = 500 * time.Millisecond
 
-func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "mr:", err)
-		os.Exit(1)
+func main() { os.Exit(exitCode(run(os.Args[1:], os.Stdout, os.Stderr), os.Stderr)) }
+
+// exitCode returns the exit status for run's error, printing it to stderr.
+// Asking for help, which has printed the usage, is not an error.
+func exitCode(err error, stderr io.Writer) int {
+	if err == nil || errors.Is(err, flag.ErrHelp) {
+		return 0
 	}
+	_, _ = fmt.Fprintln(stderr, "mr:", err)
+	return 1
 }
 
 func run(args []string, stdout, stderr io.Writer) error {

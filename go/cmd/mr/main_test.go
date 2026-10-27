@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"maps"
 	"net"
 	"os"
@@ -665,5 +667,23 @@ func TestSharedPathErrors(t *testing.T) {
 	t.Setenv("MR_DATA_DIR", filepath.Join(t.TempDir(), "missing"))
 	if err := run([]string{"cat", "/data/out/wc"}, new(strings.Builder), new(strings.Builder)); err == nil || !strings.Contains(err.Error(), "MR_DATA_DIR") {
 		t.Errorf("missing data directory: error %v", err)
+	}
+}
+
+// A failed command exits with status 1 and prints its error after "mr:".
+func TestExitCode(t *testing.T) {
+	var stderr bytes.Buffer
+	if code := exitCode(run([]string{"nope"}, io.Discard, &stderr), &stderr); code != 1 || !strings.HasPrefix(stderr.String(), "mr: ") {
+		t.Fatalf("exit %d, stderr %q; want 1 and an mr: message", code, stderr.String())
+	}
+	for _, err := range []error{nil, flag.ErrHelp} {
+		stderr.Reset()
+		if code := exitCode(err, &stderr); code != 0 || stderr.Len() != 0 {
+			t.Fatalf("exit %d, stderr %q for %v; want 0 and nothing", code, stderr.String(), err)
+		}
+	}
+	stderr.Reset()
+	if code := exitCode(run([]string{"status", "-h"}, io.Discard, &stderr), io.Discard); code != 0 || !strings.Contains(stderr.String(), "Usage") {
+		t.Fatalf("mr status -h: exit %d, stderr %q; want 0 and the usage", code, stderr.String())
 	}
 }
