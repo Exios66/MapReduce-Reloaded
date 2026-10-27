@@ -138,7 +138,7 @@ reduce  4/4
 | `<job file>` | A `.go` job file, or the name of a built-in program (`wordcount`, `grep`, `urlfreq`, …; see [Example programs](#example-programs)) |
 | `<output dir>` | Where the output goes in shared storage, such as `/data/out/wc`. It must not already hold output |
 | `<inputs…>` | Input files or globs in shared storage. Quote globs, so the coordinator expands them as the containers see them |
-| `-m M` | The number of map tasks. The input is cut into M splits, shared among the files by size; each file gets at least one. Default: one per 64 MiB |
+| `-m M` | The number of map tasks. The input is cut into M splits, shared among the non-empty files by size. Each such file gets at least one, so with more files than M there is one task per file; a file too small to cut that many ways, or a `kv` file, gets fewer. `mr submit` prints the M that resulted. Default: one per 64 MiB |
 | `-r R` | The number of reduce tasks, and of output files. Default: 2 per worker |
 | `-wait` | Wait for the job to end and print its status and counters. Without it, `mr submit` prints the job's id |
 | `-combiner=false` | Do not run the job's `Combine` |
