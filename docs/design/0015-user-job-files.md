@@ -141,6 +141,8 @@ var Combine = Reduce
   16× slower than compiled rather than 92×, and its Combine runs at
   compiled speed. `bench/jobs/wordcount-naive.go` keeps the version
   without them, and `BenchmarkMap` in `go/internal/jobfile` measures both.
+  On the cluster (E5, 1 GiB, four workers) the job file takes 91 s with the
+  helpers and 399 s without, against 38 s compiled.
 - Recovery and bad-record skipping ([ADR 0011](0011-bad-records.md)) are
   established for compiled `api.Program` callbacks: `TestBadRecords` in
   `go/internal/task/task_test.go` covers Map and Reduce panics. Once

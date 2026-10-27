@@ -277,7 +277,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 | E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 23.7 s down to 15.7 s |
 | E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
-| E5: an interpreted job file | Word count as a job file takes 403 s against 38 s compiled (10.5×), almost all in the map phase |
+| E5: an interpreted job file | Word count as a job file takes 91 s against 38 s compiled (2.4×) with the compiled helpers `api.Words` and `api.Sum`, and 399 s (10.5×) without them |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
@@ -306,7 +306,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E5-dark.png">
-  <img alt="E5: job time and map-phase time for word count compiled and as an interpreted job file" src="bench/evaluation/E5.png">
+  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="bench/evaluation/E5.png">
 </picture>
 
 ## Benchmarks
