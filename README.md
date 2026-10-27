@@ -19,10 +19,10 @@ F1–F23 (see the [paper mapping](docs/paper-mapping.md)), and survive worker
 crashes, coordinator restarts, slow machines and bad input records. The
 chaos test passes 50 seeded runs.
 
-The benchmark harness and data generators are done. Next are the course
-deliverables: a host-side client with uploads to a shared `/data` mount, user
-job files submitted with each job, and the evaluation of the special features
-(see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
+The benchmark harness, user job files submitted with each job, and the
+evaluation of the special features (E0–E4, [below](#results)) are done. Next
+are the remaining course deliverables: a host-side client with uploads to a
+shared `/data` mount, and experiment E5 (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
 and [design](design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
@@ -152,6 +152,32 @@ job flags:
 Inputs are files or glob patterns, or `s3://` URIs on a cluster with an
 object store. `mr status` and `mr submit -wait` print the job's state, its
 progress, its backup attempts, its duration and its counters.
+
+## Results
+
+Measured on the course VM (4 vCPUs, 8 GB, four one-CPU workers) on 1 GiB
+inputs with M = 32 and R = 4; each number is the median of three runs, and
+every run's output matched the normal run's. The tables, the raw CSVs, the
+logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e4)
+and [`bench/evaluation/`](bench/evaluation/).
+
+| Experiment | Result |
+|---|---|
+| E0: scaling over workers | Word count runs 3.8× faster on 4 workers than on 1, distributed sort 2.9×, grep 2.3× |
+| E1: the combiner | Shuffles 15× to 78× fewer bytes and saves 18–44% of the job time, more as the keys get more skewed |
+| E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 23.7 s down to 15.7 s |
+| E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
+| E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
+
+![E0: job time against the number of workers](bench/evaluation/E0.png)
+
+![E1: bytes shuffled and job time with the combiner on and off](bench/evaluation/E1.png)
+
+![E2: job time with a straggler, with backups on and off](bench/evaluation/E2.png)
+
+![E3: job time and rates when a worker is killed](bench/evaluation/E3.png)
+
+![E4: job time and rates across a coordinator restart](bench/evaluation/E4.png)
 
 ## Benchmarks
 
