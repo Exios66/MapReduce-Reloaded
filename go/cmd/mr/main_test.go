@@ -676,8 +676,14 @@ func TestExitCode(t *testing.T) {
 	if code := exitCode(run([]string{"nope"}, io.Discard, &stderr), &stderr); code != 1 || !strings.HasPrefix(stderr.String(), "mr: ") {
 		t.Fatalf("exit %d, stderr %q; want 1 and an mr: message", code, stderr.String())
 	}
+	for _, err := range []error{nil, flag.ErrHelp} {
+		stderr.Reset()
+		if code := exitCode(err, &stderr); code != 0 || stderr.Len() != 0 {
+			t.Fatalf("exit %d, stderr %q for %v; want 0 and nothing", code, stderr.String(), err)
+		}
+	}
 	stderr.Reset()
-	if code := exitCode(nil, &stderr); code != 0 || stderr.Len() != 0 {
-		t.Fatalf("exit %d, stderr %q for success", code, stderr.String())
+	if code := exitCode(run([]string{"status", "-h"}, io.Discard, &stderr), io.Discard); code != 0 || !strings.Contains(stderr.String(), "Usage") {
+		t.Fatalf("mr status -h: exit %d, stderr %q; want 0 and the usage", code, stderr.String())
 	}
 }

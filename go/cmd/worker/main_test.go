@@ -166,7 +166,7 @@ func TestRunSharedWorkDir(t *testing.T) {
 		t.Fatal("no map output reported")
 	}
 	for _, loc := range outputs {
-		if loc.GetWorkerAddress() != "" || !strings.HasPrefix(loc.GetUri(), "file://"+filepath.Join(dir, "shared")) {
+		if loc.GetWorkerAddress() != "" || !strings.HasPrefix(loc.GetUri(), "file://"+filepath.Join(dir, "shared")+"/") {
 			t.Fatalf("map output %v; want a file:// URI in the shared directory", loc)
 		}
 	}
@@ -186,15 +186,17 @@ func TestRunAdvertiseMetricsAndRestart(t *testing.T) {
 	if got := coord.registered()[0].GetShuffleAddress(); got != "example:7071" {
 		t.Fatalf("registered with %q, want example:7071", got)
 	}
-	resp, err := http.Get("http://" + metrics.String() + "/metrics")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "mr_worker_registrations_total 1\n") {
-		t.Fatalf("GET /metrics: %d\n%.500s", resp.StatusCode, body)
-	}
+	// The worker counts its registration once the reply arrives.
+	var body []byte
+	eventually(t, "/metrics to count the registration", func() bool {
+		resp, err := http.Get("http://" + metrics.String() + "/metrics")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && strings.Contains(string(body), "mr_worker_registrations_total 1\n")
+	})
 
 	stopCoordinator()
 	again, _, _ := coordinatorAt(t, addr)
