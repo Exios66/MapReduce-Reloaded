@@ -302,7 +302,7 @@ Each phase ends in a runnable, tested state.
 
 - **Unit tests:** partitioner (cross-language hash vectors), external sort, record framing round-trip, task-table state machine (property-based).
 - **Golden tests:** every example job in distributed mode must produce output identical to `--local` mode on a fixed corpus (e.g. Project Gutenberg texts and a synthetic web-link graph).
-- **Fault-injection tests:** `cd go && go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). A Compose driver is #29.
+- **Fault-injection tests:** `cd go && go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). `make chaos` does the same on the Compose cluster's containers (`docker kill`, `docker pause`, coordinator crashes), seeded (#29).
 - **Interop tests:** the Phase 5 matrix.
 - **End-to-end smoke test:** `make e2e` starts the Compose cluster, submits word count with `mr submit`, compares the output with the golden output, and checks the job's reduce tasks in `/metrics`.
 - **Benchmarks** (`bench/`): throughput, job completion time, and the cost of stragglers with and without backup tasks.

@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -81,6 +81,12 @@ monitoring-up:
 
 e2e: cluster-up mr
 	scripts/e2e.sh
+
+# Seeded chaos on the cluster (#29): worker kills and pauses and coordinator
+# restarts during word count jobs, which must all give the same output.
+# RUNS (default 5) runs from SEED (default 1); see scripts/chaos.sh.
+chaos: cluster-up mr
+	scripts/chaos.sh $(or $(RUNS),5) $(or $(SEED),1)
 
 # The same job with input and output in the s3 profile's store.
 e2e-s3: cluster-up
