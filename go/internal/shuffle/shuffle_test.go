@@ -64,7 +64,7 @@ func (c *cut) Send(m *pb.FetchPartitionResponse) error {
 
 // serve writes data as map 0's partition 1 of job-1, serves it, and returns
 // the server and a client.
-func serve(t *testing.T, data []byte, fails int32) (*flaky, pb.ShuffleServiceClient) {
+func serve(t testing.TB, data []byte, fails int32) (*flaky, pb.ShuffleServiceClient) {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "job-1"), 0o755); err != nil {
@@ -207,5 +207,18 @@ func TestClients(t *testing.T) {
 	}
 	if err := c.Close(); err != nil || c.conns != nil {
 		t.Fatalf("Close = %v, %d connections left", err, len(c.conns))
+	}
+}
+
+// BenchmarkFetch fetches a 64 MB partition over an in-memory connection.
+func BenchmarkFetch(b *testing.B) {
+	data := randomBytes(64 << 20)
+	_, client := serve(b, data, 0)
+	b.SetBytes(int64(len(data)))
+	for b.Loop() {
+		got, err := fetch(client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1})
+		if err != nil || len(got) != len(data) {
+			b.Fatalf("%d bytes, %v", len(got), err)
+		}
 	}
 }

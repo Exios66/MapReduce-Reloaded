@@ -183,3 +183,14 @@ func TestErrors(t *testing.T) {
 var failMapper = api.MapFunc(func(api.Context, []byte, []byte, api.Emitter) error {
 	return errors.New("boom")
 })
+
+// BenchmarkWordCount runs word count over the corpus in local mode, with
+// the combiner and 4 reduce tasks.
+func BenchmarkWordCount(b *testing.B) {
+	for b.Loop() {
+		spec := api.JobSpec{Program: wordcount.Program, Inputs: corpusInputs, Output: filepath.Join(b.TempDir(), "out"), R: 4}
+		if _, err := Run(spec, b.TempDir()); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
