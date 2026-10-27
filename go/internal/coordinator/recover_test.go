@@ -321,3 +321,41 @@ func TestCleanupAfterLog(t *testing.T) {
 		t.Fatalf("TempDir after replaying the job's end: %v, want it removed", err)
 	}
 }
+
+// A job may write to the output of an ended job whose files were deleted.
+// Replaying the old job's end must not remove the running job's TempDir.
+func TestReplayKeepsReusedOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	s := recoverServer(t, Config{}, path)
+	w := register(t, s)
+	submit := func() string {
+		t.Helper()
+		sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+			Program: "wordcount", Inputs: []string{in}, Output: out, NumReduceTasks: 1,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sub.GetJobId()
+	}
+	first := submit()
+	succeed(t, s, w, next(t, s, w), outputs(0, 1))
+	succeed(t, s, w, next(t, s, w), nil)
+	if jobStatus(t, s, first).GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+		t.Fatal("the first job did not finish")
+	}
+	second := submit() // its reduce output goes in out/_temporary again
+
+	s = recoverServer(t, Config{}, path)
+	if _, err := os.Stat(filepath.Join(out, mrtask.TempDir)); err != nil {
+		t.Fatalf("running job's TempDir after a restart: %v", err)
+	}
+	if st := jobStatus(t, s, second); st.GetState() != pb.JobState_JOB_STATE_MAPPING {
+		t.Fatalf("second job %v; want it still mapping", st)
+	}
+}

@@ -70,14 +70,15 @@ type Server struct {
 	pb.UnimplementedCoordinatorServiceServer
 	cfg Config
 
-	mu       sync.Mutex
-	workers  *Registry
-	jobs     map[string]*job
-	order    []*job       // every job kept, in the order submitted
-	seq      int          // jobs submitted, for the next ID; never reused
-	active   *job         // the running job, or nil
-	lost     []LostWorker // since this process started, for Status
-	stopping bool
+	mu          sync.Mutex
+	workers     *Registry
+	jobs        map[string]*job
+	order       []*job       // every job kept, in the order submitted
+	seq         int          // jobs submitted, for the next ID; never reused
+	active      *job         // the running job, or nil
+	replayEnded []*job       // jobs whose end Recover replayed, to clean up after
+	lost        []LostWorker // since this process started, for Status
+	stopping    bool
 }
 
 type job struct {

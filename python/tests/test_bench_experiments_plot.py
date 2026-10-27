@@ -232,3 +232,30 @@ def test_failure_interval_requires_a_recorded_transition(plotter, tmp_path, coun
             for worker in range(workers):
                 writer.writerow([seconds, f"http://worker-{worker}"])
     assert module.failure_interval(samples, 4) is None
+
+
+def test_e0_skips_a_program_with_a_zero_time(plotter, tmp_path):
+    module, pyplot = plotter
+    ax = Mock()
+    pyplot.subplots.return_value = Mock(), ax
+    rows = [
+        row("normal", seconds) | {"program": "grep", "workers": str(w)}
+        for w, seconds in ((1, 2), (2, 0), (4, 1))
+    ]
+    module.e0(rows, tmp_path / "E0.png", light(module))
+    # Only the ideal line is drawn; grep's 2-worker time of 0 has no speed-up.
+    assert ax.plot.call_count == 1
+
+
+@pytest.mark.parametrize("exp", ["e2", "e4"])
+def test_timeline_with_no_valid_run_draws_empty_bars(plotter, tmp_path, exp):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (left, right)
+    rows = [
+        row(setting, valid="0") | {"run": "1", "event_at": ""} for setting in ("normal", "restart")
+    ]
+    getattr(module, exp)(rows, tmp_path, tmp_path / "out.png", light(module))
+    right.barh.assert_called_once()
+    assert right.barh.call_args.args[1] == []
+    right.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
