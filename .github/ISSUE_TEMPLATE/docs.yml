@@ -1,0 +1,48 @@
+name: Documentation or design
+description: A doc that is wrong, missing or out of step with the code, or a decision that needs an ADR.
+title: "Docs: <what is wrong or missing>"
+labels: ["documentation"]
+assignees: ["Exios66"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: "What kind of change"
+      options:
+        - A statement that is wrong or out of date
+        - Something missing
+        - A decision that needs an ADR
+        - A requirement in the assignment that design.md does not meet yet
+        - A command or example that does not run
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: "Where"
+      description: "The file and section, or the place a reader looks and does not find it."
+      placeholder: "design.md, Resource management"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What is wrong"
+      description: "Quote the text, and say what the code, a measurement or the assignment says instead. A claim about behavior should name the test or the command that shows it."
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: "What it should say"
+      description: "The new text, or what it must cover. For an ADR, the context, the decision and the alternatives you weighed."
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: "Before it merges"
+      options:
+        - label: Every command in the text was run, and prints what the text says
+        - label: Numbers come from a recorded run, or say they are an estimate
+        - label: Links resolve, and the ADR index in docs/README.md lists a new ADR

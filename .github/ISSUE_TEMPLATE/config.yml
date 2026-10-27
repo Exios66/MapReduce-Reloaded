@@ -1,0 +1,10 @@
+# Issues come through the forms in this directory, so each one has the
+# fields a person or an agent needs to pick it up cold.
+blank_issues_enabled: false
+contact_links:
+  - name: Design and decisions
+    url: https://github.com/Exios66/MapReduce-Reloaded/blob/main/design.md
+    about: Read design.md and the ADRs in docs/design before proposing a change to how the system works.
+  - name: Roadmap
+    url: https://github.com/Exios66/MapReduce-Reloaded/blob/main/docs/roadmap.md
+    about: Planned work, in the order it is meant to be done. Check it before opening a task.

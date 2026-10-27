@@ -1,0 +1,97 @@
+name: Task
+description: A small, reviewable unit of work, written so a person or an AI agent can do it without more context.
+title: "<area>: <what changes>"
+labels: ["enhancement"]
+assignees: ["Exios66"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One task is one pull request, with one concern. If it needs more than
+        one, split it and list the parts under a tracking issue (label `epic`).
+  - type: textarea
+    id: goal
+    attributes:
+      label: "Goal"
+      description: "What should be true when this is done, and why it matters. Two or three sentences."
+      placeholder: "A failed map attempt leaves none of its partitions, so a retry never reads half-written output."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Context"
+      description: "What someone picking this up needs to know. Link the design.md section, ADR, issue or PR; name the files and functions involved."
+      placeholder: |
+        - design.md, "Failure semantics"
+        - docs/design/0009-failure-detection.md
+        - go/internal/coordinator/tasktable.go, TaskTable.Fail
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: "Tasks"
+      description: "A checklist of the steps, each small enough to check off in one commit."
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      description: "How anyone can tell it is done, as checks they can run or see. Name the test that must exist, and the commands that must pass."
+      value: |
+        - [ ] A test fails without the change and passes with it.
+        - [ ] `make check PYTHON=python` passes.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: "Out of scope"
+      description: "What this task must not change. It keeps the pull request small."
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area"
+      multiple: true
+      options:
+        - Coordinator
+        - Worker
+        - Shuffle
+        - Storage (local or S3)
+        - Formats and MRKV
+        - Job files (Yaegi)
+        - mr command line
+        - Python implementation
+        - Protocol (proto)
+        - Deployment (Compose, Docker)
+        - Benchmarks and experiments
+        - Observability (metrics, status page)
+        - CI and tooling
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: depends-on
+    attributes:
+      label: "Depends on"
+      description: "Issues or pull requests that must merge first, such as `#170, #171`."
+      placeholder: "#170"
+    validations:
+      required: false
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: "Documents this touches"
+      description: "Tick each one the change must update, so the pull request does."
+      options:
+        - label: design.md, because a decision or a requirement changes
+        - label: A new ADR in docs/design, because the change is a decision with alternatives
+        - label: README.md or docs/, because a command, flag or default changes
+        - label: The protocol in proto/, so `make proto-check` is part of this task
