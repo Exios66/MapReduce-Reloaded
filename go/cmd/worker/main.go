@@ -1,11 +1,13 @@
 // Command worker runs tasks for a coordinator until it says to exit.
 //
-//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-http :8081] [-log-format text|json]
+//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-min-free-mib n] [-http :8081] [-log-format text|json]
 //
 // It keeps map output in its work directory and serves it to reducers on
-// -listen; other workers reach it at -advertise. Without -work-dir it uses a
-// new temporary directory and removes it on exit, intermediate files
-// included. With -listen "" it serves nothing: every worker must then share
+// -listen; other workers reach it at -advertise. It deletes a job's map
+// output once the coordinator says the job has ended, and takes no task
+// while the work directory has under -min-free-mib free (default 1024).
+// Without -work-dir it uses a new temporary directory and removes it on
+// exit, intermediate files included. With -listen "" it serves nothing: every worker must then share
 // the same -work-dir, and reducers read map output from there. With -http
 // it serves Prometheus metrics at /metrics (§4.8).
 package main
@@ -35,6 +37,7 @@ import (
 
 type config struct {
 	coordinator, listen, advertise, workDir, http, logFormat string
+	minFreeMiB                                               uint64
 }
 
 func main() {
@@ -44,6 +47,7 @@ func main() {
 	flag.StringVar(&c.advertise, "advertise", "", "address other workers fetch map output from (default: this host and the -listen port)")
 	flag.StringVar(&c.workDir, "work-dir", "", "directory for map output (default: a temporary directory)")
 	flag.StringVar(&c.http, "http", "", "address to serve /metrics on (default: none)")
+	flag.Uint64Var(&c.minFreeMiB, "min-free-mib", 1024, "take no task while the -work-dir file system has less than this free, in MiB")
 	flag.StringVar(&c.logFormat, "log-format", "text", "log format: text or json")
 	flag.Parse()
 	err := logs.Setup(c.logFormat)
@@ -91,6 +95,7 @@ func run(c config) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	w := worker.New(pb.NewCoordinatorServiceClient(conn), c.workDir, info)
+	w.MinFreeDisk = c.minFreeMiB << 20
 	if c.http != "" {
 		metrics := &http.Server{Addr: c.http, Handler: w.MetricsHandler(), ReadHeaderTimeout: 5 * time.Second}
 		go func() {

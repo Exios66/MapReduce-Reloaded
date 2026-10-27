@@ -1,0 +1,76 @@
+# ADR 0017 — Workers delete ended jobs' map output; disk, memory and logs are bounded
+
+**Status:** accepted · **Phase:** course deliverable
+
+## Context
+
+A worker kept every job's map output in its work directory until the worker
+exited. Under Compose that directory is inside the container, so a cluster
+left running grew without limit: during experiment E3 on the course VM, four
+workers held 14 GB of map output from earlier runs and filled the 33 GB root
+filesystem, which broke the experiment and could break other coursework on
+the same VM. The paper deletes intermediate files once a job is done
+(§3.1 step 7). Other things grew too: the coordinator kept every job it had
+run in memory, the job-file cache emptied itself completely when full,
+Docker kept every container log, and Prometheus kept 15 days of samples.
+
+## Decision
+
+**Ended jobs' map output is deleted.** Each `HeartbeatResponse` carries
+`active_jobs`, the jobs that have not ended. A worker deletes each `job-N`
+directory in its work directory that is not active, unless it was written
+after the heartbeat was sent: that directory may belong to a job submitted
+after the coordinator answered. An unset `active_jobs` (an older
+coordinator) deletes nothing. The delete runs outside the heartbeat loop, one
+at a time, so a large one cannot delay a heartbeat. It counts
+`mr_worker_pruned_jobs_total` and `mr_worker_pruned_bytes_total`. A
+coordinator restarted without its log has forgotten the job, so its map
+output goes too, which is right: nothing can read it any more.
+
+**A worker low on disk stops taking tasks.** Before each task request it
+checks the work directory's free space; under `-min-free-mib` (default
+1024) it waits, still sending heartbeats so it is not declared dead, and
+counts `mr_worker_disk_waits_total`. A nearly full disk then stalls the
+job instead of failing task after task. The check is made before a task,
+not while it runs, so the margin must hold one task's output (a map task's
+spills or a reduce task's fetched input); a task that still runs out of
+space fails and is retried, on this worker once space is back or on
+another. `mr_worker_disk_free_bytes` shows the space.
+
+**The coordinator forgets old jobs.** It keeps the `-keep-jobs` (default
+100) most recent ended jobs for `mr status` and the status page; older ones
+are forgotten, oldest first; 0 keeps all of them, and a negative value is
+rejected. Job IDs come from a counter, so a forgotten
+job's ID is never used again.
+
+**The job-file cache is an LRU** of 16 programs, instead of emptying itself
+when full.
+
+**Compose bounds logs and metrics.** Every container's log rotates at
+10 MB, three files kept, and Prometheus keeps at most 512 MB of samples.
+`make clean-output` deletes job output from the output volume, keeping the
+experiments' cached inputs and the write-ahead log.
+
+## Consequences
+
+- A long-running cluster, such as the demo, uses disk for the current job
+  only, plus job output, which stays until the user deletes it.
+- Map output of an ended job cannot be inspected afterwards. Tests that
+  read it set `Worker.KeepEndedJobs`.
+- The write-ahead log (`-data-dir`) still grows with every job; it has no
+  compaction. One log record per task event is small next to job data, and
+  the log is deleted with the output volume.
+- If every worker is short of disk while a job runs, the job waits until
+  space is freed. The worker's warning log and its metrics say why.
+
+## Alternatives considered
+
+- **Restart workers between jobs.** A graceful stop already deletes the
+  work directory. It works for the benchmark harness, which does it before
+  each run, but a cluster in use should not need restarts.
+- **Delete on the worker when its reduce tasks finish.** A worker does not
+  know when every reduce task of the job has read its output; only the
+  coordinator does.
+- **Evict the oldest map output of running jobs when the disk is full.** The
+  coordinator would then rerun the lost map tasks (§3.3), which is correct
+  but turns a full disk into repeated work. Waiting is simpler and visible.

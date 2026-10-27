@@ -177,7 +177,8 @@ make cluster-down
 This removes only this project's containers and its `output` and
 `s3-output` volumes, including any job output and the 1 GiB sort input. It
 never touches other coursework containers. Delete old `bench/results/`
-directories as you go to keep disk free.
+directories as you go to keep disk free. To keep the cluster but drop old
+job output, run `make clean-output`; it also prints the disk use.
 
 ## Troubleshooting
 
@@ -187,7 +188,8 @@ directories as you go to keep disk free.
 | `go: command not found` | `export PATH="$HOME/.local/go/bin:$PATH"` (step 2 adds it to `~/.bashrc`) |
 | `ssh: Could not resolve hostname` or a timeout | Connect to the VPN |
 | A container exits with `OOMKilled` | Check `free -m`; stop other coursework containers, or skip the monitoring profile |
-| `no space left on device` | `make cluster-down`, delete `bench/results/*`, then `docker image prune` |
+| `no space left on device` | `make clean-output`; if that is not enough, `make cluster-down`, delete `bench/results/*`, then `docker image prune` |
+| A worker logs `disk nearly full; not taking tasks` | Free space as above; the worker resumes by itself |
 | The status page does not load on the laptop | Reconnect with the `-L 18780:...` forward from step 1 |
 
 ## Not built yet

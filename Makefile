@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check data cluster-up cluster-down monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check hooks vm-check data cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -44,6 +44,14 @@ cluster-up: data
 
 cluster-down:
 	$(COMPOSE) --profile monitoring --profile s3 down -v --remove-orphans
+
+# Delete job output from the output volume, keeping the experiments' cached
+# inputs and the write-ahead log, and show what is left on the disk.
+clean-output:
+	docker run --rm -v mapreduce_output:/out golang:1.26-alpine \
+		find /out -mindepth 1 -maxdepth 1 ! -name 'exp-input-*' ! -name wal -exec rm -rf {} +
+	@df -h /
+	@docker system df
 
 # Prometheus at 127.0.0.1:19090 and Grafana at 127.0.0.1:13000.
 monitoring-up:

@@ -1,11 +1,12 @@
 // Command coordinator serves the coordinator ("master", §3.2) of a cluster.
 //
-//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-log-format text|json]
+//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-keep-jobs n] [-log-format text|json]
 //
 // It runs until interrupted, then tells workers to exit. With -data-dir it
 // logs every decision there, and a restarted coordinator resumes its job
 // from that log (§3.3). With -http it serves a status page and Prometheus
-// metrics (§4.8).
+// metrics (§4.8). It keeps the -keep-jobs most recent ended jobs for
+// mr status and forgets older ones.
 package main
 
 import (
@@ -37,11 +38,12 @@ func main() {
 	httpAddr := flag.String("http", ":8080", "address of the status page and /metrics (empty: none)")
 	dataDir := flag.String("data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
 	backups := flag.Bool("backups", true, "run backup attempts of the last tasks of each phase")
+	keepJobs := flag.Int("keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
 	logFormat := flag.String("log-format", "text", "log format: text or json")
 	flag.Parse()
 	err := logs.Setup(*logFormat)
 	if err == nil {
-		err = run(*addr, *httpAddr, *dataDir, *backups)
+		err = run(*addr, *httpAddr, *dataDir, *backups, *keepJobs)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "coordinator:", err)
@@ -49,12 +51,16 @@ func main() {
 	}
 }
 
-func run(addr, httpAddr, dataDir string, backups bool) (err error) {
+func run(addr, httpAddr, dataDir string, backups bool, keepJobs int) (err error) {
+	if keepJobs < 0 {
+		return fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", keepJobs)
+	}
 	cfg := coordinator.Config{
 		HeartbeatInterval: 3 * time.Second,
 		WorkerTimeout:     10 * time.Second, // three missed heartbeats
 		RetryAfter:        time.Second,
 		Backups:           backups,
+		KeepJobs:          keepJobs,
 	}
 	var srv *coordinator.Server
 	if dataDir == "" {

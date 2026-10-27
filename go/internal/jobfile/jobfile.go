@@ -11,6 +11,7 @@
 package jobfile
 
 import (
+	"container/list"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -32,7 +33,8 @@ import (
 const MaxSize = 1 << 20
 
 // maxCached bounds the programs kept, so a long-lived worker running many
-// different job files does not grow without limit.
+// different job files does not grow without limit; the least recently used
+// is dropped first.
 const maxCached = 16
 
 // loadTimeout bounds interpreting a job file, which runs its package-level
@@ -61,8 +63,14 @@ var symbols = interp.Exports{
 
 var (
 	mu    sync.Mutex
-	cache = map[[sha256.Size]byte]api.Program{}
+	cache = map[[sha256.Size]byte]*list.Element{} // of entry, in lru
+	lru   = list.New()                            // most recently used first
 )
+
+type entry struct {
+	sum [sha256.Size]byte
+	p   api.Program
+}
 
 // Load interprets src and returns its program. The same source is
 // interpreted once per process: the coordinator checks it when the job is
@@ -75,10 +83,13 @@ func Load(src string) (api.Program, error) {
 	}
 	sum := sha256.Sum256([]byte(src))
 	mu.Lock()
-	p, ok := cache[sum]
+	e, ok := cache[sum]
+	if ok {
+		lru.MoveToFront(e)
+	}
 	mu.Unlock()
 	if ok {
-		return p, nil
+		return e.Value.(*entry).p, nil
 	}
 
 	type result struct {
@@ -101,10 +112,12 @@ func Load(src string) (api.Program, error) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(cache) >= maxCached {
-		clear(cache)
+	if _, ok := cache[sum]; !ok { // another caller may have loaded it too
+		cache[sum] = lru.PushFront(&entry{sum, r.p})
+		if lru.Len() > maxCached {
+			delete(cache, lru.Remove(lru.Back()).(*entry).sum)
+		}
 	}
-	cache[sum] = r.p
 	return r.p, nil
 }
 

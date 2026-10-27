@@ -91,6 +91,11 @@ benchmark shuffled 68 MB for a 64 MB input) and output. The experiments
 (E0–E4) use 1 GiB inputs; keep any larger input to a few GB at most, and
 delete old output and `bench/results/` files as you go.
 
+Workers delete a job's map output once it ends and stop taking tasks under
+1 GiB free; logs and Prometheus are capped
+([ADR 0017](design/0017-disk-and-memory-bounds.md)). `make clean-output`
+deletes old job output and prints `df` and `docker system df`.
+
 ## One-time setup
 
 ### 1. On your laptop: an SSH alias
