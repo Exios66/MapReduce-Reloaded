@@ -9,13 +9,18 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 base=${BASELINE:-$root/bench/baseline.txt}
+case $base in /*) ;; *) base=$PWD/$base ;; esac # before the cd below
+if [ "${PERF_UPDATE:-}" != 1 ] && [ ! -f "$base" ]; then
+    echo "perf: no baseline at $base; PERF_UPDATE=1 writes one" >&2
+    exit 1
+fi
 new=$(mktemp)
 trap 'rm -f "$new"' EXIT
 cd "$root/go"
 go test -run '^$' -bench . -benchtime "${BENCHTIME:-1s}" -count "${COUNT:-6}" \
     ./internal/combine ./internal/extsort ./internal/formats/kv ./internal/local \
     ./internal/jobfile ./internal/partition ./internal/shuffle | tee "$new"
-if [ "${PERF_UPDATE:-}" = 1 ] || [ ! -f "$base" ]; then
+if [ "${PERF_UPDATE:-}" = 1 ]; then
     cp "$new" "$base"
     echo "perf: wrote $base; commit it"
     exit 0
