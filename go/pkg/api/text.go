@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"math"
+	"math/bits"
 	"strconv"
 )
 
@@ -33,27 +34,33 @@ func Words(line []byte) [][]byte {
 
 // Sum emits key with the total of its values, which are base-10 int64
 // counts. It fails, emitting nothing, on a value that does not parse as an
-// int64 or on a total that overflows one. It suits counting jobs as
-// a Reducer and a Combiner. values is a plain func rather than an
-// iter.Seq, so a job file can use it directly (var Combine = api.Sum);
-// compiled code passes an iter.Seq[[]byte] unchanged.
+// int64 or on a total that overflows one, whatever the order of the values.
+// It suits counting jobs as a Reducer and a Combiner. values is a plain
+// func rather than an iter.Seq, so a job file can use it directly
+// (var Combine = api.Sum); compiled code passes an iter.Seq[[]byte]
+// unchanged.
 func Sum(_ Context, key []byte, values func(yield func([]byte) bool), out Emitter) error {
-	var total int64
+	// The positive and negative counts are summed apart, so that whether the
+	// total fits does not depend on the order in which they come.
+	var pos, neg, carry uint64
 	var err error
 	values(func(v []byte) bool {
 		var n int64
 		if n, err = strconv.ParseInt(string(v), 10, 64); err != nil {
 			return false
 		}
-		if n > 0 && total > math.MaxInt64-n || n < 0 && total < math.MinInt64-n {
-			err = fmt.Errorf("api.Sum: the total for %q overflows int64", key)
-			return false
+		if n >= 0 {
+			pos, carry = bits.Add64(pos, uint64(n), 0)
+		} else {
+			neg, carry = bits.Add64(neg, -uint64(n), 0)
 		}
-		total += n
-		return true
+		return carry == 0
 	})
 	if err != nil {
 		return err
 	}
-	return out.Emit(key, strconv.AppendInt(nil, total, 10))
+	if carry != 0 || pos >= neg && pos-neg > math.MaxInt64 || pos < neg && neg-pos > 1<<63 {
+		return fmt.Errorf("api.Sum: the total for %q overflows int64", key)
+	}
+	return out.Emit(key, strconv.AppendInt(nil, int64(pos-neg), 10))
 }

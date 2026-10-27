@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"math/big"
 	"slices"
 	"testing"
 
@@ -57,8 +58,24 @@ func TestSum(t *testing.T) {
 			t.Errorf("Sum%q: err %v, emitted %v; want an error and nothing", values, err, out)
 		}
 	}
-	out = nil
-	if err := api.Sum(nil, []byte("w"), slices.Values([][]byte{[]byte("9223372036854775807"), []byte("-1"), []byte("1")}), &out); err != nil {
-		t.Errorf("Sum near the limit: %v", err)
+	// Totals that fit, in every order of their values, including ones that
+	// pass beyond int64 on the way.
+	for _, values := range [][]string{
+		{"9223372036854775807", "-1", "1"},
+		{"9223372036854775807", "1", "-1"},
+		{"-9223372036854775808", "-1", "1"},
+		{"9223372036854775807", "9223372036854775807", "-9223372036854775808", "-9223372036854775807"},
+	} {
+		want := new(big.Int)
+		var vs [][]byte
+		for _, v := range values {
+			n, _ := new(big.Int).SetString(v, 10)
+			want.Add(want, n)
+			vs = append(vs, []byte(v))
+		}
+		out = nil
+		if err := api.Sum(nil, []byte("w"), slices.Values(vs), &out); err != nil || len(out) != 1 || out[0][1] != want.String() {
+			t.Errorf("Sum%q: emitted %v, %v; want %s", values, out, err, want)
+		}
 	}
 }
