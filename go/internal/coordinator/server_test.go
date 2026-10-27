@@ -492,6 +492,41 @@ func TestPausedTaskRequest(t *testing.T) {
 	}
 }
 
+// The retention bound applies while the coordinator is idle too. Finishing
+// the newest job must not leave KeepJobs+1 ended jobs until another submit.
+func TestKeepJobsAfterCompletion(t *testing.T) {
+	for _, keep := range []int{1, 2} {
+		t.Run(fmt.Sprintf("keep=%d", keep), func(t *testing.T) {
+			s, w, first := newJobWith(t, Config{KeepJobs: keep}, 1)
+			in := filepath.Join(t.TempDir(), "in.txt")
+			if err := os.WriteFile(in, []byte("a\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for n := 1; n <= keep+1; n++ {
+				if !succeed(t, s, w, next(t, s, w), outputs(0, 1)) || !succeed(t, s, w, next(t, s, w), nil) {
+					t.Fatal("completion rejected")
+				}
+				if n <= keep {
+					if _, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+						Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+					}}); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for n := 2; n <= keep+1; n++ {
+				if st := jobStatus(t, s, fmt.Sprintf("job-%d", n)); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+					t.Fatalf("retained job not succeeded: %v", st)
+				}
+			}
+			_, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: first})
+			if status.Code(err) != codes.NotFound {
+				t.Errorf("oldest ended job %s is still retained after %d completions (KeepJobs=%d): %v", first, keep+1, keep, err)
+			}
+		})
+	}
+}
+
 // A worker is told to stop the attempts it should no longer run (§3.6).
 func TestHeartbeatCancels(t *testing.T) {
 	s, w, _ := newJob(t, 1)

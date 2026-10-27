@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -357,5 +358,92 @@ func TestReplayKeepsReusedOutput(t *testing.T) {
 	}
 	if st := jobStatus(t, s, second); st.GetState() != pb.JobState_JOB_STATE_MAPPING {
 		t.Fatalf("second job %v; want it still mapping", st)
+	}
+}
+
+// Eviction must replay consistently, and restarting must not reuse IDs
+// belonging to forgotten jobs. Zero retention means keep all jobs.
+func TestRecoverJobRetention(t *testing.T) {
+	for _, keep := range []int{0, 1, 2} {
+		t.Run(fmt.Sprintf("keep=%d", keep), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "coordinator.log")
+			in := filepath.Join(t.TempDir(), "in.txt")
+			if err := os.WriteFile(in, []byte("a\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			s := recoverServer(t, Config{KeepJobs: keep}, path)
+			w := register(t, s)
+			submit := func() string {
+				t.Helper()
+				sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+					Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+				}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return sub.GetJobId()
+			}
+			for n := 1; n <= 4; n++ {
+				if id := submit(); id != fmt.Sprintf("job-%d", n) {
+					t.Fatalf("job ID=%s", id)
+				}
+				if n < 4 {
+					if !succeed(t, s, w, next(t, s, w), outputs(0, 1)) || !succeed(t, s, w, next(t, s, w), nil) {
+						t.Fatal("completion rejected")
+					}
+				}
+			}
+			checkRetained := func() {
+				t.Helper()
+				for n := 1; n <= 4; n++ {
+					_, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: fmt.Sprintf("job-%d", n)})
+					want := codes.OK
+					if keep > 0 && n < 4-keep {
+						want = codes.NotFound
+					}
+					assertCode(t, err, want)
+				}
+			}
+			checkRetained()
+			s = recoverServer(t, Config{KeepJobs: keep}, path)
+			checkRetained()
+			w = register(t, s)
+			hb, err := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w})
+			if err != nil || hb.GetActiveJobs() == nil || len(hb.GetActiveJobs().GetJobIds()) != 1 || hb.GetActiveJobs().GetJobIds()[0] != "job-4" {
+				t.Fatalf("recovered active jobs: %v, %v", hb, err)
+			}
+			if !succeed(t, s, w, next(t, s, w), outputs(0, 1)) || !succeed(t, s, w, next(t, s, w), nil) {
+				t.Fatal("recovered job did not finish")
+			}
+			if id := submit(); id != "job-5" {
+				t.Fatalf("ID reused after restart: %s", id)
+			}
+		})
+	}
+}
+
+func TestRecoverPreservesJobSource(t *testing.T) {
+	src, err := os.ReadFile("../../../examples/wordcount.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := recoverServer(t, Config{}, path)
+	spec := &pb.JobSpec{
+		Program: "custom.go", ProgramSource: string(src), Inputs: []string{in}, Output: t.TempDir(),
+		NumReduceTasks: 1, UseCombiner: false, Params: map[string]string{"label": "recovered"},
+	}
+	if _, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: spec}); err != nil {
+		t.Fatal(err)
+	}
+	s = recoverServer(t, Config{}, path)
+	w := register(t, s)
+	resp, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+	if err != nil || resp.GetMapTask() == nil || !proto.Equal(resp.GetMapTask().GetJob(), spec) {
+		t.Fatalf("recovered task lost source or options: %v, %v", resp, err)
 	}
 }

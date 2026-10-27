@@ -338,3 +338,64 @@ def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
     assert jobs.bar.call_args.args[0] == [0, 1]
     assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words, api.Sum)"]
     assert [c.args[0] for c in jobs.annotate.call_args_list] == ["10.0 s", "105.0 s (10.5×)"]
+
+
+@pytest.mark.parametrize("field", ["seconds", "map_output_bytes"])
+@pytest.mark.parametrize("bad_value", [None, "not-a-number"])
+def test_e1_rejects_missing_or_invalid_measurements(plotter, tmp_path, field, bad_value):
+    module, pyplot = plotter
+    figure = Mock()
+    pyplot.subplots.return_value = figure, (Mock(), Mock())
+    measurement = row("s1.0-on")
+    if bad_value is None:
+        del measurement[field]
+    else:
+        measurement[field] = bad_value
+
+    with pytest.raises(KeyError if bad_value is None else ValueError):
+        module.e1([measurement], tmp_path / "E1.png", light(module))
+
+    figure.savefig.assert_not_called()
+
+
+def test_e1_propagates_save_errors(plotter, tmp_path):
+    module, pyplot = plotter
+    figure = Mock()
+    figure.savefig.side_effect = OSError("disk full")
+    left, right = Mock(), Mock()
+    left.get_legend_handles_labels.return_value = ([], [])
+    pyplot.subplots.return_value = figure, (left, right)
+
+    with pytest.raises(OSError, match="disk full"):
+        module.e1([row("s1.0-on")], tmp_path / "E1.png", light(module))
+
+
+@pytest.mark.parametrize("contents", ["", "setting,seconds,valid\n"])
+def test_main_skips_empty_e1_results(plotter, tmp_path, monkeypatch, capsys, contents):
+    module, pyplot = plotter
+    results = tmp_path / "results"
+    experiment = results / "E1"
+    experiment.mkdir(parents=True)
+    (experiment / "runs.csv").write_text(contents)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(results)])
+
+    module.main()
+
+    pyplot.subplots.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_e0_title_places_caption_on_a_second_line(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    axis.errorbar.return_value = [Mock()]
+    pyplot.subplots.return_value = figure, axis
+
+    module.e0([row("normal")], tmp_path / "E0.png", light(module))
+
+    title, subtitle = (call.args[2] for call in figure.text.call_args_list)
+    assert title == "E0: scaling over workers"
+    first, second = subtitle.split("\n")
+    assert first.startswith("Speed-up = job time on 1 worker")
+    assert "M = 32, R = 4" in second
+    figure.savefig.assert_called_once_with(tmp_path / "E0.png")
