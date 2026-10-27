@@ -139,7 +139,7 @@ func TestS3TruncatedRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	if b, err := io.ReadAll(r); err == nil {
 		t.Errorf("a cut-off read returned %d bytes and no error", len(b))
 	}
