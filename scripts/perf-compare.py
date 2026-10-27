@@ -43,17 +43,13 @@ def main():
         if change > threshold:
             mark = f"  SLOWER than {threshold:g}%"
             slower.append(name)
-        print(
-            f"{name}: {base[name]:.0f} -> {new[name]:.0f} ns/op ({change:+.1f}%){mark}"
-        )
+        print(f"{name}: {base[name]:.0f} -> {new[name]:.0f} ns/op ({change:+.1f}%){mark}")
     if base_cpu != new_cpu:
-        print(
-            f"perf: the baseline is from {base_cpu!r}, this run {new_cpu!r}; not comparable"
-        )
+        print(f"perf: the baseline is from {base_cpu!r}, this run {new_cpu!r}; not comparable")
         return
     if slower:
         sys.exit(
-            f"perf: {len(slower)} benchmarks more than {threshold:g}% slower than bench/baseline.txt"
+            f"perf: {len(slower)} benchmarks more than {threshold:g}% slower than the baseline"
         )
     print(f"perf: no benchmark more than {threshold:g}% slower")
 
