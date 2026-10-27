@@ -142,12 +142,12 @@ proto-check: proto-lint proto-breaking proto
 	@test -z "$$(git ls-files --others --exclude-standard -- go/gen python/mapreduce_reloaded/gen)" || \
 		(echo "generated code has new files: git add them" && exit 1)
 
-# papermap reads docs and Python tests, outside the Go module, which the test
-# cache does not track; -count=1 runs it every time. -shuffle=on runs each
-# package's tests in a random order, so that no test depends on another; a
-# failure prints the seed, and -shuffle=SEED repeats the order.
+# papermap and statusweb read docs and deployment files outside the Go
+# module, which the test cache does not track; -count=1 runs them every time.
+# -shuffle=on randomizes each package's test order to expose dependencies.
+# Failures print the seed; -shuffle=SEED repeats that order.
 go-test:
-	cd go && go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap
+	cd go && go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap ./internal/statusweb
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
