@@ -259,3 +259,46 @@ def test_timeline_with_no_valid_run_draws_empty_bars(plotter, tmp_path, exp):
     right.barh.assert_called_once()
     assert right.barh.call_args.args[1] == []
     right.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
+
+
+def tasks_file(path, job, samples, total=4):
+    with path.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["seconds", "job", "kind", "state", "value"])
+        for seconds, done in samples:
+            writer.writerow([seconds, job, "map", "total", total])
+            writer.writerow([seconds, job, "map", "completed", done])
+            writer.writerow([seconds, "job-other", "map", "completed", total])
+
+
+def test_map_phase_ends_when_every_map_task_is_done(plotter, tmp_path):
+    module, _ = plotter
+    path = tmp_path / "tasks.csv"
+    tasks_file(path, "job-1", [(1.0, 0), (1.5, 2), (3.0, 4), (3.5, 4)])
+    assert module.map_phase(path, "job-1") == pytest.approx(2.0)
+    tasks_file(path, "job-1", [(1.0, 0), (1.5, 3)])
+    assert module.map_phase(path, "job-1") is None
+
+
+def test_e5_compares_job_and_map_phase_times(plotter, tmp_path):
+    module, pyplot = plotter
+    jobs, maps = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (jobs, maps)
+    (tmp_path / "E5").mkdir()
+    rows = []
+    for n, (setting, seconds, phase) in enumerate(
+        (("compiled", 10, 8), ("interpreted", 15, 12), ("interpreted", 99, 1)), start=1
+    ):
+        job = f"job-{n}"
+        rows.append(row(setting, seconds, valid="0" if n == 3 else "1") | {"run": "1", "job": job})
+        tasks_file(tmp_path / "E5" / f"tasks-{setting}-1.csv", job, [(0, 0), (phase, 4)])
+    # Run 3 is invalid and overwrote nothing that counts: its file is for job-3.
+    tasks_file(tmp_path / "E5" / "tasks-interpreted-1.csv", "job-2", [(0, 0), (12, 4)])
+
+    module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
+
+    for axis, heights, overhead in ((jobs, [10, 15], "+50%"), (maps, [8, 12], "+50%")):
+        call = axis.bar.call_args
+        assert call.args[0] == [0, 1]
+        assert call.args[1] == pytest.approx(heights)
+        assert axis.text.call_args.args[2] == f"{overhead} with the job file"
