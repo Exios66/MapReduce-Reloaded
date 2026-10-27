@@ -35,7 +35,7 @@ type LostWorker struct {
 func (s *Server) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Status{At: time.Now(), Lost: append([]LostWorker(nil), s.lost...)}
+	st := Status{At: s.now(), Lost: append([]LostWorker(nil), s.lost...)}
 	for _, j := range s.order {
 		st.Jobs = append(st.Jobs, j.status())
 	}

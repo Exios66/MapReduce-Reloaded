@@ -91,6 +91,18 @@ func (s *Server) Truncate() {
 	s.faults = append(s.faults, &fault{op: "GetObject", times: 1, truncate: true})
 }
 
+// Pending returns how many injected failures have not happened yet, not
+// counting faults set to fail every request.
+func (s *Server) Pending() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, f := range s.faults {
+		n += max(0, f.times)
+	}
+	return n
+}
+
 // Reset clears every fault.
 func (s *Server) Reset() {
 	s.mu.Lock()

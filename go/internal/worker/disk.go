@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -49,6 +50,9 @@ func (w *Worker) prune(active []string, sent time.Time) {
 			keep[id] = true
 		}
 		entries, err := os.ReadDir(w.workDir)
+		if errors.Is(err, fs.ErrNotExist) {
+			return // made by the first task, so there is nothing to prune
+		}
 		if err != nil {
 			w.logger.Warn("listing map output", "err", err)
 			return
