@@ -93,9 +93,12 @@ func PlanM(ctx context.Context, in formats.InputFormat, patterns []string, m int
 // Allocate divides m splits among files of the given positive sizes, in
 // proportion to size by largest remainder (ties to the earlier file), then
 // gives a file left with none one split, taken from the file with the most.
-// The result sums to max(m, len(sizes)).
+// The result sums to max(m, len(sizes)), or is empty if sizes is.
 func Allocate(sizes []int64, m int) []int {
 	alloc := make([]int, len(sizes))
+	if len(sizes) == 0 {
+		return alloc
+	}
 	if m <= len(sizes) {
 		for i := range alloc {
 			alloc[i] = 1

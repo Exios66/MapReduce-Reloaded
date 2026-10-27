@@ -113,6 +113,7 @@ func TestAllocate(t *testing.T) {
 		{[]int64{5, 5, 5}, 2, []int{1, 1, 1}},  // more files than m
 		{[]int64{1, 1 << 40}, 10, []int{1, 9}}, // a tiny file still gets one
 		{[]int64{1 << 62, 1 << 62}, 1 << 30, []int{1 << 29, 1 << 29}},
+		{nil, 64, []int{}}, // every input file empty
 	} {
 		got := Allocate(tc.sizes, tc.m)
 		if !slices.Equal(got, tc.want) {
@@ -158,6 +159,10 @@ func TestPlanMSkipsEmptyFilesAndRejectsZero(t *testing.T) {
 	splits, err := PlanM(t.Context(), formats.Text{}, []string{glob}, 2)
 	if err != nil || len(splits) != 2 || filepath.Base(splits[0].Path) != fileName(1) {
 		t.Fatalf("got %v, %v; want two splits of the non-empty file", splits, err)
+	}
+	// Only empty files: no splits, so the caller reports an empty input.
+	if splits, err := PlanM(t.Context(), formats.Text{}, []string{writeFiles(t, 0, 0)}, 64); err != nil || len(splits) != 0 {
+		t.Fatalf("empty files: got %v, %v; want no splits", splits, err)
 	}
 	if _, err := PlanM(t.Context(), formats.Text{}, []string{glob}, 0); err == nil {
 		t.Fatal("m = 0: no error")
