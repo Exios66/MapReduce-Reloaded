@@ -171,7 +171,7 @@ func TestPruneSafeguards(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(external, filepath.Join(dir, "job-5")); err != nil {
-		t.Fatal(err)
+		t.Skipf("symlinks unavailable: %v", err)
 	}
 	w := New(nil, dir, nil)
 	w.prune([]string{"job-2"}, sent)
