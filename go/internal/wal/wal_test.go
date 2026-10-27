@@ -43,6 +43,7 @@ func size(t *testing.T, path string) int64 {
 
 // Records survive a reopen, in order, and appends continue after them.
 func TestReopen(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "log")
 	l, got := open(t, path)
 	if got != nil {
@@ -64,6 +65,7 @@ func TestReopen(t *testing.T) {
 // A crash mid-append leaves a torn last record, which Open drops so that
 // appends continue from the last whole record.
 func TestTornTail(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	whole := filepath.Join(dir, "whole")
 	l, _ := open(t, whole)
@@ -101,6 +103,7 @@ func TestTornTail(t *testing.T) {
 
 // Damage before the last record is not a torn write, and is reported.
 func TestCorrupt(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "log")
 	l, _ := open(t, path)
 	appendAll(t, l, "first", "second")
@@ -118,6 +121,7 @@ func TestCorrupt(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "log")
 	l, _ := open(t, path)
 	appendAll(t, l, "a")

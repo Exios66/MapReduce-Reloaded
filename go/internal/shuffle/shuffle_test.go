@@ -106,6 +106,7 @@ func randomBytes(n int) []byte {
 }
 
 func TestFetch(t *testing.T) {
+	t.Parallel()
 	data := randomBytes(3*ChunkSize + 17)
 	_, client := serve(t, data, 0)
 	for _, offset := range []int{0, 5, ChunkSize, len(data), len(data) + 1} {
@@ -122,6 +123,7 @@ func TestFetch(t *testing.T) {
 // A fetch that breaks resumes where it stopped, so the bytes still arrive
 // once each and in order.
 func TestFetchResumes(t *testing.T) {
+	t.Parallel()
 	data := randomBytes(4 * ChunkSize)
 	srv, client := serve(t, data, 2)
 	got, err := fetch(client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1})
@@ -135,6 +137,7 @@ func TestFetchResumes(t *testing.T) {
 
 // A fetch that makes no progress gives up after MaxRetries retries.
 func TestFetchGivesUp(t *testing.T) {
+	t.Parallel()
 	srv, client := serve(t, randomBytes(ChunkSize), 0)
 	srv.down.Store(true)
 	empty := NewReader(context.Background(), client, &pb.FetchPartitionRequest{JobId: "job-1", Partition: 1})
@@ -152,6 +155,7 @@ func TestFetchGivesUp(t *testing.T) {
 // A fetch that stalls is abandoned after the idle timeout and resumed; one
 // that keeps stalling gives up with DeadlineExceeded.
 func TestFetchStalls(t *testing.T) {
+	t.Parallel()
 	data := randomBytes(4 * ChunkSize)
 	srv, client := serve(t, data, 0)
 	srv.stalls.Store(2)
@@ -171,6 +175,7 @@ func TestFetchStalls(t *testing.T) {
 
 // Errors that retrying cannot fix are returned at once.
 func TestFetchErrors(t *testing.T) {
+	t.Parallel()
 	srv, client := serve(t, nil, 0)
 	for _, tc := range []struct {
 		req  *pb.FetchPartitionRequest
@@ -191,6 +196,7 @@ func TestFetchErrors(t *testing.T) {
 }
 
 func TestClients(t *testing.T) {
+	t.Parallel()
 	var c Clients
 	a, err := c.Get("localhost:1")
 	if err != nil {

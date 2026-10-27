@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -143,9 +143,16 @@ proto-check: proto-lint proto-breaking proto
 		(echo "generated code has new files: git add them" && exit 1)
 
 # papermap reads docs and Python tests, outside the Go module, which the test
-# cache does not track; -count=1 runs it every time.
+# cache does not track; -count=1 runs it every time. -shuffle=on runs each
+# package's tests in a random order, so that no test depends on another; a
+# failure prints the seed, and -shuffle=SEED repeats the order.
 go-test:
-	cd go && go test -race ./... && go test -count=1 ./internal/papermap
+	cd go && go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap
+
+# Run the coordinator, worker and command tests 20 times in random orders,
+# by hand before a release, to find flaky tests (#157). It takes a while.
+flaky:
+	cd go && go test -race -shuffle=on -count=20 -timeout 90m ./internal/coordinator ./internal/worker ./internal/shuffle ./cmd/...
 
 go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...

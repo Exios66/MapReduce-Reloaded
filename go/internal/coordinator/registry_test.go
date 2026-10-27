@@ -9,6 +9,7 @@ import (
 )
 
 func TestRegistry(t *testing.T) {
+	t.Parallel()
 	r := NewRegistry("w")
 	t0 := time.Unix(0, 0)
 	a := r.Register(&pb.WorkerInfo{ShuffleAddress: "a:1", Slots: 2}, t0)

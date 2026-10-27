@@ -11,6 +11,7 @@ import (
 // Status lists the jobs, the live workers with what they run, and the lost
 // workers with the tasks that had to run again.
 func TestStatus(t *testing.T) {
+	t.Parallel()
 	s, a, id := newJobWith(t, Config{WorkerTimeout: time.Minute}, 1)
 	b := register(t, s)
 	m0 := Task{pb.TaskKind_TASK_KIND_MAP, 0}
