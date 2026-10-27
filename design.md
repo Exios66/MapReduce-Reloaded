@@ -304,6 +304,9 @@ four engineering practices:
   commit ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165).
 - **Many small pull requests.** One concern each, as the roadmap's
   course-deliverable items are listed.
+  Issues and pull requests start from the forms and templates in
+  [`.github/`](.github/), which ask for the checks, the docs and the review
+  that each one needs.
 - **Feedback sought and given.** An AI agent reviews my pull requests with
   inline comments, and I answer each thread with a fix or a reason (sought).
   I review at least one pull request written by an AI agent and leave
