@@ -73,6 +73,12 @@ class Config:
     # How long the job may hold back its map tasks from workers not on a
     # host that holds their split (delay scheduling). Zero means never.
     locality_wait: float = 0.0
+    # Begins every worker and job ID the server gives out. A coordinator
+    # without a log numbers from 1 again when restarted, so serve sets a
+    # prefix of its own: a worker still holding the last run's IDs, or files
+    # under a job's ID, must not take them for this run's. recover ignores
+    # it, as the log keeps IDs unique.
+    id_prefix: str = ""
     # The write-ahead log: every change to a job or its tasks is appended to
     # it before any reply depends on it (§3.3).
     log: Log | None = None
@@ -223,7 +229,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         # A copy, as Go's Config is a value: recover sets its log.
         self._cfg = replace(cfg) if cfg else Config()
         self._mu = threading.Lock()
-        self._workers = Registry("w")
+        self._workers = Registry(self._cfg.id_prefix + "w")
         self._jobs: dict[str, _Job] = {}
         self._order: list[_Job] = []  # every job kept, in the order submitted
         self._seq = 0  # jobs submitted, for the next ID; never reused
@@ -381,7 +387,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 os.makedirs(os.path.join(output, TEMP_DIR), exist_ok=True)
             except OSError as e:
                 raise RpcError(grpc.StatusCode.FAILED_PRECONDITION, str(e)) from e
-            rec = log_pb2.JobSubmitted(job_id=f"job-{self._seq + 1}", job=m, splits=splits)
+            rec = log_pb2.JobSubmitted(
+                job_id=f"job-{self._cfg.id_prefix}{self._seq + 1}", job=m, splits=splits
+            )
             now = self.now()
             self._record(log_pb2.LogRecord(job_submitted=rec), now)
             self._submit(rec, now)
@@ -683,6 +691,17 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             raise RpcError(grpc.StatusCode.UNAVAILABLE, f"coordinator log: {e}") from e
 
 
+def _base36(n: int) -> str:
+    """Formats n, which is not negative, in base 36, as Go's
+    strconv.FormatInt(n, 36)."""
+    digits = ""
+    while True:
+        n, d = divmod(n, 36)
+        digits = "0123456789abcdefghijklmnopqrstuvwxyz"[d] + digits
+        if n == 0:
+            return digits
+
+
 def serve(address: str, cfg: Config | None = None, threads: int = 16):
     """Starts an insecure gRPC coordinator on address, such as "[::]:18770",
     and its worker monitor. Port 0 selects an available port; threads limits
@@ -690,6 +709,10 @@ def serve(address: str, cfg: Config | None = None, threads: int = 16):
     port and the event that stops the monitor. The caller must also stop the
     gRPC server separately. Raises ValueError if threads is nonpositive and
     propagates RuntimeError if binding fails."""
+    cfg = cfg or Config()
+    if cfg.log is None and not cfg.id_prefix:
+        # Without a log, IDs start from 1 again: tell them from the last run's.
+        cfg = replace(cfg, id_prefix=_base36(time.time_ns()) + "-")
     coordinator = Server(cfg)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=threads))
     coordinator_pb2_grpc.add_CoordinatorServiceServicer_to_server(coordinator, server)

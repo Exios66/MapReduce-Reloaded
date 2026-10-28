@@ -1,6 +1,8 @@
 """Restarts a coordinator from its write-ahead log (§3.3, ADR 0007),
 mirroring go/internal/coordinator/recover.go."""
 
+from dataclasses import replace
+
 from mapreduce_reloaded.coordinator.registry import Registry
 from mapreduce_reloaded.coordinator.server import Config, Server
 from mapreduce_reloaded.gen.mapreduce.v1 import log_pb2
@@ -16,7 +18,7 @@ def recover(cfg: Config, path: str) -> tuple[Server, Log]:
     finish times are kept; missing ones stay unknown. Raises the log's
     errors, a protobuf DecodeError or replay's ValueError for a bad record,
     and RpcError with Unavailable if recording the restart fails."""
-    s = Server(cfg)
+    s = Server(replace(cfg, id_prefix=""))
     restarts = 0
 
     def replay(b: bytes):

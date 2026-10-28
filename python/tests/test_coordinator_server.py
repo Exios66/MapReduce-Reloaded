@@ -9,7 +9,14 @@ import grpc
 import pytest
 
 from mapreduce_reloaded.coordinator import SKIP_AFTER
-from mapreduce_reloaded.coordinator.server import MAX_LOST, TEMP_DIR, Config, Server, serve
+from mapreduce_reloaded.coordinator.server import (
+    MAX_LOST,
+    TEMP_DIR,
+    Config,
+    Server,
+    _base36,
+    serve,
+)
 from mapreduce_reloaded.coordinator.wire import MAX_REDUCE_TASKS, input_split, path, uri, validate
 from mapreduce_reloaded.formats import Split
 from mapreduce_reloaded.gen.mapreduce.v1 import (
@@ -1212,3 +1219,24 @@ def test_empty_and_nul_paths_are_invalid(tmp_path, monkeypatch):
         )
         assert code(Server().SubmitJob, req) == grpc.StatusCode.INVALID_ARGUMENT, output
     assert not (tmp_path / TEMP_DIR).exists()
+
+
+def test_serve_without_a_log_gives_each_run_its_own_ids():
+    """A coordinator without a log numbers from 1 again when restarted. It
+    must not give out the last run's IDs: a worker still remembers them,
+    and keeps files under a job's ID. A prefix given is kept."""
+    ids = []
+    for cfg in [None, Config(), Config(id_prefix="x-")]:
+        server, coordinator, _, stop = serve("127.0.0.1:0", cfg)
+        try:
+            ids.append(Coordinator(coordinator).register())
+        finally:
+            stop.set()
+            server.stop(None)
+    assert ids[0] != ids[1] and "w1" not in ids[:2]
+    assert ids[2] == "x-w1"
+
+
+@pytest.mark.parametrize("n, want", [(0, "0"), (35, "z"), (36, "10"), (1296, "100")])
+def test_base36(n, want):
+    assert _base36(n) == want
