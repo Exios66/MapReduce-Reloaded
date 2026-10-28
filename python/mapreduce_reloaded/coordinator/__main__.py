@@ -1,0 +1,228 @@
+"""Serves the coordinator ("master", §3.2) of a cluster, mirroring
+go/cmd/coordinator, with the same flags:
+
+    python -m mapreduce_reloaded.coordinator [-addr :7070] [-http :8080]
+        [-data-dir dir] [-backups=false] [-keep-jobs n] [-max-task-failures n]
+        [-log-format text|json]
+
+It runs until interrupted or terminated, then tells workers to exit. With
+-data-dir it logs every decision there, and a restarted coordinator resumes
+its job from that log (§3.3). With -http it serves a status page and
+Prometheus metrics (§4.8). It keeps the -keep-jobs most recent ended jobs
+for mr status and forgets older ones. Go and Python workers and the mr
+command work with either coordinator. It exits with status 2 for bad flags
+and 1 for any other error.
+"""
+
+import argparse
+import json
+import logging
+import os
+import signal
+import sys
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from mapreduce_reloaded.coordinator import statusweb
+from mapreduce_reloaded.coordinator.recover import recover
+from mapreduce_reloaded.coordinator.server import Config, Server, serve, start
+from mapreduce_reloaded.coordinator.tasktable import SKIP_AFTER
+
+log = logging.getLogger("mapreduce_reloaded.coordinator")
+
+# How long idle workers get to hear that they should exit, as Go's one
+# retry interval, before the coordinator stops serving.
+EXIT_GRACE = 1.0
+
+
+@dataclass
+class Options:
+    """The coordinator's flags."""
+
+    addr: str = ":7070"
+    http: str = ":8080"
+    data_dir: str = ""
+    backups: bool = True
+    keep_jobs: int = 100
+    max_task_failures: int = 8
+    log_format: str = "text"
+
+
+def _bool(v: str) -> bool:
+    """Parses a boolean flag value as Go's strconv.ParseBool does."""
+    if v in ("1", "t", "T", "true", "TRUE", "True"):
+        return True
+    if v in ("0", "f", "F", "false", "FALSE", "False"):
+        return False
+    raise argparse.ArgumentTypeError(f"invalid boolean value {v!r}")
+
+
+def parse(args: list[str]) -> Options:
+    """Parses the coordinator's flags, which take one dash or two, as Go's
+    flag package. Raises SystemExit with status 2 for bad flags, and 0 for
+    -h, after printing to stderr or stdout."""
+    p = argparse.ArgumentParser(prog="coordinator", allow_abbrev=False)
+    d = Options()
+    p.add_argument("-addr", "--addr", default=d.addr, help="address to listen on")
+    p.add_argument(
+        "-http",
+        "--http",
+        default=d.http,
+        help="address of the status page and /metrics (empty: none)",
+    )
+    p.add_argument(
+        "-data-dir",
+        "--data-dir",
+        default=d.data_dir,
+        help="directory for the write-ahead log (default: none, so a restart loses the job)",
+    )
+    p.add_argument(
+        "-backups",
+        "--backups",
+        type=_bool,
+        nargs="?",
+        const=True,
+        default=d.backups,
+        help="run backup attempts of the last tasks of each phase",
+    )
+    p.add_argument(
+        "-keep-jobs",
+        "--keep-jobs",
+        type=int,
+        default=d.keep_jobs,
+        help="ended jobs to keep for mr status; older ones are forgotten (0: all)",
+    )
+    p.add_argument(
+        "-max-task-failures",
+        "--max-task-failures",
+        type=int,
+        default=d.max_task_failures,
+        help="fail the job once one task has failed this many times (0: retry for ever)",
+    )
+    p.add_argument(
+        "-log-format", "--log-format", default=d.log_format, help="log format: text or json"
+    )
+    a = p.parse_args(args)
+    o = Options(
+        a.addr, a.http, a.data_dir, a.backups, a.keep_jobs, a.max_task_failures, a.log_format
+    )
+    if o.keep_jobs < 0:
+        p.error(f"-keep-jobs is {o.keep_jobs}; it must be 0 (all) or more")
+    if o.max_task_failures != 0 and o.max_task_failures <= SKIP_AFTER:
+        # Skipping a bad record takes SKIP_AFTER crashes, then one more attempt.
+        p.error(
+            f"-max-task-failures is {o.max_task_failures}; "
+            f"it must be 0 (no limit) or more than {SKIP_AFTER}"
+        )
+    if o.log_format not in ("text", "json"):
+        p.error(f"log format {o.log_format!r} is not text or json")
+    return o
+
+
+def config(o: Options) -> Config:
+    """Returns the coordinator's configuration for o, with Go's timings."""
+    return Config(
+        heartbeat_interval=3.0,
+        worker_timeout=10.0,  # three missed heartbeats
+        retry_after=1.0,
+        backups=o.backups,
+        keep_jobs=o.keep_jobs,
+        max_task_failures=o.max_task_failures,
+    )
+
+
+def grpc_address(addr: str) -> str:
+    """Turns a Go listen address such as ":7070", every interface, into
+    gRPC's "[::]:7070"; other addresses are unchanged."""
+    return "[::]" + addr if addr.startswith(":") else addr
+
+
+def http_address(addr: str) -> tuple[str, int]:
+    """Splits a Go listen address such as ":8080" or "127.0.0.1:0" into a
+    host and a port; an empty host means every interface."""
+    host, _, port = addr.rpartition(":")
+    return host.strip("[]"), int(port)
+
+
+class _JSON(logging.Formatter):
+    """Writes each record as one JSON object, with slog's keys."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        at = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(record.created))
+        at += f".{int(record.msecs):03d}"
+        return json.dumps({"time": at, "level": record.levelname, "msg": record.getMessage()})
+
+
+def setup_logs(fmt: str, stream=None):
+    """Sends the package's logs to stream (stderr) in fmt, text or json."""
+    h = logging.StreamHandler(stream or sys.stderr)
+    text = logging.Formatter("time=%(asctime)s level=%(levelname)s msg=%(message)s")
+    h.setFormatter(_JSON() if fmt == "json" else text)
+    root = logging.getLogger("mapreduce_reloaded")
+    root.handlers[:] = [h]
+    root.setLevel(logging.INFO)
+
+
+def run(
+    o: Options,
+    stop: threading.Event,
+    listening: Callable[[int, int | None], None] | None = None,
+    grace: float = EXIT_GRACE,
+):
+    """Serves coordinator RPCs at o.addr until stop is set, then tells
+    workers to exit. A nonempty o.data_dir enables log recovery and
+    persistence; a nonempty o.http enables the status page and metrics.
+    If listening is not None, run calls it with the RPC and HTTP ports (None
+    without -http) once both listen. It raises recovery, listen and log
+    errors; the log is closed on return."""
+    cfg = config(o)
+    coordinator: Server | None = None
+    if o.data_dir:
+        os.makedirs(o.data_dir, exist_ok=True)
+        coordinator, _ = recover(cfg, os.path.join(o.data_dir, "coordinator.log"))
+    try:
+        if coordinator is None:
+            server, coordinator, port, monitor = serve(grpc_address(o.addr), cfg)
+        else:
+            server, port, monitor = start(coordinator, grpc_address(o.addr))
+        status = None
+        try:
+            if o.http:
+                status = statusweb.serve(http_address(o.http), coordinator.status)
+            log.info("coordinator listening: port %d", port)
+            if listening is not None:
+                listening(port, status.server_address[1] if status else None)
+            stop.wait()
+        finally:
+            if status is not None:
+                status.shutdown()
+                status.server_close()
+            coordinator.shutdown()
+            time.sleep(grace)  # for idle workers to hear that they should exit
+            monitor.set()
+            server.stop(grace=5).wait()
+    finally:
+        if coordinator is not None:  # None if serve could not listen
+            coordinator.close()
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Runs the coordinator until SIGINT or SIGTERM and returns the
+    process's exit status, printing errors to stderr."""
+    o = parse(sys.argv[1:] if argv is None else argv)
+    setup_logs(o.log_format)
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())
+    try:
+        run(o, stop)
+    except Exception as e:
+        print(f"coordinator: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

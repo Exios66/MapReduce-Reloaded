@@ -19,7 +19,7 @@ from typing import NamedTuple, Protocol
 
 import grpc
 
-from mapreduce_reloaded.coordinator.registry import Registry
+from mapreduce_reloaded.coordinator.registry import Registry, Worker
 from mapreduce_reloaded.coordinator.tasktable import COMPLETED, MAP, Task, TaskTable
 from mapreduce_reloaded.coordinator.wire import PROGRAMS, input_split, path, validate
 from mapreduce_reloaded.formats import input_format
@@ -119,6 +119,24 @@ class LostWorker(NamedTuple):
     id: str
     at: float
     tasks: list[Task]
+
+
+class WorkerStatus(NamedTuple):
+    """A live worker, last seen by the coordinator's clock (now), and the
+    tasks of the active job it is running."""
+
+    worker: Worker
+    running: list[Task]
+
+
+class Status(NamedTuple):
+    """What the coordinator's status page shows (§4.8), as
+    go/internal/coordinator.Status."""
+
+    at: float  # when it was taken, by now
+    jobs: list[coordinator_pb2.GetJobStatusResponse]  # every job kept, in the order submitted
+    workers: list[WorkerStatus]  # the live workers, in the order they registered
+    lost: list[LostWorker]  # the last MAX_LOST workers lost since the process started
 
 
 @dataclass(eq=False)
@@ -300,6 +318,18 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         replaced."""
         with self._mu:
             getattr(self._cfg.log, "close", lambda: None)()
+
+    def status(self) -> Status:
+        """Returns a copy of the coordinator's state. It works while the log
+        has failed, so the status page shows what memory holds."""
+        with self._mu:
+            at, tick = self.now(), self._clock()
+            running = self._active.tasks.running() if self._active is not None else {}
+            workers = []
+            for w in self._workers.all():
+                w.last_seen = at - (tick - w.last_seen)  # heartbeats are timed by _clock
+                workers.append(WorkerStatus(w, running.get(w.id, [])))
+            return Status(at, [j.status() for j in self._order], workers, list(self._lost))
 
     def now(self) -> float:
         """Reads the coordinator's clock: Config.now, or time.time."""
@@ -762,10 +792,18 @@ def serve(address: str, cfg: Config | None = None, threads: int = 16):
         # Without a log, IDs start from 1 again: tell them from the last run's.
         cfg = replace(cfg, id_prefix=_base36(time.time_ns()) + "-")
     coordinator = Server(cfg)
+    server, port, stop = start(coordinator, address, threads)
+    return server, coordinator, port, stop
+
+
+def start(coordinator: Server, address: str, threads: int = 16):
+    """Serves coordinator over insecure gRPC on address, as serve does, and
+    starts its worker monitor. Returns the gRPC server, the bound port and
+    the event that stops the monitor."""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=threads))
     coordinator_pb2_grpc.add_CoordinatorServiceServicer_to_server(coordinator, server)
     port = server.add_insecure_port(address)
     server.start()
     stop = threading.Event()
     threading.Thread(target=coordinator.monitor, args=(stop,), daemon=True).start()
-    return server, coordinator, port, stop
+    return server, port, stop
