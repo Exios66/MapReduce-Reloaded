@@ -179,6 +179,9 @@ func (s *Server) Monitor(ctx context.Context) {
 	}
 }
 
+// RegisterWorker registers a worker and returns its new ID and heartbeat
+// interval. It returns Unavailable while a prior log failure remains
+// unrecovered.
 func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -195,7 +198,8 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 // which of the attempts it runs to stop: those no longer running on it, such
 // as a backup whose twin finished first (§3.6), or those of an ended job.
 // Known workers also receive the active job ID, or an empty list when idle,
-// so they can prune ended jobs' map output. It always returns a nil error.
+// so they can prune ended jobs' map output. It returns Unavailable while a
+// prior log failure remains unrecovered.
 func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -230,7 +234,8 @@ func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
 // On success it makes the job active and returns its ID. It returns
 // InvalidArgument for invalid jobs or input planning failures, AlreadyExists
 // if checking the output fails, FailedPrecondition if another job is running
-// or output setup fails, and Unavailable if recording the submission fails.
+// or output setup fails, and Unavailable if recording the submission fails
+// or a prior log failure remains unrecovered.
 func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
 	m := proto.CloneOf(req.GetJob())
 	if m == nil {
@@ -382,7 +387,8 @@ func (s *Server) compact() {
 // completed (§3.1), then backup attempts if enabled (§3.6).
 // It returns a wait instruction when no task is ready, or a shutdown
 // instruction after Shutdown. Errors are NotFound for an unknown worker,
-// Internal if assigning a task fails, or Unavailable if recording it fails.
+// Internal if assigning a task fails, or Unavailable if recording it fails
+// or a prior log failure remains unrecovered.
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -496,11 +502,11 @@ func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
 // Valid failure reports and stale or duplicate attempts are not accepted.
 // It returns NotFound for an unknown job,
 // InvalidArgument for a report with no outcome or for task or output
-// validation errors, and Unavailable if
-// recording the report fails. A log error does not undo the report's effects,
-// but a report that ends the job cleans up its output only once the log
-// holds it: a coordinator that dies in between replays a running job, whose
-// reduce attempts still need the job's TempDir (#182).
+// validation errors, and Unavailable if recording the report fails or a
+// prior log failure remains unrecovered. A log error does not undo the
+// report's effects, but a report that ends the job cleans up its output
+// only once the log holds it: a coordinator that dies in between replays
+// a running job, whose reduce attempts still need the job's TempDir (#182).
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -580,6 +586,9 @@ func (s *Server) end(j *job, err string, at time.Time) {
 	s.forget()
 }
 
+// GetJobStatus returns a retained job's state, progress, and counters.
+// It returns NotFound for an unknown or forgotten job, or Unavailable
+// while a prior log failure remains unrecovered.
 func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -657,6 +666,7 @@ func (j *job) total() map[string]int64 {
 // it (ADR 0007).
 // With a log configured it sets rec.At, returning Unavailable if encoding
 // or appending fails. Without a log it returns nil without changing rec.
+// A failure prevents later RPCs from proceeding until recovery succeeds.
 func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 	if s.cfg.Log == nil {
 		return nil
@@ -678,7 +688,10 @@ func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 // could not be logged, so no RPC may act on it. A server from Recover
 // instead rebuilds itself from the log, as a restart would, once the log
 // takes records again: a full disk stops the cluster only until space is
-// freed. Call it under the lock.
+// freed. It returns nil if the log has not failed or recovery succeeds.
+// After a recovery failure, it retries no sooner than healEvery later on
+// the coordinator's clock. Without a log path, a restart is required.
+// Call it under the lock.
 func (s *Server) failed() error {
 	if s.logErr == nil {
 		return nil
@@ -700,6 +713,8 @@ func (s *Server) failed() error {
 // heal replaces the server's jobs and workers with those recovered from
 // its log, dropping every change the log never took. Running attempts stop
 // and workers register again, as after a restart. Call it under the lock.
+// It replaces the log and clears the failure on success. Recover errors
+// propagate; errors closing the old log are ignored.
 func (s *Server) heal() error {
 	if c, ok := s.cfg.Log.(io.Closer); ok {
 		_ = c.Close() // it has already failed; reopening it is what matters
@@ -719,6 +734,7 @@ func (s *Server) heal() error {
 
 // Close closes the log the server writes to, if it can be closed. Use it
 // rather than the log Recover returned, which a healed server has replaced.
+// It returns any close error, or nil when there is no closable log.
 func (s *Server) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
