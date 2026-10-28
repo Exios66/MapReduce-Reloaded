@@ -559,6 +559,22 @@ func TestClusterReregistersOnHeartbeat(t *testing.T) {
 
 // A worker whose call fails with Internal, as when a coordinator handler
 // panics, registers again instead of exiting.
+// A report the coordinator answers with NotFound, as for a job it no longer
+// knows, is dropped: the worker keeps running tasks rather than exiting.
+func TestClusterSurvivesReportForUnknownJob(t *testing.T) {
+	c := newCluster(t)
+	job := c.submit("wordcount")
+	c.addWorker()
+	c.gates[0].lost.Store(1) // the coordinator still hears this report
+	c.wait(job)
+	assertGolden(t, c.output())
+	select {
+	case err := <-c.live[0]:
+		t.Fatalf("worker exited: %v", err)
+	default:
+	}
+}
+
 func TestClusterReregistersAfterInternal(t *testing.T) {
 	c := newCluster(t)
 	job := c.submit("wordcount")

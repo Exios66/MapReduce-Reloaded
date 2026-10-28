@@ -89,6 +89,7 @@ func pick(rng *rand.Rand, m map[int]func()) int {
 type gate struct {
 	mu   sync.RWMutex
 	fail atomic.Int32
+	lost atomic.Int32 // ReportTask replies to replace with NotFound
 	dup  atomic.Bool
 	cut  atomic.Int32
 	cuts atomic.Int32
@@ -108,6 +109,9 @@ func (g *gate) unary(ctx context.Context, method string, req, reply any, cc *grp
 		return status.Error(codes.Internal, "panic in a handler")
 	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
+	if strings.HasSuffix(method, "/ReportTask") && g.lost.Add(-1) >= 0 {
+		return status.Error(codes.NotFound, "unknown job")
+	}
 	if g.dup.Load() && (strings.HasSuffix(method, "/ReportTask") || strings.HasSuffix(method, "/Heartbeat")) {
 		_ = invoker(ctx, method, req, proto.Clone(reply.(proto.Message)), cc, opts...)
 	}

@@ -160,12 +160,28 @@ func TestMapPanic(t *testing.T) {
 }
 
 // Loading the same source twice reuses the first load.
+// emptyCache gives the test an empty cache, and restores the old one when
+// it ends: the cache is shared by every test in the process, so with
+// -count above 1 a source would otherwise be cached already.
+func emptyCache(t *testing.T) {
+	t.Helper()
+	mu.Lock()
+	oldCache, oldLRU := cache, lru
+	cache, lru = map[[sha256.Size]byte]*list.Element{}, list.New()
+	mu.Unlock()
+	t.Cleanup(func() {
+		mu.Lock()
+		cache, lru = oldCache, oldLRU
+		mu.Unlock()
+	})
+}
+
 func TestCache(t *testing.T) {
+	emptyCache(t)
 	src := minimal + "\n// TestCache\n"
-	before := cached()
 	mustLoad(t, src)
 	mustLoad(t, src)
-	if n := cached() - before; n != 1 {
+	if n := cached(); n != 1 {
 		t.Errorf("%d programs cached, want 1", n)
 	}
 }
@@ -306,15 +322,7 @@ func TestReducePanic(t *testing.T) {
 // Filling the cache must evict the least recently used source, while a
 // cache hit protects that entry and does not flush other programs.
 func TestCacheEvictsLeastRecentlyUsed(t *testing.T) {
-	mu.Lock()
-	oldCache, oldLRU := cache, lru
-	cache, lru = map[[sha256.Size]byte]*list.Element{}, list.New()
-	mu.Unlock()
-	t.Cleanup(func() {
-		mu.Lock()
-		cache, lru = oldCache, oldLRU
-		mu.Unlock()
-	})
+	emptyCache(t)
 	sources := make([]string, maxCached+1)
 	for i := range sources {
 		sources[i] = fmt.Sprintf("%s\n// cache source %d\n", minimal, i)
