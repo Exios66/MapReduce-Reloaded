@@ -341,13 +341,26 @@ def e1(rows, out, t):
 
 def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None, styles=None):
     """Tasks completed against time for each setting's median run, ending
-    when its last task completes, and its job time as a horizontal bar in
-    the same color. event names the marker drawn at a run's event_at.
+    at its first maximum completed-task count, and its median job time as
+    a horizontal bar in the same color, with minimum-to-maximum range bars.
+
+    settings maps setting names to labels; field names the job-time column
+    in seconds. Only valid="1" rows count; rows must be nonempty. Even run
+    counts select the lower median run. Task CSVs are read from results/exp
+    as tasks-SETTING-RUN.csv; missing files omit only the curve. Settings
+    without valid runs are skipped. Timeline seconds start at the job's
+    first recorded sample. event labels the first selected run with a
+    nonempty event_at, in seconds since submission.
 
     Each setting takes the next color slot, unless styles maps it to
     (slot, dashed): then settings can share a color, and a dashed one is
     drawn with a dashed line and a hatched bar. The palette has three
-    validated slots, so more settings than that need styles."""
+    validated slots; omitting styles when settings outnumber the colors
+    raises ValueError. Each slot indexes t["series"].
+
+    Returns the unsaved, open figure. Missing data or style keys, invalid
+    numbers or color slots, and file or plotting errors propagate.
+    """
     if styles is None:
         if len(settings) > len(t["series"]):
             raise ValueError(f"{len(settings)} settings, {len(t['series'])} colors: pass styles")
@@ -427,6 +440,15 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
 
 
 def e2(rows, results, out, t):
+    """Saves E2's backup-task comparison to out, in theme t, and closes it.
+
+    Compares backups on and off, with and without a worker at 0.2 CPU.
+    Color marks the straggler; dashed lines and hatched bars mark backups
+    off. Only valid="1" runs count; coordinator seconds determine median-run
+    progress and median job times with minimum-to-maximum range bars.
+    Task CSVs are read from results / "E2"; missing files omit only curves.
+    Missing fields, invalid numbers, and file or plotting errors propagate.
+    """
     settings = {
         "normal": "no straggler, backups on",
         "normal-no-backups": "no straggler, backups off",
