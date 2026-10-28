@@ -29,9 +29,10 @@ _CODECS = ("", "none", "zstd", "snappy")
 
 
 def validate(m: types_pb2.JobSpec, programs=PROGRAMS) -> list[str]:
-    """Returns every problem with the job m describes, as
-    go/pkg/api.JobSpec.Validate words them, or an empty list if it can
-    run. programs names the built-in programs the workers have."""
+    """Returns validation messages for m, worded as go/pkg/api.JobSpec.Validate,
+    or an empty list if these checks pass. programs names the workers' built-in
+    programs; a nonempty program_source bypasses that lookup. Path ValueErrors
+    become messages. This does not read files or validate user code."""
     errs = []
     if not m.program_source and m.program not in programs:
         errs.append(f"wire: unknown program {_q(m.program)}")
@@ -76,8 +77,10 @@ def validate(m: types_pb2.JobSpec, programs=PROGRAMS) -> list[str]:
 
 def path(uri: str) -> str:
     """Returns the local path of a file:// URI, which must name no host but
-    localhost. A string with no scheme is already a path. The Python
-    coordinator stores nothing else, so any other scheme is an error."""
+    localhost. File URI paths are percent-decoded; strings with no scheme are
+    returned unchanged after validation. Raises ValueError for control characters,
+    malformed percent escapes, unsupported schemes, remote file hosts, NUL bytes
+    in decoded file paths, or malformed URLs rejected by urlsplit."""
     _parse(uri)
     u = urlsplit(uri)
     if u.scheme == "":
