@@ -356,8 +356,9 @@ push, and CI runs the same targets on every pull request in four jobs
 through pull requests. CI runs on CircleCI's Free plan; the configuration is
 in `.circleci/config.yml`, and the owner connects the service, so see
 [CI](docs/ci.md) for the setup, the required checks and the Free-plan limits.
-The GitHub Actions workflow is a fallback, and `make ci-report` posts the
-result as a commit status when no hosted service is available. See
+The GitHub Actions workflow is disabled and kept for a run by hand, and
+`make ci-report` posts the result as a commit status when no hosted service
+is available. See
 [ADR 0002](docs/design/0002-local-quality-gate.md) and
 [ADR 0014](docs/design/0014-ci-on-pull-requests.md).
 

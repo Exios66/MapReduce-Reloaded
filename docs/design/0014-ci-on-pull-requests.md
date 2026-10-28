@@ -44,10 +44,10 @@ two providers cannot disagree about what a check means. [CI](../ci.md) has the
 jobs, the caches, the Free-plan limits, the setup the owner completes, and
 rollback.
 
-- The Actions workflow stays in the repository as a fallback. Its Go job now
-  installs Python, as the golden tests need it. Once the four CircleCI checks
-  are confirmed and required by branch protection, the owner makes the
-  workflow manual-only (`workflow_dispatch`); Actions are not disabled for
+- CircleCI is the only CI. The Actions workflow is kept, runs only by hand
+  (`workflow_dispatch`), and is disabled in the repository's Actions
+  settings, so the billing lock no longer fails a run on every push. Its Go
+  job now installs Python, as the golden tests need it. Actions stay on for
   the repository.
 - The required checks become the four CircleCI checks, in place of the
   Actions names `proto`, `go`, `python` above.

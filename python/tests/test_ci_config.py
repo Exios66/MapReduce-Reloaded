@@ -66,6 +66,12 @@ def test_golangci_lint_has_one_pin():
     assert vm in (ROOT / "docs/ci.md").read_text()
 
 
+def test_actions_runs_only_by_hand():
+    # CircleCI is the CI; the Actions workflow is kept for a manual run only.
+    on = ACTIONS.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+    assert on.split() == ["workflow_dispatch:"]
+
+
 def test_actions_go_job_can_run_the_python_golden_tests():
     go_job = ACTIONS.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
     assert "python-version: " in go_job and 'pip install -e "python[dev]"' in go_job

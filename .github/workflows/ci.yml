@@ -1,15 +1,12 @@
 name: CI
 
-# Runs the same checks as `make check` on every pull request and on main, so
-# a reviewer sees the result on the PR (see docs/design/0014-ci-on-pull-requests.md).
-# The repository variable CI_RUNNER picks the runner (ADR 0014).
-# The pre-push hook still runs `make check` locally before each push.
-# CircleCI runs the same checks independently of Actions (docs/ci.md); this
-# workflow is the fallback while the account's billing lock lasts.
+# CircleCI is the project's CI (.circleci/config.yml, docs/ci.md, ADR 0014).
+# This workflow runs the same checks as `make check`, but only by hand: the
+# account's hosted runners fail on a billing lock, and the workflow is also
+# disabled in the repository's Actions settings. The repository variable
+# CI_RUNNER picks the runner (ADR 0014). To bring it back, see docs/ci.md,
+# Rollback.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
