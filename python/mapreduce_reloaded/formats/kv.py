@@ -104,7 +104,6 @@ class Writer:
     def __init__(self, f: BinaryIO, *, block_target: int = BLOCK_TARGET, codec: int = CODEC_NONE):
         if codec != CODEC_NONE and codec not in _COMPRESSORS:
             raise ValueError(f"unknown codec {codec}")
-        self._codec = codec
         self._compress = None
         if codec != CODEC_NONE:
             try:
