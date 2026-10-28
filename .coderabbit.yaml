@@ -12,6 +12,12 @@ reviews:
   review_status: true
   collapse_walkthrough: true
   poem: false
+  # main's branch rules let a "changes requested" review block a merge even
+  # after the fixes land, and CodeRabbit does not re-review commits it has
+  # seen. With this, "@coderabbitai approve" resolves its threads and
+  # replaces that review with an approval.
+  auto_approvals:
+    enabled: true
   auto_review:
     enabled: true
     drafts: false
