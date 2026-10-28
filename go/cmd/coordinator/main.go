@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -112,6 +113,8 @@ func config(o options) coordinator.Config {
 // run serves coordinator RPCs at o.addr until ctx is done, then tells
 // workers to exit. A nonempty o.dataDir enables log recovery and
 // persistence; a nonempty o.httpAddr enables the status page and metrics.
+// Without o.dataDir, worker and job IDs include a prefix derived from the
+// current time.
 // If listening is not nil, run calls it with the RPC and HTTP addresses
 // (nil without -http) once both listen.
 // It returns storage, recovery, listen, and RPC server errors, joined with
@@ -120,6 +123,8 @@ func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (
 	cfg := config(o)
 	var srv *coordinator.Server
 	if o.dataDir == "" {
+		// Without a log, IDs start from 1 again: tell them from the last run's.
+		cfg.IDPrefix = strconv.FormatInt(time.Now().UnixNano(), 36) + "-"
 		srv = coordinator.NewServer(cfg)
 	} else {
 		if err := os.MkdirAll(o.dataDir, 0o755); err != nil {
