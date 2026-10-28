@@ -315,8 +315,19 @@ e1() {
 e2_settings=${E2_SETTINGS:-normal normal-no-backups straggler-backups straggler-no-backups}
 
 e2() {
-    begin E2
     local order s
+    # A misspelled setting would run as backups-on and be left out of the
+    # plot, so reject it before the cluster starts.
+    for s in $e2_settings; do
+        case $s in
+        normal | normal-no-backups | straggler-backups | straggler-no-backups) ;;
+        *)
+            echo "E2_SETTINGS: unknown setting '$s'; expected normal, normal-no-backups, straggler-backups or straggler-no-backups" >&2
+            exit 2
+            ;;
+        esac
+    done
+    begin E2
     for n in $(seq "$repeat"); do
         order=$e2_settings
         if [ $((n % 2)) = 0 ]; then
