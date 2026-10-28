@@ -16,8 +16,10 @@ import (
 // then logs a restart: the attempts that were running stop, and workers
 // register again under IDs the old coordinator never gave out. The server
 // logs to path from then on; the caller closes the returned log.
+// cfg.IDPrefix is ignored; worker IDs use a restart count from the log,
+// and job numbers continue from the recovered sequence.
 // Logged submission and finish times are preserved; missing times stay unknown.
-// It returns log open, read, decoding, or replay errors, or Unavailable if
+// It returns log I/O, decoding, or replay errors, or Unavailable if
 // recording the restart fails, joined with any error closing the log.
 func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
 	cfg.IDPrefix = ""

@@ -109,6 +109,8 @@ type job struct {
 }
 
 // NewServer returns a coordinator with no workers and no jobs.
+// cfg.IDPrefix is used as supplied for worker and job IDs; numbering
+// starts at 1.
 func NewServer(cfg Config) *Server {
 	return &Server{cfg: cfg, workers: NewRegistry(cfg.IDPrefix + "w"), jobs: map[string]*job{}}
 }
@@ -219,7 +221,8 @@ func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
 
 // SubmitJob validates the job, defaulting R to a multiple of the number of
 // workers (§3.5), and plans its map tasks.
-// On success it makes the job active and returns its ID. It returns
+// On success it makes the job active and returns its ID, consisting of
+// "job-", Config.IDPrefix, and the job sequence number. It returns
 // InvalidArgument for invalid jobs or input planning failures, AlreadyExists
 // if checking the output fails, FailedPrecondition if another job is running
 // or output setup fails, and Unavailable if recording the submission fails.
