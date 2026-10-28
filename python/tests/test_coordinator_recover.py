@@ -451,3 +451,21 @@ def test_recover_replays_a_lost_worker(restart, tmp_path):
     assert c.s.expire(time.monotonic() + 3600) == [w]
     assert c.status(job).map_tasks_completed == 0
     assert restart(cfg).status(job).map_tasks_completed == 0
+
+
+def test_id_prefix(tmp_path):
+    """id_prefix begins every worker and job ID of a server without a log,
+    so that a restarted one does not give out the last run's IDs. recover
+    ignores it: the log keeps IDs unique."""
+    inp = write(tmp_path / "in.txt")
+    s, log = recover(Config(id_prefix="x-"), str(tmp_path / "coordinator.log"))
+    try:
+        for c, worker, job in [
+            (Coordinator(Server(Config(id_prefix="x-"))), "x-w1", "job-x-1"),
+            (Coordinator(s), "r1-w1", "job-1"),
+        ]:
+            assert c.register() == worker
+            out = str(tmp_path / worker)
+            assert c.submit(program="wordcount", inputs=[inp], output=out) == job
+    finally:
+        log.close()
