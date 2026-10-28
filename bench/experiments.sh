@@ -9,8 +9,8 @@
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
 #   and without it (-combiner=false).
-# - E2: distsort with one worker throttled to 0.2 CPU, with the
-#   coordinator's backup tasks on and off, and with no straggler.
+# - E2: distsort with one worker throttled to 0.2 CPU and with none, each
+#   with the coordinator's backup tasks on and off; E2_SETTINGS picks some.
 # - E3: distsort with one worker killed at 25%, 50% and 75% of the normal
 #   job time, and with no kill.
 # - E4: distsort with the coordinator's write-ahead log, restarted at 50% of
@@ -309,14 +309,25 @@ e1() {
     zipf=1.0 submit_flags=()
 }
 
+# E2_SETTINGS limits E2 to some of its settings. The settings take turns
+# within each repeat, in reverse order on even repeats, so drift in the
+# machine over the experiment does not fall on one setting.
+e2_settings=${E2_SETTINGS:-normal normal-no-backups straggler-backups straggler-no-backups}
+
 e2() {
     begin E2
-    for setting in normal normal-no-backups straggler-backups straggler-no-backups; do
-        case $setting in
-        *-no-backups) configure 4 backups-off.yaml ;;
-        *) configure 4 ;;
-        esac
-        for n in $(seq "$repeat"); do
+    local order s
+    for n in $(seq "$repeat"); do
+        order=$e2_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e2_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            case $setting in
+            *-no-backups) configure 4 backups-off.yaml ;;
+            *) configure 4 ;;
+            esac
             slow=
             case $setting in normal*) ;; *) slow=$("${compose[@]}" ps -q worker | head -1) ;; esac
             [ -z "$slow" ] || docker update --cpus 0.2 "$slow" >/dev/null
