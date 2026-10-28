@@ -1,7 +1,8 @@
 # ADR 0014 — CI on every pull request
 
 **Status:** accepted · **Supersedes:** [ADR 0002](0002-local-quality-gate.md)'s
-decision to run GitHub Actions by hand only
+decision to run GitHub Actions by hand only · **Amended:** CircleCI Free is the
+primary CI provider (#212, see [CI](../ci.md))
 
 ## Context
 
@@ -32,6 +33,33 @@ playing that role on a solo project) cannot see that the checks passed.
   request and the status checks `proto`, `go`, `python` (or
   `local-ci/make-check`, see below). Until then the rule rests on practice
   and on review.
+
+## CircleCI as the primary provider (#212)
+
+GitHub-hosted jobs fail on the account lock described below, and every failure
+notifies the owner. `.circleci/config.yml` therefore runs the same gate on
+CircleCI's Free plan, in four jobs named `proto`, `go`, `python-3.11` and
+`python-3.13`. Each job calls the same make targets as the Actions jobs, so the
+two providers cannot disagree about what a check means. [CI](../ci.md) has the
+jobs, the caches, the Free-plan limits, the setup the owner completes, and
+rollback.
+
+- CircleCI is the only CI. The Actions workflow is kept, runs only by hand
+  (`workflow_dispatch`), and is disabled in the repository's Actions
+  settings, so the billing lock no longer fails a run on every push. Its Go
+  job now installs Python, as the golden tests need it. Actions stay on for
+  the repository.
+- The required checks become the four CircleCI checks, in place of the
+  Actions names `proto`, `go`, `python` above.
+- `make check`, the pre-push hook and `make ci-report` are unchanged.
+- The Compose end-to-end test, the S3 test, the long chaos, fuzz and flaky
+  runs and the benchmarks stay on their own targets, outside CI.
+- The Free plan has a monthly credit allowance and is not unlimited. The
+  setup uses no paid feature (remote Docker, Docker layer caching, larger
+  resource classes).
+- What is committed is the configuration. Connecting the project, requiring
+  the checks and retiring the workflow are the owner's steps, in that order,
+  and only the first green CircleCI run makes the provider live.
 
 ## Workaround while hosted runners are unavailable
 

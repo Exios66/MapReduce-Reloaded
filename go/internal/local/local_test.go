@@ -206,7 +206,9 @@ func TestRunRejectsTooManySplits(t *testing.T) {
 	if err := f.Truncate(api.MaxMapTasks + 1); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	spec := api.JobSpec{Program: wordcount.Program, Inputs: []string{in}, Output: t.TempDir(), SplitSize: 1, R: 1}
 	if _, err := Run(spec, t.TempDir()); err == nil || !strings.Contains(err.Error(), "the most is") {
 		t.Fatalf("got %v, want a split limit error", err)

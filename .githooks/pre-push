@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the full local check suite before every `git push`.
-# GitHub Actions runs the same checks on pull requests (ADR 0002, ADR 0014).
+# CircleCI runs the same checks on pull requests (ADR 0002, ADR 0014, docs/ci.md).
 # Bypass in an emergency with: git push --no-verify
 #
 # `make check` tests the working tree, so the hook only lets a push through
