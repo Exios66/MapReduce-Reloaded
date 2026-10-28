@@ -96,7 +96,8 @@ def test_logs(fmt):
 
 @pytest.mark.parametrize(
     "v, want",
-    [("a", "a"), ("", '""'), ("a b", '"a b"'), ("a=b", '"a=b"'), ('a"', '"a\\""'), ("a\n", '"a\\n"')],
+    [("a", "a"), ("", '""'), ("a b", '"a b"'), ("a=b", '"a=b"')]
+    + [('a"', '"a\\""'), ("a\n", '"a\\n"')],
 )
 def test_logfmt(v, want):
     assert cmd._logfmt(v) == want
