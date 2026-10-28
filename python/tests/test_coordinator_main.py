@@ -90,7 +90,7 @@ def test_logs(fmt):
         ]
         assert re.fullmatch(at, recs[0]["time"]), recs[0]["time"]
     else:
-        assert re.fullmatch(f"time={at} level=INFO msg=\"task failed: job job-1\"", lines[0])
+        assert re.fullmatch(f'time={at} level=INFO msg="task failed: job job-1"', lines[0])
         assert lines[1].endswith(" level=WARN msg=lost") and " level=ERROR " in lines[2]
 
 
