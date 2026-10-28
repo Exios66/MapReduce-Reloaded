@@ -15,7 +15,8 @@ reviews:
   # main's branch rules let a "changes requested" review block a merge even
   # after the fixes land, and CodeRabbit does not re-review commits it has
   # seen. With this, "@coderabbitai approve" resolves its threads and
-  # replaces that review with an approval.
+  # replaces that review with an approval. It resolves every open thread,
+  # answered or not: post it only once each thread has a fix or a reason.
   auto_approvals:
     enabled: true
   auto_review:
