@@ -148,7 +148,10 @@ jobs:
       name: medium
       python: "3.13"
     steps:
-      - checkout
+      # A full clone: buf breaking clones this repository to read main, and
+      # the default blobless checkout lacks objects that clone needs.
+      - checkout:
+          method: full
       - go-toolchain
       - python-deps:
           python: "3.13"

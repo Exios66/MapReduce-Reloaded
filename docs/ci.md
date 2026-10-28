@@ -140,6 +140,9 @@ that does not depend on any hosted service.
   or the PR is from a fork and fork builds are off.
 - **`proto` fails fetching `origin/main`.** The checkout lost access to the
   repository. Check the project's deploy key under Project Settings, SSH Keys.
+- **`proto` fails in buf breaking with `could not fetch ... from promisor
+  remote`.** The checkout is a blobless partial clone, which buf cannot
+  clone. The `proto` job uses `checkout: method: full`; keep it.
 - **`go` fails with `checksum mismatch`.** go.dev's release list and the
   archive disagree. Re-run once; if it persists, do not work around the
   check, and open an issue.

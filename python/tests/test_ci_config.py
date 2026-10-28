@@ -47,6 +47,9 @@ def test_circleci_calls_the_make_targets():
         assert command in CIRCLE
     # The compatibility check needs a fresh origin/main and must not skip.
     assert "git fetch --quiet origin +refs/heads/main:refs/remotes/origin/main" in CIRCLE
+    # buf breaking clones the checkout, which a blobless partial clone breaks.
+    proto = CIRCLE.split("\n  proto:\n", 1)[1].split("\n  go:\n", 1)[0]
+    assert re.search(r"- checkout:\n\s+method: full\n", proto)
 
 
 def test_circleci_stays_on_the_free_plan():
