@@ -17,6 +17,7 @@ __pycache__/
 .hypothesis/
 .coverage
 /python/cover.json
+/python/mutants/
 
 # Job data, the host client and benchmark output
 /data/

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = next(p for p in Path(__file__).resolve().parents if (p / "testdata").is_dir())
 VECTORS_DIR = REPO / "testdata" / "format"
 MANIFEST = json.loads((VECTORS_DIR / "vectors.json").read_text())
 
