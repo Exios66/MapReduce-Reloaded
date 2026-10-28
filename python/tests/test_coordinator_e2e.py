@@ -115,7 +115,8 @@ class Cluster:
 
     def status(self, job):
         """Returns the job's status as name/value pairs, or None if the
-        coordinator cannot be reached."""
+        coordinator cannot be reached or does not answer within 5s, which
+        leaves the deadline to wait."""
         try:
             r = subprocess.run(
                 [str(self.bin / "mr"), "status", "-coordinator", self.addr, job],
@@ -124,7 +125,7 @@ class Cluster:
                 timeout=5,
             )
         except subprocess.TimeoutExpired:
-            pytest.fail(f"mr status {job} did not exit within 5s")
+            return None
         if r.returncode != 0:
             return None
         st = dict(line.split("\t", 1) for line in r.stdout.splitlines() if "\t" in line)

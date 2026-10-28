@@ -237,8 +237,8 @@ def run(
     without -http) once the enabled servers listen. grace is the delay in
     seconds after telling workers to exit and before stopping RPC serving.
     Propagates recovery, startup, listening callback and log close errors,
-    including an error if another coordinator holds o.data_dir. On normal
-    return, the log is closed and the directory unlocked."""
+    including an error if another coordinator holds o.data_dir. The log is
+    closed and the directory unlocked on every return, error or not."""
     cfg = config(o)
     coordinator: Server | None = None
     held = None
