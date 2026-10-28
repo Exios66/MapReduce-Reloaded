@@ -160,7 +160,7 @@ CircleCI runs them on every pull request and on pushes to `main`
 | Client | Upload of files, directories and globs, `/data` path resolution and its errors, `cat` order, an exact M through a real coordinator, the M allocation (proportional, at least one per file, more files than M) | `go/cmd/mr`, `go/internal/split` |
 | Docs | Every code path and test named in the paper mapping exists | `go/internal/papermap` |
 | Job files | `examples/wordcount.go` gives the golden output with and without its combiner; a file that does not parse, lacks Map or Reduce, or has the wrong types is rejected with a reason, and the coordinator refuses its submit (`InvalidArgument`); a panic in `Map` is an error, not a crash | `go/internal/jobfile`, `go/internal/wire`, `go/cmd/mr` |
-| **(planned)** | A worker that cannot load a job file fails the job (`TaskFailure.fatal`) | |
+| Task failures | A worker that cannot load a job file reports a fatal failure, which ends the job at once (`TaskFailure.fatal`); a task whose attempts fail `-max-task-failures` times ends its job, while a crashing record is still skipped first and a lost map output does not count | `go/internal/worker`, `go/internal/coordinator` |
 
 ### Special features
 
@@ -198,10 +198,11 @@ Prometheus and Grafana, and a locality-aware scheduler hook are also built.
 
 ### Failure semantics
 
-- There is no per-task attempt cap. A task that always fails for a reason
-  other than a bad record is retried forever, and the job does not fail. A
-  job ends as failed only through `-max-skipped` (default no limit) or a
-  rejected `SubmitJob`. A planned fatal failure for job files is in ADR 0015.
+- A task whose attempts fail `-max-task-failures` times (default 8; 0 for
+  no limit) ends its job with the last error, and a worker that cannot load
+  a job file ends the job at once with a fatal failure (ADR 0015, #198).
+  Only failures reported by the running attempt count, and not a reduce
+  failure that names a lost map output, which is the map task's fault.
 - A record is skipped only after `SkipAfter = 2` attempts crash on the same
   record, so skipping needs at least three attempts.
 - After a coordinator restart, running attempts are stopped and workers
