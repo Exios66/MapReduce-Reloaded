@@ -6,3 +6,4 @@ mapreduce_reloaded 99
 mapreduce_reloaded/examples 99
 mapreduce_reloaded/formats 99
 mapreduce_reloaded/partition 99
+mapreduce_reloaded/coordinator 99
