@@ -421,7 +421,10 @@ func TestClusterSkipsBadRecords(t *testing.T) {
 // The cluster's map output is byte for byte what local mode writes for the
 // same splits, however the tasks were spread over the workers.
 func TestClusterMapOutputMatchesLocal(t *testing.T) {
-	c := newCluster(t)
+	// No worker dies here, so none may be declared dead: under load a short
+	// timeout can expire a live worker, and the map task it ran again on
+	// another leaves a second copy of its output (CircleCI job 172).
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = time.Minute })
 	c.keep = true
 	job := c.submit("wordcount")
 	for range 3 {
