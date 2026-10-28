@@ -304,8 +304,8 @@ def test_a_failed_append_stops_the_coordinator_until_the_log_works(restart, tmp_
     as a restart would, without anyone restarting it."""
     inp = write(tmp_path / "in.txt")
     out = tmp_path / "out"
-    clock = [1000.0]
-    c = restart(Config(now=lambda: clock[0]))
+    wall, clock = [1000.0], [0.0]
+    c = restart(Config(now=lambda: wall[0], clock=lambda: clock[0]))
     w = c.register()
     job = c.submit(program="wordcount", inputs=[inp], output=str(out), num_reduce_tasks=1)
     c.succeed(w, c.next(w), outputs(0, 1))
@@ -331,7 +331,9 @@ def test_a_failed_append_stops_the_coordinator_until_the_log_works(restart, tmp_
         ]:
             assert code(rpc, msg).name == "UNAVAILABLE", rpc
     assert (out / TEMP_DIR).is_dir()
-    # Space is freed. The server retries no more than once a HEAL_EVERY.
+    # Space is freed. The server retries no more than once a HEAL_EVERY, on
+    # the monotonic clock: setting the wall clock back does not delay it.
+    wall[0] -= 86400
     os.rmdir(restart.path)
     os.rename(restart.path + ".away", restart.path)
     assert code(c.s.GetJobStatus, coordinator_pb2.GetJobStatusRequest(job_id=job)).name == (

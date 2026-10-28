@@ -237,7 +237,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         self._log_err: str | None = None  # why the log refused a record, if it has
         self._replay_ended: list[_Job] = []  # jobs whose end replay saw, for recover to clean up
         self._log_path: str | None = None  # where recover opened the log, to reopen it
-        self._heal_at = 0.0  # when _failed may next try to reopen the log
+        self._heal_at = 0.0  # when _failed may next try to reopen the log, by _clock
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
@@ -252,16 +252,18 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         ended by a report that could not be logged, so no RPC may act on it.
         A server from recover instead rebuilds itself from the log, as a
         restart would, once the log takes records again: a full disk stops
-        the cluster only until space is freed. Call it under the lock."""
+        the cluster only until space is freed. Retries are timed by the
+        monotonic clock, so a wall clock set back cannot postpone them. Call
+        it under the lock."""
         if self._log_err is None:
             return
-        if self._log_path is not None and self.now() >= self._heal_at:
+        if self._log_path is not None and self._clock() >= self._heal_at:
             try:
                 self._heal()
                 return
             except Exception as e:
                 self._log_err = str(e) or type(e).__name__
-            self._heal_at = self.now() + HEAL_EVERY
+            self._heal_at = self._clock() + HEAL_EVERY
         if self._log_path is None:
             msg = f"coordinator log failed; restart the coordinator: {self._log_err}"
         else:
