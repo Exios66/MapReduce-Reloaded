@@ -115,13 +115,13 @@ class _Job:
     spec: types_pb2.JobSpec  # sent with every task
     splits: list[types_pb2.InputSplit]
     tasks: TaskTable
-    submitted: float
+    submitted: float | None
     counts: dict = field(default_factory=dict)  # of each task's accepted attempt
     placed: dict = field(default_factory=dict)  # locality of each attempt, by number
     ran: dict = field(default_factory=dict)  # locality of each task's accepted attempt
     since: float | None = None  # when the job began holding back tasks, if it has
     err: str = ""  # why the job failed, if it did
-    finished: float = 0.0  # zero while the job runs
+    finished: float | None = None  # None while the job runs
 
     def status(self) -> coordinator_pb2.GetJobStatusResponse:
         """Describes the job's progress."""
@@ -152,9 +152,9 @@ class _Job:
             backup_attempts=backups,
             backup_wins=won,
         )
-        if self.submitted:
+        if self.submitted is not None:
             resp.submitted_at.FromNanoseconds(int(self.submitted * 1e9))
-        if self.finished:
+        if self.finished is not None:
             resp.finished_at.FromNanoseconds(int(self.finished * 1e9))
         return resp
 
@@ -265,8 +265,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
 
     def monitor(self, stop: threading.Event):
         """Calls expire every heartbeat_interval seconds until stop is set.
-        Returns immediately if worker_timeout or heartbeat_interval is zero."""
-        if not self._cfg.worker_timeout or not self._cfg.heartbeat_interval:
+        Returns immediately if worker_timeout or heartbeat_interval is not
+        positive."""
+        if self._cfg.worker_timeout <= 0 or self._cfg.heartbeat_interval <= 0:
             return
         while not stop.wait(self._cfg.heartbeat_interval):
             self.expire(self._clock())

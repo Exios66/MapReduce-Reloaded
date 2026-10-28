@@ -683,6 +683,16 @@ def test_monitor(new_job):
 def test_monitor_returns_with_no_timeout():
     Server(Config(worker_timeout=0)).monitor(threading.Event())  # returns at once
     Server(Config(heartbeat_interval=0)).monitor(threading.Event())
+    Server(Config(worker_timeout=-1)).monitor(threading.Event())
+    Server(Config(heartbeat_interval=-1)).monitor(threading.Event())  # no busy loop
+
+
+def test_epoch_times_are_reported(new_job):
+    c, w, job = new_job(cfg=Config(now=lambda: 0.0))
+    c.succeed(w, c.next(w), outputs(0, 1))
+    c.succeed(w, c.next(w))
+    st = c.status(job)
+    assert st.HasField("submitted_at") and st.HasField("finished_at")
 
 
 @pytest.mark.parametrize(
