@@ -11,7 +11,9 @@ from mapreduce_reloaded.wal import Log
 
 def recover(cfg: Config, path: str) -> tuple[Server, Log]:
     """Returns a server that resumes from the write-ahead log at path,
-    creating it if needed, and the log, which the caller closes. It replays
+    creating it if needed, and the log. The caller closes the server, or the
+    log if it never failed: a server whose log fails reopens it the same
+    way, replacing it. It replays
     the decisions there, then logs a restart: the attempts that were running
     stop, and workers register again under IDs the old coordinator never
     gave out. The server logs to path from then on. Logged submission and
@@ -45,4 +47,5 @@ def recover(cfg: Config, path: str) -> tuple[Server, Log]:
         log.close()
         raise
     s._workers = Registry(f"r{restarts + 1}-w")
+    s._log_path = path
     return s, log

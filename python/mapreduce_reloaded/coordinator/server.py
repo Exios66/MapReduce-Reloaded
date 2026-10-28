@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from concurrent import futures
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from typing import NamedTuple, Protocol
 
@@ -32,6 +32,10 @@ from mapreduce_reloaded.gen.mapreduce.v1 import (
 from mapreduce_reloaded.split import default_r, plan, plan_m
 
 log = logging.getLogger(__name__)
+
+# How often, in seconds, a server whose log has failed tries to rebuild
+# itself from the log.
+HEAL_EVERY = 1.0
 
 # The directory under a job's output that holds attempts' uncommitted files,
 # as go/internal/task.TempDir.
@@ -239,20 +243,63 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         self._stopping = False
         self._log_err: str | None = None  # why the log refused a record, if it has
         self._replay_ended: list[_Job] = []  # jobs whose end replay saw, for recover to clean up
+        self._log_path: str | None = None  # where recover opened the log, to reopen it
+        self._heal_at = 0.0  # when _failed may next try to reopen the log, by _clock
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
-        """Holds the lock for an RPC. Once the log has refused a record, the
-        memory may hold a change the log does not, such as a job ended by a
-        report that could not be logged; so every RPC fails with Unavailable
-        until the coordinator restarts and recovers from the log."""
+        """Holds the lock for an RPC, raising _failed's error first."""
         with self._mu:
-            if self._log_err is not None:
-                raise RpcError(
-                    grpc.StatusCode.UNAVAILABLE,
-                    f"coordinator log failed; restart the coordinator: {self._log_err}",
-                )
+            self._failed()
             yield
+
+    def _failed(self):
+        """Raises RpcError with Unavailable while the log refuses records.
+        The memory may then hold a change the log does not, such as a job
+        ended by a report that could not be logged, so no RPC may act on it.
+        A server from recover instead rebuilds itself from the log, as a
+        restart would, once the log takes records again: a full disk stops
+        the cluster only until space is freed. Retries are timed by the
+        monotonic clock, so a wall clock set back cannot postpone them. Call
+        it under the lock."""
+        if self._log_err is None:
+            return
+        if self._log_path is not None and self._clock() >= self._heal_at:
+            try:
+                self._heal()
+                return
+            except Exception as e:
+                self._log_err = str(e) or type(e).__name__
+            self._heal_at = self._clock() + HEAL_EVERY
+        if self._log_path is None:
+            msg = f"coordinator log failed; restart the coordinator: {self._log_err}"
+        else:
+            msg = f"coordinator log failed, retrying: {self._log_err}"
+        raise RpcError(grpc.StatusCode.UNAVAILABLE, msg)
+
+    def _heal(self):
+        """Replaces the jobs and workers with those recovered from the log,
+        dropping every change the log never took. Running attempts stop and
+        workers register again, as after a restart. Call it under the lock;
+        raises what recover raises."""
+        from mapreduce_reloaded.coordinator.recover import recover  # it imports this module
+
+        assert self._log_path is not None
+        with suppress(Exception):  # it has already failed; reopening it is what matters
+            getattr(self._cfg.log, "close", lambda: None)()
+        n, wal = recover(replace(self._cfg, log=None), self._log_path)
+        log.info("coordinator log works again; recovered from it: %s", self._log_path)
+        self._cfg.log = wal
+        self._workers, self._jobs, self._order = n._workers, n._jobs, n._order
+        self._seq, self._active = n._seq, n._active
+        self._log_err = None
+
+    def close(self):
+        """Closes the log the server writes to, if it can be closed. Use it
+        rather than the log recover returned, which a healed server has
+        replaced."""
+        with self._mu:
+            getattr(self._cfg.log, "close", lambda: None)()
 
     def now(self) -> float:
         """Reads the coordinator's clock: Config.now, or time.time."""
