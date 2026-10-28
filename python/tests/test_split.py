@@ -59,6 +59,27 @@ def test_default_r():
     assert (default_r(0), default_r(4)) == (2, 8)
 
 
+def test_expand_matches_dot_files_in_byte_order(tmp_path):
+    # As Go's filepath.Glob: * matches .x, and names sort by their bytes.
+    # \u4e2d has no decomposed form, so macOS file systems keep its bytes.
+    for name in ["b", ".a", "\u4e2d", "Z"]:
+        (tmp_path / name).write_bytes(b"x")
+    got = [os.path.basename(p) for p in expand([str(tmp_path / "*")])]
+    assert got == [".a", "Z", "b", "\u4e2d"]
+
+
+def test_byte_splits_counts_before_building(tmp_path):
+    big = tmp_path / "big"
+    with open(big, "wb") as f:
+        f.truncate(10**9)  # sparse: no disk used
+    with pytest.raises(
+        ValueError, match=r"would be cut into 1000000000 splits; the most is 100000"
+    ):
+        plan(Text(), [str(big)], 1)
+    with pytest.raises(ValueError, match="would be cut into"):
+        plan_m(Text(), [str(big)], 10**9)
+
+
 def test_expand_no_match(tmp_path):
     with pytest.raises(FileNotFoundError, match="no input matches"):
         expand([str(tmp_path / "*")])

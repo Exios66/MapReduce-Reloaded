@@ -5,7 +5,17 @@ from operator import itemgetter
 
 import pytest
 
-from mapreduce_reloaded.api import Context, JobSpec, Program, TaskID, mapper, reducer
+from mapreduce_reloaded.api import (
+    MAX_MAP_TASKS,
+    MAX_REDUCE_TASKS,
+    Context,
+    JobSpec,
+    Program,
+    TaskID,
+    mapper,
+    reducer,
+)
+from mapreduce_reloaded.split import MAX_SPLITS
 
 
 @mapper
@@ -84,3 +94,14 @@ def test_job_spec_validation():
         JobSpec(Program(mapper=lambda *a: (), reducer=wc_reduce), inputs=(), output="", r=0)
     for problem in ["mapper must be a @mapper", "no inputs", "no output", "at least 1"]:
         assert problem in str(err.value)
+
+
+def test_job_spec_limits_match_go():
+    assert (MAX_REDUCE_TASKS, MAX_MAP_TASKS) == (10_000, MAX_SPLITS)
+    JobSpec(WORD_COUNT, inputs=("in",), output="out", r=MAX_REDUCE_TASKS, m=MAX_MAP_TASKS)
+    with pytest.raises(ValueError) as err:
+        JobSpec(WORD_COUNT, inputs=("in",), output="out", r=10_001, m=100_001)
+    assert str(err.value) == (
+        "number of reduce tasks r is 10001; the most is 10000; "
+        "number of map tasks m is 100001; the most is 100000"
+    )

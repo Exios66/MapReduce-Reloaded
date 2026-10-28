@@ -6,17 +6,13 @@ import heapq
 import os
 
 from mapreduce_reloaded.formats import InputFormat, Split
+from mapreduce_reloaded.formats.text import MAX_SPLITS
 
 # The paper uses splits of 16 to 64 MB (§3.1).
 DEFAULT_SIZE = 64 << 20
 
 # R is "a small multiple of the number of worker machines" (§3.5).
 REDUCE_TASKS_PER_WORKER = 2
-
-
-# The most map tasks a job may have, as go/internal/formats.MaxSplits: the
-# coordinator allocates state for every task before any runs.
-MAX_SPLITS = 100_000
 
 
 def plan(fmt: InputFormat, patterns, size: int = 0) -> list[Split]:
@@ -98,11 +94,12 @@ def default_r(workers: int) -> int:
 
 
 def expand(patterns) -> list[str]:
-    """Resolves file names and glob patterns to files, sorted within each
-    pattern. A pattern that matches nothing is an error."""
+    """Resolves file names and glob patterns to files, sorted by bytes within
+    each pattern, as Go's filepath.Glob: * matches names that start with a
+    dot too. A pattern that matches nothing is an error."""
     files = []
     for pattern in patterns:
-        matches = sorted(glob.glob(pattern))
+        matches = sorted(glob.glob(pattern, include_hidden=True), key=os.fsencode)
         if not matches:
             raise FileNotFoundError(f"no input matches {pattern!r}")
         files += matches

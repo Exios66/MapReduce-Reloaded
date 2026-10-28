@@ -3,6 +3,7 @@ and go/cmd/mr. The expected files come from scripts/make-corpus-expected.py."""
 
 import dataclasses
 import re
+import resource
 from pathlib import Path
 
 import pytest
@@ -293,3 +294,30 @@ def test_load():
     assert load("mapreduce_reloaded.examples.wordcount:program") is program
     with pytest.raises(TypeError, match="not a Program"):
         load("mapreduce_reloaded.examples.wordcount:wc_map")
+
+
+@pytest.mark.parametrize(
+    "platform, limits, want",
+    [
+        ("linux", (1024, 4096), (4096, 4096)),
+        ("darwin", (256, 2**40), (10240, 2**40)),  # OPEN_MAX, as Go
+        ("linux", (1024, resource.RLIM_INFINITY), (10240, resource.RLIM_INFINITY)),
+        ("linux", (4096, 4096), None),  # already there
+    ],
+)
+def test_raise_open_file_limit(monkeypatch, platform, limits, want):
+    set_to = []
+    monkeypatch.setattr(local.sys, "platform", platform)
+    monkeypatch.setattr(resource, "getrlimit", lambda _: limits)
+    monkeypatch.setattr(resource, "setrlimit", lambda _, v: set_to.append(v))
+    local.raise_open_file_limit()
+    assert set_to == ([want] if want else [])
+
+
+def test_raise_open_file_limit_keeps_a_limit_it_cannot_raise(monkeypatch):
+    def refuse(*_):
+        raise ValueError("not allowed")
+
+    monkeypatch.setattr(resource, "getrlimit", lambda _: (256, 4096))
+    monkeypatch.setattr(resource, "setrlimit", refuse)
+    local.raise_open_file_limit()  # no error
