@@ -168,9 +168,14 @@ needs it. Nothing else depends on it.
 
 ## Status
 
-Written and tested locally: the configuration parses, the Go install script's
-download, checksum and cache logic is tested against a fake download server
-(`python/tests/test_ci_config.py`), and the version pins agree. **Not yet
-confirmed on CircleCI:** the configuration has not been run there, since that
-needs the owner's account (Setup, steps 1 and 2). This section is where to
-record the first green run.
+Live since 2026-10-27. The project is connected through the CircleCI GitHub
+App, with triggers for pull requests (opened and pushed) and for pushes to
+`main`, and GitHub shows the checks as `ci/circleci: proto`,
+`ci/circleci: go`, `ci/circleci: python-3.11` and `ci/circleci: python-3.13`.
+The first runs found two problems, both fixed: buf v1.74.0 needs a newer Go
+than go.mod's (the generator install now allows `GOTOOLCHAIN=auto`), and buf
+breaking cannot clone a blobless checkout (`proto` checks out in full). The
+Actions workflow is disabled and runs only by hand (Setup, step 5).
+
+CircleCI reads this configuration from each branch, so a branch made before
+it reached `main` gets no checks until `main` is merged into it.
