@@ -197,10 +197,8 @@ def test_server_status(tmp_path):
     st = c.s.status()
     assert st.at == AT + 3
     assert [j.job_id for j in st.jobs] == [job]
-    assert [(w.worker.id, w.worker.info.host, w.worker.last_seen, w.running) for w in st.workers] == [
-        (w1, "h1", AT, [M0]),
-        (w2, "h2", AT + 2, []),
-    ]
+    seen = [(w.worker.id, w.worker.info.host, w.worker.last_seen, w.running) for w in st.workers]
+    assert seen == [(w1, "h1", AT, [M0]), (w2, "h2", AT + 2, [])]
     assert st.lost == []
     c.s.expire(106.0)  # w1 has been silent for 6 s
     st = c.s.status()
