@@ -126,7 +126,8 @@ class JobSpec:
     """A Program and the data to run it on. Raises ValueError if invalid.
 
     The in-process form of the wire message mapreduce.v1.JobSpec. M, the
-    number of map tasks, follows from split_size (§3.1); 0 means 64 MiB.
+    number of map tasks, is m if set; otherwise it follows from split_size
+    (§3.1), where 0 means 64 MiB.
     """
 
     program: Program
@@ -134,6 +135,7 @@ class JobSpec:
     output: str
     r: int
     split_size: int = 0
+    m: int = 0
     input_format: str = "text"
     output_format: str = "text"
     params: Mapping[str, str] = field(default_factory=dict)
@@ -148,6 +150,7 @@ class JobSpec:
                 (not self.output, "no output"),
                 (self.r < 1, "number of reduce tasks r must be at least 1"),
                 (self.split_size < 0, "split_size must not be negative"),
+                (self.m < 0, "number of map tasks m must not be negative"),
             ]
             if failed
         ]
