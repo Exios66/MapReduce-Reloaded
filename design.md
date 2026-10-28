@@ -286,7 +286,7 @@ made them; the data is in `bench/evaluation/`. What they showed (course VM,
 workers for word count but only 2.3× for grep, whose one-second job is mostly
 fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
 15× to 78× fewer bytes with the combiner, more with more skew, and ran 18%
-to 44% faster. E2's straggler cost 33% with backups and 101% without. E3 cost
+to 44% faster. E2, run again on 2026-10-28 with the settings alternating, took 11.2 s with the straggler and backups, 17.6 s with the straggler and no backups, and 8.0 s with no straggler. E3 cost
 about the 10 s detection timeout when the kill came early and 27 s at 75%,
 when finished map output was lost. E4's restart cost 1.6 s. E5's job file
 made word count 10.5× slower (399 s against 38 s), nearly all in the map
@@ -604,7 +604,7 @@ no reducer is told about them.
 | Keys and values are strings (§2) | `[]byte` in Go and `bytes` in Python. User code encodes its own data. | Both languages then sort and hash identically, with no extra rules. | [ADR 0005](docs/design/0005-programming-api.md), [explainer](docs/explainers/07-programming-api.md) |
 | Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](docs/file-format.md), [explainer](docs/explainers/09-external-sort.md) |
 | M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is an exact M (ADR 0016). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](docs/explainers/12-splits.md) |
-| User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. (planned) | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](docs/design/0015-user-job-files.md) |
+| User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](docs/design/0015-user-job-files.md) |
 | One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
 | Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB of RAM: one coordinator and four workers, each limited to one CPU. | It is the hardware available, it still exercises every protocol path, and the CPU limits make spreading tasks over workers pay off. | [cluster VM](docs/cluster-vm.md), [explainer](docs/explainers/14-cluster.md) |
 
