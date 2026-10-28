@@ -16,7 +16,7 @@ had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 |---|---|---|---|
 | 5.2 Grep | 1 TB, M = 15,000, R = 1: 150 s | 10 GB, M = 160, R = 1: 18.3 s | [`paper/grep`](../bench/evaluation/paper/grep) |
 | 5.3 Sort | 1 TB, M = 15,000, R = 4,000: 891 s | 1 GiB, M = 32, R = 4: 7.8 s | [`paper/sort`](../bench/evaluation/paper/sort), E0 |
-| 5.4 No backup tasks | +44% (1,283 s) | +56% with a straggler; no cost without one | E2 |
+| 5.4 No backup tasks | +44% (1,283 s) | +56% with a straggler (not drift-controlled); no statistically significant cost without one | E2 |
 | 5.5 Machine failures | 200 of 1,746 killed: +5% (933 s) | 1 of 4 killed: +79% to +232% | E3 |
 
 The grep and sort rows ran with `bench/run.sh` at commit `2707160`; their
@@ -95,15 +95,15 @@ took 7.8 s.
   the job's end; one had finished, and its commit failed because the
   job's temporary directory was already gone. In the paper, with 4,000
   reduce tasks, backups were a few percent of the work; here they are most
-  of a second copy of the reduce phase, though E2 finds they do not slow
-  the job (below).
+  of a second copy of the reduce phase, though E2 finds no statistically
+  significant slowdown (below).
 
 The sort's scaling over 1, 2 and 4 workers is E0: 36.7 s, 20.4 s and
 12.5 s, 2.9× on four workers, limited by the one shared disk.
 
 ## Backup tasks (§5.4)
 
-<img alt="E2: tasks completed over time and job time, with and without a straggler and backups" src="../bench/evaluation/E2.png" width="480">
+<img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png" width="480">
 
 The paper turned backup tasks off for the same sort and it took 1,283 s
 instead of 891 s, 44% longer: the last 5 reduce tasks straggled and took
@@ -123,15 +123,22 @@ and with no straggler:
 
 The straggler rows are medians of three runs; the others, of ten pairs of
 runs taken in turn ([bench/README.md](../bench/README.md#e2-backup-tasks-and-a-straggler)).
+The chart uses these same measurements: the no-straggler rows from
+`bench/evaluation/E2-pairs/` and the straggler rows from `bench/evaluation/E2/`.
+The saved `straggler-backups` trials ran as one block, followed by the
+`straggler-no-backups` block, so the +56% estimate is not drift-controlled.
+The current harness alternates settings, but that order does not apply to
+these saved straggler rows.
 
-- **The saving is the same size.** Without backups the job waits for the
-  slow worker's last tasks and takes 56% longer, close to the paper's 44%.
-- **With no straggler, backups cost nothing measurable.** They still run,
+- **The observed saving is similar.** Without backups the job waits for the
+  slow worker's last tasks and takes 56% longer, close to the paper's 44%,
+  subject to the run-order limitation above.
+- **With no straggler, no statistically significant cost was found.** Backups still run,
   5 or 6 a job, and none win: with as many reduce tasks as workers, a
   worker that finishes its reduce task has nothing left to do, so it backs
-  up another. But the job is no slower: over ten pairs the difference is
-  -0.11 s, 95% interval -0.38 to +0.16 s, not significant. The backups use
-  workers that would otherwise idle.
+  up another. Over ten pairs the mean difference is -0.11 s, with a 95%
+  interval of -0.38 to +0.16 s, allowing a mean cost of up to 0.16 s.
+  The backups use workers that would otherwise idle.
 - **The cause differs.** The paper's straggling came from machine variation
   at scale (bad disks, contention, a bug that disabled processor caches;
   §3.6). Here it is injected, because a small cluster of identical
@@ -153,7 +160,13 @@ restart it:
 | 5.8 s (50%) | 23.50 | +102% |
 | 8.7 s (75%) | 38.56 | +232% |
 
-- **Every job finished with the right output**, as the paper's did: the
+The baseline trials ran first, followed by the 25%, 50%, and 75% worker-kill
+trials in that fixed order, with three runs per setting. These comparisons
+are not drift-controlled.
+
+- **Every job finished and its output checksum matched the first normal run.**
+  This checks agreement with that run; it does not independently verify
+  correctness, sorted order, or preservation of every input record. The
   coordinator notices the loss, runs the lost tasks again on the others,
   and the reduce tasks fetch the new map output (§3.3).
 - **The cost is much larger, for two reasons of scale.** First, one of four
@@ -179,5 +192,5 @@ restart it:
   because some machine is always slow; four identical containers need a
   slow one made on purpose to show the same effect.
 - **The mechanisms behave as the paper says.** Overlapping phases, backups
-  that cut a straggler's tail, and lost tasks run again to the right result
-  all appear at this scale too.
+  that cut a straggler's tail, and lost tasks run again with output matching
+  the first normal run all appear at this scale too.

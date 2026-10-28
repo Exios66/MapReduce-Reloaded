@@ -278,9 +278,22 @@ def test_e2_draws_four_settings_in_two_colors(plotter, tmp_path):
     pyplot.subplots.return_value = Mock(), (left, right)
     settings = ("normal", "normal-no-backups", "straggler-backups", "straggler-no-backups")
     rows = [row(s) | {"run": "1", "event_at": "", "job": "job-1"} for s in settings]
+    (tmp_path / "E2").mkdir()
+    for setting in settings:
+        tasks_file(tmp_path / "E2" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
     t = light(module)
     module.e2(rows, tmp_path, tmp_path / "out.png", t)
     blue, orange = t["series"][:2]
+    assert left.step.call_count == 4
+    for call, color, style in zip(
+        left.step.call_args_list,
+        (blue, blue, orange, orange),
+        ("-", "--", "-", "--"),
+        strict=True,
+    ):
+        assert call.args == ([0, 1], [0, 4])
+        assert call.kwargs["color"] == color
+        assert call.kwargs["ls"] == style
     assert right.barh.call_args.kwargs["color"] == [blue, blue, orange, orange]
     hatched = [b for b in bars if b.set.called]
     assert hatched == [bars[1], bars[3]]

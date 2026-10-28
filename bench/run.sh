@@ -63,11 +63,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+mkdir -p data
+chmod a+x data
 "${compose[@]}" up -d --build --scale worker="$workers"
 mkdir -p "$dir"
 
-mkdir -p data
 python3 "bench/$gen" "$size" "$seed" > "$host_input"
+chmod a+r "$host_input"
 input_bytes=$(wc -c < "$host_input")
 
 urls=()

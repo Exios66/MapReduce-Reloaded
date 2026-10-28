@@ -237,10 +237,12 @@ hatched bar, backups off.
   they cost about a second, but that run took each setting's three runs in
   a block, so drift on the VM fell on one setting. Ten pairs taken in turn
   (`REPEAT=10 E2_SETTINGS="normal normal-no-backups"`, at `162be31`,
-  [`evaluation/E2-pairs/`](evaluation/E2-pairs/)) show no cost: 8.03 s
+  [`evaluation/E2-pairs/`](evaluation/E2-pairs/)) found no statistically
+  significant cost: 8.03 s
   with backups and 8.20 s without, backups faster in 8 of 10 pairs; the
   mean difference is -0.11 s, 95% interval -0.38 to +0.16 s (paired t,
-  p = 0.38; Wilcoxon signed-rank, p = 0.13).
+  p = 0.38; Wilcoxon signed-rank, p = 0.13). The interval allows a mean
+  cost of up to 0.16 s.
 
 ### E3: losing a worker
 
@@ -261,7 +263,8 @@ record the offset between those two clocks.
 | 5.8 s (50%) | 23.50 (23.17–23.68) | +11.9 s |
 | 8.7 s (75%) | 38.56 (38.04–38.85) | +26.9 s |
 
-- Every job finished with the right output on three workers.
+- Every job finished on three workers, with its output checksum matching
+  the first normal run's; this checks agreement, not independent correctness.
 - The cost is the 10 s it takes the coordinator to declare the worker dead
   (three missed heartbeats), plus the work that is lost. Killed early, the
   worker has finished little, so the cost is about the timeout.
