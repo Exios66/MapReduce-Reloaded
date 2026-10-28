@@ -31,6 +31,7 @@ mkdir -p "$GO_OUT" "$PY_OUT"
 # Go: protoc-gen-go writes the message types, protoc-gen-go-grpc the
 # service interfaces. paths=source_relative puts files under go/gen/
 # mirroring proto/ instead of under the full Go import path.
+# shellcheck disable=SC2086 # PROTOS is a list of paths with no spaces
 "$PYTHON" -m grpc_tools.protoc -I proto \
   --plugin=protoc-gen-go="$TOOLS/protoc-gen-go" \
   --plugin=protoc-gen-go-grpc="$TOOLS/protoc-gen-go-grpc" \
@@ -40,6 +41,7 @@ mkdir -p "$GO_OUT" "$PY_OUT"
 
 # Python: messages (_pb2.py), type stubs for editors (_pb2.pyi), and gRPC
 # stubs (_pb2_grpc.py).
+# shellcheck disable=SC2086 # as above
 "$PYTHON" -m grpc_tools.protoc -I proto \
   --python_out="$PY_OUT" --pyi_out="$PY_OUT" --grpc_python_out="$PY_OUT" \
   $PROTOS

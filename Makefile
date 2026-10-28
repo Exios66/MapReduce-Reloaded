@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint sh-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -112,7 +112,18 @@ perf:
 
 test: go-test py-test
 
-lint: go-lint py-lint
+lint: go-lint py-lint sh-lint
+
+# shellcheck on every tracked shell script and the git hook (#159). Where it
+# is not installed, it says so and passes, as CI's jobs have none;
+# scripts/vm-setup.sh --install puts it in ~/.local/bin.
+SH_FILES = $(shell git ls-files '*.sh') .githooks/pre-push
+sh-lint:
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck $(SH_FILES) && echo "sh-lint: shellcheck passed on $(words $(SH_FILES)) scripts"; \
+	else \
+		echo "sh-lint: shellcheck is not installed; skipping (scripts/vm-setup.sh installs it)"; \
+	fi
 
 fmt:
 	cd go && gofmt -w .

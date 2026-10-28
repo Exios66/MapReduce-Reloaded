@@ -335,6 +335,8 @@ Each of these has its own README.
 ## Development
 
 Requirements: Go 1.26+, Python 3.11+, `golangci-lint` v2 (built with Go 1.26+).
+`shellcheck` is optional: `make lint` runs it on the shell scripts if it is
+installed, and skips it with a message if not.
 
 ```sh
 pip install -e "python[dev]"   # install the Python package + dev tools

@@ -30,6 +30,11 @@ GO_DL_BASE=${GO_DL_BASE:-https://go.dev/dl}
 VENV="$REPO/python/.venv"
 # The linter make go-lint runs; keep in step with .github/workflows/ci.yml.
 GOLANGCI_VERSION=v2.14.0
+# The shell linter make sh-lint runs (#159): a release binary, checked
+# against these SHA-256 sums of its archives.
+SHELLCHECK_VERSION=v0.10.0
+SHELLCHECK_SHA256_amd64=6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87
+SHELLCHECK_SHA256_arm64=324a7e89de8fa2aed0d0c28f3dab59cf84c6d74264022c00c22af665ed1a09bb
 TOOLS_BIN="$HOME/.local/bin"
 
 # --- Reporting helpers --------------------------------------------------------
@@ -261,11 +266,45 @@ golangci_ok() {
     command -v golangci-lint >/dev/null 2>&1 || [ -x "$TOOLS_BIN/golangci-lint" ]
 }
 
+shellcheck_ok() {
+    command -v shellcheck >/dev/null 2>&1 || [ -x "$TOOLS_BIN/shellcheck" ]
+}
+
+# install_shellcheck downloads the pinned release for GOARCH, checks its
+# SHA-256 sum, and puts the binary in TOOLS_BIN.
+install_shellcheck() {
+    case "$GOARCH" in
+        amd64) arch=x86_64 want=$SHELLCHECK_SHA256_amd64 ;;
+        arm64) arch=aarch64 want=$SHELLCHECK_SHA256_arm64 ;;
+        *) return 0 ;;
+    esac
+    file="shellcheck-$SHELLCHECK_VERSION.linux.$arch.tar.xz"
+    echo "installing shellcheck $SHELLCHECK_VERSION into $TOOLS_BIN ..."
+    tmp=$(mktemp -d)
+    curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$file" \
+        "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/$file"
+    got=$(sha256sum "$tmp/$file" | awk '{print $1}')
+    if [ "$got" != "$want" ]; then
+        rm -rf "$tmp"
+        echo "shellcheck: $file has SHA-256 $got, want $want" >&2
+        return 1
+    fi
+    tar -xJf "$tmp/$file" -C "$tmp"
+    mkdir -p "$TOOLS_BIN"
+    install -m 0755 "$tmp/shellcheck-$SHELLCHECK_VERSION/shellcheck" "$TOOLS_BIN/shellcheck"
+    rm -rf "$tmp"
+}
+
 check_devtools() {
     if golangci_ok; then
         report OK lint "golangci-lint"
     else
         report WARN lint "golangci-lint missing, needed by make check (run with --install)"
+    fi
+    if shellcheck_ok; then
+        report OK shell "shellcheck"
+    else
+        report WARN shell "shellcheck missing; make sh-lint skips without it (run with --install)"
     fi
     if [ -x "$REPO/.tools/bin/buf" ]; then
         report OK proto "buf and the code generators in .tools/bin"
@@ -290,6 +329,7 @@ install_devtools() {
             "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$GOLANGCI_VERSION"
         echo "add this line to ~/.bashrc if ~/.local/bin is not on PATH:  export PATH=\"\$HOME/.local/bin:\$PATH\""
     fi
+    shellcheck_ok || install_shellcheck
     if [ ! -x "$REPO/.tools/bin/buf" ] && command -v make >/dev/null 2>&1; then
         echo "installing the code generators into .tools/bin ..."
         # Some pinned tools need a newer Go than go.mod's; as in CI, the go

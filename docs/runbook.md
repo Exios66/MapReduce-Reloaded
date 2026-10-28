@@ -37,7 +37,7 @@ Skip this section if `~/MapReduce-Reloaded` already exists.
 sudo apt-get install -y make gcc             # not on the VM by default; gcc is for go test -race
 git clone https://github.com/Exios66/MapReduce-Reloaded.git
 cd MapReduce-Reloaded
-scripts/vm-setup.sh --install                # Go, the Python venv, golangci-lint, buf
+scripts/vm-setup.sh --install                # Go, the Python venv, golangci-lint, shellcheck, buf
 echo 'export PATH="$HOME/.local/go/bin:$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 scripts/vm-setup.sh                          # every line should say OK

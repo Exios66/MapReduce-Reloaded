@@ -21,6 +21,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CIRCLE = (ROOT / ".circleci/config.yml").read_text()
 ACTIONS = (ROOT / ".github/workflows/ci.yml").read_text()
+MAKEFILE = (ROOT / "Makefile").read_text()
 INSTALL_GO = ROOT / "scripts/ci-install-go.sh"
 
 
@@ -79,6 +80,15 @@ def test_actions_go_job_can_run_the_python_golden_tests():
     go_job = ACTIONS.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
     assert "python-version: " in go_job and 'pip install -e "python[dev]"' in go_job
     assert "make go-lint go-test PYTHON=python" in go_job
+
+
+def test_make_lint_runs_shellcheck_on_every_script():
+    """make lint includes sh-lint, which lints every tracked *.sh and the
+    pre-push hook, and skips with a message where shellcheck is missing."""
+    assert re.search(r"^lint: .*\bsh-lint\b", MAKEFILE, re.M)
+    assert "SH_FILES = $(shell git ls-files '*.sh') .githooks/pre-push" in MAKEFILE
+    target = MAKEFILE.split("\nsh-lint:\n", 1)[1].split("\n\n", 1)[0]
+    assert "command -v shellcheck" in target and "skipping" in target
 
 
 def test_install_go_reads_the_version_from_go_mod():
