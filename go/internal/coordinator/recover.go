@@ -20,6 +20,7 @@ import (
 // It returns log open, read, decoding, or replay errors, or Unavailable if
 // recording the restart fails, joined with any error closing the log.
 func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
+	cfg.IDPrefix = ""
 	s := NewServer(cfg)
 	restarts := 0
 	log, err := wal.Open(path, func(b []byte) error {

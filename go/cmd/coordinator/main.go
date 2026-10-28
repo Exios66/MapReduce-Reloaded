@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -121,6 +122,8 @@ func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (
 	cfg := config(o)
 	var srv *coordinator.Server
 	if o.dataDir == "" {
+		// Without a log, IDs start from 1 again: tell them from the last run's.
+		cfg.IDPrefix = strconv.FormatInt(time.Now().UnixNano(), 36) + "-"
 		srv = coordinator.NewServer(cfg)
 	} else {
 		if err := os.MkdirAll(o.dataDir, 0o755); err != nil {

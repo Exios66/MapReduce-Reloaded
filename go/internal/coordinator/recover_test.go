@@ -447,3 +447,30 @@ func TestRecoverPreservesJobSource(t *testing.T) {
 		t.Fatalf("recovered task lost source or options: %v, %v", resp, err)
 	}
 }
+
+// IDPrefix begins every worker and job ID of a server without a log, so
+// that a restarted one does not give out the last run's IDs. Recover
+// ignores it: the log keeps IDs unique.
+func TestIDPrefix(t *testing.T) {
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		s          *Server
+		worker, id string
+	}{
+		{NewServer(Config{IDPrefix: "x-"}), "x-w1", "job-x-1"},
+		{recoverServer(t, Config{IDPrefix: "x-"}, filepath.Join(t.TempDir(), "coordinator.log")), "r1-w1", "job-1"},
+	} {
+		if w := register(t, c.s); w != c.worker {
+			t.Errorf("worker ID %q, want %q", w, c.worker)
+		}
+		sub, err := c.s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+			Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+		}})
+		if err != nil || sub.GetJobId() != c.id {
+			t.Errorf("job ID %q, %v; want %q", sub.GetJobId(), err, c.id)
+		}
+	}
+}

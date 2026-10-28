@@ -45,6 +45,12 @@ type Config struct {
 	// workers not on a host that holds their split, in the hope that one
 	// that is asks first (delay scheduling). Zero means never.
 	LocalityWait time.Duration
+	// IDPrefix begins every worker and job ID the server gives out. A
+	// coordinator without a log numbers from 1 again when restarted, so it
+	// sets a prefix of its own: a worker still holding the last run's IDs,
+	// or files under a job's ID, must not take them for this run's.
+	// Recover ignores it, as the log keeps IDs unique.
+	IDPrefix string
 	// Log, if set, is the write-ahead log: every change to a job or its
 	// tasks is appended to it before any reply depends on it (§3.3).
 	Log Log
@@ -104,7 +110,7 @@ type job struct {
 
 // NewServer returns a coordinator with no workers and no jobs.
 func NewServer(cfg Config) *Server {
-	return &Server{cfg: cfg, workers: NewRegistry("w"), jobs: map[string]*job{}}
+	return &Server{cfg: cfg, workers: NewRegistry(cfg.IDPrefix + "w"), jobs: map[string]*job{}}
 }
 
 // Shutdown makes every worker's next RequestTask tell it to exit.
@@ -263,7 +269,7 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 	if err := mrtask.Setup(ctx, spec.Output); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
-	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", s.seq+1), Job: m, Splits: splits}
+	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%s%d", s.cfg.IDPrefix, s.seq+1), Job: m, Splits: splits}
 	now := s.now()
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}, now); err != nil {
 		return nil, err

@@ -149,10 +149,27 @@ func TestRunRecoversAndServesStatus(t *testing.T) {
 	}
 }
 
-// Without -data-dir there is no log, and a restart forgets the job.
+// Without -data-dir there is no log, and a restart forgets the job. It
+// must not give out the last run's IDs again: a worker still remembers
+// them, and keeps files under a job's ID.
 func TestRunWithoutLog(t *testing.T) {
-	rpc, _, _ := serve(t, options{addr: "127.0.0.1:0"})
-	if _, err := client(t, rpc).GetJobStatus(t.Context(), &pb.GetJobStatusRequest{JobId: "job-1"}); err == nil {
-		t.Fatal("found a job on a new coordinator")
+	ids := map[string]bool{}
+	for range 2 {
+		rpc, _, stop := serve(t, options{addr: "127.0.0.1:0"})
+		c := client(t, rpc)
+		if _, err := c.GetJobStatus(t.Context(), &pb.GetJobStatusRequest{JobId: "job-1"}); err == nil {
+			t.Fatal("found a job on a new coordinator")
+		}
+		reg, err := c.RegisterWorker(t.Context(), &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ids[reg.GetWorkerId()] {
+			t.Fatalf("worker ID %q given out again after a restart", reg.GetWorkerId())
+		}
+		ids[reg.GetWorkerId()] = true
+		if err := stop(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
