@@ -146,8 +146,8 @@ resume a broken fetch at a byte offset and detect corruption.
 ### Tests
 
 Every check is a make target. `make check` runs them before every push, and
-GitHub Actions runs them on every pull request, on pushes to `main`, and
-on manual dispatches ([ADR 0014](docs/design/0014-ci-on-pull-requests.md)).
+CircleCI runs them on every pull request and on pushes to `main`
+([ADR 0014](docs/design/0014-ci-on-pull-requests.md), [CI](docs/ci.md)).
 
 | Kind | What it checks | Where |
 |---|---|---|
@@ -300,10 +300,11 @@ four engineering practices:
 
 - **Never push to `main`.** Work goes to a branch, and `main` changes only by
   merging a pull request.
-- **Actions run tests on pull requests.** `.github/workflows/ci.yml` runs the
-  `make check` targets on every PR. While the account's hosted runners fail,
-  `make ci-report` runs the same checks and records the result on the PR's
-  commit ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165).
+- **CI runs tests on pull requests.** CircleCI (`.circleci/config.yml`) runs
+  the `make check` targets on every PR. GitHub's hosted runners fail on the
+  account's billing lock, so the Actions workflow runs only by hand; `make
+  ci-report` can still record a local run on the PR's commit
+  ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165, #212).
 - **Many small pull requests.** One concern each, as the roadmap's
   course-deliverable items are listed.
   Issues and pull requests start from the forms and templates in

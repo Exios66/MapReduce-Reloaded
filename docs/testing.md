@@ -2,8 +2,11 @@
 
 `make check` runs everything that needs no Docker: code generation checks,
 lint, the Go tests under the race detector, the Python tests, and the
-coverage floors. The VM's run of it is the merge gate (ADR 0014). The other
-kinds of test below are run by hand or by their own target.
+coverage floors. CI runs the same targets on every pull request, split into
+four jobs ([CI](ci.md)); `make ci-report` posts the VM's run as a commit
+status when no hosted service is available (ADR 0014). The other kinds of
+test below are run by hand or by their own target, and CI runs none of the
+rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 
 | Kind | Command | In `make check` | Where |
 |---|---|---|---|
