@@ -87,5 +87,33 @@ them except the 13 below. These make no difference that a test could see:
   `DefaultBudget * R` for `/ R` (85), which changes only memory use, and
   would need a map task of over 64 MB to see.
 
-Python (`mutmut` on `formats/kv.py` and `partition/hash.py`) is not run
-yet.
+`make mutate-py` does the same for the Python MRKV format and partition
+function with [mutmut](https://github.com/boxed/mutmut), installed by
+`pip install -e 'python[mutation]'`; `python/pyproject.toml` names the
+files and the tests it runs. It takes about a minute.
+
+| File | Killed | Survived | Score |
+|---|---|---|---|
+| `formats/kv.py` | 372 | 77 | 82.9% |
+| `partition/hash.py` | 11 | 3 | 78.6% |
+
+The first run killed 78.4% of `kv.py`. `tests/test_kv_boundaries.py` now
+kills the rest of the mutants that a test could see, at limits no test had
+reached: a length of exactly 128, a record, a block and a declared size of
+exactly `MAX_BLOCK_SIZE`, a three-byte snappy prefix, and a length prefix
+cut off at the end of a block. The one timeout, counted as killed, is a
+length encoder made to loop forever. The 80 left are of three kinds:
+
+- 47 change only the text of an error message. Tests check an error's
+  kind, not its wording.
+- 18 change the CRC-32C table, which is built when the module is imported,
+  before mutmut switches a mutant on. The test vectors written by the Go
+  code catch them: making the table's inner loop run 9 times instead of 8
+  fails `tests/test_kv.py`.
+- 15 make no difference: a value replaced by another that is just as false
+  (`None` for `False`, `""` for `None`); zstd's module-level `compress` for
+  a `ZstdCompressor`, which writes the same frame; `f.read(2)` for
+  `f.read(1)` at the end of the file; and changes that turn one bad block
+  into another (a zstd frame that declares 0 bytes; an 11th byte of a
+  length prefix; `_field`'s check for a length of 2^64 or more, which the
+  check against the payload's end covers).
