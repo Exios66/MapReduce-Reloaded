@@ -74,6 +74,47 @@ func TestJobFile(t *testing.T) {
 	}
 }
 
+// Source takes precedence even when the display name names a registered
+// program. Disabling optional callbacks in one request must not mutate the
+// cached program used by the next request.
+func TestJobFileOverridesAndCacheIsolation(t *testing.T) {
+	src, err := os.ReadFile("../../../examples/wordcount.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &pb.JobSpec{
+		Program: "wordcount", ProgramSource: string(src) + "\nfunc Partition(key []byte, r uint32) uint32 { return r-1 }\n",
+		Inputs: []string{"in"}, Output: "out", NumReduceTasks: 3,
+	}
+	for _, tc := range []struct {
+		name, partitioner string
+		combiner, custom  bool
+	}{
+		{"disabled", "hash", false, false},
+		{"source defaults", "", true, true},
+		{"disable only combiner", "", false, true},
+		{"disable only partitioner", "hash", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m.UseCombiner, m.Partitioner = tc.combiner, tc.partitioner
+			spec, err := JobSpec(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (spec.Program.Combiner != nil) != tc.combiner || (spec.Program.Partitioner != nil) != tc.custom {
+				t.Fatalf("program options=%+v", spec.Program)
+			}
+			if tc.custom && spec.Program.Partitioner.Partition([]byte("key"), 3) != 2 {
+				t.Fatal("custom partitioner was not used")
+			}
+		})
+	}
+	m.ProgramSource = "package job" // must not fall back to the registered wordcount
+	if _, err := JobSpec(m); err == nil || !strings.Contains(err.Error(), "wire: wordcount: job file: it has no Map") {
+		t.Fatalf("invalid source not identified: %v", err)
+	}
+}
+
 func TestPartitioner(t *testing.T) {
 	m := &pb.JobSpec{Program: "test.partitioned", Inputs: []string{"in"}, Output: "o", NumReduceTasks: 1}
 	for name, custom := range map[string]bool{"": true, "hash": false} {

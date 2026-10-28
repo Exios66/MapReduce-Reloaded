@@ -1,0 +1,104 @@
+name: Bug report
+description: Something does not work as the design, a doc or a test says it should.
+title: "<area>: <what goes wrong>"
+labels: ["bug"]
+assignees: ["Exios66"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check that it is not already an open issue. Do not paste a working
+        exploit for a security problem here; describe the effect and the
+        conditions, and keep the proof to yourself until it is fixed.
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What should happen"
+      description: "And where that is written down: design.md, an ADR, a doc, or a test."
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: "What happens"
+      description: "The wrong result, the error message, or the symptom, exactly as it appeared."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "How to reproduce"
+      description: "Commands from a clean clone, or a failing test, in the order to run them. The smallest case that shows it."
+      render: shell
+      placeholder: |
+        git checkout <commit>
+        make up
+        mr submit ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Area"
+      options:
+        - Coordinator
+        - Worker
+        - Shuffle
+        - Storage (local or S3)
+        - Formats and MRKV
+        - Job files (Yaegi)
+        - mr command line
+        - Python implementation
+        - Protocol (proto)
+        - Deployment (Compose, Docker)
+        - Benchmarks and experiments
+        - Observability (metrics, status page)
+        - CI and tooling
+        - Documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "How bad is it"
+      options:
+        - Loses or corrupts job output
+        - A job fails or hangs that should finish
+        - Exhausts memory, disk or CPU
+        - A wrong number or message, with the right output
+        - Cosmetic
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: "Commit"
+      description: "The output of `git rev-parse --short HEAD`, or the release."
+      placeholder: "8cf1245"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment"
+      description: "Where it ran. The course VM (4 vCPU, 8 GB), Compose or processes, Go and Python versions, and the options passed to the coordinator and the workers."
+      placeholder: |
+        Course VM, Docker Compose, 4 workers at 1 CPU
+        go version, python --version
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs and metrics"
+      description: "The coordinator and worker log lines around the failure, and any `mr_*` metric that shows it. Trim to the relevant lines."
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: cause
+    attributes:
+      label: "Suspected cause or fix"
+      description: "Optional. Say how sure you are, and what you checked."
+    validations:
+      required: false

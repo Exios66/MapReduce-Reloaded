@@ -201,3 +201,16 @@ func (testContext) Input() string                        { return "" }
 func (testContext) Count(string, int64)                  {}
 func (testContext) Logger() *slog.Logger                 { return slog.New(slog.DiscardHandler) }
 func (testContext) SideOutput(string) (io.Writer, error) { return io.Discard, nil }
+
+func TestValidateTaskCountLimits(t *testing.T) {
+	spec := api.JobSpec{Program: wordCount, Inputs: []string{"in"}, Output: "out", R: api.MaxReduceTasks, M: api.MaxMapTasks}
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("the limits themselves are allowed: %v", err)
+	}
+	spec.R, spec.M = api.MaxReduceTasks+1, api.MaxMapTasks+1
+	err := spec.Validate()
+	if err == nil || !strings.Contains(err.Error(), "reduce tasks R is 10001") ||
+		!strings.Contains(err.Error(), "map tasks M is 100001") {
+		t.Fatalf("got %v, want both counts rejected", err)
+	}
+}

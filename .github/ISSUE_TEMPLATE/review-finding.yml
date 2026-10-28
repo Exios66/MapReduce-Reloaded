@@ -1,0 +1,86 @@
+name: Review or scan finding
+description: A finding from an AI reviewer, a scanner or a human review that is not fixed in the pull request it came from.
+title: "<tool>: <short summary of the finding>"
+labels: ["bug"]
+assignees: ["Exios66"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A finding is a claim to check, not an order. Open an issue only if it
+        stands after you read the code, and say what you checked. Findings
+        that are already fixed, or not worth their code, are answered on their
+        thread with the reason.
+  - type: dropdown
+    id: source
+    attributes:
+      label: "Source"
+      options:
+        - CodeRabbit (pull request review)
+        - CodeRabbit (security scan)
+        - CodeAnt
+        - Another AI reviewer
+        - A scanner or linter
+        - A human review
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: "Link or ID"
+      description: "The review comment URL, or the report and finding ID, such as `CodeRabbit 2026-10-26, F-004`."
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: "Location"
+      description: "File and lines on the commit you checked."
+      placeholder: "go/internal/formats/text.go:39-40"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity as reported"
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+        - Not stated
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: "The finding"
+      description: "What the tool or reviewer claims, in a few sentences. Quote only what is needed."
+    validations:
+      required: true
+  - type: dropdown
+    id: verified
+    attributes:
+      label: "Do you agree with it"
+      description: "Trace a realistic path from a caller or input to the failure before you answer."
+      options:
+        - Confirmed on the current main
+        - Partly true; see below
+        - Not reproduced; kept for the record
+        - Not checked yet
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "What you checked"
+      description: "The path you traced, a failing test, or the reason it does not apply. If a design decision covers it, link the ADR."
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: "Proposed fix"
+      description: "The smallest change that closes it, and whether it fits one pull request. If the fix costs more than the problem, say so."
+    validations:
+      required: false

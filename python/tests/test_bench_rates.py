@@ -6,6 +6,7 @@ import io
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -94,4 +95,25 @@ def test_rates(tmp_path):
         ["1.000", "6.000", "0.000", "0.000"],
         ["3.000", "1.000", "3.000", "0.500"],
         ["4.000", "2.000", "0.000", "0.000"],
+    ]
+
+
+def test_unplotted_metrics_cost_nothing(tmp_path):
+    # A sample file that introduces a new series at every timestamp must not
+    # make the work grow with the square of its length: only the three
+    # plotted metrics are kept.
+    samples = tmp_path / "samples.csv"
+    with samples.open("w") as f:
+        f.write("seconds,url,metric,value\n")
+        f.write("0,a,mr_worker_map_input_bytes_total,0\n")
+        for i in range(1, 30_000):
+            f.write(f"{i},a,other_metric_{i},1\n")
+        f.write("30000,a,mr_worker_map_input_bytes_total,30000000000\n")
+    start = time.monotonic()
+    rows = list(csv.reader(io.StringIO(run("plot-rates.py", samples))))
+    assert time.monotonic() - start < 10
+    # Only the two rounds with a plotted metric remain: 30 GB over 30000 s.
+    assert rows == [
+        ["seconds", "input", "shuffle", "output"],
+        ["30000.000", "1.000", "0.000", "0.000"],
     ]

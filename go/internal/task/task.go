@@ -234,7 +234,8 @@ func writeKV(path string, codec kv.Codec, records extsort.Records) (size int64, 
 // CheckOutput returns an error if output already holds part files, so that
 // a job's output is never mixed with an earlier job's.
 func CheckOutput(ctx context.Context, output string) error {
-	parts, err := storage.List(ctx, storage.Join(output, "part-r-*"))
+	// output is a literal name; only the part files are a pattern.
+	parts, err := storage.List(ctx, storage.Join(storage.Escape(output), "part-r-*"))
 	if err == nil && len(parts) > 0 {
 		err = fmt.Errorf("task: %s already holds job output", output)
 	}

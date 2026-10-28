@@ -64,3 +64,41 @@ def test_output_round_trip(tmp_path, name, want):
         w.write(b"apple", b"3")
         w.write(b"pear", b"1")
     assert read_splits(input_format(name), path, 4) == want
+
+
+def test_text_alignment_stays_in_split(tmp_path, monkeypatch):
+    # A split inside a very long line looks for the next line only up to its
+    # own end, so the splits of one long line do not each read the rest of it.
+    import builtins
+
+    from mapreduce_reloaded.formats import text
+
+    path = tmp_path / "input"
+    path.write_bytes(b"x" * 1_000_000 + b"\nshort\n")
+    sizes = []
+
+    class Spy:
+        def __init__(self, f):
+            self.f = f
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.f.close()
+
+        def seek(self, pos):
+            return self.f.seek(pos)
+
+        def readline(self, limit=-1):
+            line = self.f.readline(limit)
+            sizes.append(len(line))
+            return line
+
+    monkeypatch.setattr(text, "open", lambda *a: Spy(builtins.open(*a)), raising=False)
+    inside = text.Split(str(path), 5000, 5100)
+    assert list(Text().read(inside)) == []
+    assert sizes == [100]  # the alignment read, and nothing past the split
+    assert list(Text().read(text.Split(str(path), 1_000_000, 1_000_007))) == [
+        (b"1000001", b"short")
+    ]
