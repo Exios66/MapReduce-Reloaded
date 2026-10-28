@@ -102,7 +102,8 @@ kills the rest of the mutants that a test could see, at limits no test had
 reached: a length of exactly 128, a record, a block and a declared size of
 exactly `MAX_BLOCK_SIZE`, a three-byte snappy prefix, and a length prefix
 cut off at the end of a block. The one timeout, counted as killed, is a
-length encoder made to loop forever. The 80 left are of three kinds:
+length encoder made to loop forever. The 80 survivors in the two files
+are of three kinds:
 
 - 47 change only the text of an error message. Tests check an error's
   kind, not its wording.
