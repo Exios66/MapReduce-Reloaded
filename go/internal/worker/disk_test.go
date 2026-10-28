@@ -30,7 +30,7 @@ func (idleCoordinator) RequestTask(_ context.Context, req *pb.RequestTaskRequest
 func TestPrune(t *testing.T) {
 	dir := t.TempDir()
 	old := time.Now().Add(-time.Minute)
-	for _, name := range []string{"job-1", "job-2", "job-3", "notes"} {
+	for _, name := range []string{"job-1", "job-mh3x9k-4", "job-2", "job-3", "notes"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -48,13 +48,13 @@ func TestPrune(t *testing.T) {
 	for w.pruning.Load() {
 		time.Sleep(time.Millisecond)
 	}
-	for name, want := range map[string]bool{"job-1": false, "job-2": true, "job-3": true, "notes": true} {
+	for name, want := range map[string]bool{"job-1": false, "job-mh3x9k-4": false, "job-2": true, "job-3": true, "notes": true} {
 		if _, err := os.Stat(filepath.Join(dir, name)); (err == nil) != want {
 			t.Errorf("%s: kept = %v, want %v", name, err == nil, want)
 		}
 	}
-	if w.stats.prunedJobs.Load() != 1 || w.stats.prunedBytes.Load() != 1 {
-		t.Errorf("pruned %d jobs, %d bytes; want 1, 1", w.stats.prunedJobs.Load(), w.stats.prunedBytes.Load())
+	if w.stats.prunedJobs.Load() != 2 || w.stats.prunedBytes.Load() != 2 {
+		t.Errorf("pruned %d jobs, %d bytes; want 2, 2", w.stats.prunedJobs.Load(), w.stats.prunedBytes.Load())
 	}
 }
 

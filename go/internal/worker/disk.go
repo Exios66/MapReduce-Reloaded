@@ -20,8 +20,9 @@ import (
 // retried (§3.3) up to the coordinator's -max-task-failures.
 
 // jobDir matches the directories prune may delete: the coordinator's job
-// IDs, so a -work-dir that holds anything else keeps it.
-var jobDir = regexp.MustCompile(`^job-[0-9]+$`)
+// IDs, with the run's prefix a coordinator without a log adds (job-<p>-<n>),
+// so a -work-dir that holds anything else keeps it.
+var jobDir = regexp.MustCompile(`^job-([0-9a-z]+-)?[0-9]+$`)
 
 // diskPoll is how often a worker waiting for disk space checks again.
 var diskPoll = time.Second
@@ -32,7 +33,7 @@ var diskPoll = time.Second
 // otherwise appear older than it.
 const pruneSlack = 3 * time.Second
 
-// prune asynchronously deletes job-[0-9]+ directories under the work
+// prune asynchronously deletes job directories (jobDir) under the work
 // directory that are not in active, as of a heartbeat sent at sent.
 // A directory modified less than pruneSlack before sent is kept: it may
 // belong to a job submitted after the coordinator answered. Only one prune runs at a time, outside the
