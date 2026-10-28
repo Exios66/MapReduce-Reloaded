@@ -40,8 +40,8 @@ def duration(j: coordinator_pb2.GetJobStatusResponse, now: float) -> int | None:
 
 
 def go_float(x: float) -> str:
-    """Formats x as Go's %g: the shortest digits that read back as x, in
-    exponent form below 1e-4 or from 1e6 on."""
+    """Formats finite x as Go's %g: the shortest digits that read back as x,
+    in exponent form for nonzero magnitudes below 1e-4 or from 1e6 on."""
     if x == 0:
         return "0"
     t = Decimal(repr(x)).normalize().as_tuple()
@@ -82,6 +82,7 @@ def metrics(st: Status) -> bytes:
     lines: list[str] = []
 
     def family(name: str, help: str):
+        """Adds HELP and gauge TYPE declarations for a metric family."""
         lines.extend([f"# HELP {name} {help}", f"# TYPE {name} gauge"])
 
     family("mr_workers", "Live workers.")
@@ -202,6 +203,9 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
         timeout = READ_TIMEOUT
 
         def do_GET(self):
+            """Serves a fresh status page or metrics, ignoring query strings.
+            Returns HTTP 404 for other paths; source and rendering
+            exceptions propagate from this method."""
             route = urlsplit(self.path).path
             if route == "/":
                 body, ctype = page(source()).encode(), "text/html; charset=utf-8"
@@ -217,6 +221,7 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(body)
 
         def log_message(self, format, *args):
+            """Suppresses HTTP request and error log messages."""
             pass  # as the Go server, which logs no requests
 
     return Handler
@@ -232,6 +237,8 @@ class _Server6(_Server):
     address_family = socket.AF_INET6
 
     def server_bind(self):
+        """Binds IPv6, attempting to accept IPv4 on the same socket.
+        Ignores OSError when enabling IPv4; bind errors propagate."""
         with contextlib.suppress(OSError):
             self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
         super().server_bind()

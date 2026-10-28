@@ -320,8 +320,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             getattr(self._cfg.log, "close", lambda: None)()
 
     def status(self) -> Status:
-        """Returns a copy of the coordinator's state. It works while the log
-        has failed, so the status page shows what memory holds."""
+        """Returns retained jobs in submission order, live workers in
+        registration order with their running tasks, and recent lost workers.
+        Snapshot and last-seen times use the coordinator's wall clock in Unix
+        seconds. It works while the log has failed, so the status page shows
+        what memory holds."""
         with self._mu:
             at, tick = self.now(), self._clock()
             running = self._active.tasks.running() if self._active is not None else {}
@@ -801,7 +804,10 @@ def start(coordinator: Server, address: str, threads: int = 16):
     starts its worker monitor. Returns the gRPC server, the bound port and
     the event that stops the monitor. An address in use is an error, as in
     Go: gRPC would otherwise share the port with SO_REUSEPORT, and two
-    coordinators would split the workers and write one log."""
+    coordinators would split the workers and write one log. Port 0 selects
+    an available port; threads limits concurrent RPC handlers. The caller
+    must stop the gRPC server separately from the monitor. Raises ValueError
+    if threads is nonpositive and propagates RuntimeError if binding fails."""
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=threads), options=[("grpc.so_reuseport", 0)]
     )
