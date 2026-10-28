@@ -3,6 +3,7 @@ package coordinator
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -86,8 +87,14 @@ type Server struct {
 	replayEnded []*job       // jobs whose end Recover replayed, to clean up after
 	lost        []LostWorker // since this process started, for Status
 	stopping    bool
-	logErr      error // why the log refused a record, if it has
+	logErr      error     // why the log refused a record, if it has
+	logPath     string    // where Recover opened the log, to reopen it
+	healAt      time.Time // when failed may next try to reopen the log
 }
+
+// healEvery is how often a server whose log has failed tries to rebuild
+// itself from the log.
+const healEvery = time.Second
 
 type job struct {
 	id     string
@@ -666,15 +673,59 @@ func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 	return nil
 }
 
-// failed returns Unavailable once the log has refused a record. The memory
-// may then hold a change the log does not, such as a job ended by a report
-// that could not be logged, so every RPC fails until the coordinator
-// restarts and recovers from the log. Call it under the lock.
+// failed returns Unavailable while the log refuses records. The memory may
+// then hold a change the log does not, such as a job ended by a report that
+// could not be logged, so no RPC may act on it. A server from Recover
+// instead rebuilds itself from the log, as a restart would, once the log
+// takes records again: a full disk stops the cluster only until space is
+// freed. Call it under the lock.
 func (s *Server) failed() error {
 	if s.logErr == nil {
 		return nil
 	}
-	return status.Errorf(codes.Unavailable, "coordinator log failed; restart the coordinator: %v", s.logErr)
+	if s.logPath != "" && !s.now().Before(s.healAt) {
+		if err := s.heal(); err == nil {
+			return nil
+		} else {
+			s.logErr = err
+		}
+		s.healAt = s.now().Add(healEvery)
+	}
+	if s.logPath == "" {
+		return status.Errorf(codes.Unavailable, "coordinator log failed; restart the coordinator: %v", s.logErr)
+	}
+	return status.Errorf(codes.Unavailable, "coordinator log failed, retrying: %v", s.logErr)
+}
+
+// heal replaces the server's jobs and workers with those recovered from
+// its log, dropping every change the log never took. Running attempts stop
+// and workers register again, as after a restart. Call it under the lock.
+func (s *Server) heal() error {
+	if c, ok := s.cfg.Log.(io.Closer); ok {
+		_ = c.Close() // it has already failed; reopening it is what matters
+	}
+	cfg := s.cfg
+	cfg.Log = nil
+	n, _, err := Recover(cfg, s.logPath)
+	if err != nil {
+		return err
+	}
+	slog.Info("coordinator log works again; recovered from it", "path", s.logPath)
+	s.cfg.Log = n.cfg.Log
+	s.workers, s.jobs, s.order, s.seq, s.active = n.workers, n.jobs, n.order, n.seq, n.active
+	s.logErr = nil
+	return nil
+}
+
+// Close closes the log the server writes to, if it can be closed. Use it
+// rather than the log Recover returned, which a healed server has replaced.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.cfg.Log.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
 }
 
 // cleanup removes what dead or failed reduce attempts left in the job's

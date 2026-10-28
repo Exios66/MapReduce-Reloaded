@@ -15,7 +15,8 @@ import (
 // creating it if needed (§3.3, ADR 0007). It replays the decisions there,
 // then logs a restart: the attempts that were running stop, and workers
 // register again under IDs the old coordinator never gave out. The server
-// logs to path from then on; the caller closes the returned log.
+// logs to path from then on, and reopens it the same way if it ever fails;
+// the caller closes the server, or the returned log if it never failed.
 // Logged submission and finish times are preserved; missing times stay unknown.
 // It returns log open, read, decoding, or replay errors, or Unavailable if
 // recording the restart fails, joined with any error closing the log.
@@ -51,6 +52,7 @@ func Recover(cfg Config, path string) (*Server, *wal.Log, error) {
 	}
 	_ = s.replay(rec) // cannot fail
 	s.workers = NewRegistry(fmt.Sprintf("r%d-w", restarts+1))
+	s.logPath = path
 	return s, log, nil
 }
 

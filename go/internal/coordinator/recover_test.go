@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -450,19 +450,22 @@ func TestRecoverPreservesJobSource(t *testing.T) {
 }
 
 // A report that ends the job but cannot be logged leaves the job ended in
-// memory only: no RPC may reveal that, nor may the output be cleaned up,
-// until a restart rebuilds the state from the log.
-func TestFailedAppendStopsCoordinator(t *testing.T) {
+// memory only: no RPC may reveal that, nor may the output be cleaned up.
+// Once the log can be reopened, the server rebuilds itself from it, as a
+// restart would, without anyone restarting it.
+func TestFailedAppendStopsCoordinatorUntilLogWorks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "coordinator.log")
 	in := filepath.Join(t.TempDir(), "in.txt")
 	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := t.TempDir()
-	s, log, err := Recover(Config{}, path)
+	clock := time.Unix(1000, 0)
+	s, log, err := Recover(Config{Now: func() time.Time { return clock }}, path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = s.Close() })
 	w := register(t, s)
 	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
 		Program: "wordcount", Inputs: []string{in}, Output: out, NumReduceTasks: 1,
@@ -473,7 +476,14 @@ func TestFailedAppendStopsCoordinator(t *testing.T) {
 	job := sub.GetJobId()
 	succeed(t, s, w, next(t, s, w), outputs(0, 1))
 	last := next(t, s, w)
+	// The log fails, and cannot be reopened either, as on a full disk.
 	_ = log.Close()
+	if err := os.Rename(path, path+".away"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	report := &pb.ReportTaskRequest{WorkerId: w, Attempt: last, Outcome: &pb.ReportTaskRequest_Success{Success: &pb.TaskSuccess{}}}
 	_, err = s.ReportTask(ctx, report)
 	assertCode(t, err, codes.Unavailable)
@@ -505,16 +515,43 @@ func TestFailedAppendStopsCoordinator(t *testing.T) {
 			return err
 		},
 	}
-	for name, call := range calls {
-		err := call()
-		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "restart the coordinator") {
-			t.Errorf("%s after a failed append: %v, want Unavailable", name, err)
+	for round := range 2 { // the second retries reopening the log, and fails
+		if round > 0 {
+			clock = clock.Add(healEvery)
+		}
+		for name, call := range calls {
+			if err := call(); status.Code(err) != codes.Unavailable {
+				t.Errorf("%s after a failed append: %v, want Unavailable", name, err)
+			}
 		}
 	}
 	if _, err := os.Stat(filepath.Join(out, mrtask.TempDir)); err != nil {
 		t.Fatalf("output cleaned up before the log held the job's end: %v", err)
 	}
-	if st := jobStatus(t, recoverServer(t, Config{}, path), job); st.GetState() != pb.JobState_JOB_STATE_REDUCING {
-		t.Fatalf("recovered status %v; want reducing", st)
+	// Space is freed. The server retries no more than once a healEvery.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+".away", path); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: job})
+	assertCode(t, err, codes.Unavailable)
+	clock = clock.Add(healEvery)
+	if st := jobStatus(t, s, job); st.GetState() != pb.JobState_JOB_STATE_REDUCING {
+		t.Fatalf("healed status %v; want reducing", st)
+	}
+	if hb, err := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w}); err != nil || !hb.GetReregister() {
+		t.Fatalf("heartbeat after healing: %v, %v; want reregister, as after a restart", hb, err)
+	}
+	w = register(t, s)
+	if !succeed(t, s, w, next(t, s, w), nil) {
+		t.Fatal("report after healing not accepted")
+	}
+	if st := jobStatus(t, s, job); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+		t.Fatalf("status after healing %v; want succeeded", st)
+	}
+	if st := jobStatus(t, recoverServer(t, Config{}, path), job); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+		t.Fatalf("recovered status %v; want succeeded: the healed server logs again", st)
 	}
 }
