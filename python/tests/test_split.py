@@ -85,6 +85,36 @@ def test_allocate(sizes, m, want):
     assert allocate(sizes, m) == want
 
 
+def allocate_by_definition(sizes, m):
+    """allocate as defined: each file left with no split takes one from the
+    first file with the most."""
+    if not sizes or m <= len(sizes):
+        return [1] * len(sizes)
+    total = sum(sizes)
+    alloc = [m * s // total for s in sizes]
+    rems = [m * s % total for s in sizes]
+    for i in sorted(range(len(sizes)), key=lambda i: -rems[i])[: m - sum(alloc)]:
+        alloc[i] += 1
+    for i in range(len(alloc)):
+        if alloc[i] == 0:
+            alloc[i] = 1
+            alloc[alloc.index(max(alloc))] -= 1
+    return alloc
+
+
+def test_allocate_matches_definition():
+    rng = random.Random(1)
+    for _ in range(2000):
+        sizes = [1 + rng.randrange(rng.choice([3, 100, 1 << 40])) for _ in range(rng.randint(1, 12))]
+        m = rng.randint(1, 60)
+        assert allocate(sizes, m) == allocate_by_definition(sizes, m), (sizes, m)
+    # One file far larger than the rest, the case that makes the definition
+    # quadratic, stays fast.
+    sizes = [1 << 50] + [1] * 99_998
+    alloc = allocate(sizes, MAX_SPLITS)
+    assert alloc[0] == MAX_SPLITS - len(sizes) + 1 and min(alloc) == 1
+
+
 def test_plan_m():
     # plan_m gives exactly m splits for files that can be cut that finely,
     # covering each file in order.

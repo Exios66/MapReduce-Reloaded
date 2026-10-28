@@ -2,6 +2,7 @@
 default task counts (§3.5), mirroring go/internal/split."""
 
 import glob
+import heapq
 import os
 
 from mapreduce_reloaded.formats import InputFormat, Split
@@ -60,10 +61,17 @@ def allocate(sizes: list[int], m: int) -> list[int]:
     alloc = list(alloc)
     for i in sorted(range(len(sizes)), key=lambda i: -rems[i])[: m - sum(alloc)]:
         alloc[i] += 1
+    # The file with the most is the first in this heap. The others, with
+    # one split or none, never have the most: the splits outnumber the files.
+    most = [(-a, i) for i, a in enumerate(alloc) if a > 1]
+    heapq.heapify(most)
     for i in range(len(alloc)):
         if alloc[i] == 0:
             alloc[i] = 1
-            alloc[alloc.index(max(alloc))] -= 1
+            _, j = heapq.heappop(most)
+            alloc[j] -= 1
+            if alloc[j] > 1:
+                heapq.heappush(most, (-alloc[j], j))
     return alloc
 
 

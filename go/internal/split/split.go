@@ -5,6 +5,7 @@ package split
 
 import (
 	"cmp"
+	"container/heap"
 	"context"
 	"errors"
 	"fmt"
@@ -136,13 +137,47 @@ func Allocate(sizes []int64, m int) []int {
 	for _, i := range order[:m-given] {
 		alloc[i]++
 	}
+	// The file with the most is the first in this heap. The others, with
+	// one split or none, never have the most: the splits outnumber the files.
+	most := &mostHeap{alloc: alloc}
+	for i, a := range alloc {
+		if a > 1 {
+			most.idx = append(most.idx, i)
+		}
+	}
+	heap.Init(most)
 	for i := range alloc {
 		if alloc[i] == 0 {
 			alloc[i] = 1
-			alloc[slices.Index(alloc, slices.Max(alloc))]--
+			j := most.idx[0]
+			if alloc[j]--; alloc[j] > 1 {
+				heap.Fix(most, 0)
+			} else {
+				heap.Pop(most)
+			}
 		}
 	}
 	return alloc
+}
+
+// mostHeap orders files by the splits allocated to them, most first, ties
+// to the earlier file.
+type mostHeap struct {
+	alloc []int
+	idx   []int
+}
+
+func (h *mostHeap) Len() int { return len(h.idx) }
+func (h *mostHeap) Less(a, b int) bool {
+	x, y := h.idx[a], h.idx[b]
+	return h.alloc[x] > h.alloc[y] || h.alloc[x] == h.alloc[y] && x < y
+}
+func (h *mostHeap) Swap(a, b int) { h.idx[a], h.idx[b] = h.idx[b], h.idx[a] }
+func (h *mostHeap) Push(x any)    { h.idx = append(h.idx, x.(int)) }
+func (h *mostHeap) Pop() any {
+	x := h.idx[len(h.idx)-1]
+	h.idx = h.idx[:len(h.idx)-1]
+	return x
 }
 
 // bits128Div returns a*b/c and a*b%c without overflow; a*b/c must fit in

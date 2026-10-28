@@ -25,7 +25,7 @@ from mapreduce_reloaded.formats import (
     kv,
     output_format,
 )
-from mapreduce_reloaded.split import plan
+from mapreduce_reloaded.split import plan, plan_m
 
 # Framework counters, reported alongside the user's.
 MAP_INPUT_RECORDS = "map.input.records"
@@ -46,7 +46,10 @@ def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     <output>/part-r-<r>."""
     in_format = input_format(spec.input_format)
     out_format = output_format(spec.output_format)
-    splits = plan(in_format, spec.inputs, spec.split_size)
+    if spec.m:
+        splits = plan_m(in_format, spec.inputs, spec.m)
+    else:
+        splits = plan(in_format, spec.inputs, spec.split_size)
     if not splits:
         raise ValueError("the input is empty")
     if glob.glob(os.path.join(glob.escape(spec.output), "part-r-*")):
