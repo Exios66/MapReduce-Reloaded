@@ -115,7 +115,7 @@ func TestAllocate(t *testing.T) {
 		{[]int64{100}, 8, []int{8}},
 		{[]int64{100, 300}, 4, []int{1, 3}},
 		{[]int64{100, 300}, 8, []int{2, 6}},
-		{[]int64{1, 1, 1}, 4, []int{2, 1, 1}},  // a tie goes to the first file
+		{[]int64{1, 1, 1}, 4, []int{2, 1, 1}}, // a tie goes to the first file
 		{[]int64{1, 2}, 4, []int{1, 3}},       // the larger remainder gets the leftover
 		{[]int64{2, 1}, 4, []int{3, 1}},
 		{[]int64{5, 5, 5}, 2, []int{1, 1, 1}},  // more files than m
