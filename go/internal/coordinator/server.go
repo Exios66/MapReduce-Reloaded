@@ -56,6 +56,9 @@ type Config struct {
 	// times, with the last error (#176). Attempts that could not fetch lost
 	// map output do not count. Zero means no limit.
 	MaxTaskFailures int
+	// Now, if set, replaces time.Now as the coordinator's clock, for tests
+	// of a clock that is set back.
+	Now func() time.Time
 }
 
 // Log is where a coordinator records its decisions. After a failed Append
@@ -126,7 +129,7 @@ func (s *Server) Expire(now time.Time) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	dead := s.workers.Expire(now, s.cfg.WorkerTimeout)
-	at := time.Now() // now may predate a record logged while we waited for the lock
+	at := s.now() // now may predate a record logged while we waited for the lock
 	for _, w := range dead {
 		var reset []Task
 		if s.active != nil {
@@ -142,7 +145,16 @@ func (s *Server) Expire(now time.Time) []string {
 	return dead
 }
 
-// Monitor calls Expire every HeartbeatInterval until ctx is done.
+// now reads the coordinator's clock: Config.Now, or time.Now.
+func (s *Server) now() time.Time {
+	if s.cfg.Now != nil {
+		return s.cfg.Now()
+	}
+	return time.Now()
+}
+
+// Monitor calls Expire, as of the coordinator's clock, every
+// HeartbeatInterval until ctx is done.
 func (s *Server) Monitor(ctx context.Context) {
 	if s.cfg.WorkerTimeout == 0 || s.cfg.HeartbeatInterval == 0 {
 		return
@@ -153,8 +165,8 @@ func (s *Server) Monitor(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-tick.C:
-			s.Expire(now)
+		case <-tick.C:
+			s.Expire(s.now())
 		}
 	}
 }
@@ -163,7 +175,7 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return &pb.RegisterWorkerResponse{
-		WorkerId:          s.workers.Register(req.GetWorker(), time.Now()),
+		WorkerId:          s.workers.Register(req.GetWorker(), s.now()),
 		HeartbeatInterval: durationpb.New(s.cfg.HeartbeatInterval),
 	}, nil
 }
@@ -177,7 +189,7 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	worker := req.GetWorkerId()
-	if !s.workers.Heartbeat(worker, time.Now()) {
+	if !s.workers.Heartbeat(worker, s.now()) {
 		return &pb.HeartbeatResponse{Reregister: true}, nil
 	}
 	resp := &pb.HeartbeatResponse{ActiveJobs: &pb.ActiveJobs{}}
@@ -252,7 +264,7 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	rec := &pb.JobSubmitted{JobId: fmt.Sprintf("job-%d", s.seq+1), Job: m, Splits: splits}
-	now := time.Now()
+	now := s.now()
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_JobSubmitted{JobSubmitted: rec}}, now); err != nil {
 		return nil, err
 	}
@@ -357,7 +369,7 @@ func (s *Server) compact() {
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	worker, now := req.GetWorkerId(), time.Now()
+	worker, now := req.GetWorkerId(), s.now()
 	if !s.workers.Heartbeat(worker, now) {
 		return nil, status.Errorf(codes.NotFound, "unknown worker %q: register again", worker)
 	}
@@ -479,7 +491,7 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	if req.GetOutcome() == nil {
 		return nil, status.Error(codes.InvalidArgument, "report has neither success nor failure")
 	}
-	now := time.Now()
+	now := s.now()
 	accepted, ended, err := s.report(j, req, now)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())

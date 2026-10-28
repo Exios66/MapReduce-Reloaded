@@ -65,9 +65,12 @@ process and check that jobs finish with the right output when workers die, the
 coordinator restarts, tasks hang, or records are bad. `TestChaos` does this at
 random from a seed, for word count. `TestChaosPrograms` does it for every
 example program, with the combiner on or off, each intermediate codec and both
-output formats, and adds lost map output files, duplicate reports and
-heartbeats, and a torn record at the end of the coordinator's log; its output
-must match local mode's byte for byte. The same flags apply to both (the
+output formats, writing to the local file system or to S3. Each seed injects
+every kind of fault: besides TestChaos's, lost map output files, duplicate
+reports and heartbeats, fetches that break halfway, a torn record at the end
+of the coordinator's log, its clock set back, full disks, failed S3 copies
+and deletes, and a mapper that crashes on some records. Its output must match
+local mode's byte for byte. The same flags apply to both (the
 `-run TestChaos` below runs both):
 
 ```sh

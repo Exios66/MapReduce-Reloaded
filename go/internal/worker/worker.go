@@ -360,7 +360,7 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logg
 			return nil, err
 		}
 		defer func() { err = errors.Join(err, r.Close()) }()
-		sources[i] = kv.NewReader(r)
+		sources[i] = checked(kv.NewReader(r), src)
 	}
 	if counts, err = task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log); err == nil {
 		w.stats.outputBytes.Add(uint64(max(0, counts[task.ReduceOutputBytes])))
@@ -431,6 +431,42 @@ func (f fetch) Read(p []byte) (int, error) {
 		err = &lostOutput{f.src, err}
 	}
 	return n, err
+}
+
+// checked returns the records of map output src, read by r. An error that
+// shows a fetched output is damaged, such as a checksum that does not match,
+// says the output was lost, as when its file is gone: the map task must run
+// again, since every attempt to reduce it would fail the same way.
+func checked(r *kv.Reader, src *pb.PartitionLocation) extsort.Records {
+	if src.GetWorkerAddress() == "" {
+		return r // in shared storage: a map task run again would not replace it
+	}
+	return damage{r, src}
+}
+
+type damage struct {
+	*kv.Reader
+	src *pb.PartitionLocation
+}
+
+// damaged are the Reader's errors for a file that is not as written.
+var damaged = []error{
+	kv.ErrBadMagic, kv.ErrUnsupportedVersion, kv.ErrUnsupportedCodec, kv.ErrBadHeader,
+	kv.ErrChecksumMismatch, kv.ErrBadBlock, kv.ErrTruncated, kv.ErrCountMismatch, kv.ErrTrailingData,
+}
+
+func (d damage) Err() error {
+	err := d.Reader.Err()
+	var lost *lostOutput
+	if err == nil || errors.As(err, &lost) {
+		return err
+	}
+	for _, e := range damaged {
+		if errors.Is(err, e) {
+			return &lostOutput{d.src, err}
+		}
+	}
+	return err
 }
 
 // lostOutput is the error of a fetch from a worker that is gone or no

@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
+	"github.com/exios66/mapreduce-reloaded/go/internal/formats/kv"
 	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 )
 
@@ -33,6 +36,32 @@ func TestReportFailure(t *testing.T) {
 		tc.want.Message = tc.err.Error()
 		if !proto.Equal(got, tc.want) {
 			t.Errorf("report(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
+}
+
+// A fetched map output that turns out to be damaged is lost, as one that is
+// gone, so that its map task runs again; otherwise the reduce task fails on
+// it every time. One from shared storage, or an error that is not damage,
+// is not.
+func TestDamagedOutputIsLost(t *testing.T) {
+	fetched := &pb.PartitionLocation{MapIndex: 2, WorkerAddress: "w1:1"}
+	stored := &pb.PartitionLocation{MapIndex: 2, Uri: "file:///out/m2"}
+	for _, tc := range []struct {
+		src  *pb.PartitionLocation
+		in   io.Reader
+		lost bool
+	}{
+		{fetched, strings.NewReader("not an mrkv file at all"), true},
+		{stored, strings.NewReader("not an mrkv file at all"), false},
+		{fetched, iotest.ErrReader(errors.New("boom")), false},
+	} {
+		r := checked(kv.NewReader(tc.in), tc.src)
+		for r.Next() {
+		}
+		var lost *lostOutput
+		if got := errors.As(r.Err(), &lost) && proto.Equal(lost.src, tc.src); got != tc.lost {
+			t.Errorf("%v from %v: lost %v, want %v", r.Err(), tc.src, got, tc.lost)
 		}
 	}
 }

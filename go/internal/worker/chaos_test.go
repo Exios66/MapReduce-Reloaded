@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 )
 
@@ -82,11 +83,15 @@ func pick(rng *rand.Rand, m map[int]func()) int {
 // While fail is positive, each RequestTask fails with Internal, as from a
 // coordinator handler that panicked, and decrements it.
 // While dup is set, each ReportTask and Heartbeat is sent twice, as by a
-// client that retries a call whose reply was lost.
+// client that retries a call whose reply was lost. While cut is positive,
+// each fetch the worker serves breaks halfway through its first message,
+// and decrements it; cuts counts the fetches broken.
 type gate struct {
 	mu   sync.RWMutex
 	fail atomic.Int32
 	dup  atomic.Bool
+	cut  atomic.Int32
+	cuts atomic.Int32
 }
 
 func (g *gate) freeze() { g.mu.Lock() }
@@ -111,5 +116,28 @@ func (g *gate) unary(ctx context.Context, method string, req, reply any, cc *grp
 
 func (g *gate) stream(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	g.pass()
+	if g.cut.Add(-1) >= 0 {
+		ss = &cutStream{ServerStream: ss, cuts: &g.cuts}
+	}
 	return handler(srv, ss)
+}
+
+// cutStream sends the first half of a fetch's first chunk and then fails,
+// as a connection that breaks partway through; the reader must resume from
+// the byte where it stopped.
+type cutStream struct {
+	grpc.ServerStream
+	cuts *atomic.Int32
+}
+
+func (c *cutStream) SendMsg(m any) error {
+	if r, ok := m.(*pb.FetchPartitionResponse); ok && len(r.GetData()) > 1 {
+		half := &pb.FetchPartitionResponse{Data: r.GetData()[:len(r.GetData())/2]}
+		if err := c.ServerStream.SendMsg(half); err != nil {
+			return err
+		}
+		c.cuts.Add(1)
+		return status.Error(codes.Unavailable, "connection cut")
+	}
+	return c.ServerStream.SendMsg(m)
 }
