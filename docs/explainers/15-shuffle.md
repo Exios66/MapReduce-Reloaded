@@ -50,6 +50,7 @@ its missing heartbeats; see [16-worker-failure.md](16-worker-failure.md).
 
 A worker without `-work-dir` uses a temporary directory and removes it,
 with all its map output, when it exits. A worker also removes a job's
-files once that job ends: every heartbeat reply lists the active jobs, and
-the worker deletes the directory of a job missing from it, after a 3 s
+files once that job ends: each heartbeat reply to a registered worker lists
+the active jobs, and the worker deletes the directory of a job missing
+from it, after a 3 s
 margin (`go/internal/worker/disk.go`).
