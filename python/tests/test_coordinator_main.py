@@ -7,6 +7,7 @@ import logging
 import os
 import runpy
 import signal
+import sys
 import threading
 import urllib.request
 
@@ -235,6 +236,8 @@ def test_main_stops_on_signal(tmp_path, monkeypatch):
 def test_module_runs_main(monkeypatch, capsys):
     """python -m mapreduce_reloaded.coordinator runs main with the arguments."""
     monkeypatch.setattr("sys.argv", ["coordinator", "-h"])
+    # runpy warns if the module it runs as __main__ is already imported.
+    monkeypatch.delitem(sys.modules, "mapreduce_reloaded.coordinator.__main__", raising=False)
     with pytest.raises(SystemExit) as e:
         runpy.run_module("mapreduce_reloaded.coordinator", run_name="__main__")
     assert e.value.code == 0 and "-data-dir" in capsys.readouterr().out
