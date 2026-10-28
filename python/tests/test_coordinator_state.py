@@ -301,13 +301,17 @@ def check_counts(tt):
 
 def test_registry():
     r = Registry("w")
-    a = r.register(types_pb2.WorkerInfo(shuffle_address="a:1", slots=2), 0.0)
+    given = types_pb2.WorkerInfo(shuffle_address="a:1", slots=2)
+    a = r.register(given, 0.0)
+    given.slots = 5  # the registry copied it
     b = r.register(types_pb2.WorkerInfo(shuffle_address="b:1"), 0.0)
     assert a != b and len(r) == 2
     w = r.lookup(a)
     assert w is not None and w.info.slots == 2
     w.last_seen = 99.0  # a copy: the registry keeps its own
-    assert r.lookup(a).last_seen == 0.0
+    w.info.slots = 7
+    r.all()[0].info.slots = 8
+    assert r.lookup(a).last_seen == 0.0 and r.lookup(a).info.slots == 2
     assert [w.id for w in r.all()] == [a, b]
 
     assert r.heartbeat(a, 10.0)
@@ -323,3 +327,70 @@ def test_registry_lists_in_registration_order():
     ids = [r.register(types_pb2.WorkerInfo(), 0.0) for _ in range(11)]
     assert [w.id for w in r.all()] == ids
     assert r.expire(1.0, 0.5) == sorted(ids)
+
+
+def test_reset_worker_spares_other_workers():
+    # Losing w1 stops its running map and re-runs its finished map, but leaves
+    # w2's finished map and running attempts alone.
+    tt = TaskTable(3, 1)
+    tt.complete(M0, assign(tt, M0, "w2"), "w2", outputs(0, 1))
+    tt.complete(M1, assign(tt, M1, "w1"), "w1", outputs(1, 1))
+    m2 = Task(MAP, 2)
+    assign(tt, m2, "w1")
+    assert tt.reset_worker("w1") == [M1, m2]
+    assert tt.state(M0) == COMPLETED and tt.progress() == (1, 0)
+    assert tt.state(m2) == IDLE
+    assert not tt.done()
+
+
+def test_counts_accumulate():
+    # Every counter counts past one.
+    tt = TaskTable(1, 2)
+    for n in range(2):
+        for _ in range(SKIP_AFTER):
+            tt.fail(M0, assign(tt, M0, "w1"), "w1", crash(n))
+    assert tt.failures(M0) == 4 and tt.skipped() == 2
+    tt.complete(M0, assign(tt, M0, "w1"), "w1", outputs(0, 2))
+    for r in (R0, R1):
+        assign(tt, r, "w1")
+        assert tt.complete(r, assign(tt, r, "w2"), "w2")
+    assert tt.progress() == (1, 2) and tt.backups() == (2, 2) and tt.done()
+
+
+def test_done_needs_every_reduce():
+    tt = TaskTable(1, 1)
+    tt.complete(M0, assign(tt, M0, "w1"), "w1", outputs(0, 1))
+    assert not tt.done()
+
+
+def test_backup_tie_goes_to_the_lowest_index():
+    tt = TaskTable(2, 1)
+    tt.assign(M1, "w1", 5.0)
+    tt.assign(M0, "w2", 5.0)
+    assert tt.backup("w3") == M0
+
+
+@pytest.mark.parametrize(
+    "bad, message",
+    [
+        (outputs(0, 1), "map 0 reported 1 outputs, want 2"),
+        (outputs(1, 2), "map 0 reported output 0 as map 1 partition 0"),
+        ([None, None], "map 0 reported output 0 with no location"),
+    ],
+)
+def test_bad_outputs_say_why(bad, message):
+    tt = TaskTable(1, 2)
+    a = assign(tt, M0, "w1")
+    with pytest.raises(ValueError, match=f"^coordinator: {message}$"):
+        tt.complete(M0, a, "w1", bad)
+
+
+def test_registry_ids_and_expiry_boundary():
+    r = Registry("worker-")
+    assert [r.register(types_pb2.WorkerInfo(), 0.0) for _ in range(3)] == [
+        "worker-1",
+        "worker-2",
+        "worker-3",
+    ]
+    assert r.expire(10.0, 10.0) == [], "a worker seen exactly timeout ago is still live"
+    assert len(r) == 3

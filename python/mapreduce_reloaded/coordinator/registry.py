@@ -1,6 +1,6 @@
 """The worker registry, mirroring go/internal/coordinator/registry.go."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from mapreduce_reloaded.gen.mapreduce.v1 import types_pb2
 
@@ -26,10 +26,11 @@ class Registry:
         self._next = 0
 
     def register(self, info: types_pb2.WorkerInfo, now: float) -> str:
-        """Adds a worker seen at now and returns its new ID."""
+        """Adds a worker seen at now and returns its new ID. The registry keeps
+        its own copy of info."""
         self._next += 1
         id = f"{self._prefix}{self._next}"
-        self._workers[id] = Worker(id, info, now)
+        self._workers[id] = _copy(Worker(id, info, now))
         return id
 
     def heartbeat(self, id: str, now: float) -> bool:
@@ -43,11 +44,11 @@ class Registry:
     def lookup(self, id: str) -> Worker | None:
         """Returns a copy of the live worker with the given ID, or None."""
         w = self._workers.get(id)
-        return None if w is None else replace(w)
+        return None if w is None else _copy(w)
 
     def all(self) -> list[Worker]:
-        """Returns the live workers, in the order they registered."""
-        return [replace(w) for w in self._workers.values()]
+        """Returns copies of the live workers, in the order they registered."""
+        return [_copy(w) for w in self._workers.values()]
 
     def expire(self, now: float, timeout: float) -> list[str]:
         """Removes the workers not seen for longer than timeout seconds and
@@ -60,3 +61,10 @@ class Registry:
     def __len__(self) -> int:
         """Returns the number of live workers."""
         return len(self._workers)
+
+
+def _copy(w: Worker) -> Worker:
+    """Returns a copy of w that shares nothing mutable with it."""
+    info = types_pb2.WorkerInfo()
+    info.CopyFrom(w.info)
+    return Worker(w.id, info, w.last_seen)
