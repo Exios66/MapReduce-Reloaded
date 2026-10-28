@@ -36,3 +36,4 @@ internal/wal 84
 internal/wire 93
 internal/worker 92
 pkg/api 97
+tools/mutate 27  # the rest runs go test on each mutant: make mutate
