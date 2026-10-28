@@ -160,7 +160,9 @@ func TestCombine(t *testing.T) {
 		}
 		return nil
 	}
-	for _, budget := range []int{1 << 20, 3 * cost("a", "x")} {
+	// Without a spill Combine sees all five records and emits a and b; with
+	// three records a run, it sees b a b, then a a, and emits three records.
+	for budget, records := range map[int]int{1 << 20: 2, 3 * cost("a", "x"): 3} {
 		s := newSorter(t, Config{Budget: budget, Combine: count})
 		for _, k := range []string{"b", "a", "b", "a", "a"} {
 			add(t, s, k, "x")
@@ -170,12 +172,13 @@ func TestCombine(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Each run is combined on its own, so merge the counts again.
+		out := collect(t, it)
 		n := map[string]int{}
-		for _, r := range collect(t, it) {
+		for _, r := range out {
 			n[r.key] += len(r.value)
 		}
-		if n["a"] != 3 || n["b"] != 2 || len(n) != 2 {
-			t.Fatalf("budget %d: counts %v, want a=3 b=2", budget, n)
+		if len(out) != records || n["a"] != 3 || n["b"] != 2 || len(n) != 2 {
+			t.Fatalf("budget %d: %d records, counts %v; want %d records, a=3 b=2", budget, len(out), n, records)
 		}
 	}
 }

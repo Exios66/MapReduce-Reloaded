@@ -12,7 +12,7 @@ import pytest
 
 from mapreduce_reloaded.partition import fnv1a64, partition
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = next(p for p in Path(__file__).resolve().parents if (p / "testdata").is_dir())
 MANIFEST = json.loads((REPO / "testdata" / "hash" / "vectors.json").read_text())
 VECTORS = MANIFEST["vectors"]
 

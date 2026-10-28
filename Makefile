@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -186,6 +186,12 @@ mutate:
 	cd go && go run ./tools/mutate ./internal/extsort merge.go sorter.go
 	cd go && go run ./tools/mutate ./internal/coordinator tasktable.go
 	cd go && go run ./tools/mutate ./internal/task task.go
+
+# The same for the Python MRKV format and partition function, with mutmut
+# (pip install -e 'python[dev,mutation]'); the files and tests are set in
+# python/pyproject.toml. It needs fork, so Linux or macOS.
+mutate-py:
+	cd python && $(PYTHON) -m mutmut run && $(PYTHON) -m mutmut results
 
 go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
