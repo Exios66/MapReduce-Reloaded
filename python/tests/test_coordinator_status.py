@@ -109,7 +109,18 @@ def _fetch(url):
         return r.status
 
 
-@pytest.mark.skipif(not socket.has_ipv6, reason="needs IPv6")
+def _ipv6_loopback() -> bool:
+    """Says whether this machine has an IPv6 loopback address: a container
+    can have IPv6 sockets but no ::1."""
+    try:
+        with socket.socket(socket.AF_INET6) as s:
+            s.bind(("::1", 0))
+        return True
+    except OSError:
+        return False
+
+
+@pytest.mark.skipif(not _ipv6_loopback(), reason="needs an IPv6 loopback address")
 def test_serve_ipv6():
     """An empty host serves IPv6 and IPv4, and an IPv6 host binds, as Go's
     net.Listen."""
