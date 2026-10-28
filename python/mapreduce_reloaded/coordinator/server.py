@@ -442,10 +442,10 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
 
     def _hold_back(self, t: Task, info, now: float) -> bool:
         """Reports whether a worker should wait, as of now by the monotonic
-        clock, rather than run t, the nearest task to it, because t is a map task whose split is on other
-        hosts. The job holds such tasks back for at most locality_wait at a
-        time: the wait starts when it first holds one back, and ends when it
-        starts one on a host that holds its split."""
+        clock, rather than run t, the nearest task to it, because t is a map
+        task whose split is on other hosts. The job holds such tasks back for
+        at most locality_wait at a time: the wait starts when it first holds
+        one back, and ends when it starts one on a host that holds its split."""
         j = self._active
         if t.kind != MAP or not self._cfg.locality_wait:
             return False
