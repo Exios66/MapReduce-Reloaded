@@ -86,6 +86,7 @@ type Server struct {
 	replayEnded []*job       // jobs whose end Recover replayed, to clean up after
 	lost        []LostWorker // since this process started, for Status
 	stopping    bool
+	logErr      error // why the log refused a record, if it has
 }
 
 type job struct {
@@ -174,6 +175,9 @@ func (s *Server) Monitor(ctx context.Context) {
 func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.failed(); err != nil {
+		return nil, err
+	}
 	return &pb.RegisterWorkerResponse{
 		WorkerId:          s.workers.Register(req.GetWorker(), s.now()),
 		HeartbeatInterval: durationpb.New(s.cfg.HeartbeatInterval),
@@ -188,6 +192,9 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.failed(); err != nil {
+		return nil, err
+	}
 	worker := req.GetWorkerId()
 	if !s.workers.Heartbeat(worker, s.now()) {
 		return &pb.HeartbeatResponse{Reregister: true}, nil
@@ -254,6 +261,9 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.failed(); err != nil {
+		return nil, err
+	}
 	if s.active != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "job %s is still running", s.active.id)
 	}
@@ -369,6 +379,9 @@ func (s *Server) compact() {
 func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb.RequestTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.failed(); err != nil {
+		return nil, err
+	}
 	worker, now := req.GetWorkerId(), s.now()
 	if !s.workers.Heartbeat(worker, now) {
 		return nil, status.Errorf(codes.NotFound, "unknown worker %q: register again", worker)
@@ -484,6 +497,9 @@ func locality(split *pb.InputSplit, w *pb.WorkerInfo) pb.Locality {
 func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.ReportTaskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.failed(); err != nil {
+		return nil, err
+	}
 	j, ok := s.jobs[req.GetAttempt().GetTask().GetJobId()]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetAttempt().GetTask().GetJobId())
@@ -560,6 +576,9 @@ func (s *Server) end(j *job, err string, at time.Time) {
 func (s *Server) GetJobStatus(_ context.Context, req *pb.GetJobStatusRequest) (*pb.GetJobStatusResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.failed(); err != nil {
+		return nil, err
+	}
 	j, ok := s.jobs[req.GetJobId()]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "unknown job %q", req.GetJobId())
@@ -641,9 +660,21 @@ func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 		err = s.cfg.Log.Append(b)
 	}
 	if err != nil {
+		s.logErr = err
 		return status.Errorf(codes.Unavailable, "coordinator log: %v", err)
 	}
 	return nil
+}
+
+// failed returns Unavailable once the log has refused a record. The memory
+// may then hold a change the log does not, such as a job ended by a report
+// that could not be logged, so every RPC fails until the coordinator
+// restarts and recovers from the log. Call it under the lock.
+func (s *Server) failed() error {
+	if s.logErr == nil {
+		return nil
+	}
+	return status.Errorf(codes.Unavailable, "coordinator log failed; restart the coordinator: %v", s.logErr)
 }
 
 // cleanup removes what dead or failed reduce attempts left in the job's

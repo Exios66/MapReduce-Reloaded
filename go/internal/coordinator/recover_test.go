@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -445,5 +446,75 @@ func TestRecoverPreservesJobSource(t *testing.T) {
 	resp, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
 	if err != nil || resp.GetMapTask() == nil || !proto.Equal(resp.GetMapTask().GetJob(), spec) {
 		t.Fatalf("recovered task lost source or options: %v, %v", resp, err)
+	}
+}
+
+// A report that ends the job but cannot be logged leaves the job ended in
+// memory only: no RPC may reveal that, nor may the output be cleaned up,
+// until a restart rebuilds the state from the log.
+func TestFailedAppendStopsCoordinator(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	s, log, err := Recover(Config{}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := register(t, s)
+	sub, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: []string{in}, Output: out, NumReduceTasks: 1,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := sub.GetJobId()
+	succeed(t, s, w, next(t, s, w), outputs(0, 1))
+	last := next(t, s, w)
+	_ = log.Close()
+	report := &pb.ReportTaskRequest{WorkerId: w, Attempt: last, Outcome: &pb.ReportTaskRequest_Success{Success: &pb.TaskSuccess{}}}
+	_, err = s.ReportTask(ctx, report)
+	assertCode(t, err, codes.Unavailable)
+	calls := map[string]func() error{
+		"GetJobStatus": func() error {
+			_, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: job})
+			return err
+		},
+		"RegisterWorker": func() error {
+			_, err := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
+			return err
+		},
+		"Heartbeat": func() error {
+			_, err := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w})
+			return err
+		},
+		"RequestTask": func() error {
+			_, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
+			return err
+		},
+		"ReportTask": func() error {
+			_, err := s.ReportTask(ctx, report)
+			return err
+		},
+		"SubmitJob": func() error {
+			_, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+				Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+			}})
+			return err
+		},
+	}
+	for name, call := range calls {
+		err := call()
+		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "restart the coordinator") {
+			t.Errorf("%s after a failed append: %v, want Unavailable", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, mrtask.TempDir)); err != nil {
+		t.Fatalf("output cleaned up before the log held the job's end: %v", err)
+	}
+	if st := jobStatus(t, recoverServer(t, Config{}, path), job); st.GetState() != pb.JobState_JOB_STATE_REDUCING {
+		t.Fatalf("recovered status %v; want reducing", st)
 	}
 }
