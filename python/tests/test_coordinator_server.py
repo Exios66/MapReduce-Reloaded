@@ -1,14 +1,16 @@
 """Tests for the coordinator's gRPC service, ported from
 go/internal/coordinator/server_test.go and failure_test.go."""
 
+import errno
 import os
+import shutil
 import threading
 import time
 
 import grpc
 import pytest
 
-from mapreduce_reloaded.coordinator import SKIP_AFTER
+from mapreduce_reloaded.coordinator import SKIP_AFTER, server
 from mapreduce_reloaded.coordinator.server import (
     MAX_LOST,
     TEMP_DIR,
@@ -958,6 +960,55 @@ def test_cleanup_tolerates_missing_or_broken_temp(new_job, caplog):
     j.cleanup()
     assert "cleaning up job output: job job-1" in caplog.text
     assert os.path.isfile(temp)
+
+
+def test_cleanup_survives_late_attempts(new_job, monkeypatch, caplog):
+    """A losing attempt that renames its file out of _temporary, or creates
+    one in it, while cleanup runs does not leave the directory behind, as
+    it did when a vanished entry ended the cleanup (Go's os.RemoveAll
+    starts over)."""
+    c, _, job = new_job()
+    temp = os.path.join(path(c.s._jobs[job].spec.output), TEMP_DIR)
+    real = shutil.rmtree
+    races = [
+        FileNotFoundError(errno.ENOENT, "renamed away", os.path.join(temp, "part.attempt-1")),
+        OSError(errno.ENOTEMPTY, "Directory not empty", temp),
+    ]
+
+    def racing(d):
+        if races:
+            raise races.pop(0)
+        real(d)
+
+    monkeypatch.setattr(shutil, "rmtree", racing)
+    c.s._jobs[job].cleanup()
+    assert not os.path.exists(temp) and not races and caplog.text == ""
+
+
+def test_remove_all_gives_up(tmp_path, monkeypatch):
+    """remove_all stops after REMOVE_TRIES tries, raising the last error;
+    a directory gone on the last try is not one."""
+    d = tmp_path / "d"
+    d.mkdir()
+    tries = []
+
+    def busy(p):
+        tries.append(p)
+        raise OSError(errno.ENOTEMPTY, "Directory not empty", p)
+
+    monkeypatch.setattr(shutil, "rmtree", busy)
+    with pytest.raises(OSError, match="not empty"):
+        server.remove_all(str(d))
+    assert len(tries) == server.REMOVE_TRIES
+
+    def vanishing(p):
+        raise FileNotFoundError(errno.ENOENT, "gone", os.path.join(p, "f"))
+
+    monkeypatch.setattr(shutil, "rmtree", vanishing)
+    with pytest.raises(FileNotFoundError):
+        server.remove_all(str(d))  # d is still there
+    d.rmdir()
+    server.remove_all(str(d))  # gone: not an error
 
 
 def test_job_ids_continue_from_the_highest(new_job):

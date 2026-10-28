@@ -5,6 +5,7 @@ All state is guarded by one lock (ADR 0006). Nothing slow runs under it:
 SubmitJob plans the input splits before locking.
 """
 
+import errno
 import glob
 import logging
 import os
@@ -19,7 +20,7 @@ from typing import NamedTuple, Protocol
 
 import grpc
 
-from mapreduce_reloaded.coordinator.registry import Registry
+from mapreduce_reloaded.coordinator.registry import Registry, Worker
 from mapreduce_reloaded.coordinator.tasktable import COMPLETED, MAP, Task, TaskTable
 from mapreduce_reloaded.coordinator.wire import PROGRAMS, input_split, path, validate
 from mapreduce_reloaded.formats import input_format
@@ -121,6 +122,24 @@ class LostWorker(NamedTuple):
     tasks: list[Task]
 
 
+class WorkerStatus(NamedTuple):
+    """A live worker, last seen by the coordinator's clock (now), and the
+    tasks of the active job it is running."""
+
+    worker: Worker
+    running: list[Task]
+
+
+class Status(NamedTuple):
+    """What the coordinator's status page shows (§4.8), as
+    go/internal/coordinator.Status."""
+
+    at: float  # when it was taken, by now
+    jobs: list[coordinator_pb2.GetJobStatusResponse]  # every job kept, in the order submitted
+    workers: list[WorkerStatus]  # the live workers, in the order they registered
+    lost: list[LostWorker]  # the last MAX_LOST workers lost since the process started
+
+
 @dataclass(eq=False)
 class _Job:
     id: str
@@ -185,11 +204,34 @@ class _Job:
         holds the job's end. A missing directory is ignored; other OSError
         and ValueError failures are caught without changing the job's outcome."""
         try:
-            shutil.rmtree(os.path.join(path(self.spec.output), TEMP_DIR))
-        except FileNotFoundError:
-            pass
+            remove_all(os.path.join(path(self.spec.output), TEMP_DIR))
         except (OSError, ValueError) as e:
             log.warning("cleaning up job output: job %s: %s", self.id, e)
+
+
+# How many times remove_all starts over before it gives up.
+REMOVE_TRIES = 10
+
+
+def remove_all(d: str):
+    """Removes directory d and what it holds, as Go's os.RemoveAll; a
+    missing d is not an error. A losing backup attempt may rename its file
+    out of d, or create one in it, while it runs: rmtree then fails on the
+    entry, or on d not being empty, and remove_all starts over, up to
+    REMOVE_TRIES times. Raises rmtree's other errors."""
+    for i in range(REMOVE_TRIES):
+        last = i == REMOVE_TRIES - 1
+        try:
+            shutil.rmtree(d)
+            return
+        except FileNotFoundError:
+            if not os.path.lexists(d):
+                return
+            if last:
+                raise
+        except OSError as e:
+            if e.errno != errno.ENOTEMPTY or last:
+                raise
 
 
 def _ns(t: float) -> int:
@@ -300,6 +342,21 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         replaced."""
         with self._mu:
             getattr(self._cfg.log, "close", lambda: None)()
+
+    def status(self) -> Status:
+        """Returns retained jobs in submission order, live workers in
+        registration order with their running tasks, and recent lost workers.
+        Snapshot and last-seen times use the coordinator's wall clock in Unix
+        seconds. It works while the log has failed, so the status page shows
+        what memory holds."""
+        with self._mu:
+            at, tick = self.now(), self._clock()
+            running = self._active.tasks.running() if self._active is not None else {}
+            workers = []
+            for w in self._workers.all():
+                w.last_seen = at - (tick - w.last_seen)  # heartbeats are timed by _clock
+                workers.append(WorkerStatus(w, running.get(w.id, [])))
+            return Status(at, [j.status() for j in self._order], workers, list(self._lost))
 
     def now(self) -> float:
         """Reads the coordinator's clock: Config.now, or time.time."""
@@ -762,10 +819,25 @@ def serve(address: str, cfg: Config | None = None, threads: int = 16):
         # Without a log, IDs start from 1 again: tell them from the last run's.
         cfg = replace(cfg, id_prefix=_base36(time.time_ns()) + "-")
     coordinator = Server(cfg)
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=threads))
+    server, port, stop = start(coordinator, address, threads)
+    return server, coordinator, port, stop
+
+
+def start(coordinator: Server, address: str, threads: int = 16):
+    """Serves coordinator over insecure gRPC on address, as serve does, and
+    starts its worker monitor. Returns the gRPC server, the bound port and
+    the event that stops the monitor. An address in use is an error, as in
+    Go: gRPC would otherwise share the port with SO_REUSEPORT, and two
+    coordinators would split the workers and write one log. Port 0 selects
+    an available port; threads limits concurrent RPC handlers. The caller
+    must stop the gRPC server separately from the monitor. Raises ValueError
+    if threads is nonpositive and propagates RuntimeError if binding fails."""
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=threads), options=[("grpc.so_reuseport", 0)]
+    )
     coordinator_pb2_grpc.add_CoordinatorServiceServicer_to_server(coordinator, server)
     port = server.add_insecure_port(address)
     server.start()
     stop = threading.Event()
     threading.Thread(target=coordinator.monitor, args=(stop,), daemon=True).start()
-    return server, coordinator, port, stop
+    return server, port, stop
