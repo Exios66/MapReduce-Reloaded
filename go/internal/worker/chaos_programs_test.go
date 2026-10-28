@@ -67,7 +67,7 @@ func chaosJob(t *testing.T, rng *rand.Rand, output string) *pb.JobSpec {
 // every kind of fault once, in an order and at times it chooses: a worker
 // killed and replaced; a worker frozen; the coordinator restarted, perhaps
 // after a record torn at the end of its log; a map output file lost from a
-// worker's disk, so the map task must run again; reports and heartbeats
+// worker's disk or corrupted on it, so the map task must run again; reports and heartbeats
 // that arrive twice; shuffle fetches that break halfway; the coordinator's
 // clock set back an hour; every worker's disk full for a while; and, with
 // S3, a commit's copy or delete failing past the client's retries. The
@@ -167,10 +167,15 @@ func TestChaosPrograms(t *testing.T) {
 					}
 					time.Sleep(time.Duration(rng.IntN(50)) * time.Millisecond)
 					c.start()
-				case 3: // a disk loses a map output file
+				case 3: // a disk loses or corrupts a map output file
 					if files := c.mapFiles(job); len(files) > 0 {
 						slices.Sort(files)
-						_ = os.Remove(files[rng.IntN(len(files))])
+						name := files[rng.IntN(len(files))]
+						if rng.IntN(2) == 0 {
+							_ = os.Remove(name)
+						} else {
+							corrupt(name, rng)
+						}
 					}
 				case 4: // a worker's reports and heartbeats arrive twice, for a while
 					c.gates[live].dup.Store(true)
@@ -232,6 +237,17 @@ func assertSameOutput(t *testing.T, got, want string) {
 	if len(w) == 0 || !maps.Equal(g, w) {
 		t.Fatalf("output %v differs from local mode's %v", slices.Sorted(maps.Keys(g)), slices.Sorted(maps.Keys(w)))
 	}
+}
+
+// corrupt flips a byte of the file name, if it has any, in place, as a bad
+// disk sector would: its checksums must catch it.
+func corrupt(name string, rng *rand.Rand) {
+	data, err := os.ReadFile(name)
+	if err != nil || len(data) == 0 {
+		return
+	}
+	data[rng.IntN(len(data))] ^= 0xff
+	_ = os.WriteFile(name, data, 0o644)
 }
 
 // tearLog appends the start of a record, as a crash during an append
