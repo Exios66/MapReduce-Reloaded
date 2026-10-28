@@ -114,3 +114,19 @@ func TestMaxTaskFailuresRecovers(t *testing.T) {
 	s = recoverServer(t, cfg, path)
 	wantFailed(t, s, sub.GetJobId(), "failed 3 times")
 }
+
+// Once a job has failed, a report from an attempt still in flight changes
+// nothing: the failed job's progress and counters are final.
+func TestReportAfterFailure(t *testing.T) {
+	s, w, job := newJobWith(t, Config{Backups: true}, 1)
+	original := next(t, s, w)
+	other := register(t, s)
+	fail(t, s, other, next(t, s, other), &pb.TaskFailure{Message: "no Map", Fatal: true})
+	if succeed(t, s, w, original, outputs(0, 1)) {
+		t.Fatal("accepted a completion for a failed job")
+	}
+	if st := jobStatus(t, s, job); st.GetMapTasksCompleted() != 0 || len(st.GetCounters().GetValues()) != 0 {
+		t.Fatalf("failed job changed: %v", st)
+	}
+	wantFailed(t, s, job, "cannot run: no Map")
+}

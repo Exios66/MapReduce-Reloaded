@@ -315,7 +315,7 @@ def test_locality_counts_only_accepted_attempts(tmp_path):
 def test_locality_wait(new_job):
     wait = 0.5  # exact in binary, so the clock lands on it
     clock = [1000.0]
-    cfg = Config(locality_wait=wait, locate=lambda s: ["host-a"], now=lambda: clock[0])
+    cfg = Config(locality_wait=wait, locate=lambda s: ["host-a"], clock=lambda: clock[0])
     c, _, _ = new_job(cfg=cfg)
     b = c.register("host-b")
     assert c.request(b).HasField("wait")
@@ -327,7 +327,7 @@ def test_locality_wait(new_job):
 
 def test_locality_wait_resets_on_a_local_start(tmp_path):
     clock = [1000.0]
-    cfg = Config(locality_wait=10, locate=lambda s: ["host-a"], now=lambda: clock[0])
+    cfg = Config(locality_wait=10, locate=lambda s: ["host-a"], clock=lambda: clock[0])
     c = Coordinator(Server(cfg))
     a, b = c.register("host-a"), c.register("host-b")
     c.submit(
@@ -404,7 +404,7 @@ def test_job_end_cleans_up_output(new_job):
 def test_rerun_map_replaces_its_counts(new_job):
     c, w, job = new_job(cfg=Config(worker_timeout=60))
     c.succeed(w, c.next(w), outputs(0, 1), {"n": 5})
-    c.s.expire(time.time() + 3600)
+    c.s.expire(time.monotonic() + 3600)
     w2 = c.register()
     c.succeed(w2, c.next(w2), outputs(0, 1), {"n": 7})
     assert c.status(job).counters.values["n"] == 7
@@ -478,7 +478,7 @@ def test_log(new_job):
     c, _, _ = new_job(cfg=Config(log=log, worker_timeout=60))
     assert log.kinds()[len(want) :] == want[:1]
     start = time.time()
-    c.s.expire(start + 3600)
+    c.s.expire(time.monotonic() + 3600)
     assert log.kinds()[len(want) + 1 :] == ["worker_lost"]
     at = log.records[-1].at.ToNanoseconds() / 1e9
     assert start <= at <= time.time()  # the current time, not the expiry cutoff
@@ -512,7 +512,7 @@ def test_log_fails(new_job, tmp_path):
     assert s._jobs == {}, "a job whose submission was not logged was kept"
     # A worker still expires, and its tasks still reset, when the log fails.
     c.s._cfg.worker_timeout = 60
-    assert c.s.expire(time.time() + 3600) == [w]
+    assert c.s.expire(time.monotonic() + 3600) == [w]
 
 
 def test_heartbeat(new_job):
@@ -627,11 +627,11 @@ def test_heartbeat_cancels_an_ended_jobs_attempts(new_job):
 def test_expire(new_job):
     c, w, job = new_job()
     c.s._cfg.worker_timeout = 0
-    assert c.s.expire(time.time() + 3600) == []
+    assert c.s.expire(time.monotonic() + 3600) == []
     c.s._cfg.worker_timeout = 60
     c.succeed(w, c.request(w).map_task.attempt, outputs(0, 1))
-    assert c.s.expire(time.time()) == []
-    assert c.s.expire(time.time() + 120) == [w]
+    assert c.s.expire(time.monotonic()) == []
+    assert c.s.expire(time.monotonic() + 120) == [w]
     assert c.status(job).map_tasks_completed == 0  # the lost map output is redone
     lost = c.s._lost[-1]
     assert lost.id == w and [str(t) for t in lost.tasks] == ["TASK_KIND_MAP 0"]
@@ -645,7 +645,7 @@ def test_expire(new_job):
 def test_expire_while_idle_remembers_the_loss(new_job):
     c, w, _ = new_job(cfg=Config(worker_timeout=1))
     end_active(c.s)
-    assert c.s.expire(time.time() + 10) == [w]
+    assert c.s.expire(time.monotonic() + 10) == [w]
     assert c.s._lost[-1].tasks == []
 
 
@@ -653,7 +653,7 @@ def test_lost_workers_are_bounded():
     c = Coordinator(Server(Config(worker_timeout=1)))
     for _ in range(MAX_LOST + 5):
         c.register()
-    dead = c.s.expire(time.time() + 10)
+    dead = c.s.expire(time.monotonic() + 10)
     assert len(dead) == MAX_LOST + 5
     assert [lw.id for lw in c.s._lost] == dead[5:]
 
@@ -984,17 +984,16 @@ def test_status_fields(new_job):
 
 def test_expire_records_and_logs(new_job, caplog):
     log = MemLog()
-    c, w, _ = new_job(cfg=Config(log=log, worker_timeout=60))
+    c, w, _ = new_job(cfg=Config(log=log, worker_timeout=60, now=lambda: 77.0))
     c.next(w)
-    at = time.time() + 3600
-    c.s.expire(at)
+    c.s.expire(time.monotonic() + 3600)
     assert log.records[-1].worker_lost.worker_id == w
-    assert c.s._lost[-1].at == at
+    assert c.s._lost[-1].at == 77.0  # when, by the wall clock
     assert "worker lost: worker w1, 1 tasks reset" in [r.getMessage() for r in caplog.records]
 
     c, w, _ = new_job(cfg=Config(log=log, worker_timeout=60))
     log.err = OSError("disk full")
-    c.s.expire(time.time() + 3600)
+    c.s.expire(time.monotonic() + 3600)
     msgs = [r.getMessage() for r in caplog.records]
     assert "logging a lost worker: worker w1: coordinator log: disk full" in msgs
 
@@ -1104,3 +1103,54 @@ def test_serve_runs_the_monitor():
     finally:
         stop.set()
         server.stop(None)
+
+
+# CodeAnt review findings.
+
+
+def test_liveness_ignores_the_wall_clock(new_job):
+    """Heartbeats are timed by the monotonic clock, so setting the system
+    clock forward does not expire a live worker."""
+    wall, tick = [1000.0], [5.0]
+    c, w, _ = new_job(cfg=Config(worker_timeout=10, now=lambda: wall[0], clock=lambda: tick[0]))
+    wall[0] += 3600
+    assert c.s.expire(tick[0] + 1) == []
+    tick[0] += 20
+    assert c.s.expire(tick[0]) == [w]
+
+
+def test_report_after_failure_changes_nothing(new_job):
+    c, w, job = new_job()
+    original = c.next(w)
+    other = c.register()
+    c.fail(other, c.next(other), message="no Map", fatal=True)
+    assert not c.succeed(w, original, outputs(0, 1))
+    st = c.status(job)
+    assert st.state == FAILED and st.map_tasks_completed == 0 and not st.counters.values
+    assert st.error == "TASK_KIND_MAP 0 cannot run: no Map"
+
+
+def test_path_rejects_what_go_rejects():
+    with pytest.raises(ValueError) as e:
+        path("file:///tmp/input%ZZ")
+    assert str(e.value) == 'wire: parse "file:///tmp/input%ZZ": invalid URL escape "%ZZ"'
+    with pytest.raises(ValueError, match=r'invalid URL escape "%"$'):
+        path("50%")
+    with pytest.raises(ValueError) as e:
+        path("in\nput")
+    assert str(e.value) == 'wire: parse "in\\nput": net/url: invalid control character in URL'
+    assert path("file:///a%2Fb") == "/a/b" and path("100%25") == "100%25"
+
+
+def test_quoting_matches_go():
+    m = types_pb2.JobSpec(inputs=["/i"], output="/o", num_reduce_tasks=1)
+    for program, want in [
+        ("a\nb", 'a\\nb'),
+        ("t\tq\"\\", 't\\tq\\"\\\\'),
+        ("\x01\x7f", "\\x01\\x7f"),
+        ("\u00a0\u2028", "\\u00a0\\u2028"),
+        ("\U000e0001", "\\U000e0001"),
+        ("héllo ☃", "héllo ☃"),
+    ]:
+        m.program = program
+        assert validate(m) == [f'wire: unknown program "{want}"']

@@ -508,13 +508,16 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 // report applies req, received at at, to j, and says whether it completed
 // its task and whether it ended the job, whose output the caller then
 // cleans up.
-// Failure reports and stale attempts return false; invalid tasks or map
-// outputs return an error. If the report ends the active job, at is its
+// Failure reports, stale attempts and reports for an ended job return
+// false, and a report for an ended job changes nothing; invalid tasks or
+// map outputs return an error. If the report ends the active job, at is its
 // finish time.
 func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accepted, ended bool, err error) {
+	if s.active != j { // an ended job's outcome and progress are final
+		return false, false, nil
+	}
 	id := req.GetAttempt()
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
-	active := s.active == j
 	if f := req.GetFailure(); f != nil {
 		counted := j.tasks.Runs(t, id.GetAttempt(), req.GetWorkerId())
 		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
@@ -528,7 +531,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 		case limit != nil && uint64(j.tasks.Skipped()) > *limit:
 			s.end(j, fmt.Sprintf("more than %d bad records to skip", *limit), at)
 		}
-		return false, active && s.active != j, err
+		return false, s.active != j, err
 	}
 	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
 	if accepted {
@@ -539,7 +542,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 			s.end(j, "", at)
 		}
 	}
-	return accepted, active && s.active != j, err
+	return accepted, s.active != j, err
 }
 
 // end ends j at at if it is the active job: it failed with err, or

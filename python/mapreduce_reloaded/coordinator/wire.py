@@ -9,6 +9,7 @@ as a fatal task failure, and with it the job (#198).
 """
 
 import os
+import re
 from urllib.parse import quote, unquote, urlsplit
 
 from mapreduce_reloaded.formats import Split
@@ -71,6 +72,7 @@ def path(uri: str) -> str:
     """Returns the local path of a file:// URI, which must name no host but
     localhost. A string with no scheme is already a path. The Python
     coordinator stores nothing else, so any other scheme is an error."""
+    _parse(uri)
     u = urlsplit(uri)
     if u.scheme == "":
         return uri
@@ -91,6 +93,46 @@ def input_split(s: Split) -> types_pb2.InputSplit:
     return types_pb2.InputSplit(uri=uri(s.path), offset=s.start, length=s.end - s.start)
 
 
+_CONTROL = re.compile("[\x00-\x1f\x7f]")
+_BAD_ESCAPE = re.compile("%(?![0-9A-Fa-f]{2})")
+
+
+def _parse(uri: str):
+    """Rejects what Go's url.Parse rejects in a URI or a path: control
+    characters, and a % not followed by two hex digits."""
+    if _CONTROL.search(uri):
+        raise ValueError(f"wire: parse {_q(uri)}: net/url: invalid control character in URL")
+    if m := _BAD_ESCAPE.search(uri):
+        bad = uri[m.start() : m.start() + 3]
+        raise ValueError(f"wire: parse {_q(uri)}: invalid URL escape {_q(bad)}")
+
+
+_ESCAPES = {
+    "\a": r"\a",
+    "\b": r"\b",
+    "\f": r"\f",
+    "\n": r"\n",
+    "\r": r"\r",
+    "\t": r"\t",
+    "\v": r"\v",
+    "\\": "\\\\",
+    '"': '\\"',
+}
+
+
 def _q(s: str) -> str:
-    """Quotes s as Go's %q does for printable text."""
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    """Quotes s as Go's %q does: backslash escapes for quotes, backslashes
+    and control characters, and \x, \u or \U for other unprintable ones."""
+    out = []
+    for c in s:
+        if c in _ESCAPES:
+            out.append(_ESCAPES[c])
+        elif c.isprintable():
+            out.append(c)
+        elif ord(c) < 0x80:
+            out.append(f"\\x{ord(c):02x}")
+        elif ord(c) <= 0xFFFF:
+            out.append(f"\\u{ord(c):04x}")
+        else:
+            out.append(f"\\U{ord(c):08x}")
+    return '"' + "".join(out) + '"'

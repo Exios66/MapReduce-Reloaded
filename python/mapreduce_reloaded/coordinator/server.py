@@ -80,8 +80,13 @@ class Config:
     # error (#176). Attempts that could not fetch lost map output do not
     # count. Zero means no limit.
     max_task_failures: int = 0
-    # Replaces time.time as the coordinator's clock, for tests.
+    # Replaces time.time as the coordinator's clock, which dates its
+    # decisions, for tests.
     now: Callable[[], float] | None = None
+    # Replaces time.monotonic, which times heartbeats and locality waits, so
+    # that setting the system clock neither kills live workers nor keeps
+    # dead ones, for tests.
+    clock: Callable[[], float] | None = None
     # The built-in programs the workers have.
     programs: frozenset = PROGRAMS
 
@@ -216,6 +221,10 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         """Reads the coordinator's clock: Config.now, or time.time."""
         return self._cfg.now() if self._cfg.now else time.time()
 
+    def _clock(self) -> float:
+        """Reads the monotonic clock: Config.clock, or time.monotonic."""
+        return self._cfg.clock() if self._cfg.clock else time.monotonic()
+
     def shutdown(self):
         """Makes every worker's next RequestTask tell it to exit."""
         with self._mu:
@@ -223,7 +232,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
 
     def expire(self, now: float) -> list[str]:
         """Declares dead every worker not heard from within worker_timeout of
-        now, and returns their IDs. Their running tasks and completed map
+        now, by the monotonic clock, and returns their IDs. Their running tasks and completed map
         tasks become idle again, since map output lives on the worker's
         disk; their completed reduce tasks stay done (§3.3). A dead worker
         that calls again is told to register anew. Log failures do not
@@ -232,7 +241,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             return []
         with self._mu:
             dead = self._workers.expire(now, self._cfg.worker_timeout)
-            at = self.now()  # now may predate a record logged while we waited
+            at = self.now()
             for w in dead:
                 reset = []
                 if self._active is not None:
@@ -243,23 +252,22 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                     except RpcError as e:
                         log.error("logging a lost worker: worker %s: %s", w, e)
                     reset = self._active.tasks.reset_worker(w)
-                self._lost = [*self._lost, LostWorker(w, now, reset)][-MAX_LOST:]
+                self._lost = [*self._lost, LostWorker(w, at, reset)][-MAX_LOST:]
                 log.warning("worker lost: worker %s, %d tasks reset", w, len(reset))
             return dead
 
     def monitor(self, stop: threading.Event):
-        """Calls expire, as of the coordinator's clock, every
-        heartbeat_interval until stop is set."""
+        """Calls expire every heartbeat_interval until stop is set."""
         if not self._cfg.worker_timeout or not self._cfg.heartbeat_interval:
             return
         while not stop.wait(self._cfg.heartbeat_interval):
-            self.expire(self.now())
+            self.expire(self._clock())
 
     @_rpc
     def RegisterWorker(self, request, context):
         with self._mu:
             resp = coordinator_pb2.RegisterWorkerResponse(
-                worker_id=self._workers.register(request.worker, self.now())
+                worker_id=self._workers.register(request.worker, self._clock())
             )
         resp.heartbeat_interval.FromNanoseconds(int(self._cfg.heartbeat_interval * 1e9))
         return resp
@@ -273,7 +281,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         when idle, so they can prune ended jobs' map output."""
         with self._mu:
             worker = request.worker_id
-            if not self._workers.heartbeat(worker, self.now()):
+            if not self._workers.heartbeat(worker, self._clock()):
                 return coordinator_pb2.HeartbeatResponse(reregister=True)
             resp = coordinator_pb2.HeartbeatResponse(active_jobs=coordinator_pb2.ActiveJobs())
             if self._active is not None:
@@ -380,8 +388,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         shutdown. Errors are NotFound for an unknown worker, Internal if
         assigning a task fails, or Unavailable if recording it fails."""
         with self._mu:
-            worker, now = request.worker_id, self.now()
-            if not self._workers.heartbeat(worker, now):
+            worker, now, tick = request.worker_id, self.now(), self._clock()
+            if not self._workers.heartbeat(worker, tick):
                 raise RpcError(
                     grpc.StatusCode.NOT_FOUND, f'unknown worker "{worker}": register again'
                 )
@@ -393,7 +401,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             if j is not None and not request.paused:
                 info = self._worker_info(worker)
                 t = j.tasks.next(lambda i: locality(j.splits[i], info))
-                if t is not None and self._hold_back(t, info, now):
+                if t is not None and self._hold_back(t, info, tick):
                     t = None
                 elif t is None and self._cfg.backups:
                     t = j.tasks.backup(worker)
@@ -433,8 +441,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         )
 
     def _hold_back(self, t: Task, info, now: float) -> bool:
-        """Reports whether a worker should wait rather than run t, the
-        nearest task to it, because t is a map task whose split is on other
+        """Reports whether a worker should wait, as of now by the monotonic
+        clock, rather than run t, the nearest task to it, because t is a map task whose split is on other
         hosts. The job holds such tasks back for at most locality_wait at a
         time: the wait starts when it first holds one back, and ends when it
         starts one on a host that holds its split."""
@@ -486,11 +494,13 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
 
     def _report(self, j: _Job, req, at: float) -> tuple[bool, bool]:
         """Applies req, received at at, to j, and says whether it completed
-        its task and whether it ended the job. Raises ValueError for invalid
-        tasks or map outputs."""
+        its task and whether it ended the job. A report for an ended job
+        changes nothing: its outcome and progress are final. Raises
+        ValueError for invalid tasks or map outputs."""
+        if self._active is not j:
+            return False, False
         id = req.attempt
         t = Task(id.task.kind, id.task.index)
-        active = self._active is j
         if req.HasField("failure"):
             f = req.failure
             counted = j.tasks.runs(t, id.attempt, req.worker_id)
@@ -509,7 +519,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 self._end(j, f"{t} failed {n} times; the last error: {f.message}", at)
             elif limit is not None and j.tasks.skipped() > limit:
                 self._end(j, f"more than {limit} bad records to skip", at)
-            return False, active and self._active is not j
+            return False, self._active is not j
         accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs)
         if accepted:
             # A map task run again after its worker died replaces its counts.
@@ -517,7 +527,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             j.ran[t] = j.placed[t][id.attempt]
             if j.tasks.done():
                 self._end(j, "", at)
-        return accepted, active and self._active is not j
+        return accepted, self._active is not j
 
     def _end(self, j: _Job, err: str, at: float):
         """Ends j at at if it is the active job: it failed with err, or
