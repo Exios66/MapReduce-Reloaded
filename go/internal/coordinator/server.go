@@ -237,6 +237,12 @@ func (s *Server) runs(attempt *pb.TaskAttemptId, worker string) bool {
 // or output setup fails, and Unavailable if recording the submission fails
 // or a prior log failure remains unrecovered.
 func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.SubmitJobResponse, error) {
+	s.mu.Lock()
+	err := s.failed()
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
 	m := proto.CloneOf(req.GetJob())
 	if m == nil {
 		return nil, status.Error(codes.InvalidArgument, "no job")
@@ -678,7 +684,7 @@ func (s *Server) record(rec *pb.LogRecord, at time.Time) error {
 	}
 	if err != nil {
 		s.logErr = err
-		return status.Errorf(codes.Unavailable, "coordinator log: %v", err)
+		return s.logFailure()
 	}
 	return nil
 }
@@ -704,6 +710,13 @@ func (s *Server) failed() error {
 		}
 		s.healAt = s.now().Add(healEvery)
 	}
+	return s.logFailure()
+}
+
+// logFailure describes the log error without trying to recover, so a failed
+// append still fails its RPC even if the log can be reopened. Call it under
+// the lock.
+func (s *Server) logFailure() error {
 	if s.logPath == "" {
 		return status.Errorf(codes.Unavailable, "coordinator log failed; restart the coordinator: %v", s.logErr)
 	}

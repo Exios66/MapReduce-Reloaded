@@ -386,6 +386,25 @@ func TestLogFails(t *testing.T) {
 	log.err = errors.New("disk full")
 	_, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w})
 	assertCode(t, err, codes.Unavailable)
+	if got, want := status.Convert(err).Message(), "coordinator log failed; restart the coordinator: disk full"; got != want {
+		t.Errorf("first failed append: %q, want %q", got, want)
+	}
+	for name, job := range map[string]*pb.JobSpec{
+		"missing job": nil,
+		"invalid job": {Program: "nope"},
+		"missing input": {
+			Program: "wordcount", Inputs: []string{filepath.Join(t.TempDir(), "missing.txt")},
+			Output: t.TempDir(), NumReduceTasks: 1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, submitErr := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: job})
+			assertCode(t, submitErr, codes.Unavailable)
+			if status.Convert(submitErr).Message() != status.Convert(err).Message() {
+				t.Fatalf("submission after a failed append: %v, want %v", submitErr, err)
+			}
+		})
+	}
 	_, err = s.ReportTask(ctx, &pb.ReportTaskRequest{WorkerId: w, Attempt: &pb.TaskAttemptId{
 		Task: &pb.TaskId{JobId: "job-1", Kind: pb.TaskKind_TASK_KIND_MAP},
 	}, Outcome: &pb.ReportTaskRequest_Failure{Failure: &pb.TaskFailure{}}})

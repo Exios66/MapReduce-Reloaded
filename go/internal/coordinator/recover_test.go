@@ -449,6 +449,34 @@ func TestRecoverPreservesJobSource(t *testing.T) {
 	}
 }
 
+// A failed append must fail its RPC even when the log can be reopened
+// immediately. Recovery must not acknowledge a submission it never logged.
+func TestFailedAppendReturnsUnavailableBeforeHealing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coordinator.log")
+	s, log, err := Recover(Config{}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+		Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+	}})
+	assertCode(t, err, codes.Unavailable)
+	if len(s.jobs) != 0 {
+		t.Fatal("a job whose submission was not logged was kept")
+	}
+	register(t, s) // a subsequent RPC can reopen the log and resume
+	_, err = s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: "job-1"})
+	assertCode(t, err, codes.NotFound)
+}
+
 // A report that ends the job but cannot be logged leaves the job ended in
 // memory only: no RPC may reveal that, nor may the output be cleaned up.
 // Once the log can be reopened, the server rebuilds itself from it, as a
