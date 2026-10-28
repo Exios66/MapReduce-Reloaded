@@ -116,11 +116,15 @@ class Cluster:
     def status(self, job):
         """Returns the job's status as name/value pairs, or None if the
         coordinator cannot be reached."""
-        r = subprocess.run(
-            [str(self.bin / "mr"), "status", "-coordinator", self.addr, job],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            r = subprocess.run(
+                [str(self.bin / "mr"), "status", "-coordinator", self.addr, job],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"mr status {job} did not exit within 5s")
         if r.returncode != 0:
             return None
         st = dict(line.split("\t", 1) for line in r.stdout.splitlines() if "\t" in line)
@@ -143,7 +147,10 @@ class Cluster:
 
 
 def mr(bin_dir, *args):
-    r = subprocess.run([str(bin_dir / "mr"), *args], capture_output=True, text=True)
+    try:
+        r = subprocess.run([str(bin_dir / "mr"), *args], capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"mr {' '.join(args)} did not exit within 60s")
     if r.returncode != 0:
         pytest.fail(f"mr {' '.join(args)}: exit {r.returncode}\n{r.stdout}{r.stderr}")
     return r.stdout
