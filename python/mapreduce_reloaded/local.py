@@ -8,7 +8,6 @@ the oracle the distributed runs are checked against.
 
 import glob
 import os
-import resource
 import shutil
 import sys
 from collections import Counter
@@ -46,7 +45,11 @@ def raise_open_file_limit():
     """Raises the soft limit on open files to the hard one, as the Go runtime
     does at startup (capped at OPEN_MAX, 10240, on macOS and when unlimited):
     a reduce task opens all M map outputs at once. A limit that cannot be
-    raised stays as it is."""
+    raised stays as it is, as does any on Windows, which has none."""
+    try:
+        import resource
+    except ImportError:  # pragma: no cover - Windows
+        return
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if hard == resource.RLIM_INFINITY:
         want = 10240

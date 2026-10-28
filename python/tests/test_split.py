@@ -61,10 +61,11 @@ def test_default_r():
 
 def test_expand_matches_dot_files_in_byte_order(tmp_path):
     # As Go's filepath.Glob: * matches .x, and names sort by their bytes.
-    for name in ["b", ".a", "\u00e9", "Z"]:
+    # \u4e2d has no decomposed form, so macOS file systems keep its bytes.
+    for name in ["b", ".a", "\u4e2d", "Z"]:
         (tmp_path / name).write_bytes(b"x")
     got = [os.path.basename(p) for p in expand([str(tmp_path / "*")])]
-    assert got == [".a", "Z", "b", "\u00e9"]
+    assert got == [".a", "Z", "b", "\u4e2d"]
 
 
 def test_byte_splits_counts_before_building(tmp_path):

@@ -308,8 +308,8 @@ def test_load():
 def test_raise_open_file_limit(monkeypatch, platform, limits, want):
     set_to = []
     monkeypatch.setattr(local.sys, "platform", platform)
-    monkeypatch.setattr(local.resource, "getrlimit", lambda _: limits)
-    monkeypatch.setattr(local.resource, "setrlimit", lambda _, v: set_to.append(v))
+    monkeypatch.setattr(resource, "getrlimit", lambda _: limits)
+    monkeypatch.setattr(resource, "setrlimit", lambda _, v: set_to.append(v))
     local.raise_open_file_limit()
     assert set_to == ([want] if want else [])
 
@@ -318,6 +318,6 @@ def test_raise_open_file_limit_keeps_a_limit_it_cannot_raise(monkeypatch):
     def refuse(*_):
         raise ValueError("not allowed")
 
-    monkeypatch.setattr(local.resource, "getrlimit", lambda _: (256, 4096))
-    monkeypatch.setattr(local.resource, "setrlimit", refuse)
+    monkeypatch.setattr(resource, "getrlimit", lambda _: (256, 4096))
+    monkeypatch.setattr(resource, "setrlimit", refuse)
     local.raise_open_file_limit()  # no error
