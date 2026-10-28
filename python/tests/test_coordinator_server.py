@@ -1142,6 +1142,24 @@ def test_path_rejects_what_go_rejects():
     assert path("file:///a%2Fb") == "/a/b" and path("100%25") == "100%25"
 
 
+def test_source_over_the_limit_is_invalid():
+    m = types_pb2.JobSpec(program="j", inputs=["/i"], output="/o", num_reduce_tasks=1)
+    m.program_source = "é" * (1 << 19)
+    assert validate(m) == []
+    m.program_source += "x"
+    assert validate(m) == [f"wire: j: job file is {(1 << 20) + 1} bytes; the limit is 1 MiB"]
+
+
+def test_path_keeps_bytes_that_are_not_utf8(tmp_path):
+    name = os.fsencode(tmp_path) + b"/\xff"
+    with open(name, "wb") as f:
+        f.write(b"x")
+    u = uri(os.fsdecode(name))
+    assert u.endswith("/%FF")
+    with open(path(u), "rb") as f:
+        assert f.read() == b"x"
+
+
 def test_quoting_matches_go():
     m = types_pb2.JobSpec(inputs=["/i"], output="/o", num_reduce_tasks=1)
     for program, want in [
