@@ -5,6 +5,7 @@ All state is guarded by one lock (ADR 0006). Nothing slow runs under it:
 SubmitJob plans the input splits before locking.
 """
 
+import errno
 import glob
 import logging
 import os
@@ -203,11 +204,34 @@ class _Job:
         holds the job's end. A missing directory is ignored; other OSError
         and ValueError failures are caught without changing the job's outcome."""
         try:
-            shutil.rmtree(os.path.join(path(self.spec.output), TEMP_DIR))
-        except FileNotFoundError:
-            pass
+            remove_all(os.path.join(path(self.spec.output), TEMP_DIR))
         except (OSError, ValueError) as e:
             log.warning("cleaning up job output: job %s: %s", self.id, e)
+
+
+# How many times remove_all starts over before it gives up.
+REMOVE_TRIES = 10
+
+
+def remove_all(d: str):
+    """Removes directory d and what it holds, as Go's os.RemoveAll; a
+    missing d is not an error. A losing backup attempt may rename its file
+    out of d, or create one in it, while it runs: rmtree then fails on the
+    entry, or on d not being empty, and remove_all starts over, up to
+    REMOVE_TRIES times. Raises rmtree's other errors."""
+    for i in range(REMOVE_TRIES):
+        last = i == REMOVE_TRIES - 1
+        try:
+            shutil.rmtree(d)
+            return
+        except FileNotFoundError:
+            if not os.path.lexists(d):
+                return
+            if last:
+                raise
+        except OSError as e:
+            if e.errno != errno.ENOTEMPTY or last:
+                raise
 
 
 def _ns(t: float) -> int:

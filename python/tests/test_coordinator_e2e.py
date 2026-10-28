@@ -160,8 +160,9 @@ def mr(bin_dir, *args):
 @pytest.fixture
 def cluster(bin_dir, tmp_path):
     """Returns a function that starts a cluster; every process is killed
-    when the test ends. Its output is printed, which pytest shows only for
-    a failed test."""
+    when the test ends. Each process's output is kept in the test's
+    logs/ directory, which pytest keeps for its last three runs, and
+    printed at teardown, which pytest shows with -rP or -s."""
     procs = []
     yield lambda workers, wal=False: Cluster(bin_dir, tmp_path, workers, wal, procs)
     for p in procs:
