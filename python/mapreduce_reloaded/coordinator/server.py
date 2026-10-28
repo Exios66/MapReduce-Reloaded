@@ -799,8 +799,12 @@ def serve(address: str, cfg: Config | None = None, threads: int = 16):
 def start(coordinator: Server, address: str, threads: int = 16):
     """Serves coordinator over insecure gRPC on address, as serve does, and
     starts its worker monitor. Returns the gRPC server, the bound port and
-    the event that stops the monitor."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=threads))
+    the event that stops the monitor. An address in use is an error, as in
+    Go: gRPC would otherwise share the port with SO_REUSEPORT, and two
+    coordinators would split the workers and write one log."""
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=threads), options=[("grpc.so_reuseport", 0)]
+    )
     coordinator_pb2_grpc.add_CoordinatorServiceServicer_to_server(coordinator, server)
     port = server.add_insecure_port(address)
     server.start()

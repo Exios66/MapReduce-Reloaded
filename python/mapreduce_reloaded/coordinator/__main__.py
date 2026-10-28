@@ -24,6 +24,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 
 from mapreduce_reloaded.coordinator import statusweb
 from mapreduce_reloaded.coordinator.recover import recover
@@ -146,20 +147,45 @@ def http_address(addr: str) -> tuple[str, int]:
     return host.strip("[]"), int(port)
 
 
-class _JSON(logging.Formatter):
-    """Writes each record as one JSON object, with slog's keys."""
+# slog's names of the levels Python has.
+_LEVELS = {"WARNING": "WARN", "CRITICAL": "ERROR"}
+
+
+def _slog(record: logging.LogRecord) -> dict[str, str]:
+    """Returns record's time, level and message as slog writes them: the
+    time in RFC 3339 with milliseconds and the zone's offset, and the
+    level as DEBUG, INFO, WARN or ERROR."""
+    at = datetime.fromtimestamp(record.created).astimezone().isoformat(timespec="milliseconds")
+    level = _LEVELS.get(record.levelname, record.levelname)
+    return {"time": at.replace("+00:00", "Z"), "level": level, "msg": record.getMessage()}
+
+
+def _logfmt(v: str) -> str:
+    """Quotes v as slog's text handler does, if it is empty or has a space,
+    '=', '"' or a character that does not print."""
+    if v and not any(c in '="' or c.isspace() or not c.isprintable() for c in v):
+        return v
+    return json.dumps(v, ensure_ascii=False)
+
+
+class _Text(logging.Formatter):
+    """Writes each record as one line of key=value pairs, as slog's text handler."""
 
     def format(self, record: logging.LogRecord) -> str:
-        at = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(record.created))
-        at += f".{int(record.msecs):03d}"
-        return json.dumps({"time": at, "level": record.levelname, "msg": record.getMessage()})
+        return " ".join(f"{k}={_logfmt(v)}" for k, v in _slog(record).items())
+
+
+class _JSON(logging.Formatter):
+    """Writes each record as one JSON object, as slog's JSON handler."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps(_slog(record))
 
 
 def setup_logs(fmt: str, stream=None):
     """Sends the package's logs to stream (stderr) in fmt, text or json."""
     h = logging.StreamHandler(stream or sys.stderr)
-    text = logging.Formatter("time=%(asctime)s level=%(levelname)s msg=%(message)s")
-    h.setFormatter(_JSON() if fmt == "json" else text)
+    h.setFormatter(_JSON() if fmt == "json" else _Text())
     root = logging.getLogger("mapreduce_reloaded")
     root.handlers[:] = [h]
     root.setLevel(logging.INFO)

@@ -1,6 +1,7 @@
 """Tests for the coordinator's status page and metrics, ported from
 go/internal/statusweb/statusweb_test.go, and for Server.status."""
 
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -101,6 +102,55 @@ def test_page(get):
     assert "<script>" not in body
     assert get("/?refresh=1")[0] == 200
     assert get("/nope")[0] == 404
+
+
+def _fetch(url):
+    with urllib.request.urlopen(url) as r:
+        return r.status
+
+
+@pytest.mark.skipif(not socket.has_ipv6, reason="needs IPv6")
+def test_serve_ipv6():
+    """An empty host serves IPv6 and IPv4, and an IPv6 host binds, as Go's
+    net.Listen."""
+    for host, urls in [("", ["127.0.0.1", "[::1]"]), ("::1", ["[::1]"])]:
+        srv = statusweb.serve((host, 0), lambda: STATUS)
+        try:
+            for u in urls:
+                assert _fetch(f"http://{u}:{srv.server_address[1]}/") == 200
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+
+def test_serve_without_ipv6(monkeypatch):
+    """Where the host has no IPv6, an empty host serves IPv4."""
+
+    def no_ipv6(*args):
+        raise OSError("Address family not supported by protocol")
+
+    monkeypatch.setattr(statusweb, "_Server6", no_ipv6)
+    srv = statusweb.serve(("", 0), lambda: STATUS)
+    try:
+        assert _fetch(f"http://127.0.0.1:{srv.server_address[1]}/") == 200
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_stalled_client_is_dropped(monkeypatch):
+    """A client that never finishes its request is disconnected after the
+    read timeout instead of holding a thread forever."""
+    monkeypatch.setattr(statusweb, "READ_TIMEOUT", 0.2)
+    srv = statusweb.serve(("127.0.0.1", 0), lambda: STATUS)
+    try:
+        with socket.create_connection(("127.0.0.1", srv.server_address[1])) as c:
+            c.sendall(b"GET / HTTP/1.1\r\n")
+            c.settimeout(5)
+            assert c.recv(1024) == b""
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_empty_page():

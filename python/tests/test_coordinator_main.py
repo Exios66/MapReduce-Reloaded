@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import re
 import runpy
 import signal
 import sys
@@ -66,18 +67,39 @@ def test_addresses():
 
 @pytest.mark.parametrize("fmt", ["text", "json"])
 def test_logs(fmt):
+    """The logs have slog's keys and values: an RFC 3339 time with
+    milliseconds and an offset, slog's level names, and in text, quoted
+    values where slog quotes them."""
     out = io.StringIO()
     cmd.setup_logs(fmt, out)
     try:
-        logging.getLogger("mapreduce_reloaded.coordinator").info("task failed: job %s", "job-1")
+        log = logging.getLogger("mapreduce_reloaded.coordinator")
+        log.info("task failed: job %s", "job-1")
+        log.warning("lost")
+        log.critical("down")
     finally:
         logging.getLogger("mapreduce_reloaded").handlers[:] = []
-    line = out.getvalue().strip()
+    lines = out.getvalue().splitlines()
+    at = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}(Z|[+-]\d\d:\d\d)"
     if fmt == "json":
-        rec = json.loads(line)
-        assert rec["msg"] == "task failed: job job-1" and rec["level"] == "INFO" and rec["time"]
+        recs = [json.loads(line) for line in lines]
+        assert [(r["level"], r["msg"]) for r in recs] == [
+            ("INFO", "task failed: job job-1"),
+            ("WARN", "lost"),
+            ("ERROR", "down"),
+        ]
+        assert re.fullmatch(at, recs[0]["time"]), recs[0]["time"]
     else:
-        assert "level=INFO msg=task failed: job job-1" in line and line.startswith("time=")
+        assert re.fullmatch(f"time={at} level=INFO msg=\"task failed: job job-1\"", lines[0])
+        assert lines[1].endswith(" level=WARN msg=lost") and " level=ERROR " in lines[2]
+
+
+@pytest.mark.parametrize(
+    "v, want",
+    [("a", "a"), ("", '""'), ("a b", '"a b"'), ("a=b", '"a=b"'), ('a"', '"a\\""'), ("a\n", '"a\\n"')],
+)
+def test_logfmt(v, want):
+    assert cmd._logfmt(v) == want
 
 
 @pytest.fixture
@@ -188,10 +210,14 @@ def test_run_without_log(running, tmp_path):
 
 
 def test_run_errors(running, tmp_path):
-    """A status address in use stops the coordinator, which still closes its
-    log; a -data-dir that cannot be made is reported."""
+    """An RPC or status address in use stops the coordinator, which still
+    closes its log; a -data-dir that cannot be made is reported. A second
+    coordinator on the same port must not share it, as SO_REUSEPORT would
+    let it: the two would split the workers and write one log."""
     busy = cmd.Options(addr="127.0.0.1:0", http="127.0.0.1:0", data_dir=str(tmp_path / "wal"))
-    _, http, _ = running(busy)
+    rpc, http, _ = running(busy)
+    with pytest.raises(RuntimeError):
+        running(cmd.Options(addr=f"127.0.0.1:{rpc}", http="", data_dir=str(tmp_path / "wal2")))
     with pytest.raises(OSError):
         running(cmd.Options(addr="127.0.0.1:0", http=f"127.0.0.1:{http}"))
     (tmp_path / "file").write_text("")

@@ -3,7 +3,9 @@ go/internal/statusweb: a page for people, refreshed every few seconds, and
 Prometheus metrics at /metrics, with the same metric names and labels as
 the Go coordinator, so one dashboard reads either."""
 
+import contextlib
 import html
+import socket
 import threading
 import time
 from collections.abc import Callable
@@ -16,6 +18,10 @@ from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2
 
 # The Content-Type of a /metrics response: the text format, version 0.0.4.
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
+
+# How long a client may take to send its request, in seconds, as the Go
+# server's ReadHeaderTimeout: a stalled one would hold a thread forever.
+READ_TIMEOUT = 5.0
 
 
 def label(v: str) -> str:
@@ -193,6 +199,8 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
     metrics at /metrics, taking a fresh status from source for each."""
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = READ_TIMEOUT
+
         def do_GET(self):
             route = urlsplit(self.path).path
             if route == "/":
@@ -214,11 +222,36 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
+class _Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+
+class _Server6(_Server):
+    """Listens on IPv6 and, for "::", on IPv4 too, as Go's net.Listen."""
+
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        with contextlib.suppress(OSError):
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        super().server_bind()
+
+
 def serve(address: tuple[str, int], source: Callable[[], Status]) -> ThreadingHTTPServer:
     """Serves the status page and metrics at address, such as ("", 8080), on
-    a daemon thread, and returns the server; port 0 picks a free one. Stop it
-    with shutdown and server_close. Raises OSError if it cannot listen."""
-    srv = ThreadingHTTPServer(address, handler(source))
-    srv.daemon_threads = True
+    a daemon thread, and returns the server; port 0 picks a free one. An
+    empty host means every interface, over IPv6 and IPv4, or IPv4 alone
+    where the host has no IPv6; a host such as "::1" is IPv6. Stop it with
+    shutdown and server_close. Raises OSError if it cannot listen."""
+    host, port = address
+    if ":" in host:
+        srv = _Server6(address, handler(source))
+    elif host:
+        srv = _Server(address, handler(source))
+    else:
+        try:
+            srv = _Server6(("::", port), handler(source))
+        except OSError:
+            srv = _Server(address, handler(source))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
