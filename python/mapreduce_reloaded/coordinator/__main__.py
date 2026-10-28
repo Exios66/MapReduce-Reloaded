@@ -205,7 +205,9 @@ def lock(data_dir: str):
         f.seek(0)
         holder = f.read().strip() or "unknown"
         f.close()
-        raise OSError(f"-data-dir {data_dir} is in use by another coordinator (pid {holder})")
+        raise OSError(
+            f"-data-dir {data_dir} is in use by another coordinator (pid {holder})"
+        ) from None
     f.truncate(0)
     f.write(f"{os.getpid()}\n")
     f.flush()
