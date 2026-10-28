@@ -311,11 +311,14 @@ e1() {
 
 e2() {
     begin E2
-    for setting in normal straggler-backups straggler-no-backups; do
-        if [ "$setting" = straggler-no-backups ]; then configure 4 backups-off.yaml; else configure 4; fi
+    for setting in normal normal-no-backups straggler-backups straggler-no-backups; do
+        case $setting in
+        *-no-backups) configure 4 backups-off.yaml ;;
+        *) configure 4 ;;
+        esac
         for n in $(seq "$repeat"); do
             slow=
-            [ "$setting" = normal ] || slow=$("${compose[@]}" ps -q worker | head -1)
+            case $setting in normal*) ;; *) slow=$("${compose[@]}" ps -q worker | head -1) ;; esac
             [ -z "$slow" ] || docker update --cpus 0.2 "$slow" >/dev/null
             start_sampler tasks "bench/results/E2/tasks-$setting-$n.csv"
             run E2 "$setting" distsort "$n" 4 ""

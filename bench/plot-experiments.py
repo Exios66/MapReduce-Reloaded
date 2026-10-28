@@ -411,6 +411,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None)
 def e2(rows, results, out, t):
     settings = {
         "normal": "no straggler",
+        "normal-no-backups": "no straggler, backups off",
         "straggler-backups": "straggler, backups on",
         "straggler-no-backups": "straggler, backups off",
     }
