@@ -20,7 +20,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
-| `go` | `make go-lint go-test` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors) | `cimg/python:3.13`, medium |
+| `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
 | `python-3.11` | `make py-lint py-test` | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
 
@@ -47,7 +47,10 @@ How each job meets its requirements:
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
   and the VM setup use the same pin, and a test fails if they drift.
 - **Python in the Go job.** The Go golden tests run the Python reference
-  implementation, so the `go` job installs `python[dev]` too.
+  implementation, so the `go` job installs `python[dev]` too. With both
+  installed, it also runs `make py-e2e`: the Python coordinator with the Go
+  worker and `mr` commands. The Python jobs have no Go and skip those
+  tests; `py-e2e` sets `MR_REQUIRE_GO`, which turns the skip into a failure.
 - **Breaking-change check.** The `proto` job fetches `origin/main` fresh and
   runs `make proto-check PROTO_FETCH=false`. If the fetch fails, the job
   fails; the check is never skipped. A fork's build has no deploy key, so the

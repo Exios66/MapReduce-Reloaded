@@ -1,7 +1,8 @@
 """The scenarios of go/internal/e2e/process_test.go, ported to pytest and run
 against the Python coordinator (#36): python -m mapreduce_reloaded.coordinator
 as a process, with the Go worker and mr commands, over localhost sockets.
-The tests are skipped if the Go commands cannot be built."""
+The tests are skipped if the Go commands cannot be built, or fail if
+MR_REQUIRE_GO is set, as make py-e2e sets it for CI's go job."""
 
 import json
 import os
@@ -23,9 +24,11 @@ pytestmark = pytest.mark.skipif(not hasattr(signal, "SIGKILL"), reason="needs Un
 
 @pytest.fixture(scope="module")
 def bin_dir(tmp_path_factory):
-    """Builds the Go worker and mr commands once, or skips."""
+    """Builds the Go worker and mr commands once, or skips, or fails with
+    MR_REQUIRE_GO."""
+    give_up = pytest.fail if os.environ.get("MR_REQUIRE_GO") else pytest.skip
     if shutil.which("go") is None:
-        pytest.skip("go is not installed")
+        give_up("go is not installed")
     out = tmp_path_factory.mktemp("bin")
     build = subprocess.run(
         ["go", "build", "-o", str(out), "./cmd/worker", "./cmd/mr"],
@@ -34,7 +37,7 @@ def bin_dir(tmp_path_factory):
         text=True,
     )
     if build.returncode != 0:
-        pytest.skip(f"cannot build the Go commands: {build.stderr}")
+        give_up(f"cannot build the Go commands: {build.stderr}")
     return out
 
 

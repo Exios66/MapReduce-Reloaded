@@ -41,7 +41,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-      # The Go golden tests run the Python reference implementation.
+      # The Go golden tests run the Python reference implementation, and
+      # py-e2e runs the Python coordinator with the Go commands.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -49,7 +50,7 @@ jobs:
       # Built from source so it is built with the module's Go version. Keep the
       # version in step with .circleci/config.yml and scripts/vm-setup.sh.
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
-      - run: make go-lint go-test PYTHON=python
+      - run: make go-lint go-test py-e2e PYTHON=python
 
   python:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
