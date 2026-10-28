@@ -105,7 +105,9 @@ def allocate_by_definition(sizes, m):
 def test_allocate_matches_definition():
     rng = random.Random(1)
     for _ in range(2000):
-        sizes = [1 + rng.randrange(rng.choice([3, 100, 1 << 40])) for _ in range(rng.randint(1, 12))]
+        sizes = [
+            1 + rng.randrange(rng.choice([3, 100, 1 << 40])) for _ in range(rng.randint(1, 12))
+        ]
         m = rng.randint(1, 60)
         assert allocate(sizes, m) == allocate_by_definition(sizes, m), (sizes, m)
     # One file far larger than the rest, the case that makes the definition

@@ -233,7 +233,7 @@ def test_exact_m(tmp_path, monkeypatch):
     planned = []
     real = local.plan_m
     monkeypatch.setattr(local, "plan_m", lambda *a: planned.append(real(*a)) or planned[-1])
-    spec = JobSpec(program=program, inputs=INPUTS, output=str(tmp_path / "out"), r=2, m=5)
+    spec = JobSpec(program=program, inputs=INPUTS, output=str(tmp_path / "out"), r=4, m=5)
     local.run(spec, str(tmp_path))
     assert len(planned[0]) == 5
     assert_same_files(CORPUS / "expected", tmp_path / "out")
@@ -277,7 +277,7 @@ def test_cli_globs_once(tmp_path):
         (["run", "--local", "nope", "out", RAVEN], "No module named"),
         (["run", "--local", "wordcount", "out", "missing"], "no input matches"),
         (["run", "--local", "-r", "0", "wordcount", "out", RAVEN], "at least 1"),
-        (["run", "--local", "-m", "-1", "wordcount", "out", RAVEN], "number of map tasks m must not be negative"),
+        (["run", "--local", "-m", "-1", "wordcount", "out", RAVEN], "m must not be negative"),
         (["run", "--local", "--param", "novalue", "wordcount", "out", RAVEN], "is not NAME=VALUE"),
         (["run", "--local", "--input-format", "csv", "wordcount", "out", RAVEN], "invalid choice"),
     ],
