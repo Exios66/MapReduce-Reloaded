@@ -366,6 +366,8 @@ is available. See
 
 [`docs/README.md`](docs/README.md) is the index. In short:
 
+- [Final report](docs/report.md): what was built, how it compares with
+  the paper, the demo, and what was learned.
 - [Design](design.md): one job from submission to completion, and the
   differences from the paper.
 - [Paper mapping](docs/paper-mapping.md): each feature of the paper, where it
