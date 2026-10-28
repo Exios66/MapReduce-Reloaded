@@ -1145,8 +1145,8 @@ def test_path_rejects_what_go_rejects():
 def test_quoting_matches_go():
     m = types_pb2.JobSpec(inputs=["/i"], output="/o", num_reduce_tasks=1)
     for program, want in [
-        ("a\nb", 'a\\nb'),
-        ("t\tq\"\\", 't\\tq\\"\\\\'),
+        ("a\nb", "a\\nb"),
+        ('t\tq"\\', 't\\tq\\"\\\\'),
         ("\x01\x7f", "\\x01\\x7f"),
         ("\u00a0\u2028", "\\u00a0\\u2028"),
         ("\U000e0001", "\\U000e0001"),

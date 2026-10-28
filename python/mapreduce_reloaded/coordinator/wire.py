@@ -122,7 +122,8 @@ _ESCAPES = {
 
 def _q(s: str) -> str:
     """Quotes s as Go's %q does: backslash escapes for quotes, backslashes
-    and control characters, and \x, \u or \U for other unprintable ones."""
+    and control characters, and hex escapes (x, u or U) for other
+    unprintable ones."""
     out = []
     for c in s:
         if c in _ESCAPES:
