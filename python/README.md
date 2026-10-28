@@ -30,7 +30,8 @@ uncompressed files, though the MRKV reader and writer handle every codec
 | `api.py` | `Program`, `JobSpec`, the `@mapper`, `@reducer` and `@combiner` decorators, and the task context |
 | `local.py` | Local mode, with the same counters as Go |
 | `split.py`, `extsort.py`, `combine.py` | Input splits, external sort, the combiner |
-| `coordinator/` | The coordinator's task table, worker registry and gRPC service, ported from `go/internal/coordinator` (#36; the write-ahead log comes next) |
+| `coordinator/` | The coordinator's task table, worker registry, gRPC service and recovery from its write-ahead log, ported from `go/internal/coordinator` (#36; the status page, `/metrics` and an entry point come next) |
+| `wal.py` | The write-ahead log, in the same file format as `go/internal/wal` |
 | `formats/` | The text format and the MRKV reader and writer |
 | `partition/` | The partition hash, checked against shared test vectors |
 | `examples/` | The seven example programs |

@@ -103,11 +103,14 @@ class Log:
             raise
         # The new log is in place; from here a failure leaves the file's end
         # unknown, so the log refuses further appends.
+        f = None
         try:
             _sync_dir(self._path)
             f = open(self._path, "r+b", buffering=0)  # noqa: SIM115 - the log's file from now on
             f.seek(0, os.SEEK_END)
         except Exception as e:
+            if f is not None:
+                f.close()
             self._err = e
             raise
         self._f.close()
@@ -122,7 +125,10 @@ class Log:
         _check(payload)
         buf = memoryview(_HEADER.pack(len(payload), crc32c(payload)) + payload)
         while buf:
-            buf = buf[self._f.write(buf) :]
+            n = self._f.write(buf)
+            if not n:  # 0, or None from a non-blocking file: no progress
+                raise OSError(f"wal: write made no progress with {len(buf)} bytes left")
+            buf = buf[n:]
 
 
 def _check(payload: bytes):

@@ -165,6 +165,61 @@ def test_short_writes_are_finished(tmp_path):
     assert got == ["abc"]
 
 
+def test_a_write_without_progress_fails(tmp_path):
+    """A write that takes nothing fails the append instead of looping."""
+    log, _ = open_log(tmp_path / "log")
+    real = log._f
+
+    class Stuck:
+        def write(self, b):
+            return 0
+
+        def fileno(self):
+            return real.fileno()
+
+        def close(self):
+            real.close()
+
+    log._f = Stuck()
+    with pytest.raises(OSError, match="no progress"):
+        log.append(b"abc")
+    with pytest.raises(OSError, match="no progress"):  # and every later one
+        log.append(b"d")
+    log.close()
+
+
+def test_compact_closes_the_new_file_if_seek_fails(tmp_path, monkeypatch):
+    path = tmp_path / "log"
+    log, _ = open_log(path)
+    append_all(log, "a", "b")
+    opened = []
+    real_open = open
+
+    class NoSeek:
+        def __init__(self, f):
+            self.f = f
+
+        def seek(self, *a):
+            raise OSError("no seek")
+
+        def close(self):
+            opened.append("closed")
+            self.f.close()
+
+    def open_no_seek(file, mode="r", *a, **k):
+        f = real_open(file, mode, *a, **k)
+        return NoSeek(f) if mode == "r+b" else f
+
+    monkeypatch.setattr(wal, "open", open_no_seek, raising=False)
+    with pytest.raises(OSError, match="no seek"):
+        log.compact(lambda p: p == b"a")
+    monkeypatch.undo()
+    assert opened == ["closed"]
+    with pytest.raises(OSError, match="no seek"):
+        log.append(b"c")
+    log.close()
+
+
 def test_compact(tmp_path):
     path = tmp_path / "log"
     log, _ = open_log(path)

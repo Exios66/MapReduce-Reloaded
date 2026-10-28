@@ -11,9 +11,10 @@ import os
 import shutil
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent import futures
-from dataclasses import dataclass, field
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from typing import NamedTuple, Protocol
 
 import grpc
@@ -153,9 +154,9 @@ class _Job:
             backup_wins=won,
         )
         if self.submitted is not None:
-            resp.submitted_at.FromNanoseconds(int(self.submitted * 1e9))
+            resp.submitted_at.FromNanoseconds(_ns(self.submitted))
         if self.finished is not None:
-            resp.finished_at.FromNanoseconds(int(self.finished * 1e9))
+            resp.finished_at.FromNanoseconds(_ns(self.finished))
         return resp
 
     def total(self) -> dict[str, int]:
@@ -178,6 +179,13 @@ class _Job:
             pass
         except (OSError, ValueError) as e:
             log.warning("cleaning up job output: job %s: %s", self.id, e)
+
+
+def _ns(t: float) -> int:
+    """Returns Unix time t in nanoseconds, rounded to the microsecond, which a
+    float holds exactly enough to survive the log: a replayed time reads
+    back as the time first reported."""
+    return round(t * 1e6) * 1000
 
 
 def _rpc(method):
@@ -212,7 +220,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def __init__(self, cfg: Config | None = None):
         """Creates an idle coordinator, using default settings if cfg is None.
         Network serving and worker monitoring are started separately."""
-        self._cfg = cfg or Config()
+        # A copy, as Go's Config is a value: recover sets its log.
+        self._cfg = replace(cfg) if cfg else Config()
         self._mu = threading.Lock()
         self._workers = Registry("w")
         self._jobs: dict[str, _Job] = {}
@@ -221,6 +230,22 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         self._active: _Job | None = None
         self._lost: list[LostWorker] = []  # since this process started
         self._stopping = False
+        self._log_err: str | None = None  # why the log refused a record, if it has
+        self._replay_ended: list[_Job] = []  # jobs whose end replay saw, for recover to clean up
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Holds the lock for an RPC. Once the log has refused a record, the
+        memory may hold a change the log does not, such as a job ended by a
+        report that could not be logged; so every RPC fails with Unavailable
+        until the coordinator restarts and recovers from the log."""
+        with self._mu:
+            if self._log_err is not None:
+                raise RpcError(
+                    grpc.StatusCode.UNAVAILABLE,
+                    f"coordinator log failed; restart the coordinator: {self._log_err}",
+                )
+            yield
 
     def now(self) -> float:
         """Reads the coordinator's clock: Config.now, or time.time."""
@@ -276,7 +301,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def RegisterWorker(self, request, context):
         """Registers a copy of the worker's information and returns its new
         ID and the configured heartbeat interval."""
-        with self._mu:
+        with self._locked():
             resp = coordinator_pb2.RegisterWorkerResponse(
                 worker_id=self._workers.register(request.worker, self._clock())
             )
@@ -290,7 +315,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         as a backup whose twin finished first (§3.6), or those of an ended
         job. Known workers also receive the active job ID, or an empty list
         when idle, so they can prune ended jobs' map output."""
-        with self._mu:
+        with self._locked():
             worker = request.worker_id
             if not self._workers.heartbeat(worker, self._clock()):
                 return coordinator_pb2.HeartbeatResponse(reregister=True)
@@ -322,7 +347,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         m = types_pb2.JobSpec()
         m.CopyFrom(request.job)
         if m.num_reduce_tasks == 0:
-            with self._mu:
+            with self._locked():
                 m.num_reduce_tasks = default_r(len(self._workers))
         if errs := validate(m, self._cfg.programs):
             raise RpcError(grpc.StatusCode.INVALID_ARGUMENT, "\n".join(errs))
@@ -341,7 +366,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             for s in splits:
                 s.locations.extend(self._cfg.locate(s))
 
-        with self._mu:
+        with self._locked():
             if self._active is not None:
                 raise RpcError(
                     grpc.StatusCode.FAILED_PRECONDITION, f"job {self._active.id} is still running"
@@ -362,7 +387,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             self._submit(rec, now)
             return coordinator_pb2.SubmitJobResponse(job_id=rec.job_id)
 
-    def _submit(self, rec: log_pb2.JobSubmitted, at: float):
+    def _submit(self, rec: log_pb2.JobSubmitted, at: float | None):
         """Makes the job rec describes, submitted at at, the active one,
         advances the job sequence, and forgets old jobs per keep_jobs."""
         j = _Job(
@@ -387,8 +412,88 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         newest, is never dropped."""
         keep = self._cfg.keep_jobs
         limit = keep + (self._active is not None)
+        dropped = False
         while keep > 0 and len(self._order) > limit and self._order[0] is not self._active:
             del self._jobs[self._order.pop(0).id]
+            dropped = True
+        if dropped:
+            self._compact()
+
+    def _compact(self):
+        """Rewrites the log with the records of the jobs still kept, so its
+        size follows keep_jobs rather than every job ever run (#178), as Go's
+        compact. It keeps every Restarted record, which recover counts to
+        name workers, and a WorkerLost record only if the job submitted
+        before it is kept: jobs run one at a time, so that is the job it
+        applied to, if any. A failure is logged; the log is either unchanged
+        or, if the failure came after its replacement, refuses further
+        records, which stops the coordinator taking new decisions."""
+        compact = getattr(self._cfg.log, "compact", None)
+        if compact is None or self._cfg.keep_jobs <= 0:
+            return
+        last = ""
+
+        def keep(b: bytes) -> bool:
+            nonlocal last
+            rec = log_pb2.LogRecord.FromString(b)
+            kind = rec.WhichOneof("record")
+            if kind == "job_submitted":
+                last = rec.job_submitted.job_id
+                return last in self._jobs
+            if kind == "task_assigned":
+                return rec.task_assigned.attempt.task.job_id in self._jobs
+            if kind == "task_reported":
+                return rec.task_reported.attempt.task.job_id in self._jobs
+            if kind == "worker_lost":
+                return last in self._jobs
+            return True  # Restarted, and anything newer: keep what is not understood
+
+        try:
+            compact(keep)
+        except Exception as e:
+            log.error("compacting the coordinator log: %s", e)
+
+    def _replay(self, rec: log_pb2.LogRecord):
+        """Applies a logged decision as the handler that logged it did, at
+        the time it was made, as Go's replay. A record without a time leaves
+        submission or finish times unknown. Raises ValueError for unknown
+        records, inconsistent assignments, or invalid reports."""
+        at = rec.at.ToNanoseconds() / 1e9 if rec.HasField("at") else None
+        kind = rec.WhichOneof("record")
+        if kind == "job_submitted":
+            self._submit(rec.job_submitted, at)
+        elif kind == "task_assigned":
+            a = rec.task_assigned
+            id = a.attempt
+            if self._active is None or self._active.id != id.task.job_id:
+                raise ValueError(f"coordinator log: {id} assigned outside the running job")
+            t = Task(id.task.kind, id.task.index)
+            try:
+                attempt = self._active.tasks.assign(t, a.worker_id, at or 0.0)
+                if attempt != id.attempt:
+                    raise ValueError(f"replayed as attempt {attempt}")
+            except ValueError as e:
+                raise ValueError(f"coordinator log: assigning {id}: {e}") from e
+            self._active.placed.setdefault(t, []).append(a.locality)
+        elif kind == "task_reported":
+            job = rec.task_reported.attempt.task.job_id
+            j = self._jobs.get(job)
+            if j is None:
+                raise ValueError(f'coordinator log: report for unknown job "{job}"')
+            try:
+                _, ended = self._report(j, rec.task_reported, at)
+            except ValueError as e:
+                raise ValueError(f"coordinator log: {e}") from e
+            if ended:  # the coordinator may have died before cleaning up
+                self._replay_ended.append(j)
+        elif kind == "worker_lost":
+            if self._active is not None:
+                self._active.tasks.reset_worker(rec.worker_lost.worker_id)
+        elif kind == "restarted":
+            if self._active is not None:
+                self._active.tasks.stop_all()
+        else:
+            raise ValueError(f"coordinator log: unknown record {rec}")
 
     @_rpc
     def RequestTask(self, request, context):
@@ -399,7 +504,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         shutdown. A paused worker receives only wait or shutdown instructions.
         Errors are NotFound for an unknown worker, Internal if
         assigning a task fails, or Unavailable if recording it fails."""
-        with self._mu:
+        with self._locked():
             worker, now, tick = request.worker_id, self.now(), self._clock()
             if not self._workers.heartbeat(worker, tick):
                 raise RpcError(
@@ -488,7 +593,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         output validation errors, and Unavailable if recording the report
         fails. A report that ends the job cleans up its output only once the
         log holds it (#182)."""
-        with self._mu:
+        with self._locked():
             job_id = request.attempt.task.job_id
             j = self._jobs.get(job_id)
             if j is None:
@@ -507,7 +612,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 j.cleanup()
             return coordinator_pb2.ReportTaskResponse(accepted=accepted)
 
-    def _report(self, j: _Job, req, at: float) -> tuple[bool, bool]:
+    def _report(self, j: _Job, req, at: float | None) -> tuple[bool, bool]:
         """Applies req, received at at, to j, and says whether it completed
         its task and whether it ended the job. A report for an ended job
         changes nothing: its outcome and progress are final. Raises
@@ -544,7 +649,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 self._end(j, "", at)
         return accepted, self._active is not j
 
-    def _end(self, j: _Job, err: str, at: float):
+    def _end(self, j: _Job, err: str, at: float | None):
         """Ends j at at if it is the active job: it failed with err, or
         succeeded if err is empty. The caller cleans up j's output."""
         if self._active is not j:
@@ -557,7 +662,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def GetJobStatus(self, request, context):
         """Returns the retained job's state, progress, counters and timestamps.
         Returns NotFound for an unknown job, including one forgotten per keep_jobs."""
-        with self._mu:
+        with self._locked():
             j = self._jobs.get(request.job_id)
             if j is None:
                 raise RpcError(grpc.StatusCode.NOT_FOUND, f'unknown job "{request.job_id}"')
@@ -570,10 +675,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         or appending fails; timestamp conversion errors propagate."""
         if self._cfg.log is None:
             return
-        rec.at.FromNanoseconds(int(at * 1e9))
+        rec.at.FromNanoseconds(_ns(at))
         try:
             self._cfg.log.append(rec.SerializeToString())
         except Exception as e:
+            self._log_err = str(e) or type(e).__name__
             raise RpcError(grpc.StatusCode.UNAVAILABLE, f"coordinator log: {e}") from e
 
 
