@@ -118,7 +118,8 @@ func config(o options) coordinator.Config {
 // If listening is not nil, run calls it with the RPC and HTTP addresses
 // (nil without -http) once both listen.
 // It returns storage, recovery, listen, and RPC server errors, joined with
-// any log close error. Status HTTP server errors do not stop RPCs.
+// any log close error, and an error if another coordinator holds
+// o.dataDir. Status HTTP server errors do not stop RPCs.
 func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (err error) {
 	cfg := config(o)
 	var srv *coordinator.Server
@@ -129,6 +130,14 @@ func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (
 	} else {
 		if err := os.MkdirAll(o.dataDir, 0o755); err != nil {
 			return err
+		}
+		var held *os.File
+		if held, err = lock(o.dataDir); err != nil {
+			return err
+		}
+		if held != nil {
+			// Unlocked last: after the log is closed.
+			defer func() { err = errors.Join(err, held.Close()) }()
 		}
 		if srv, _, err = coordinator.Recover(cfg, filepath.Join(o.dataDir, "coordinator.log")); err != nil {
 			return err
