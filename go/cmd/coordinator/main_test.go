@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -153,21 +154,36 @@ func TestRunRecoversAndServesStatus(t *testing.T) {
 // must not give out the last run's IDs again: a worker still remembers
 // them, and keeps files under a job's ID.
 func TestRunWithoutLog(t *testing.T) {
+	dir := t.TempDir()
+	in := filepath.Join(dir, "in.txt")
+	if err := os.WriteFile(in, []byte("a b a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	ids := map[string]bool{}
-	for range 2 {
+	last := "job-1"
+	for run := range 2 {
 		rpc, _, stop := serve(t, options{addr: "127.0.0.1:0"})
 		c := client(t, rpc)
-		if _, err := c.GetJobStatus(t.Context(), &pb.GetJobStatusRequest{JobId: "job-1"}); err == nil {
-			t.Fatal("found a job on a new coordinator")
+		if _, err := c.GetJobStatus(t.Context(), &pb.GetJobStatusRequest{JobId: last}); err == nil {
+			t.Fatalf("found job %s on a new coordinator", last)
 		}
 		reg, err := c.RegisterWorker(t.Context(), &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ids[reg.GetWorkerId()] {
-			t.Fatalf("worker ID %q given out again after a restart", reg.GetWorkerId())
+		sub, err := c.SubmitJob(t.Context(), &pb.SubmitJobRequest{Job: &pb.JobSpec{
+			Program: "wordcount", Inputs: []string{in}, Output: filepath.Join(dir, fmt.Sprint("out", run)), NumReduceTasks: 1,
+		}})
+		if err != nil {
+			t.Fatal(err)
 		}
-		ids[reg.GetWorkerId()] = true
+		for _, id := range []string{reg.GetWorkerId(), sub.GetJobId()} {
+			if ids[id] {
+				t.Fatalf("ID %q given out again after a restart", id)
+			}
+			ids[id] = true
+		}
+		last = sub.GetJobId()
 		if err := stop(); err != nil {
 			t.Fatal(err)
 		}

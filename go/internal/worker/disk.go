@@ -20,9 +20,10 @@ import (
 // retried (§3.3) up to the coordinator's -max-task-failures.
 
 // jobDir matches the directories prune may delete: the coordinator's job
-// IDs, with the run's prefix a coordinator without a log adds (job-<p>-<n>),
-// so a -work-dir that holds anything else keeps it.
-var jobDir = regexp.MustCompile(`^job-([0-9a-z]+-)?[0-9]+$`)
+// IDs, job-<n>, or job-<p>-<n> from a coordinator without a log, whose
+// prefix p is its start time in nanoseconds in base 36 (12 or 13 digits
+// from 1974 on). A -work-dir that holds anything else keeps it.
+var jobDir = regexp.MustCompile(`^job-([0-9a-z]{12,13}-)?[0-9]+$`)
 
 // diskPoll is how often a worker waiting for disk space checks again.
 var diskPoll = time.Second
