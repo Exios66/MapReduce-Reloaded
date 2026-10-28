@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit's settings for this repository (#238). Reference:
+# https://docs.coderabbit.ai/reference/configuration
+language: en-US
+tone_instructions: >-
+  Be brief and concrete. Name the failing input or state for every
+  correctness finding. Do not restate the diff or praise it.
+early_access: false
+reviews:
+  profile: chill
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "^main$"
+  # Generated code, test fixtures and benchmark output are not reviewed.
+  path_filters:
+    - "!go/gen/**"
+    - "!python/mapreduce_reloaded/gen/**"
+    - "!**/*.pb.go"
+    - "!**/*_pb2.py"
+    - "!**/*_pb2_grpc.py"
+    - "!**/*_pb2.pyi"
+    - "!testdata/**"
+    - "!bench/results/**"
+    - "!**/go.sum"
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Commits are authored by the repository owner. Never push commits to
+        a pull request (no autofix commits, no co-author lines); leave
+        findings as comments only.
+    - path: "go/internal/coordinator/**"
+      instructions: |
+        The coordinator's write-ahead log rules are in ADR 0007
+        (docs/design/0007-*.md): every change is appended before any reply
+        depends on it. Flag a reply, cleanup or state change that can be
+        observed before its record is logged. The Python coordinator in
+        python/mapreduce_reloaded/coordinator/ must behave the same; flag a
+        change to one that has no matching change or issue for the other.
+    - path: "python/mapreduce_reloaded/coordinator/**"
+      instructions: |
+        This mirrors go/internal/coordinator/ (#36). Check behavior and
+        error codes against the Go coordinator, and the WAL rules of ADR
+        0007. Timeouts and retry timers use the monotonic clock (_clock),
+        dates use now().
+    - path: "proto/**"
+      instructions: |
+        The wire protocol is shared by the Go and Python implementations.
+        Flag field renumbering, removed fields or changed semantics; these
+        need an ADR and a buf breaking-change note.
+    - path: "docs/design/*.md"
+      instructions: |
+        ADRs: Context, Decision, Consequences. Check the decision matches
+        the code it describes and that docs/README.md lists the ADR.
+    - path: "**/*.md"
+      instructions: |
+        Plain, short sentences. Check that commands, flags and defaults in
+        the text match the code, and that relative links resolve.
+    - path: "deploy/**"
+      instructions: |
+        The cluster runs on a 4 vCPU, 8 GB VM (docs/cluster-vm.md). Flag
+        changes that raise memory or disk use without a limit, and metric
+        names in Grafana or Prometheus files that the services do not export.
+  tools:
+    shellcheck:
+      enabled: true
+    ruff:
+      enabled: true
+    golangci-lint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    hadolint:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+chat:
+  auto_reply: true
+knowledge_base:
+  opt_out: false

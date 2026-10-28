@@ -1,0 +1,17 @@
+{
+  "file_filters": {
+    "config": {
+      "exclude_files": [
+        "go/gen/*",
+        "python/mapreduce_reloaded/gen/*",
+        "*.pb.go",
+        "*_pb2.py",
+        "*_pb2_grpc.py",
+        "*_pb2.pyi",
+        "testdata/*",
+        "bench/results/*",
+        "*/go.sum"
+      ]
+    }
+  }
+}
