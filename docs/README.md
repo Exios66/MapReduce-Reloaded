@@ -16,6 +16,8 @@ Where to start depends on the question.
 - **What checks run on a pull request, and how is CI set up?** [CI](ci.md):
   the four CircleCI jobs, caching, the Free-plan limits, the steps the owner
   completes, and troubleshooting.
+- **How do the results compare with the paper's?** [Evaluation](evaluation.md):
+  §5's grep, sort, backup tasks and machine failures, run again on the VM.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.

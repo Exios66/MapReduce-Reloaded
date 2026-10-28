@@ -23,8 +23,9 @@
 # - status.txt: what mr submit -wait printed;
 # - result.json: the run's settings, the job's counters and the machine.
 #
-# The input and the job's output are removed from /out at the end, as in
-# codecs.sh. If the job fails, the files are still written, and run.sh exits
+# The input is written once, to the host's data/ directory, which every
+# container sees at /data (ADR 0016), so a 10 GB input needs 10 GB of disk,
+# not twice that. The input and the job's output are removed at the end. If the job fails, the files are still written, and run.sh exits
 # with mr's status.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -49,25 +50,27 @@ interval=${INTERVAL:-0.5}
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
 # The process ID keeps runs that start in the same second apart.
 stamp=$(date -u +%Y%m%dT%H%M%SZ)-$$
-input=/out/bench-input-$scenario-$stamp.txt
+host_input=data/bench-input-$scenario-$stamp.txt
+input=/data/bench-input-$scenario-$stamp.txt
 dir=bench/results/$scenario-$stamp
 out=/out/bench-$scenario-$stamp
-tmp=$(mktemp -d)
 scraper=
 rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$@"; }
 cleanup() {
     [ -z "$scraper" ] || kill "$scraper" 2>/dev/null || true
-    rm -rf "$tmp"
-    rm_out "$input" "$out"
+    rm -f "$host_input"
+    rm_out "$out"
 }
 trap cleanup EXIT
 
+mkdir -p data
+chmod a+x data
 "${compose[@]}" up -d --build --scale worker="$workers"
 mkdir -p "$dir"
 
-python3 "bench/$gen" "$size" "$seed" > "$tmp/input.txt"
-input_bytes=$(wc -c < "$tmp/input.txt")
-"${compose[@]}" cp "$tmp/input.txt" "coordinator:$input"
+python3 "bench/$gen" "$size" "$seed" > "$host_input"
+chmod a+r "$host_input"
+input_bytes=$(wc -c < "$host_input")
 
 urls=()
 for id in $("${compose[@]}" ps -q worker); do

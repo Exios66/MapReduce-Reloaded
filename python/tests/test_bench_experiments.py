@@ -456,3 +456,21 @@ def test_each_sampled_run_refreshes_workers_before_discovery_and_sampling(
     rows = list(csv.reader(io.StringIO(result.stdout)))
     assert [row[4] for row in rows] == ["1", "2"]
     assert all(row[15] == "1" for row in rows)
+
+
+@pytest.mark.parametrize("settings", ["normal straggler-backup", "normal-backups", "Normal"])
+def test_e2_rejects_unknown_settings_before_starting(experiment, monkeypatch, settings):
+    invoke, _ = experiment
+    monkeypatch.setenv("E2_SETTINGS", settings)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        argument="E2",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E2_SETTINGS: unknown setting" in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout

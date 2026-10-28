@@ -339,15 +339,39 @@ def e1(rows, out, t):
     finish(fig, out)
 
 
-def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None):
+def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None, styles=None):
     """Tasks completed against time for each setting's median run, ending
-    when its last task completes, and its job time as a horizontal bar in
-    the same color. event names the marker drawn at a run's event_at."""
+    at its first maximum completed-task count, and its median job time as
+    a horizontal bar in the same color, with minimum-to-maximum range bars.
+
+    settings maps setting names to labels; field names the job-time column
+    in seconds. Only valid="1" rows count; rows must be nonempty. Even run
+    counts select the lower median run. Task CSVs are read from results/exp
+    as tasks-SETTING-RUN.csv; missing files omit only the curve. Settings
+    without valid runs are skipped. Timeline seconds start at the job's
+    first recorded sample. event labels the first selected run with a
+    nonempty event_at, in seconds since submission.
+
+    Each setting takes the next color slot, unless styles maps it to
+    (slot, dashed): then settings can share a color, and a dashed one is
+    drawn with a dashed line and a hatched bar. The palette has three
+    validated slots; omitting styles when settings outnumber the colors
+    raises ValueError. Each slot indexes t["series"].
+
+    Returns the unsaved, open figure. Missing data or style keys, invalid
+    numbers or color slots, and file or plotting errors propagate.
+    """
+    if styles is None:
+        if len(settings) > len(t["series"]):
+            raise ValueError(f"{len(settings)} settings, {len(t['series'])} colors: pass styles")
+        styles = {s: (i, False) for i, s in enumerate(settings)}
     fig, (left, right) = plt.subplots(
         1, 2, figsize=(11, 4.6), gridspec_kw={"width_ratios": [1.7, 1]}
     )
-    labels, stats, colors, marked = [], [], [], False
-    for (setting, label), color in zip(settings.items(), t["series"], strict=False):
+    labels, stats, colors, hatched, marked = [], [], [], [], False
+    for setting, label in settings.items():
+        slot, dashed = styles[setting]
+        color = t["series"][slot]
         runs = valid(rows, setting=setting)
         if not runs:
             continue
@@ -358,7 +382,8 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None)
             times, done = completed(path, run["job"])
             end = done.index(max(done)) + 1 if done else 0  # the curve stops when the job does
             xs = [x - t0 for x in times[:end]]
-            left.step(xs, done[:end], where="post", color=color, label=label, zorder=3)
+            style = "--" if dashed else "-"
+            left.step(xs, done[:end], where="post", color=color, ls=style, label=label, zorder=3)
             if xs:
                 dots(left, t, [xs[-1]], [done[end - 1]], color)
         if event and run["event_at"] and not marked:
@@ -378,6 +403,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None)
         labels.append(label)
         stats.append(spread(runs, field))
         colors.append(color)
+        hatched.append(dashed)
     left.set_xlabel("Seconds since submission")
     left.set_ylabel("Tasks completed (map + reduce)")
     left.set_xlim(left=0)
@@ -387,7 +413,12 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None)
 
     ys = list(range(len(labels)))[::-1]  # the first setting on top
     med = [s[0] for s in stats]
-    right.barh(ys, med, height=0.5, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2)
+    bars = right.barh(
+        ys, med, height=0.5, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2
+    )
+    for i in (i for i, hatch in enumerate(hatched) if hatch):
+        # the series color as a hatch on the surface
+        bars[i].set(facecolor=t["surface"], edgecolor=colors[i], hatch="///", linewidth=1.5)
     ranges(right, t, ys, med, [s[1] for s in stats], [s[2] for s in stats], horizontal=True)
     for y, s in zip(ys, stats, strict=True):
         right.annotate(
@@ -409,10 +440,28 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None)
 
 
 def e2(rows, results, out, t):
+    """Saves E2's backup-task comparison to out, in theme t, and closes it.
+
+    Compares backups on and off, with and without a worker at 0.2 CPU.
+    Color marks the straggler; dashed lines and hatched bars mark backups
+    off. Only valid="1" runs count; coordinator seconds determine median-run
+    progress and median job times with minimum-to-maximum range bars.
+    Task CSVs are read from results / "E2"; missing files omit only curves.
+    Missing fields, invalid numbers, and file or plotting errors propagate.
+    """
     settings = {
-        "normal": "no straggler",
+        "normal": "no straggler, backups on",
+        "normal-no-backups": "no straggler, backups off",
         "straggler-backups": "straggler, backups on",
         "straggler-no-backups": "straggler, backups off",
+    }
+    # Four settings, two factors: the color says whether a worker straggles,
+    # a dashed line and a hatched bar that backups are off.
+    styles = {
+        "normal": (0, False),
+        "normal-no-backups": (0, True),
+        "straggler-backups": (1, False),
+        "straggler-no-backups": (1, True),
     }
     fig = timeline_and_bars(
         rows,
@@ -422,6 +471,7 @@ def e2(rows, results, out, t):
         "seconds",
         t,
         "E2: backup tasks against a worker throttled to 0.2 CPU",
+        styles=styles,
     )
     finish(fig, out)
 

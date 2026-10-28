@@ -274,7 +274,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 |---|---|
 | E0: scaling over workers | Word count runs 3.8× faster on 4 workers than on 1, distributed sort 2.9×, grep 2.3× |
 | E1: the combiner | Shuffles 15× to 78× fewer bytes and saves 18–44% of the job time, more as the keys get more skewed |
-| E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 23.7 s down to 15.7 s |
+| E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 17.6 s down to 11.2 s; with none slowed, they cost nothing measurable |
 | E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
 | E5: an interpreted job file | Word count as a job file takes 91 s against 38 s compiled (2.4×) with the compiled helpers `api.Words` and `api.Sum`, and 399 s (10.5×) without them |

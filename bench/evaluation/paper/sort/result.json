@@ -1,0 +1,39 @@
+{
+  "scenario": "sort",
+  "program": "distsort",
+  "workers": 4,
+  "size": 1073741824,
+  "input_bytes": 1073741900,
+  "m": 32,
+  "r": 4,
+  "seed": 42,
+  "interval": 0.5,
+  "wall_seconds": 8.801,
+  "job": {
+    "id": "job-37",
+    "state": "SUCCEEDED",
+    "map": "32/32",
+    "reduce": "4/4",
+    "backups": 6,
+    "backups_won": 0,
+    "map_host_local": 0,
+    "map_zone_local": 0,
+    "seconds": 7.842,
+    "map.input.bytes": 1073741900,
+    "map.input.records": 10737419,
+    "map.output.bytes": 1084682711,
+    "map.output.records": 10737419,
+    "reduce.input.records": 10737419,
+    "reduce.output.bytes": 1063004481,
+    "reduce.output.records": 10737419
+  },
+  "commit": "2707160e5825531d6d24a19a47303987333069bf",
+  "dirty": false,
+  "machine": {
+    "cpus": 4,
+    "cpu": "INTEL(R) XEON(R) SILVER 4516Y+",
+    "memory_bytes": 8325894144,
+    "kernel": "6.8.0-139-generic",
+    "docker": "29.8.1"
+  }
+}
