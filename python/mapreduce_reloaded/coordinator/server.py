@@ -45,7 +45,9 @@ class Log(Protocol):
     must keep failing, so that a coordinator whose log has fallen behind its
     memory accepts no more changes."""
 
-    def append(self, record: bytes) -> None: ...
+    def append(self, record: bytes) -> None:
+        """Appends a serialized LogRecord, raising an exception on failure."""
+        ...
 
 
 @dataclass
@@ -113,13 +115,13 @@ class _Job:
     spec: types_pb2.JobSpec  # sent with every task
     splits: list[types_pb2.InputSplit]
     tasks: TaskTable
-    submitted: float
+    submitted: float | None
     counts: dict = field(default_factory=dict)  # of each task's accepted attempt
     placed: dict = field(default_factory=dict)  # locality of each attempt, by number
     ran: dict = field(default_factory=dict)  # locality of each task's accepted attempt
-    since: float = 0.0  # when the job began holding back tasks, if it has
+    since: float | None = None  # when the job began holding back tasks, if it has
     err: str = ""  # why the job failed, if it did
-    finished: float = 0.0  # zero while the job runs
+    finished: float | None = None  # None while the job runs
 
     def status(self) -> coordinator_pb2.GetJobStatusResponse:
         """Describes the job's progress."""
@@ -150,25 +152,26 @@ class _Job:
             backup_attempts=backups,
             backup_wins=won,
         )
-        if self.submitted:
+        if self.submitted is not None:
             resp.submitted_at.FromNanoseconds(int(self.submitted * 1e9))
-        if self.finished:
+        if self.finished is not None:
             resp.finished_at.FromNanoseconds(int(self.finished * 1e9))
         return resp
 
     def total(self) -> dict[str, int]:
-        """Sums the counters of every task's accepted attempt."""
+        """Sums the counters of every task's accepted attempt, wrapping at
+        int64 as Go does."""
         total: dict[str, int] = {}
         for counts in self.counts.values():
             for name, n in counts.items():
-                total[name] = total.get(name, 0) + n
+                total[name] = (total.get(name, 0) + n + 2**63) % 2**64 - 2**63
         return total
 
     def cleanup(self):
         """Removes what dead or failed reduce attempts left in the job's
-        output. It runs under the lock, once the log holds the job's end, so
-        that the job is never reported done before its output is clean. The
-        job's outcome is already decided, so an error is only logged."""
+        output's _temporary directory. Call it under the lock once the log
+        holds the job's end. A missing directory is ignored; other OSError
+        and ValueError failures are caught without changing the job's outcome."""
         try:
             shutil.rmtree(os.path.join(path(self.spec.output), TEMP_DIR))
         except FileNotFoundError:
@@ -207,6 +210,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     """Implements CoordinatorService, as go/internal/coordinator.Server."""
 
     def __init__(self, cfg: Config | None = None):
+        """Creates an idle coordinator, using default settings if cfg is None.
+        Network serving and worker monitoring are started separately."""
         self._cfg = cfg or Config()
         self._mu = threading.Lock()
         self._workers = Registry("w")
@@ -231,10 +236,12 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             self._stopping = True
 
     def expire(self, now: float) -> list[str]:
-        """Declares dead every worker not heard from within worker_timeout of
-        now, by the monotonic clock, and returns their IDs. Their running tasks and completed map
-        tasks become idle again, since map output lives on the worker's
-        disk; their completed reduce tasks stay done (§3.3). A dead worker
+        """Declares dead workers last heard from more than worker_timeout
+        seconds before now, on the monotonic clock, and returns their sorted
+        IDs. A zero timeout disables expiry. In the active job, their running
+        attempts stop and their completed map tasks become idle again, since
+        map output lives on the worker's disk. Tasks with another running
+        attempt continue; completed reduce tasks stay done (§3.3). A dead worker
         that calls again is told to register anew. Log failures do not
         prevent workers from expiring or their tasks from being reset."""
         if not self._cfg.worker_timeout:
@@ -257,14 +264,18 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             return dead
 
     def monitor(self, stop: threading.Event):
-        """Calls expire every heartbeat_interval until stop is set."""
-        if not self._cfg.worker_timeout or not self._cfg.heartbeat_interval:
+        """Calls expire every heartbeat_interval seconds until stop is set.
+        Returns immediately if worker_timeout or heartbeat_interval is not
+        positive."""
+        if self._cfg.worker_timeout <= 0 or self._cfg.heartbeat_interval <= 0:
             return
         while not stop.wait(self._cfg.heartbeat_interval):
             self.expire(self._clock())
 
     @_rpc
     def RegisterWorker(self, request, context):
+        """Registers a copy of the worker's information and returns its new
+        ID and the configured heartbeat interval."""
         with self._mu:
             resp = coordinator_pb2.RegisterWorkerResponse(
                 worker_id=self._workers.register(request.worker, self._clock())
@@ -305,7 +316,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         jobs or input planning failures, AlreadyExists if the output already
         holds job output, FailedPrecondition if another job is running or
         output setup fails, and Unavailable if recording the submission
-        fails."""
+        fails. Exceptions other than RpcError from Config.locate propagate."""
         if not request.HasField("job"):
             raise RpcError(grpc.StatusCode.INVALID_ARGUMENT, "no job")
         m = types_pb2.JobSpec()
@@ -385,7 +396,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         to their input (§3.4), reduce tasks once every map task has completed
         (§3.1), then backup attempts if enabled (§3.6). It returns a wait
         instruction when no task is ready, or a shutdown instruction after
-        shutdown. Errors are NotFound for an unknown worker, Internal if
+        shutdown. A paused worker receives only wait or shutdown instructions.
+        Errors are NotFound for an unknown worker, Internal if
         assigning a task fails, or Unavailable if recording it fails."""
         with self._mu:
             worker, now, tick = request.worker_id, self.now(), self._clock()
@@ -412,8 +424,10 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             return resp
 
     def _assign(self, t: Task, worker: str, now: float) -> coordinator_pb2.RequestTaskResponse:
-        """Starts an attempt at t, a task of the active job, on worker at now.
-        An error does not roll back the attempt."""
+        """Starts an attempt at t, a task of the active job, on worker at now
+        (Unix seconds), and returns its map or reduce assignment. Raises
+        RpcError with Internal if assignment fails or Unavailable if recording
+        fails. An error does not roll back the attempt."""
         j = self._active
         try:
             attempt = j.tasks.assign(t, worker, now)
@@ -453,9 +467,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             types_pb2.LOCALITY_UNSPECIFIED,
             types_pb2.LOCALITY_HOST,
         ):
-            j.since = 0.0
+            j.since = None
             return False
-        if not j.since:
+        if j.since is None:
             j.since = now
         return now - j.since < self._cfg.locality_wait
 
@@ -468,8 +482,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def ReportTask(self, request, context):
         """Records the outcome of an attempt, from the worker it was assigned
         to. The first successful attempt of a task is accepted, and only its
-        counters are kept (§3.3, §4.9). Errors are NotFound for an unknown
-        job, InvalidArgument for a report with no outcome or for task or
+        counters are kept (§3.3, §4.9). Failure reports, stale attempts and
+        reports for ended jobs return accepted=False. Errors are NotFound for
+        an unknown job, InvalidArgument for a report with no outcome or for task or
         output validation errors, and Unavailable if recording the report
         fails. A report that ends the job cleans up its output only once the
         log holds it (#182)."""
@@ -540,6 +555,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
 
     @_rpc
     def GetJobStatus(self, request, context):
+        """Returns the retained job's state, progress, counters and timestamps.
+        Returns NotFound for an unknown job, including one forgotten per keep_jobs."""
         with self._mu:
             j = self._jobs.get(request.job_id)
             if j is None:
@@ -549,8 +566,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def _record(self, rec: log_pb2.LogRecord, at: float):
         """Appends rec, a decision made at at, to the log, if there is one.
         It runs under the lock, so no reply reveals a change before the log
-        holds it (ADR 0007). Raises Unavailable if encoding or appending
-        fails."""
+        holds it (ADR 0007). Raises RpcError with Unavailable if serialization
+        or appending fails; timestamp conversion errors propagate."""
         if self._cfg.log is None:
             return
         rec.at.FromNanoseconds(int(at * 1e9))
@@ -561,9 +578,12 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
 
 
 def serve(address: str, cfg: Config | None = None, threads: int = 16):
-    """Starts a coordinator listening on address, such as "[::]:18770", and
-    its worker monitor. Returns the gRPC server, the Server, the bound port
-    and the event that stops the monitor."""
+    """Starts an insecure gRPC coordinator on address, such as "[::]:18770",
+    and its worker monitor. Port 0 selects an available port; threads limits
+    concurrent RPC handlers. Returns the gRPC server, the Server, the bound
+    port and the event that stops the monitor. The caller must also stop the
+    gRPC server separately. Raises ValueError if threads is nonpositive and
+    propagates RuntimeError if binding fails."""
     coordinator = Server(cfg)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=threads))
     coordinator_pb2_grpc.add_CoordinatorServiceServicer_to_server(coordinator, server)

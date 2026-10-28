@@ -24,16 +24,22 @@ PROGRAMS = frozenset(
 # The most reduce tasks a job may have, as go/pkg/api.MaxReduceTasks.
 MAX_REDUCE_TASKS = 10_000
 
+# The largest program_source, in bytes, as go/internal/jobfile.MaxSize.
+MAX_SOURCE = 1 << 20
+
 _INPUT_FORMATS = ("", "text", "kv")
 _CODECS = ("", "none", "zstd", "snappy")
 
 
 def validate(m: types_pb2.JobSpec, programs=PROGRAMS) -> list[str]:
-    """Returns every problem with the job m describes, as
-    go/pkg/api.JobSpec.Validate words them, or an empty list if it can
-    run. programs names the built-in programs the workers have."""
+    """Returns validation messages for m, worded as go/pkg/api.JobSpec.Validate,
+    or an empty list if these checks pass. programs names the workers' built-in
+    programs; a nonempty program_source bypasses that lookup. Path ValueErrors
+    become messages. This does not read files or validate user code."""
     errs = []
-    if not m.program_source and m.program not in programs:
+    if (n := len(m.program_source.encode())) > MAX_SOURCE:
+        errs.append(f"wire: {m.program}: job file is {n} bytes; the limit is 1 MiB")
+    elif not m.program_source and m.program not in programs:
         errs.append(f"wire: unknown program {_q(m.program)}")
     if m.partitioner not in ("", "hash"):
         errs.append(f"wire: unknown partitioner {_q(m.partitioner)}")
@@ -76,17 +82,23 @@ def validate(m: types_pb2.JobSpec, programs=PROGRAMS) -> list[str]:
 
 def path(uri: str) -> str:
     """Returns the local path of a file:// URI, which must name no host but
-    localhost. A string with no scheme is already a path. The Python
-    coordinator stores nothing else, so any other scheme is an error."""
+    localhost. File URI paths are percent-decoded; strings with no scheme are
+    returned unchanged after validation. Raises ValueError for control characters,
+    malformed percent escapes, unsupported schemes, remote file hosts, NUL bytes
+    in decoded file paths, or malformed URLs rejected by urlsplit."""
     _parse(uri)
-    u = urlsplit(uri)
+    try:
+        u = urlsplit(uri)
+    except ValueError as e:
+        raise ValueError(f"wire: parse {_q(uri)}: {e}") from None
     if u.scheme == "":
         return uri
     if u.scheme != "file":
         raise ValueError(f"wire: {_q(uri)}: the Python coordinator stores only local files")
     if u.netloc not in ("", "localhost"):
         raise ValueError(f"wire: {_q(uri)} names a remote host")
-    p = unquote(u.path)
+    # As Go, an escape that is not UTF-8 names that byte, not U+FFFD.
+    p = unquote(u.path, errors="surrogateescape")
     if "\x00" in p:  # no file system takes it
         raise ValueError(f"wire: {_q(uri)} names a path with a NUL byte")
     return p
@@ -94,7 +106,7 @@ def path(uri: str) -> str:
 
 def uri(p: str) -> str:
     """Returns the file:// URI of path p, made absolute."""
-    return "file://" + quote(os.path.abspath(p))
+    return "file://" + quote(os.fsencode(os.path.abspath(p)))
 
 
 def input_split(s: Split) -> types_pb2.InputSplit:

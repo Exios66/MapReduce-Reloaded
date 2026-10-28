@@ -312,9 +312,10 @@ def test_locality_counts_only_accepted_attempts(tmp_path):
     assert c.status(job).map_tasks_host_local == 1
 
 
-def test_locality_wait(new_job):
+@pytest.mark.parametrize("start", [1000.0, 0.0])
+def test_locality_wait(new_job, start):
     wait = 0.5  # exact in binary, so the clock lands on it
-    clock = [1000.0]
+    clock = [start]
     cfg = Config(locality_wait=wait, locate=lambda s: ["host-a"], clock=lambda: clock[0])
     c, _, _ = new_job(cfg=cfg)
     b = c.register("host-b")
@@ -399,6 +400,13 @@ def test_job_end_cleans_up_output(new_job):
     assert os.path.isdir(tmp)
     c.succeed(w, c.next(w))
     assert not os.path.exists(tmp)
+
+
+def test_counters_wrap_as_go_does(new_job):
+    c, w, job = new_job()
+    c.succeed(w, c.next(w), outputs(0, 1), {"n": 2**63 - 1})
+    c.succeed(w, c.next(w), counters={"n": 2})
+    assert c.status(job).counters.values["n"] == -(2**63) + 1
 
 
 def test_rerun_map_replaces_its_counts(new_job):
@@ -675,6 +683,16 @@ def test_monitor(new_job):
 def test_monitor_returns_with_no_timeout():
     Server(Config(worker_timeout=0)).monitor(threading.Event())  # returns at once
     Server(Config(heartbeat_interval=0)).monitor(threading.Event())
+    Server(Config(worker_timeout=-1)).monitor(threading.Event())
+    Server(Config(heartbeat_interval=-1)).monitor(threading.Event())  # no busy loop
+
+
+def test_epoch_times_are_reported(new_job):
+    c, w, job = new_job(cfg=Config(now=lambda: 0.0))
+    c.succeed(w, c.next(w), outputs(0, 1))
+    c.succeed(w, c.next(w))
+    st = c.status(job)
+    assert st.HasField("submitted_at") and st.HasField("finished_at")
 
 
 @pytest.mark.parametrize(
@@ -1140,6 +1158,26 @@ def test_path_rejects_what_go_rejects():
         path("in\nput")
     assert str(e.value) == 'wire: parse "in\\nput": net/url: invalid control character in URL'
     assert path("file:///a%2Fb") == "/a/b" and path("100%25") == "100%25"
+    with pytest.raises(ValueError, match=r'^wire: parse "file://\[::1/x": '):
+        path("file://[::1/x")
+
+
+def test_source_over_the_limit_is_invalid():
+    m = types_pb2.JobSpec(program="j", inputs=["/i"], output="/o", num_reduce_tasks=1)
+    m.program_source = "é" * (1 << 19)
+    assert validate(m) == []
+    m.program_source += "x"
+    assert validate(m) == [f"wire: j: job file is {(1 << 20) + 1} bytes; the limit is 1 MiB"]
+
+
+def test_path_keeps_bytes_that_are_not_utf8(tmp_path):
+    name = os.fsencode(tmp_path) + b"/\xff"
+    with open(name, "wb") as f:
+        f.write(b"x")
+    u = uri(os.fsdecode(name))
+    assert u.endswith("/%FF")
+    with open(path(u), "rb") as f:
+        assert f.read() == b"x"
 
 
 def test_quoting_matches_go():
