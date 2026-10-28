@@ -87,7 +87,10 @@ def path(uri: str) -> str:
     malformed percent escapes, unsupported schemes, remote file hosts, NUL bytes
     in decoded file paths, or malformed URLs rejected by urlsplit."""
     _parse(uri)
-    u = urlsplit(uri)
+    try:
+        u = urlsplit(uri)
+    except ValueError as e:
+        raise ValueError(f"wire: parse {_q(uri)}: {e}") from None
     if u.scheme == "":
         return uri
     if u.scheme != "file":

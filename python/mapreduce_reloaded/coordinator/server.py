@@ -119,7 +119,7 @@ class _Job:
     counts: dict = field(default_factory=dict)  # of each task's accepted attempt
     placed: dict = field(default_factory=dict)  # locality of each attempt, by number
     ran: dict = field(default_factory=dict)  # locality of each task's accepted attempt
-    since: float = 0.0  # when the job began holding back tasks, if it has
+    since: float | None = None  # when the job began holding back tasks, if it has
     err: str = ""  # why the job failed, if it did
     finished: float = 0.0  # zero while the job runs
 
@@ -159,11 +159,12 @@ class _Job:
         return resp
 
     def total(self) -> dict[str, int]:
-        """Sums the counters of every task's accepted attempt."""
+        """Sums the counters of every task's accepted attempt, wrapping at
+        int64 as Go does."""
         total: dict[str, int] = {}
         for counts in self.counts.values():
             for name, n in counts.items():
-                total[name] = total.get(name, 0) + n
+                total[name] = (total.get(name, 0) + n + 2**63) % 2**64 - 2**63
         return total
 
     def cleanup(self):
@@ -465,9 +466,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             types_pb2.LOCALITY_UNSPECIFIED,
             types_pb2.LOCALITY_HOST,
         ):
-            j.since = 0.0
+            j.since = None
             return False
-        if not j.since:
+        if j.since is None:
             j.since = now
         return now - j.since < self._cfg.locality_wait
 
