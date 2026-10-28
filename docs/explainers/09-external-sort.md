@@ -9,7 +9,8 @@ an external sort is used" (§3.1).
 
 ## How it works
 
-1. **Buffer** records until a memory budget (64 MB by default) is reached.
+1. **Buffer** records until a memory budget is reached: 64 MiB per map task by default, shared
+   evenly among its R sorters.
 2. **Spill:** sort the buffer and write it to disk as a *run*, an MRKV file
    (#8). Repeat until all records are in.
 3. **Merge** the runs. Each run is already sorted, so only the smallest

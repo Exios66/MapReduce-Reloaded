@@ -16,7 +16,7 @@
 # jobs it knew and resumes a running one. make cluster-down deletes the log
 # with the output volume. Map output stays inside each worker and is
 # fetched over the network (§3.1 step 5); a worker deletes a job's map output
-# once the job ends, and takes no task while under 1 GiB of disk is free.
+# once the job ends, and takes no task while under 2 GiB of disk is free.
 #
 # Every container's log rotates at 10 MB, three files kept. Prometheus has
 # a 512 MB retention target, not a hard disk-usage limit: WAL and head chunks

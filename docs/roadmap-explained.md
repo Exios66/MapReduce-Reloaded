@@ -21,7 +21,8 @@ identical bytes, which gives a second, independent correctness check.
 
 ## The phases
 
-Phases 0–4 are done, and so are #41 and #42. Next is Phase 7. Where the build
+Phases 0–4 are done, and so are #41 and #42 and Phase 7's benchmarks and
+evaluation (#57, #58); the final report (#60) remains. Where the build
 differs from the plan, [design.md](../design.md) says how and why.
 
 ### Phase 0 — Foundations (#1–#5)
@@ -102,7 +103,7 @@ failing, and jobs still finish correctly.*
 - **#29 Chaos testing:** randomly kill and freeze workers and restart the
   coordinator during a job, 50 runs in a row, and check the output still
   matches the oracle. This is the strongest demo. The harness runs in one
-  process; running it against the Docker cluster is still open. See
+  process, and `make chaos` runs it against the Docker cluster. See
   [explainers/22-chaos.md](explainers/22-chaos.md).
 
 ### Phase 4 — Finish the paper's features (#30–#34)

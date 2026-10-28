@@ -92,7 +92,7 @@ benchmark shuffled 68 MB for a 64 MB input) and output. The experiments
 delete old output and `bench/results/` files as you go.
 
 Workers delete a job's map output once it ends and stop taking tasks under
-1 GiB free; logs rotate and Prometheus has a retention target
+2 GiB free (`-min-free-mib 2048` in Compose; the worker's default is 1 GiB); logs rotate and Prometheus has a retention target
 ([ADR 0017](design/0017-disk-and-memory-bounds.md)). `make clean-output`
 requires explicit completed directories, e.g.
 `make clean-output CLEAN_OUTPUTS='sort-kill-123'`, and prints `df` and

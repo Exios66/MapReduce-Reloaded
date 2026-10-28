@@ -5,8 +5,9 @@ are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
 
 **Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
-has a test, and so are #41 and #42 (Phase 6 Tier A). Next are the course
-deliverables below, then Phase 7 (#57, #58, #60). Where the build departed
+has a test, and so are #41 and #42 (Phase 6 Tier A). Phase 7's benchmarks
+and evaluation (#57, #58) are done; the course deliverables below and the
+final report (#60) remain. Where the build departed
 from this plan, [design.md](../design.md) lists the differences from the paper
 and why.
 
@@ -241,7 +242,7 @@ MapReduce-Reloaded/
 └── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
 
-`bench/` (#57) and `tests/interop/` (Phase 5) do not exist yet.
+`tests/interop/` (Phase 5) does not exist yet; `bench/` came with #57.
 
 ---
 
@@ -270,7 +271,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
 - Locality-aware scheduling, the status web UI, Prometheus `/metrics`, and all paper example programs.
-- `docs/paper-mapping.md` complete: every row F1–F23 linked to code and tests; F24 waits on Phase 7.
+- `docs/paper-mapping.md` complete: every row F1–F24 linked to code and tests (F24 with Phase 7).
 
 **Phase 5 — Python parity & interop**
 - Finish the Python coordinator and worker.

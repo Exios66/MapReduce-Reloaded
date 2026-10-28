@@ -42,7 +42,7 @@ reordering would change its output.
 
 Both commands take `-m`, `-r`, `-param` and the record formats
 (`-input-format` and `-output-format`, each `text` or `kv`; Python spells
-them with two dashes). An output written with `kv` can be the input of
+the last three with two dashes, as `--param`). An output written with `kv` can be the input of
 the next job with `-input-format kv`.
 
 Two things differ from a cluster job:
@@ -51,8 +51,8 @@ Two things differ from a cluster job:
   be reported and run again; local mode runs each task once, so the first
   record that makes user code fail fails the job, with the task named in
   the error. `-max-skipped` exists only on `mr submit`.
-- **Python's local mode has no codecs.** Only `mr run` takes
-  `-intermediate-codec` and `-output-codec`. Python jobs write uncompressed
+- **Python's local mode has no codecs.** Of the two, only `mr run`
+  takes `-intermediate-codec` and `-output-codec`. Python jobs write uncompressed
   files, though its MRKV reader and writer handle every codec.
 
 ## Programs by name
