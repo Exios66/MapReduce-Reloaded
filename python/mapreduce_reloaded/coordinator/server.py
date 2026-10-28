@@ -359,7 +359,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         try:
             n = int(j.id.removeprefix("job-"))
         except ValueError:
-            n = self._seq + 1
+            n = 0
         self._seq = max(self._seq + 1, n)
         self._forget()
 

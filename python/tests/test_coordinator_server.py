@@ -967,3 +967,140 @@ def test_end_ignores_an_ended_job(new_job):
     with c.s._mu:
         c.s._end(j, "second", 5.0)
     assert c.status(job).error == "first"
+
+
+# Gaps found by mutation testing.
+
+
+def test_status_fields(new_job):
+    c, w, job = new_job(cfg=Config(now=lambda: 1234.5))
+    assert w == "w1"
+    c.succeed(w, c.next(w), outputs(0, 1), {"n": 2})
+    c.succeed(w, c.next(w), (), {"n": 3})
+    st = c.status(job)
+    assert st.job_id == job and dict(st.counters.values) == {"n": 5}
+    assert st.submitted_at.ToNanoseconds() == st.finished_at.ToNanoseconds() == 1234_500_000_000
+
+
+def test_expire_records_and_logs(new_job, caplog):
+    log = MemLog()
+    c, w, _ = new_job(cfg=Config(log=log, worker_timeout=60))
+    c.next(w)
+    at = time.time() + 3600
+    c.s.expire(at)
+    assert log.records[-1].worker_lost.worker_id == w
+    assert c.s._lost[-1].at == at
+    assert "worker lost: worker w1, 1 tasks reset" in [r.getMessage() for r in caplog.records]
+
+    c, w, _ = new_job(cfg=Config(log=log, worker_timeout=60))
+    log.err = OSError("disk full")
+    c.s.expire(time.time() + 3600)
+    msgs = [r.getMessage() for r in caplog.records]
+    assert "logging a lost worker: worker w1: coordinator log: disk full" in msgs
+
+
+def test_cleanup_logs_the_error(new_job, caplog):
+    c, _, job = new_job()
+    j = c.s._jobs[job]
+    temp = os.path.join(path(j.spec.output), TEMP_DIR)
+    os.rmdir(temp)
+    with open(temp, "w"):
+        pass
+    j.cleanup()
+    (msg,) = [r.getMessage() for r in caplog.records]
+    assert msg.startswith("cleaning up job output: job job-1: [Errno")
+
+
+def test_backup_goes_to_the_oldest_attempt(tmp_path):
+    clock = [100.0]
+    c = Coordinator(Server(Config(now=lambda: clock[0])))
+    a, b, d = c.register(), c.register(), c.register()
+    c.submit(
+        program="wordcount",
+        inputs=[write(tmp_path / "x", b"a\n" * 4)],
+        output=str(tmp_path / "o"),
+        num_reduce_tasks=1,
+        num_map_tasks=2,
+    )
+    clock[0] = 200.0
+    assert c.next(b).task.index == 0  # task 0 starts later
+    clock[0] = 150.0
+    assert c.next(a).task.index == 1
+    backup = c.next(d)
+    assert (backup.task.index, backup.attempt) == (1, 1)
+
+
+def test_logged_assignment_names_the_attempt(new_job):
+    log = MemLog()
+    c, w, _ = new_job(cfg=Config(log=log))
+    attempt = c.next(w)
+    assert log.records[-1].task_assigned.attempt == attempt
+
+
+def test_reduce_task_carries_the_job_and_skips(new_job):
+    c, w, _ = new_job()
+    c.succeed(w, c.next(w), outputs(0, 1))
+    for _ in range(SKIP_AFTER):
+        c.fail(w, c.next(w), failed_record=6)
+    r = c.request(w).reduce_task
+    assert r.job.program == "wordcount" and list(r.skip_records) == [6]
+
+
+def test_reduce_tasks_are_never_held_back(tmp_path):
+    c = Coordinator(Server(Config(locality_wait=100, locate=lambda s: ["host-a"])))
+    a, b = c.register("host-a"), c.register("host-b")
+    c.submit(
+        program="wordcount",
+        inputs=[write(tmp_path / "in")],
+        output=str(tmp_path / "o"),
+        num_reduce_tasks=1,
+    )
+    c.succeed(a, c.next(a), outputs(0, 1))
+    assert c.request(b).HasField("reduce_task")
+
+
+@pytest.mark.parametrize(
+    ("cfg", "failure", "skip_limit"),
+    [
+        (Config(), {"fatal": True}, None),
+        (Config(max_task_failures=1), {}, None),
+        (Config(), {"failed_record": 2}, 0),
+    ],
+)
+def test_failed_job_ends_and_cleans_up(new_job, cfg, failure, skip_limit):
+    c, w, job = new_job(cfg=cfg)
+    if skip_limit is not None:
+        c.s._jobs[job].spec.max_skipped_records = skip_limit
+    temp = os.path.join(path(c.s._jobs[job].spec.output), TEMP_DIR)
+    for _ in range(SKIP_AFTER if skip_limit is not None else 1):
+        assert os.path.isdir(temp)
+        c.fail(w, c.next(w), message="boom", **failure)
+    st = c.status(job)
+    assert st.state == FAILED and st.HasField("finished_at")
+    assert not os.path.exists(temp)
+
+
+def test_a_retried_failure_keeps_the_output(new_job):
+    c, w, job = new_job(cfg=Config(max_task_failures=2))
+    c.fail(w, c.next(w), message="boom")
+    assert c.status(job).state == MAPPING
+    assert os.path.isdir(os.path.join(path(c.s._jobs[job].spec.output), TEMP_DIR))
+
+
+def test_serve_runs_the_monitor():
+    server, _, port, stop = serve(
+        "127.0.0.1:0", Config(heartbeat_interval=0.02, worker_timeout=0.02)
+    )
+    try:
+        with grpc.insecure_channel(f"127.0.0.1:{port}") as ch:
+            stub = coordinator_pb2_grpc.CoordinatorServiceStub(ch)
+            w = stub.RegisterWorker(
+                coordinator_pb2.RegisterWorkerRequest(worker=types_pb2.WorkerInfo())
+            ).worker_id
+            deadline = time.time() + 10
+            while not stub.Heartbeat(coordinator_pb2.HeartbeatRequest(worker_id=w)).reregister:
+                assert time.time() < deadline, "the monitor never expired the worker"
+                time.sleep(0.05)
+    finally:
+        stop.set()
+        server.stop(None)
