@@ -155,16 +155,17 @@ proto-check: proto-lint proto-breaking proto
 	@test -z "$$(git ls-files --others --exclude-standard -- go/gen python/mapreduce_reloaded/gen)" || \
 		(echo "generated code has new files: git add them" && exit 1)
 
-# papermap reads docs and Python tests, outside the Go module, which the test
-# cache does not track; -count=1 runs it every time. -shuffle=on runs each
-# package's tests in a random order, so that no test depends on another; a
-# failure prints the seed, and -shuffle=SEED repeats the order.
+# papermap and statusweb read docs, Python tests and deployment files outside
+# the Go module, which the test cache does not track; -count=1 runs them every
+# time. -shuffle=on runs each package's tests in a random order, so that no
+# test depends on another; a failure prints the seed, and -shuffle=SEED
+# repeats the order.
 # MR_PYTHON lets go/cmd/mr compare the Go examples with Python's (#153); a
 # relative PYTHON is a command name, looked up on the PATH.
 # Each package's coverage must stay at or over its floor in go/cover-floors.txt
 # and python/cover-floors.txt (scripts/cover.py, #161).
 go-test:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
 # Run the coordinator, worker and command tests 20 times in random orders,

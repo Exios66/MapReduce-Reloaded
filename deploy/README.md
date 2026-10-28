@@ -36,3 +36,23 @@ make cluster-down     # remove this project's containers and volumes, and nothin
 
 The project name `mapreduce` keeps `cluster-down` from touching other
 containers on a shared machine.
+
+## Regression checks
+
+`make test` (and therefore `make check`) checks the Compose memory limits
+and replica-weighted totals against the VM documentation, Prometheus's
+preservation of MapReduce job labels and worker DNS discovery, and Grafana's
+provisioned datasources. Go tests also compare dashboard metric names and
+legend labels with metrics emitted by the coordinator and worker, including
+labels retained by the dashboard's `sum by` aggregations.
+
+Python's development dependencies include PyYAML for these checks. To run
+just the deployment checks, use `cd python && python3 -m pytest -q -rs
+tests/test_deploy.py`. When Docker Compose is installed, the tests also run
+`docker compose config` for the default, `s3`, `monitoring`, `tools` and all
+profiles together, plus the backups-off override. These commands do not
+start containers or require a Docker daemon. When `promtool` is installed,
+its `check config` validates the Prometheus configuration too. Missing
+external tools produce explicit pytest skips; the static contract checks
+always run. Image builds, non-root runtime checks and a live query through
+Prometheus still require a container-based end-to-end run.
