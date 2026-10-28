@@ -112,6 +112,8 @@ DOCS = (
     [
         ({}, b"a.com\tthe:4\nb.org\tcat:3\n"),
         ({"min": "1"}, b"a.com\tthe:4 cat:1 dog:1\nb.org\tcat:3\n"),
+        ({"min": ""}, b"a.com\tthe:4\nb.org\tcat:3\n"),  # as Go: empty is the default
+        ({"min": "+1"}, b"a.com\tthe:4 cat:1 dog:1\nb.org\tcat:3\n"),  # strconv.Atoi's sign
     ],
 )
 def test_termvector(tmp_path, params, want):
@@ -119,9 +121,10 @@ def test_termvector(tmp_path, params, want):
     assert (out / "part-r-00000").read_bytes() == want
 
 
-def test_termvector_bad_min(tmp_path):
+@pytest.mark.parametrize("bad", ["0", "\u00b2", " 2", "x"])
+def test_termvector_bad_min(tmp_path, bad):
     with pytest.raises(ValueError, match="positive integer"):
-        run(tmp_path, termvector.program, 1, {"min": "0"}, write(tmp_path, DOCS))
+        run(tmp_path, termvector.program, 1, {"min": bad}, write(tmp_path, DOCS))
 
 
 def test_distsort(tmp_path):

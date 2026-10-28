@@ -23,11 +23,25 @@ class Split:
     end: int
 
 
+# The most map tasks a job may have, as go/internal/formats.MaxSplits: the
+# coordinator allocates state for every task before any runs.
+MAX_SPLITS = 100_000
+
+
 def byte_splits(path: str, split_size: int) -> list[Split]:
-    """Cuts the file at path into consecutive ranges of split_size bytes."""
+    """Cuts the file at path into consecutive ranges of split_size bytes.
+    Raises ValueError, before building any, if there would be more than
+    MAX_SPLITS."""
     if split_size <= 0:
         raise ValueError("split size must be positive")
     size = os.path.getsize(path)
+    # Count first, as Go does: a tiny split size on a large file would
+    # otherwise build the whole list before any limit could reject it.
+    if (n := -(-size // split_size)) > MAX_SPLITS:
+        raise ValueError(
+            f"formats: {path} would be cut into {n} splits; "
+            f"the most is {MAX_SPLITS} (raise the split size)"
+        )
     return [Split(path, s, min(s + split_size, size)) for s in range(0, size, split_size)]
 
 

@@ -27,6 +27,11 @@ from typing import BinaryIO
 
 from mapreduce_reloaded.partition import partition
 
+# The most reduce tasks a job may have, as go/pkg/api.MaxReduceTasks.
+MAX_REDUCE_TASKS = 10_000
+# The most map tasks, as go/pkg/api.MaxMapTasks (go/internal/formats.MaxSplits).
+MAX_MAP_TASKS = 100_000
+
 Pair = tuple[bytes, bytes]
 Partitioner = Callable[[bytes, int], int]
 
@@ -151,6 +156,14 @@ class JobSpec:
                 (self.r < 1, "number of reduce tasks r must be at least 1"),
                 (self.split_size < 0, "split_size must not be negative"),
                 (self.m < 0, "number of map tasks m must not be negative"),
+                (
+                    self.r > MAX_REDUCE_TASKS,
+                    f"number of reduce tasks r is {self.r}; the most is {MAX_REDUCE_TASKS}",
+                ),
+                (
+                    self.m > MAX_MAP_TASKS,
+                    f"number of map tasks m is {self.m}; the most is {MAX_MAP_TASKS}",
+                ),
             ]
             if failed
         ]

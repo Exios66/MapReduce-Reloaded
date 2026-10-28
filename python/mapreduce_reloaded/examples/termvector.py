@@ -33,8 +33,10 @@ def tv_sum(ctx, host, vectors):
 
 @reducer
 def tv_reduce(ctx, host, vectors):
-    min_count = ctx.params.get("min", "2")
-    if not (min_count.isdigit() and int(min_count) >= 1):
+    # As Go: empty means the default, and strconv.Atoi's syntax (an optional
+    # sign, then ASCII digits).
+    min_count = ctx.params.get("min") or "2"
+    if not (re.fullmatch(r"[+-]?[0-9]+", min_count) and int(min_count) >= 1):
         raise ValueError(f"termvector: min={min_count!r} is not a positive integer")
     yield host, encode(total(vectors), int(min_count))
 

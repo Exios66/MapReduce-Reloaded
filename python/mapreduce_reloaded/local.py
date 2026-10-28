@@ -8,7 +8,9 @@ the oracle the distributed runs are checked against.
 
 import glob
 import os
+import resource
 import shutil
+import sys
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
@@ -40,10 +42,28 @@ REDUCE_OUTPUT_BYTES = "reduce.output.bytes"  # keys and values emitted, before t
 TEMP_DIR = "_temporary"
 
 
+def raise_open_file_limit():
+    """Raises the soft limit on open files to the hard one, as the Go runtime
+    does at startup (capped at OPEN_MAX, 10240, on macOS and when unlimited):
+    a reduce task opens all M map outputs at once. A limit that cannot be
+    raised stays as it is."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if hard == resource.RLIM_INFINITY:
+        want = 10240
+    else:
+        want = min(hard, 10240) if sys.platform == "darwin" else hard
+    if soft < want:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
+        except (ValueError, OSError):
+            pass
+
+
 def run(spec: JobSpec, work_dir: str) -> dict[str, int]:
     """Executes spec and returns its counters. Intermediate files go in
     work_dir, which the caller removes. Reduce task r writes
     <output>/part-r-<r>."""
+    raise_open_file_limit()
     in_format = input_format(spec.input_format)
     out_format = output_format(spec.output_format)
     if spec.m:
