@@ -386,3 +386,73 @@ def test_begin_keeps_three_previous_results_and_prunes_the_volume(experiment):
     calls = log.read_text().splitlines()
     assert sum(c.startswith("volume:sh -c cd /out") for c in calls) == 5
     assert sum(c.endswith(" sh 100 E1") for c in calls) == 5
+
+
+@pytest.mark.parametrize("kind", ["tasks", "bytes"])
+def test_each_sampled_run_refreshes_workers_before_discovery_and_sampling(
+    experiment, monkeypatch, tmp_path, kind
+):
+    invoke, log = experiment
+    monkeypatch.setenv("INTERVAL", "0.05")
+    result = invoke(
+        f"kind={kind}\n"
+        + """
+        compose_stub() {
+            printf 'compose:%s\\n' "$*" >> "$CALL_LOG"
+            case "$1" in
+                ps) echo worker-id ;;
+                run) echo job-1 ;;
+            esac
+        }
+        wait_workers() { printf 'ready:%s\\n' "$1" >> "$CALL_LOG"; }
+        docker() {
+            printf 'inspect:%s\\n' "${@: -1}" >> "$CALL_LOG"
+            echo 10.0.0.9
+        }
+        python3() { printf 'sample:%s\\n' "$*" >> "$CALL_LOG"; }
+        df() { printf 'header\\ndisk 1 0 %s 0%% /\\n' $((6 << 20)); }
+        input() { echo /out/input.txt; }
+        in_volume() { :; }
+        checksum() { echo same-output; }
+        log() { :; }
+        sleep() { :; }
+        status_stub() {
+            printf 'job-1\\tSUCCEEDED\\nseconds\\t2\\nbackups\\t0\\n'
+            printf 'backups_won\\t0\\nmap.output.bytes\\t123\\n'
+        }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E3
+        for n in 1 2; do
+            start_sampler "$kind" "bench/sample-$n.csv"
+            wait "$sampler"
+            sampler=
+            run E3 normal distsort "$n" 4 ""
+            [ -z "$ready" ]
+        done
+        cat bench/results/E3/runs.csv
+        """
+    )
+    sampler = "sample:bench/scrape-tasks.py 0.05 86400 http://127.0.0.1:18780/metrics"
+    discovery = []
+    if kind == "bytes":
+        discovery = ["compose:ps -q worker", "inspect:worker-id"]
+        sampler = "sample:bench/scrape-metrics.py 0.05 86400 http://10.0.0.9:8081/metrics"
+    expected = []
+    for n in (1, 2):
+        expected.extend(
+            [
+                "compose:restart worker",
+                "ready:4",
+                *discovery,
+                sampler,
+                f"compose:run --rm -q -v {tmp_path}/examples:/examples:ro "
+                f"-v {tmp_path}/bench/jobs:/jobs:ro "
+                "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
+                f"distsort /out/exp-E3-normal-{n} /out/input.txt",
+            ]
+        )
+    assert log.read_text().splitlines() == expected
+    rows = list(csv.reader(io.StringIO(result.stdout)))
+    assert [row[4] for row in rows] == ["1", "2"]
+    assert all(row[15] == "1" for row in rows)
