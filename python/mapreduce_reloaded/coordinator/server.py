@@ -237,7 +237,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 reset = []
                 if self._active is not None:
                     try:
-                        self._record(log_pb2.LogRecord(worker_lost=log_pb2.WorkerLost(worker_id=w)), at)
+                        self._record(
+                            log_pb2.LogRecord(worker_lost=log_pb2.WorkerLost(worker_id=w)), at
+                        )
                     except RpcError as e:
                         log.error("logging a lost worker: worker %s: %s", w, e)
                     reset = self._active.tasks.reset_worker(w)

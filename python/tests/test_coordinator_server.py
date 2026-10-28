@@ -57,7 +57,9 @@ class Coordinator:
         self.s = s
 
     def register(self, host="", zone=""):
-        req = coordinator_pb2.RegisterWorkerRequest(worker=types_pb2.WorkerInfo(host=host, zone=zone))
+        req = coordinator_pb2.RegisterWorkerRequest(
+            worker=types_pb2.WorkerInfo(host=host, zone=zone)
+        )
         return self.s.RegisterWorker(req, CTX).worker_id
 
     def submit(self, **job):
@@ -78,17 +80,17 @@ class Coordinator:
 
     def succeed(self, worker, attempt, outs=(), counters=None):
         counters = types_pb2.Counters(values={"n": 1} if counters is None else counters)
-        success = types_pb2.TaskSuccess(outputs=outs, counters=counters)
+        success = coordinator_pb2.TaskSuccess(outputs=outs, counters=counters)
         return self.report(worker, attempt, success=success)
 
     def fail(self, worker, attempt, **failure):
-        return self.report(worker, attempt, failure=types_pb2.TaskFailure(**failure))
+        return self.report(worker, attempt, failure=coordinator_pb2.TaskFailure(**failure))
 
     def status(self, job):
         return self.s.GetJobStatus(coordinator_pb2.GetJobStatusRequest(job_id=job), CTX)
 
     def heartbeat(self, worker, *running):
-        progress = [types_pb2.TaskProgress(attempt=a) for a in running]
+        progress = [coordinator_pb2.TaskProgress(attempt=a) for a in running]
         req = coordinator_pb2.HeartbeatRequest(worker_id=worker, running=progress)
         return self.s.Heartbeat(req, CTX)
 
@@ -200,7 +202,10 @@ def test_submit_job_num_map_tasks(tmp_path):
     c = Coordinator(Server())
     big = write(tmp_path / "in.txt", b"x\n" * 50)
     job = c.submit(
-        program="wordcount", inputs=[big], output=str(tmp_path / "o"), num_reduce_tasks=1,
+        program="wordcount",
+        inputs=[big],
+        output=str(tmp_path / "o"),
+        num_reduce_tasks=1,
         num_map_tasks=4,
     )
     assert c.status(job).map_tasks_total == 4
@@ -210,9 +215,7 @@ def test_submit_job_default_r_counts_workers(tmp_path):
     c = Coordinator(Server())
     for _ in range(3):
         c.register()
-    job = c.submit(
-        program="wordcount", inputs=[write(tmp_path / "in")], output=str(tmp_path / "o")
-    )
+    job = c.submit(program="wordcount", inputs=[write(tmp_path / "in")], output=str(tmp_path / "o"))
     assert c.status(job).reduce_tasks_total == 3 * 2
 
 
@@ -220,7 +223,9 @@ def test_submit_job_output_setup_fails(tmp_path):
     blocker = write(tmp_path / "file", b"")  # a file where the output dir goes
     req = coordinator_pb2.SubmitJobRequest(
         job=types_pb2.JobSpec(
-            program="wordcount", inputs=[write(tmp_path / "in")], output=blocker,
+            program="wordcount",
+            inputs=[write(tmp_path / "in")],
+            output=blocker,
             num_reduce_tasks=1,
         )
     )
@@ -233,7 +238,9 @@ def test_one_job_at_a_time(new_job, tmp_path):
     c, _, job = new_job()
     req = coordinator_pb2.SubmitJobRequest(
         job=types_pb2.JobSpec(
-            program="wordcount", inputs=[write(tmp_path / "in")], output=str(tmp_path / "o"),
+            program="wordcount",
+            inputs=[write(tmp_path / "in")],
+            output=str(tmp_path / "o"),
             num_reduce_tasks=1,
         )
     )
@@ -293,7 +300,9 @@ def test_locality_counts_only_accepted_attempts(tmp_path):
     c = Coordinator(Server(Config(locate=lambda s: ["host-a"])))
     far, near = c.register("host-b"), c.register("host-a")
     job = c.submit(
-        program="wordcount", inputs=[write(tmp_path / "in")], output=str(tmp_path / "o"),
+        program="wordcount",
+        inputs=[write(tmp_path / "in")],
+        output=str(tmp_path / "o"),
         num_reduce_tasks=1,
     )
     remote = c.next(far)  # remote attempt 0
@@ -304,7 +313,7 @@ def test_locality_counts_only_accepted_attempts(tmp_path):
 
 
 def test_locality_wait(new_job):
-    wait = 0.05
+    wait = 0.5  # exact in binary, so the clock lands on it
     clock = [1000.0]
     cfg = Config(locality_wait=wait, locate=lambda s: ["host-a"], now=lambda: clock[0])
     c, _, _ = new_job(cfg=cfg)
@@ -322,8 +331,11 @@ def test_locality_wait_resets_on_a_local_start(tmp_path):
     c = Coordinator(Server(cfg))
     a, b = c.register("host-a"), c.register("host-b")
     c.submit(
-        program="wordcount", inputs=[write(tmp_path / "x", b"a\n" * 3)],
-        output=str(tmp_path / "o"), num_reduce_tasks=1, num_map_tasks=3,
+        program="wordcount",
+        inputs=[write(tmp_path / "x", b"a\n" * 3)],
+        output=str(tmp_path / "o"),
+        num_reduce_tasks=1,
+        num_map_tasks=3,
     )
     assert c.request(b).HasField("wait")  # the wait starts
     clock[0] += 9
@@ -343,7 +355,7 @@ def test_report_task(new_job):
     )
     assert code(c.s.ReportTask, bad) == grpc.StatusCode.NOT_FOUND
     with pytest.raises(Aborted) as e:
-        c.report(w, attempt, success=types_pb2.TaskSuccess())
+        c.report(w, attempt, success=coordinator_pb2.TaskSuccess())
     assert e.value.code == grpc.StatusCode.INVALID_ARGUMENT  # no outputs
     assert e.value.details == "coordinator: map 0 reported 0 outputs, want 1"
     assert not c.succeed("other", attempt, out)  # from another worker: ignored
@@ -490,8 +502,10 @@ def test_log_fails(new_job, tmp_path):
     s = Server(Config(log=log))
     req = coordinator_pb2.SubmitJobRequest(
         job=types_pb2.JobSpec(
-            program="wordcount", inputs=[write(tmp_path / "in", b"a\n")],
-            output=str(tmp_path / "o"), num_reduce_tasks=1,
+            program="wordcount",
+            inputs=[write(tmp_path / "in", b"a\n")],
+            output=str(tmp_path / "o"),
+            num_reduce_tasks=1,
         )
     )
     assert code(s.SubmitJob, req) == grpc.StatusCode.UNAVAILABLE
@@ -525,7 +539,9 @@ def test_keep_jobs(new_job, tmp_path):
         end_active(s)
         ids.append(
             c.submit(
-                program="wordcount", inputs=[inp], output=str(tmp_path / f"o{i}"),
+                program="wordcount",
+                inputs=[inp],
+                output=str(tmp_path / f"o{i}"),
                 num_reduce_tasks=1,
             )
         )
@@ -552,7 +568,9 @@ def test_keep_jobs_zero_keeps_all(new_job, tmp_path):
     for i in range(3):
         end_active(c.s)
         c.submit(
-            program="wordcount", inputs=[write(tmp_path / "in")], output=str(tmp_path / f"o{i}"),
+            program="wordcount",
+            inputs=[write(tmp_path / "in")],
+            output=str(tmp_path / f"o{i}"),
             num_reduce_tasks=1,
         )
     assert len(c.s._jobs) == 4
@@ -575,7 +593,9 @@ def test_keep_jobs_after_completion(new_job, tmp_path, keep):
         assert c.succeed(w, c.next(w), outputs(0, 1)) and c.succeed(w, c.next(w))
         if n <= keep:
             c.submit(
-                program="wordcount", inputs=[inp], output=str(tmp_path / f"o{n}"),
+                program="wordcount",
+                inputs=[inp],
+                output=str(tmp_path / f"o{n}"),
                 num_reduce_tasks=1,
             )
     for n in range(2, keep + 2):
@@ -631,9 +651,11 @@ def test_expire_while_idle_remembers_the_loss(new_job):
 
 def test_lost_workers_are_bounded():
     c = Coordinator(Server(Config(worker_timeout=1)))
-    ids = [c.register() for _ in range(MAX_LOST + 5)]
-    c.s.expire(time.time() + 10)
-    assert [lw.id for lw in c.s._lost] == ids[5:]
+    for _ in range(MAX_LOST + 5):
+        c.register()
+    dead = c.s.expire(time.time() + 10)
+    assert len(dead) == MAX_LOST + 5
+    assert [lw.id for lw in c.s._lost] == dead[5:]
 
 
 def test_monitor(new_job):
@@ -679,8 +701,11 @@ def test_submit_job_rejects_too_many_splits(tmp_path):
         f.truncate(MAX_SPLITS + 1)
     req = coordinator_pb2.SubmitJobRequest(
         job=types_pb2.JobSpec(
-            program="wordcount", inputs=[str(big)], output=str(tmp_path / "o"),
-            num_reduce_tasks=1, split_size_bytes=1,
+            program="wordcount",
+            inputs=[str(big)],
+            output=str(tmp_path / "o"),
+            num_reduce_tasks=1,
+            split_size_bytes=1,
         )
     )
     with pytest.raises(Aborted) as e:
@@ -695,8 +720,11 @@ def test_job_file_is_accepted(tmp_path):
     c = Coordinator(Server())
     w = c.register()
     job = c.submit(
-        program="bad.go", program_source="package job\nfunc Map(",
-        inputs=[write(tmp_path / "in")], output=str(tmp_path / "o"), num_reduce_tasks=1,
+        program="bad.go",
+        program_source="package job\nfunc Map(",
+        inputs=[write(tmp_path / "in")],
+        output=str(tmp_path / "o"),
+        num_reduce_tasks=1,
     )
     m = c.request(w).map_task
     assert m.job.program_source.startswith("package job")
@@ -729,7 +757,8 @@ def test_max_task_failures(new_job):
     assert c.status(job).state != FAILED
     c.fail(w, c.next(w), message="boom c")
     st = c.status(job)
-    assert st.state == FAILED and st.error == "TASK_KIND_MAP 0 failed 3 times; the last error: boom c"
+    assert st.state == FAILED
+    assert st.error == "TASK_KIND_MAP 0 failed 3 times; the last error: boom c"
 
     c, w, job = new_job(cfg=Config(max_task_failures=3))
     outs = outputs(0, 1)
@@ -793,8 +822,12 @@ def test_uri(tmp_path, monkeypatch):
 def test_validate():
     ok = types_pb2.JobSpec(program="grep", inputs=["/i"], output="/o", num_reduce_tasks=1)
     assert validate(ok) == []
-    assert validate(types_pb2.JobSpec(program_source="x", inputs=["i"], output="o",
-                                      num_reduce_tasks=1)) == []
+    assert (
+        validate(
+            types_pb2.JobSpec(program_source="x", inputs=["i"], output="o", num_reduce_tasks=1)
+        )
+        == []
+    )
 
     def errs(**changes):
         m = types_pb2.JobSpec()
@@ -811,7 +844,9 @@ def test_validate():
     assert validate(ok, frozenset(["wc"])) == ['wire: unknown program "grep"']
     assert errs(partitioner="range") == ['wire: unknown partitioner "range"']
     assert errs(partitioner="hash") == []
-    assert errs(inputs=["s3://b/x"]) == ['wire: "s3://b/x": the Python coordinator stores only local files']
+    assert errs(inputs=["s3://b/x"]) == [
+        'wire: "s3://b/x": the Python coordinator stores only local files'
+    ]
     assert errs(output="file://h/o") == ['wire: "file://h/o" names a remote host']
     assert errs(inputs=[]) == ["no Inputs"]
     assert errs(output="") == ["no Output"]
@@ -829,9 +864,7 @@ def test_validate():
     assert errs(input_format="csv") == ['formats: unknown format "csv"']
     for codec in ("none", "zstd", "snappy"):
         assert errs(intermediate_codec=codec) == []
-    assert errs(intermediate_codec="lz4") == [
-        'intermediate codec: mrkv: unsupported_codec: "lz4"'
-    ]
+    assert errs(intermediate_codec="lz4") == ['intermediate codec: mrkv: unsupported_codec: "lz4"']
     assert errs(output_codec="lz4", output_format="csv") == [
         'output codec: mrkv: unsupported_codec: "lz4"'
     ]
@@ -862,8 +895,10 @@ def test_serve(tmp_path):
             job = stub.SubmitJob(
                 coordinator_pb2.SubmitJobRequest(
                     job=types_pb2.JobSpec(
-                        program="wordcount", inputs=[write(tmp_path / "in")],
-                        output=str(tmp_path / "o"), num_reduce_tasks=1,
+                        program="wordcount",
+                        inputs=[write(tmp_path / "in")],
+                        output=str(tmp_path / "o"),
+                        num_reduce_tasks=1,
                     )
                 )
             ).job_id
@@ -872,7 +907,7 @@ def test_serve(tmp_path):
                 coordinator_pb2.ReportTaskRequest(
                     worker_id=reg.worker_id,
                     attempt=m.map_task.attempt,
-                    success=types_pb2.TaskSuccess(outputs=outputs(0, 1)),
+                    success=coordinator_pb2.TaskSuccess(outputs=outputs(0, 1)),
                 )
             )
             assert rep.accepted
@@ -885,3 +920,50 @@ def test_serve(tmp_path):
     finally:
         stop.set()
         server.stop(None)
+
+
+def test_cleanup_tolerates_missing_or_broken_temp(new_job, caplog):
+    c, _, job = new_job()
+    j = c.s._jobs[job]
+    temp = os.path.join(path(j.spec.output), TEMP_DIR)
+    os.rmdir(temp)
+    j.cleanup()  # already gone
+    with open(temp, "w"):
+        pass  # a file, which rmtree refuses
+    j.cleanup()
+    assert "cleaning up job output: job job-1" in caplog.text
+    assert os.path.isfile(temp)
+
+
+def test_job_ids_continue_from_the_highest(new_job):
+    c, _, _ = new_job()
+    end_active(c.s)
+    rec = log_pb2.JobSubmitted(job_id="job-9", job=types_pb2.JobSpec(num_reduce_tasks=1))
+    rec.splits.add(uri="file:///x", length=1)
+    with c.s._mu:
+        c.s._submit(rec, 1.0)
+        c.s._end(c.s._active, "", 2.0)
+        rec.job_id = "odd"
+        c.s._submit(rec, 3.0)
+    assert c.s._seq == 10  # job-9, then one more for the odd ID
+
+
+def test_assign_error_is_internal(new_job, monkeypatch):
+    c, w, job = new_job()
+
+    def broken(*_):
+        raise ValueError("coordinator: no task")
+
+    monkeypatch.setattr(c.s._jobs[job].tasks, "assign", broken)
+    with pytest.raises(Aborted) as e:
+        c.request(w)
+    assert (e.value.code, e.value.details) == (grpc.StatusCode.INTERNAL, "coordinator: no task")
+
+
+def test_end_ignores_an_ended_job(new_job):
+    c, _, job = new_job()
+    j = c.s._jobs[job]
+    end_active(c.s, "first")
+    with c.s._mu:
+        c.s._end(j, "second", 5.0)
+    assert c.status(job).error == "first"
