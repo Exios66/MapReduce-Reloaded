@@ -73,12 +73,6 @@ class Config:
     # How long the job may hold back its map tasks from workers not on a
     # host that holds their split (delay scheduling). Zero means never.
     locality_wait: float = 0.0
-    # Begins every worker and job ID the server gives out. A coordinator
-    # without a log numbers from 1 again when restarted, so serve sets a
-    # prefix of its own: a worker still holding the last run's IDs, or files
-    # under a job's ID, must not take them for this run's. recover ignores
-    # it, as the log keeps IDs unique.
-    id_prefix: str = ""
     # The write-ahead log: every change to a job or its tasks is appended to
     # it before any reply depends on it (§3.3).
     log: Log | None = None
@@ -98,6 +92,13 @@ class Config:
     clock: Callable[[], float] | None = None
     # The built-in programs the workers have.
     programs: frozenset = PROGRAMS
+    # Begins every worker and job ID the server gives out. A coordinator
+    # without a log numbers from 1 again when restarted, so serve sets a
+    # prefix of its own: a worker still holding the last run's IDs, or files
+    # under a job's ID, must not take them for this run's. recover ignores
+    # it, as the log keeps IDs unique. Last, so positional arguments keep
+    # the meaning they had before it was added.
+    id_prefix: str = ""
 
 
 class RpcError(Exception):
