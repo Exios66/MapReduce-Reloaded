@@ -89,7 +89,7 @@ them except the 13 below. These make no difference that a test could see:
 
 `make mutate-py` does the same for the Python MRKV format and partition
 function with [mutmut](https://github.com/boxed/mutmut), installed by
-`pip install -e 'python[mutation]'`; `python/pyproject.toml` names the
+`pip install -e 'python[dev,mutation]'`; `python/pyproject.toml` names the
 files and the tests it runs. It takes about a minute.
 
 | File | Killed | Survived | Score |

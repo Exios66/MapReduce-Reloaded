@@ -188,7 +188,7 @@ mutate:
 	cd go && go run ./tools/mutate ./internal/task task.go
 
 # The same for the Python MRKV format and partition function, with mutmut
-# (pip install -e 'python[mutation]'); the files and tests are set in
+# (pip install -e 'python[dev,mutation]'); the files and tests are set in
 # python/pyproject.toml. It needs fork, so Linux or macOS.
 mutate-py:
 	cd python && $(PYTHON) -m mutmut run && $(PYTHON) -m mutmut results

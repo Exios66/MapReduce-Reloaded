@@ -133,7 +133,11 @@ func dirSize(t *testing.T, dir string) int64 {
 	}
 	var n int64
 	for _, e := range entries {
-		if info, err := e.Info(); err == nil && info.Mode().IsRegular() {
+		info, err := e.Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().IsRegular() {
 			n += info.Size()
 		}
 	}
