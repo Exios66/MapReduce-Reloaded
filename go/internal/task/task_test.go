@@ -80,7 +80,7 @@ func TestMapThenReduce(t *testing.T) {
 		t.Fatalf("map counters %v", counts)
 	}
 
-	total, read := int64(0), int64(0) // the combiner leaves a, b and c
+	total, read, outBytes := int64(0), int64(0), int64(0) // the combiner leaves a, b and c
 	for r := range spec.R {
 		sources, closeSources, err := OpenSources([]string{MapOutput(dir, 0, int(r))})
 		if err != nil {
@@ -92,6 +92,11 @@ func TestMapThenReduce(t *testing.T) {
 		}
 		total += counts[ReduceOutputRecords]
 		read += counts[ReduceInputRecords]
+		outBytes += counts[ReduceOutputBytes]
+	}
+	// The text output adds a tab and a newline to each record.
+	if want := dirSize(t, spec.Output) - 2*total; outBytes != want {
+		t.Fatalf("reduce counted %d output bytes, want %d", outBytes, want)
 	}
 	if err := Cleanup(t.Context(), spec.Output); err != nil {
 		t.Fatal(err)
@@ -104,6 +109,35 @@ func TestMapThenReduce(t *testing.T) {
 	if _, err := Reduce(t.Context(), spec, api.TaskID{Kind: api.ReduceTask, Attempt: 1}, nil, nil, quiet); err == nil || len(dirNames(t, spec.Output)) != 2 {
 		t.Fatalf("late attempt: %v; output %v", err, dirNames(t, spec.Output))
 	}
+}
+
+// MapInputBytes counts the split's bytes, wherever in the file it starts.
+func TestMapInputBytes(t *testing.T) {
+	spec, split := setup(t, "a b a\nc\n")
+	split.Start = 4
+	_, counts, err := Map(t.Context(), spec, api.TaskID{Kind: api.MapTask}, split, t.TempDir(), nil, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts[MapInputBytes] != 4 {
+		t.Fatalf("%d input bytes, want 4", counts[MapInputBytes])
+	}
+}
+
+// dirSize returns the total size of the regular files directly in dir.
+func dirSize(t *testing.T, dir string) int64 {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n int64
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && info.Mode().IsRegular() {
+			n += info.Size()
+		}
+	}
+	return n
 }
 
 // A cancelled attempt, such as a backup whose twin finished first, stops

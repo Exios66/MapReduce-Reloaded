@@ -108,6 +108,9 @@ func TestNextRank(t *testing.T) {
 	if next, _ := tt.Next(func(uint32) int { panic("ranked a reduce task") }); next != (Task{reduceKind, 0}) {
 		t.Fatalf("Next = %v, want reduce 0", next)
 	}
+	if next, _ := NewTaskTable(3, 1).Next(func(i uint32) int { return []int{1, 2, 3}[i] }); next != (Task{mapKind, 0}) {
+		t.Fatalf("Next = %v, want map 0, which ranks lowest", next)
+	}
 }
 
 func TestFirstCompletionWins(t *testing.T) {
@@ -182,6 +185,15 @@ func TestResetWorker(t *testing.T) {
 	if tt.ResetWorker("w2") != nil {
 		t.Fatal("resetting an unknown worker changed tasks")
 	}
+
+	// A task that keeps an attempt on another worker is not reset.
+	tt = NewTaskTable(1, 1)
+	mustAssign(t, tt, m0, "w1")
+	mustAssign(t, tt, m0, "w2")
+	if got := tt.ResetWorker("w1"); got != nil {
+		t.Fatalf("ResetWorker = %v, want nothing: w2 still runs %v", got, m0)
+	}
+	assertState(t, tt, m0, inProgress)
 }
 
 // A reduce that cannot fetch a map output sends that map task back to idle,
@@ -197,7 +209,9 @@ func TestFailWithLostOutput(t *testing.T) {
 	}
 	lost := tt.Sources(0)[0]
 	stale := &pb.PartitionLocation{MapIndex: 0, WorkerAddress: "w9:7000"}
-	for _, l := range []*pb.PartitionLocation{nil, stale} {
+	noMap := &pb.PartitionLocation{MapIndex: 1, WorkerAddress: "w1:7000"}
+	noPartition := &pb.PartitionLocation{MapIndex: 0, Partition: 1, WorkerAddress: "w1:7000"}
+	for _, l := range []*pb.PartitionLocation{nil, stale, noMap, noPartition} {
 		if err := tt.Fail(r0, mustAssign(t, tt, r0, "w2"), "w2", &pb.TaskFailure{LostOutput: l}); err != nil {
 			t.Fatal(err)
 		}
@@ -329,13 +343,22 @@ func TestErrors(t *testing.T) {
 	if _, err := tt.Skip(Task{mapKind, 1}); err == nil {
 		t.Error("Skip of an unknown task succeeded")
 	}
+	if a, err := tt.Assign(Task{mapKind, 1}, "w1", clock); a != 0 || err == nil {
+		t.Errorf("Assign of an unknown task = %d, %v", a, err)
+	}
+	if ok, err := tt.Complete(Task{mapKind, 1}, 0, "w1", nil); ok || err == nil {
+		t.Errorf("Complete of an unknown task = %v, %v", ok, err)
+	}
+	if n := tt.Failures(Task{mapKind, 1}); n != 0 {
+		t.Errorf("Failures of an unknown task = %d", n)
+	}
 	a := mustAssign(t, tt, m0, "w1")
 	if _, err := tt.Assign(m0, "w1", clock); err == nil {
 		t.Error("backed a task up on its own worker")
 	}
 	mustAssign(t, tt, m0, "w2")
-	if _, err := tt.Assign(m0, "w3", clock); err == nil {
-		t.Error("backed a task up twice")
+	if a, err := tt.Assign(m0, "w3", clock); a != 0 || err == nil {
+		t.Errorf("backed a task up twice: %d, %v", a, err)
 	}
 	nowhere := outputs(0, 2)
 	nowhere[1].Uri = ""
