@@ -113,6 +113,8 @@ func config(o options) coordinator.Config {
 // run serves coordinator RPCs at o.addr until ctx is done, then tells
 // workers to exit. A nonempty o.dataDir enables log recovery and
 // persistence; a nonempty o.httpAddr enables the status page and metrics.
+// Without o.dataDir, worker and job IDs include a prefix derived from the
+// current time.
 // If listening is not nil, run calls it with the RPC and HTTP addresses
 // (nil without -http) once both listen.
 // It returns storage, recovery, listen, and RPC server errors, joined with
