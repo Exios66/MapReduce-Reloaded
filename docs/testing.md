@@ -65,20 +65,27 @@ Measured on 2026-10-28, on the course VM:
 | Package, files | Killed | Survived | Score |
 |---|---|---|---|
 | `internal/partition`, `hash.go` | 7 | 0 | 100% |
-| `internal/extsort`, `merge.go sorter.go` | 59 | 17 | 77.6% |
-| `internal/coordinator`, `tasktable.go` | 94 | 13 | 87.9% |
-| `internal/task`, `task.go` | 53 | 6 | 89.8% |
+| `internal/extsort`, `merge.go sorter.go` | 71 | 5 | 93.4% |
+| `internal/coordinator`, `tasktable.go` | 103 | 4 | 96.3% |
+| `internal/task`, `task.go` | 55 | 4 | 93.2% |
 
-Not yet triaged, and the rest of #161:
+The first run left 36 survivors (77.6% to 89.8%). Tests now kill all of
+them except the 13 below. These make no difference that a test could see:
 
-- `extsort`: tuning constants that no test can pin down, and so are
-  equivalent mutants (`DefaultBudget`, `recordOverhead`, the spill file's
-  buffer size); boundary comparisons in the merge and in when to spill
-  (`merge.go:16,36,61`, `sorter.go:73,87,109,150`); and the spilled-byte
-  counters (`sorter.go:181,204`), which no test reads back.
-- `coordinator/tasktable.go`: initial values and boundaries at lines 96,
-  125, 133, 148, 152, 222, 241 and 244, and three booleans (171, 406, 434).
-- `task/task.go`: arithmetic at lines 85, 98 and 171, and initial values at
-  219, 225 and 229.
-- Python (`mutmut` on `formats/kv.py` and `partition/hash.py`) is not run
-  yet.
+- `extsort`: the tuning constants `DefaultBudget` and `recordOverhead`
+  (`sorter.go:30,33`); `s.arena[:1]` for `s.arena[:0]` after a spill
+  (`sorter.go:182`), since a record's offset is the arena's length; and
+  `index <= index` for `<` in the merge's tie break (`merge.go:61`), since
+  no two streams share an index.
+- `coordinator/tasktable.go`: -2 for the -1 that means "none yet"
+  (lines 96 and 125), and a starting best rank of 1 (125), which the first
+  candidate overwrites; `stopped := true` (406), which matters only for a
+  task in progress with no attempt, a state the table never leaves a task
+  in.
+- `task/task.go`: `writeKV`'s size on an error (lines 219, 225, 229), which
+  its caller discards; and each partition's sort budget,
+  `DefaultBudget * R` for `/ R` (85), which changes only memory use, and
+  would need a map task of over 64 MB to see.
+
+Python (`mutmut` on `formats/kv.py` and `partition/hash.py`) is not run
+yet.
