@@ -210,7 +210,10 @@ def test_ai_reviewers_skip_the_same_files():
         re.M,
     )
     codeant = json.loads((ROOT / ".codeant/configuration.json").read_text())
-    assert _excluded(rabbit) == _excluded(codeant["file_filters"]["config"]["exclude_files"])
+    # CodeAnt's schema takes one comma-separated string, not a list.
+    excluded = codeant["file_filters"]["config"]["exclude_files"]
+    assert isinstance(excluded, str)
+    assert _excluded(rabbit) == _excluded(excluded.split(","))
 
 
 def test_codeant_instructions_apply_to_pull_requests():

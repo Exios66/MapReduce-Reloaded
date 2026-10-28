@@ -3,38 +3,67 @@
     {
       "id": "no-bot-commits",
       "description": "Commits are authored by the repository owner. Leave findings as comments; never push commits or suggest co-author lines.",
-      "files": ["**/*"],
-      "scope": ["pr"]
+      "files": [
+        "*",
+        "**/*"
+      ],
+      "scope": [
+        "pr"
+      ]
     },
     {
       "id": "coordinator-wal-ordering",
       "description": "ADR 0007: every coordinator state change is appended to the write-ahead log before any reply depends on it. Flag a reply, cleanup or state change observable before its record is logged.",
-      "files": ["go/internal/coordinator/**", "python/mapreduce_reloaded/coordinator/**"],
-      "scope": ["pr"]
+      "files": [
+        "go/internal/coordinator/**",
+        "python/mapreduce_reloaded/coordinator/**"
+      ],
+      "scope": [
+        "pr"
+      ]
     },
     {
       "id": "go-python-parity",
       "description": "The Python coordinator mirrors the Go coordinator (#36). Flag a behavior or gRPC status-code change in one that the other lacks, unless the PR links an issue for it.",
-      "files": ["go/internal/coordinator/**", "python/mapreduce_reloaded/coordinator/**"],
-      "scope": ["pr"]
+      "files": [
+        "go/internal/coordinator/**",
+        "python/mapreduce_reloaded/coordinator/**"
+      ],
+      "scope": [
+        "pr"
+      ]
     },
     {
       "id": "monotonic-timers",
       "description": "Timeouts, heartbeats and retry timers use the monotonic clock (Go time.Since/time.Now with its monotonic reading; Python _clock or time.monotonic), not the wall clock.",
-      "files": ["go/**/*.go", "python/**/*.py"],
-      "scope": ["pr"]
+      "files": [
+        "go/**/*.go",
+        "python/**/*.py"
+      ],
+      "scope": [
+        "pr"
+      ]
     },
     {
       "id": "wire-compat",
       "description": "proto/ is shared by Go and Python. Flag renumbered or removed fields and changed semantics; these need an ADR.",
-      "files": ["proto/**"],
-      "scope": ["pr"]
+      "files": [
+        "proto/**"
+      ],
+      "scope": [
+        "pr"
+      ]
     },
     {
       "id": "docs-match-code",
       "description": "Commands, flags, defaults and metric names in docs must match the code; relative links must resolve.",
-      "files": ["**/*.md"],
-      "scope": ["pr"]
+      "files": [
+        "*.md",
+        "**/*.md"
+      ],
+      "scope": [
+        "pr"
+      ]
     }
   ]
 }
