@@ -163,7 +163,7 @@ succeeded, and every run's output matched the normal run's checksum.
 python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 ```
 
-Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1, E2 and E4 ran at commit `4b5a235`; E3 ran again at `9a3cd42`, after
+Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1 and E4 ran at commit `4b5a235`, and E2 again at `ca082a3` and `162be31` (below); E3 ran again at `9a3cd42`, after
 its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
@@ -214,20 +214,33 @@ E5 ran at `6b6c7be`; its harness log is
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E2-dark.png">
-  <img alt="E2: tasks completed over time and job time with a straggler" src="evaluation/E2.png">
+  <img alt="E2: tasks completed over time and job time, with and without a straggler and backups" src="evaluation/E2.png">
 </picture>
+
+Run again at `ca082a3` with a fourth setting, no straggler and backups off,
+which the first run lacked. Color marks the straggler; a dashed line and a
+hatched bar, backups off.
 
 | Setting | Job time (s) | Backups run | Backups won |
 |---|---|---:|---:|
-| no straggler | 11.80 (10.68–12.07) | 6 | 0 |
-| straggler, backups on | 15.68 (15.17–16.68) | 5–6 | 2–3 |
-| straggler, backups off | 23.68 (23.35–23.91) | 0 | 0 |
+| no straggler, backups on | 9.10 (8.83–10.24) | 5–6 | 0 |
+| no straggler, backups off | 8.16 (8.06–9.29) | 0 | 0 |
+| straggler, backups on | 11.24 (10.98–12.48) | 4 | 1 |
+| straggler, backups off | 17.58 (16.89–18.31) | 0 | 0 |
 
-- With one worker at 0.2 CPU, backups make the job a third faster
-  (15.7 s against 23.7 s), as in the paper's Figure 3(b).
-- It is still a third slower than with no straggler: the slow worker holds
-  some tasks for the whole map phase, and a backup only starts when the
-  phase is nearly done (§3.6).
+- With one worker at 0.2 CPU, backups make the job 36% faster (11.2 s
+  against 17.6 s), as in the paper's Figure 3(b).
+- It is still slower than with no straggler: the slow worker holds some
+  tasks for the whole map phase, and a backup only starts when the phase
+  is nearly done (§3.6).
+- With no straggler, backups run and never win. The table above suggests
+  they cost about a second, but that run took each setting's three runs in
+  a block, so drift on the VM fell on one setting. Ten pairs taken in turn
+  (`REPEAT=10 E2_SETTINGS="normal normal-no-backups"`, at `162be31`,
+  [`evaluation/E2-pairs/`](evaluation/E2-pairs/)) show no cost: 8.03 s
+  with backups and 8.20 s without, backups faster in 8 of 10 pairs; the
+  mean difference is -0.11 s, 95% interval -0.38 to +0.16 s (paired t,
+  p = 0.38; Wilcoxon signed-rank, p = 0.13).
 
 ### E3: losing a worker
 
