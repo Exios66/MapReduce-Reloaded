@@ -71,6 +71,8 @@ def test_expand_no_match(tmp_path):
         ([100, 300], 4, [1, 3]),
         ([100, 300], 8, [2, 6]),
         ([1, 1, 1], 4, [2, 1, 1]),  # a tie goes to the first file
+        ([1, 2], 4, [1, 3]),  # the larger remainder gets the leftover
+        ([2, 1], 4, [3, 1]),
         ([5, 5, 5], 2, [1, 1, 1]),  # more files than m
         ([1, 1 << 40], 10, [1, 9]),  # a tiny file still gets one
         ([1 << 62, 1 << 62], 1 << 30, [1 << 29, 1 << 29]),
@@ -107,8 +109,12 @@ def test_plan_m_skips_empty_files_and_rejects_zero(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert plan_m(Text(), [write_files(empty, [0, 0])], 64) == []
-    with pytest.raises(ValueError, match="at least 1"):
+    with pytest.raises(ValueError, match="^m must be at least 1$"):
         plan_m(Text(), [glob], 0)
+    # A one-byte file is not empty.
+    one = tmp_path / "one"
+    one.mkdir()
+    assert [s.end - s.start for s in plan_m(Text(), [write_files(one, [1, 100])], 2)] == [1, 100]
 
 
 def test_plan_stops_at_max_splits(tmp_path):
@@ -121,3 +127,18 @@ def test_plan_stops_at_max_splits(tmp_path):
     with pytest.raises(ValueError, match="map tasks"):
         plan_m(Text(), [glob], 120_000)
     assert len(plan(Text(), [glob], 2)) == 60_000
+    with pytest.raises(ValueError, match=r"\(120000 so far\); raise the split size$"):
+        plan(Text(), [glob], 1)
+
+
+def test_plan_allows_exactly_max_splits(tmp_path):
+    assert len(plan(Text(), [write_files(tmp_path, [MAX_SPLITS])], 1)) == MAX_SPLITS
+
+
+def test_size_for_empty_input_and_expand_order(tmp_path):
+    glob = write_files(tmp_path, [0, 0])
+    assert size_for([glob], 3) == 1
+    with pytest.raises(ValueError, match="^m must be at least 1$"):
+        size_for([glob], 0)
+    a, b = tmp_path / "f0.txt", tmp_path / "f1.txt"
+    assert expand([str(b), str(a)]) == [str(b), str(a)]
