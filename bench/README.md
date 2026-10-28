@@ -115,8 +115,8 @@ What the numbers show:
   - Every container shares one machine, so the shuffle crosses loopback,
     not a network, and saving bytes saves almost no time.
   - The paper's cluster shuffled over a real network (§5.1), where bytes
-    cost time. The Phase 7 benchmarks (#57, #58) will measure that across
-    machines.
+    cost time. Measuring that across machines is Phase 7
+    work (#56).
 
 ## Benchmarks and limits (#160)
 

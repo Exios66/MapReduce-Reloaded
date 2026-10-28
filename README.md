@@ -43,7 +43,7 @@ every container. Run every command from the repository root.
 | Python 3.11+ | `make upload-example` generates a web log with it | already there (3.12) |
 | Go 1.26+ (optional) | builds `bin/mr`; without it, `make mr` builds it in Docker | `scripts/vm-setup.sh --install` |
 
-The cluster needs 4 CPUs, about 3.7 GB of memory and a few GB of disk.
+The cluster needs 4 CPUs, about 3.3 GB of memory (3.7 GB with the S3 store) and a few GB of disk.
 [Cluster VM](docs/cluster-vm.md) has the budgets and the setup for the
 course VM, and the [runbook](docs/runbook.md) goes from SSH to a full demo.
 

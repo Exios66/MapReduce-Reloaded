@@ -65,7 +65,9 @@ return h                      # keep only the low 64 bits
   reducer. The combiner (#11) shrinks it on the map side.
 - **Can a job use its own partitioner?** Yes, the paper's example is
   `hash(hostname(url)) mod R`, so all pages of one site end up in the same
-  output file. That is paper feature F14, built later; this is the default.
+  output file. A program may set its own `Partitioner`, in Go and in
+  Python; the `distsort` example does, to keep its output in global order.
+  The hash is the default.
 - **Why `mod R` and not something fancier, like consistent hashing?** R is
   fixed for the whole job, so nothing gets re-shuffled when workers come and
   go. Consistent hashing solves a problem we don't have.

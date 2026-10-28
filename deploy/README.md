@@ -20,8 +20,9 @@ the CPU and memory budgets and the setup of the course VM.
 | `prometheus`, `grafana` | `monitoring` | 256 MB each | — | At `127.0.0.1:19090` and `127.0.0.1:13000` |
 
 The coordinator, the workers and `mr` see the test corpus at `/corpus` and
-job output in the `output` volume at `/out`; the `s3`, `prometheus` and
-`grafana` services mount neither. A container that goes over its limit is killed, and
+job output in the `output` volume at `/out`; `s3` mounts the corpus at
+`/data/corpus` and its own output volume, and `prometheus` and `grafana`
+mount neither. A container that goes over its limit is killed, and
 `make e2e` fails if any was.
 
 ## Commands
