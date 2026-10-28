@@ -16,7 +16,7 @@ GO_DL_BASE=${GO_DL_BASE:-https://go.dev/dl}
 GO_CACHE_DIR=${GO_CACHE_DIR:-$HOME/.cache/go-toolchain}
 
 # The toolchain line wins over the go line, as it does for the go command.
-version=$(awk '$1 == "toolchain" {sub(/^go/, "", $2); t = $2} $1 == "go" {g = $2} END {print t != "" ? t : g}' "$REPO/go/go.mod")
+version=$(awk '$1 == "toolchain" {sub(/^go/, "", $2); t = $2} $1 == "go" {g = $2} END {print (t != "" ? t : g)}' "$REPO/go/go.mod")
 case "$version" in
     [0-9]*.[0-9]*.[0-9]*) ;;
     *) echo "ci-install-go: go/go.mod names '$version'; need a full version like 1.26.0" >&2; exit 1 ;;

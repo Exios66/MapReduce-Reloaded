@@ -99,6 +99,12 @@ commands:
             - proto-tools-v1-{{ arch }}-{{ checksum "/tmp/tool-pins" }}
       - run:
           name: Install the generators
+          # Some pins need a newer Go than go.mod's (buf v1.74.0 needs
+          # 1.26.7); as in scripts/vm-setup.sh, the go command fetches that
+          # toolchain itself, checked against the Go checksum database. Lint
+          # and tests still run on the toolchain installed above.
+          environment:
+            GOTOOLCHAIN: auto
           command: make tools
       - save_cache:
           key: proto-tools-v1-{{ arch }}-{{ checksum "/tmp/tool-pins" }}
