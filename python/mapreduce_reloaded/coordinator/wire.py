@@ -37,14 +37,20 @@ def validate(m: types_pb2.JobSpec, programs=PROGRAMS) -> list[str]:
         errs.append(f"wire: unknown program {_q(m.program)}")
     if m.partitioner not in ("", "hash"):
         errs.append(f"wire: unknown partitioner {_q(m.partitioner)}")
-    for uri in [*m.inputs, m.output]:
+    for uri in m.inputs:
         try:
             path(uri)
         except ValueError as e:
             errs.append(str(e))
+    try:
+        output = path(m.output)
+    except ValueError as e:
+        errs.append(str(e))
+        output = m.output
     if not m.inputs:
         errs.append("no Inputs")
-    if not m.output:
+    # As Go, of the path: "file:" names none.
+    if not output:
         errs.append("no Output")
     if m.num_reduce_tasks == 0:
         errs.append("number of reduce tasks R must be at least 1")
@@ -80,7 +86,10 @@ def path(uri: str) -> str:
         raise ValueError(f"wire: {_q(uri)}: the Python coordinator stores only local files")
     if u.netloc not in ("", "localhost"):
         raise ValueError(f"wire: {_q(uri)} names a remote host")
-    return unquote(u.path)
+    p = unquote(u.path)
+    if "\x00" in p:  # no file system takes it
+        raise ValueError(f"wire: {_q(uri)} names a path with a NUL byte")
+    return p
 
 
 def uri(p: str) -> str:

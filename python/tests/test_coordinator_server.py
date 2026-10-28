@@ -1154,3 +1154,23 @@ def test_quoting_matches_go():
     ]:
         m.program = program
         assert validate(m) == [f'wire: unknown program "{want}"']
+
+
+def test_empty_and_nul_paths_are_invalid(tmp_path, monkeypatch):
+    """file: names no path, and %00 a path no file system takes: both are
+    invalid jobs, not a ./_temporary in the coordinator's directory or an
+    UNKNOWN status."""
+    with pytest.raises(ValueError, match='^wire: "file:///tmp/%00" names a path with a NUL byte$'):
+        path("file:///tmp/%00")
+    m = types_pb2.JobSpec(program="grep", inputs=["/i"], output="file:", num_reduce_tasks=1)
+    assert validate(m) == ["no Output"]
+    monkeypatch.chdir(tmp_path)
+    inp = write(tmp_path / "in")
+    for output in ("file:", "file:///tmp/%00", "file://localhost"):
+        req = coordinator_pb2.SubmitJobRequest(
+            job=types_pb2.JobSpec(
+                program="wordcount", inputs=[inp], output=output, num_reduce_tasks=1
+            )
+        )
+        assert code(Server().SubmitJob, req) == grpc.StatusCode.INVALID_ARGUMENT, output
+    assert not (tmp_path / TEMP_DIR).exists()
