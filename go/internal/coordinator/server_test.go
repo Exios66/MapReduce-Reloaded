@@ -651,7 +651,9 @@ func TestSubmitJobRejectsTooManySplits(t *testing.T) {
 	if err := f.Truncate(api.MaxMapTasks + 1); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	job := &pb.JobSpec{Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1, SplitSizeBytes: 1}
 	_, err = NewServer(Config{}).SubmitJob(ctx, &pb.SubmitJobRequest{Job: job})
 	assertCode(t, err, codes.InvalidArgument)

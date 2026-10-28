@@ -106,8 +106,8 @@ week-by-week schedule and a plain-language walkthrough, is in
   one PR, and each commit covers one concept.
 - Every feature ships with tests. `make check` should pass before every push;
   the pre-push hook runs it in clones where `make hooks` was run
-  ([ADR 0002](design/0002-local-quality-gate.md)), and GitHub Actions runs it
-  on every pull request ([ADR 0014](design/0014-ci-on-pull-requests.md)).
+  ([ADR 0002](design/0002-local-quality-gate.md)), and CircleCI runs it on
+  every pull request ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 - Each phase adds a short architecture decision record (ADR) under
   [`design/`](design/), covering the decision, the alternatives and the
   rationale.

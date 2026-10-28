@@ -2,6 +2,7 @@
 
 | Script | What it does |
 |---|---|
+| [`ci-install-go.sh`](ci-install-go.sh) | Installs the Go release named in `go/go.mod` for CircleCI, checking the archive's SHA-256 against go.dev's release list. See `docs/ci.md`. |
 | [`ci-report.sh`](ci-report.sh) | Runs `make check` on a clean clone of `HEAD` and posts a `local-ci/make-check` commit status to GitHub (needs `GITHUB_TOKEN`). `make ci-report`; see ADR 0014. |
 | [`gen-proto.sh`](gen-proto.sh) | Generates the Go and Python code from [`proto/`](../proto/), with the `protoc` bundled in `grpcio-tools`. Run it with `make proto`. |
 | [`chaos.sh`](chaos.sh) | Seeded chaos on the running Compose cluster (#29): during word count jobs it kills workers, pauses them past and short of the failure timeout, and crashes the coordinator, and every job must give the undisturbed run's output. `make chaos RUNS=5 SEED=1`; a failing run prints its seed. |
