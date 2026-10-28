@@ -1,6 +1,7 @@
 package split
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -115,7 +116,9 @@ func TestAllocate(t *testing.T) {
 		{[]int64{100}, 8, []int{8}},
 		{[]int64{100, 300}, 4, []int{1, 3}},
 		{[]int64{100, 300}, 8, []int{2, 6}},
-		{[]int64{1, 1, 1}, 4, []int{2, 1, 1}},  // a tie goes to the first file
+		{[]int64{1, 1, 1}, 4, []int{2, 1, 1}}, // a tie goes to the first file
+		{[]int64{1, 2}, 4, []int{1, 3}},       // the larger remainder gets the leftover
+		{[]int64{2, 1}, 4, []int{3, 1}},
 		{[]int64{5, 5, 5}, 2, []int{1, 1, 1}},  // more files than m
 		{[]int64{1, 1 << 40}, 10, []int{1, 9}}, // a tiny file still gets one
 		{[]int64{1 << 62, 1 << 62}, 1 << 30, []int{1 << 29, 1 << 29}},
@@ -125,6 +128,64 @@ func TestAllocate(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("Allocate(%v, %d) = %v, want %v", tc.sizes, tc.m, got, tc.want)
 		}
+	}
+}
+
+// Allocate gives the same result as its plain definition: each file left
+// with no split takes one from the first file with the most. A file far
+// larger than the rest, the case that makes that definition quadratic, stays fast.
+func TestAllocateMatchesDefinition(t *testing.T) {
+	naive := func(sizes []int64, m int) []int {
+		if len(sizes) == 0 || m <= len(sizes) {
+			return Allocate(sizes, m)
+		}
+		alloc := make([]int, len(sizes))
+		var total uint64
+		for _, s := range sizes {
+			total += uint64(s)
+		}
+		rems := make([]uint64, len(sizes))
+		given := 0
+		for i, s := range sizes {
+			q, r := bits128Div(uint64(m), uint64(s), total)
+			alloc[i], rems[i] = int(q), r
+			given += int(q)
+		}
+		order := make([]int, len(sizes))
+		for i := range order {
+			order[i] = i
+		}
+		slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(rems[b], rems[a]) })
+		for _, i := range order[:m-given] {
+			alloc[i]++
+		}
+		for i := range alloc {
+			if alloc[i] == 0 {
+				alloc[i] = 1
+				alloc[slices.Index(alloc, slices.Max(alloc))]--
+			}
+		}
+		return alloc
+	}
+	r := rand.New(rand.NewPCG(1, 2))
+	for range 2000 {
+		sizes := make([]int64, 1+r.IntN(12))
+		for i := range sizes {
+			sizes[i] = 1 + r.Int64N([]int64{3, 100, 1 << 40}[r.IntN(3)])
+		}
+		m := 1 + r.IntN(60)
+		if got, want := Allocate(sizes, m), naive(sizes, m); !slices.Equal(got, want) {
+			t.Fatalf("Allocate(%v, %d) = %v, want %v", sizes, m, got, want)
+		}
+	}
+	sizes := make([]int64, 99_999)
+	for i := range sizes {
+		sizes[i] = 1
+	}
+	sizes[0] = 1 << 50
+	alloc := Allocate(sizes, formats.MaxSplits)
+	if alloc[0] != formats.MaxSplits-len(sizes)+1 || slices.Min(alloc) != 1 {
+		t.Fatalf("one large file and many small ones: got %d for the large one", alloc[0])
 	}
 }
 
