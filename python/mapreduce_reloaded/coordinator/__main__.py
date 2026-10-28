@@ -15,6 +15,7 @@ and 1 for any other error.
 """
 
 import argparse
+import fcntl
 import json
 import logging
 import os
@@ -191,6 +192,26 @@ def setup_logs(fmt: str, stream=None):
     root.setLevel(logging.INFO)
 
 
+def lock(data_dir: str):
+    """Takes the lock of data_dir, which its coordinator holds while it
+    runs, and returns the open lock file; closing it releases the lock. A
+    second coordinator on the directory, whatever its -addr, would truncate
+    the log under the first and remove its compaction. Raises OSError if
+    another process holds it."""
+    f = open(os.path.join(data_dir, "coordinator.lock"), "a+")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        f.seek(0)
+        holder = f.read().strip() or "unknown"
+        f.close()
+        raise OSError(f"-data-dir {data_dir} is in use by another coordinator (pid {holder})")
+    f.truncate(0)
+    f.write(f"{os.getpid()}\n")
+    f.flush()
+    return f
+
+
 def run(
     o: Options,
     stop: threading.Event,
@@ -202,12 +223,19 @@ def run(
     persistence; a nonempty o.http enables the status page and metrics.
     If listening is not None, run calls it with the RPC and HTTP ports (None
     without -http) once both listen. It raises recovery, listen and log
-    errors; the log is closed on return."""
+    errors, and an error if another coordinator holds o.data_dir; the log
+    is closed and the directory unlocked on return."""
     cfg = config(o)
     coordinator: Server | None = None
+    held = None
     if o.data_dir:
         os.makedirs(o.data_dir, exist_ok=True)
-        coordinator, _ = recover(cfg, os.path.join(o.data_dir, "coordinator.log"))
+        held = lock(o.data_dir)
+        try:
+            coordinator, _ = recover(cfg, os.path.join(o.data_dir, "coordinator.log"))
+        except BaseException:
+            held.close()
+            raise
     try:
         if coordinator is None:
             server, coordinator, port, monitor = serve(grpc_address(o.addr), cfg)
@@ -232,6 +260,8 @@ def run(
     finally:
         if coordinator is not None:  # None if serve could not listen
             coordinator.close()
+        if held is not None:
+            held.close()
 
 
 def main(argv: list[str] | None = None) -> int:

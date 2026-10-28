@@ -1,6 +1,7 @@
 """Tests for python -m mapreduce_reloaded.coordinator, ported from
 go/cmd/coordinator/main_test.go."""
 
+import fcntl
 import io
 import json
 import logging
@@ -224,6 +225,38 @@ def test_run_errors(running, tmp_path):
     (tmp_path / "file").write_text("")
     with pytest.raises(OSError):
         running(cmd.Options(addr="127.0.0.1:0", http="", data_dir=str(tmp_path / "file")))
+
+
+def test_run_locks_data_dir(running, tmp_path, monkeypatch):
+    """A second coordinator on a -data-dir in use is refused, whatever its
+    -addr, before it touches the log; the lock is released when the first
+    stops, and when recovery fails."""
+    o = cmd.Options(addr="127.0.0.1:0", http="", data_dir=str(tmp_path / "wal"))
+    _, _, halt = running(o)
+    log = (tmp_path / "wal" / "coordinator.log").read_bytes()
+    with pytest.raises(OSError, match=f"in use by another coordinator \\(pid {os.getpid()}\\)"):
+        running(cmd.Options(addr="127.0.0.1:0", http="", data_dir=o.data_dir))
+    assert (tmp_path / "wal" / "coordinator.log").read_bytes() == log
+    halt()
+    _, _, halt = running(o)
+    halt()
+
+    def bad_log(cfg, path):
+        raise ValueError("bad record")
+
+    monkeypatch.setattr(cmd, "recover", bad_log)
+    with pytest.raises(ValueError):
+        running(o)
+    with open(tmp_path / "wal" / "coordinator.lock") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released
+
+
+def test_lock_without_holder(tmp_path):
+    """A lock held by a process that wrote no pid says so."""
+    with open(tmp_path / "coordinator.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        with pytest.raises(OSError, match=r"\(pid unknown\)"):
+            cmd.lock(str(tmp_path))
 
 
 def test_main(tmp_path, capsys):
