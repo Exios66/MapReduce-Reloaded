@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +27,10 @@ func TestRunLocksDataDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := fmt.Sprintf("-data-dir %s is in use by another coordinator (pid %d)", dir, os.Getpid())
-	if err := run(t.Context(), o, nil); err == nil || err.Error() != want {
+	// Without the lock the second one would serve: stop it once it listens.
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if err := run(ctx, o, func(net.Addr, net.Addr) { cancel() }); err == nil || err.Error() != want {
 		t.Fatalf("second run: %v; want %q", err, want)
 	}
 	if after, _ := os.ReadFile(logPath); !bytes.Equal(after, before) {
