@@ -178,7 +178,15 @@ func (w *Worker) serve(ctx context.Context, cur *current) error {
 		if report == nil {
 			continue
 		}
-		if _, err := w.coordinator.ReportTask(ctx, report); err != nil {
+		_, err = w.coordinator.ReportTask(ctx, report)
+		if status.Code(err) == codes.NotFound {
+			// The coordinator no longer knows the job, as after a restart
+			// without its log or once it forgets an ended job: there is
+			// no one to tell, and the worker can still run other jobs.
+			w.logger.Warn("report for an unknown job dropped", "err", err)
+			continue
+		}
+		if err != nil {
 			return fmt.Errorf("report task: %w", err)
 		}
 	}
