@@ -6,6 +6,7 @@
 /go/mr
 *.test
 *.out
+/go/.cover/
 
 # Python
 __pycache__/

@@ -34,15 +34,26 @@ var (
 	buildErr  error
 )
 
+// coverDir, from MR_E2E_GOCOVERDIR, is where the commands write their
+// coverage counters if set (make go-test), so that what only a process
+// runs, such as main, counts toward each package's coverage.
+var coverDir = os.Getenv("MR_E2E_GOCOVERDIR")
+
 // bin returns the path of a built command, building all three once, or
-// skips the test if they do not build.
+// skips the test if they do not build. With coverDir they are built to
+// count coverage of every package in the module.
 func bin(t *testing.T, name string) string {
 	t.Helper()
 	buildOnce.Do(func() {
 		if binDir, buildErr = os.MkdirTemp("", "mr-e2e-bin-"); buildErr != nil {
 			return
 		}
-		out, err := exec.Command("go", "build", "-o", binDir, "../../cmd/coordinator", "../../cmd/worker", "../../cmd/mr").CombinedOutput()
+		args := []string{"build", "-o", binDir}
+		if coverDir != "" {
+			args = append(args, "-cover", "-covermode=atomic", "-coverpkg=github.com/exios66/mapreduce-reloaded/go/...")
+		}
+		args = append(args, "../../cmd/coordinator", "../../cmd/worker", "../../cmd/mr")
+		out, err := exec.Command("go", args...).CombinedOutput()
 		if err != nil {
 			buildErr = fmt.Errorf("%v\n%s", err, out)
 		}
@@ -51,6 +62,18 @@ func bin(t *testing.T, name string) string {
 		t.Skipf("cannot build the commands: %v", buildErr)
 	}
 	return filepath.Join(binDir, name)
+}
+
+// command returns a command that runs the built command name, writing its
+// coverage counters to coverDir if set.
+func command(t *testing.T, name string, args ...string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command(bin(t, name), args...)
+	cmd.Env = os.Environ()
+	if coverDir != "" {
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+	}
+	return cmd
 }
 
 func TestMain(m *testing.M) {
@@ -72,8 +95,8 @@ type proc struct {
 
 func start(t *testing.T, name string, env []string, args ...string) *proc {
 	t.Helper()
-	p := &proc{name: name, cmd: exec.Command(bin(t, strings.Fields(name)[0]), args...), done: make(chan struct{})}
-	p.cmd.Env = append(os.Environ(), env...)
+	p := &proc{name: name, cmd: command(t, strings.Fields(name)[0], args...), done: make(chan struct{})}
+	p.cmd.Env = append(p.cmd.Env, env...)
 	p.cmd.Stdout, p.cmd.Stderr = &p.out, &p.out
 	if err := p.cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -161,7 +184,7 @@ func (c *cluster) startCoordinator() {
 func mr(t *testing.T, args ...string) string {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(bin(t, "mr"), args...)
+	cmd := command(t, "mr", args...)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("mr %s: %v\n%s%s", strings.Join(args, " "), err, stdout.String(), stderr.String())
@@ -177,7 +200,7 @@ func (c *cluster) submit(args ...string) string {
 // status returns the job's status as name/value pairs, or nil if the
 // coordinator cannot be reached.
 func (c *cluster) status(job string) map[string]string {
-	out, err := exec.Command(bin(c.t, "mr"), "status", "-coordinator", c.addr, job).Output()
+	out, err := command(c.t, "mr", "status", "-coordinator", c.addr, job).Output()
 	if err != nil {
 		return nil
 	}
