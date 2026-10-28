@@ -14,8 +14,9 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/task"
 )
 
-// A failure report says which record crashed the user's code, or which map
-// output could not be fetched, however deeply the error is wrapped.
+// A failure report says which record crashed the user's code, which map
+// output could not be fetched, or that no attempt of the job can run,
+// however deeply the error is wrapped.
 func TestReportFailure(t *testing.T) {
 	w := New(nil, "", nil)
 	src := &pb.PartitionLocation{MapIndex: 2, WorkerAddress: "w1:1"}
@@ -26,12 +27,28 @@ func TestReportFailure(t *testing.T) {
 		{errors.New("boom"), &pb.TaskFailure{}},
 		{fmt.Errorf("map: %w", &task.CrashError{Record: 7}), &pb.TaskFailure{FailedRecord: proto.Uint64(7)}},
 		{fmt.Errorf("reduce: %w", &lostOutput{src, errors.New("gone")}), &pb.TaskFailure{LostOutput: src}},
+		{fmt.Errorf("map: %w", &fatalError{errors.New("bad job")}), &pb.TaskFailure{Fatal: true}},
 	} {
 		got := w.report(&pb.TaskAttemptId{}, slog.New(slog.DiscardHandler), nil, nil, tc.err).GetFailure()
 		tc.want.Message = tc.err.Error()
 		if !proto.Equal(got, tc.want) {
 			t.Errorf("report(%v) = %v, want %v", tc.err, got, tc.want)
 		}
+	}
+}
+
+// A job that cannot be loaded, such as a job file that does not compile,
+// fails its map and reduce attempts as fatal (#176).
+func TestBadJobIsFatal(t *testing.T) {
+	w := New(nil, "", nil)
+	job := &pb.JobSpec{Program: "wc.go", ProgramSource: "package main\n\nfunc Map("}
+	log := slog.New(slog.DiscardHandler)
+	var fatal *fatalError
+	if _, _, err := w.runMap(t.Context(), &pb.MapTask{Job: job}, log); !errors.As(err, &fatal) {
+		t.Errorf("map: %v; want a fatal error", err)
+	}
+	if _, err := w.runReduce(t.Context(), &pb.ReduceTask{Job: job}, log); !errors.As(err, &fatal) {
+		t.Errorf("reduce: %v; want a fatal error", err)
 	}
 }
 

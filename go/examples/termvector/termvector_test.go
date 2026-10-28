@@ -39,3 +39,16 @@ func TestBadMin(t *testing.T) {
 		t.Fatal("min=0 was accepted")
 	}
 }
+
+// A term with a Unicode space in it, which is not a word boundary,
+// survives the combiner and the reducer.
+func TestUnicodeSpaceInTerm(t *testing.T) {
+	in := "http://h/\ta\u00a0b a\u00a0b c\u0085\n"
+	got, err := run.Local(t, termvector.Program, []string{run.Write(t, in)}, 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "h\ta\u00a0b:2\n"; string(got) != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

@@ -7,7 +7,6 @@
 package job
 
 import (
-	"bytes"
 	"strconv"
 
 	"mapreduce/api"
@@ -15,19 +14,18 @@ import (
 
 // Map emits each ASCII-whitespace-delimited word in value with a count of 1,
 // returning the first emission error. For text input, key is the byte
-// offset of the line and value is the line.
+// offset of the line and value is the line. api.Words is compiled code:
+// splitting the line here, byte by byte, would run in the interpreter and
+// make the job several times slower (ADR 0015).
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	for _, w := range bytes.FieldsFunc(value, isSpace) {
-		if err := out.Emit(w, []byte("1")); err != nil {
+	one := []byte("1")
+	for _, w := range api.Words(value) {
+		if err := out.Emit(w, one); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-// isSpace is the same word boundary the registered wordcount uses: ASCII
-// whitespace only, so both versions give the same output.
-func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
 
 // Reduce sums base-10 int64 counts for key and emits their decimal total,
 // returning any emission error. Numeric parse errors are ignored.
@@ -44,5 +42,6 @@ func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), o
 }
 
 // Combine is optional. If present, it runs on map output (§4.3) and must
-// obey the rules in api.Combiner.
-var Combine = Reduce
+// obey the rules in api.Combiner. It sees every value a map task emits, so
+// it is the compiled api.Sum, which does what Reduce does.
+var Combine = api.Sum

@@ -1,0 +1,9 @@
+{
+  "commit": "6b6c7be022e1b0447545f30c81864512c0c3878e",
+  "dirty": false,
+  "cpus": 4,
+  "cpu": "INTEL(R) XEON(R) SILVER 4516Y+",
+  "memory_bytes": 8325894144,
+  "kernel": "6.8.0-139-generic",
+  "docker": "29.8.1"
+}

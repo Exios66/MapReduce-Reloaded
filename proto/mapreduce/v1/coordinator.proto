@@ -148,6 +148,9 @@ message TaskFailure {
   // output on shared storage, or one that fails its checksum, is not
   // reported here, and the map task is not run again.
   PartitionLocation lost_output = 3;
+  // The task cannot succeed on any attempt, as when the worker cannot load
+  // the job's program: the coordinator fails the job at once (#176).
+  bool fatal = 4;
 }
 
 message ReportTaskResponse {

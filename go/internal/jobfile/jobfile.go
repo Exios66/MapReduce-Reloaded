@@ -4,8 +4,8 @@
 //
 // A job file imports "mapreduce/api" for api.Context, api.Emitter and the task
 // kinds (api.TaskKind, api.MapTask, api.ReduceTask), the
-// same interfaces compiled programs use, and the standard library; nothing
-// else. Reduce and Combine take values as a plain
+// same interfaces compiled programs use, the compiled helpers api.Words and
+// api.Sum, and the standard library; nothing else. Reduce and Combine take values as a plain
 // func(yield func([]byte) bool), since Yaegi cannot import iter; the loader
 // passes the framework's iter.Seq[[]byte], which has the same underlying type.
 package jobfile
@@ -58,6 +58,8 @@ var symbols = interp.Exports{
 		"TaskKind":   reflect.ValueOf((*api.TaskKind)(nil)),
 		"MapTask":    reflect.ValueOf(api.MapTask),
 		"ReduceTask": reflect.ValueOf(api.ReduceTask),
+		"Sum":        reflect.ValueOf(api.Sum),
+		"Words":      reflect.ValueOf(api.Words),
 	},
 }
 

@@ -63,9 +63,41 @@ Every package has tests next to its code. The slower ones are in
 `internal/worker`: they start a coordinator and several workers in one
 process and check that jobs finish with the right output when workers die, the
 coordinator restarts, tasks hang, or records are bad. `TestChaos` does this at
-random from a seed:
+random from a seed, for word count. `TestChaosPrograms` does it for every
+example program, with the combiner on or off, each intermediate codec and both
+output formats, and adds lost map output files, duplicate reports and
+heartbeats, and a torn record at the end of the coordinator's log; its output
+must match local mode's byte for byte. The same flags apply to both (the
+`-run TestChaos` below runs both):
 
 ```sh
 go test ./internal/worker -run TestChaos -chaos.runs=50           # 50 seeded runs
 go test ./internal/worker -run TestChaos -chaos.seed=7 -chaos.runs=1   # replay seed 7
 ```
+
+`TestModel` in `internal/coordinator` drives the coordinator's RPCs with
+seeded random calls (several workers, duplicate, late and stale reports,
+lost map output, expiring workers, restarts from the log) and checks every
+reply and the job's status against a model of the job. It runs 15 seeds in
+`make check`; `-model.runs` and `-model.seed` run more or replay one.
+
+`internal/e2e` runs the built `coordinator`, `worker` and `mr` commands as
+separate processes on localhost ports: word count against the golden output,
+every example program, a worker killed with `SIGKILL` mid-job, a coordinator
+killed and restarted from its `-data-dir`, and `SIGTERM` stopping each
+process cleanly. It needs no Docker, so `make check` runs it; it takes about
+25 s, most of it the coordinator's 10 s wait before it declares the killed
+worker dead.
+
+Parsers and file formats also have fuzz targets: the WAL reader, the wire
+conversions, the shuffle reader, split planning, URI joining, metric labels,
+and the example programs' record parsers. `make fuzz` runs each one in turn
+for `FUZZTIME` (20s by default); a single target runs with `go test -fuzz`:
+
+```sh
+make fuzz FUZZTIME=1m
+go test ./internal/wal -run '^$' -fuzz '^FuzzOpen$' -fuzztime 30s
+```
+
+A crash is saved under the package's `testdata/fuzz/` and replays as an
+ordinary test from then on, so commit it with the fix.

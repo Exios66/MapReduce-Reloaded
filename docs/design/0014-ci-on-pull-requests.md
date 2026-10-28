@@ -1,7 +1,8 @@
 # ADR 0014 — CI on every pull request
 
 **Status:** accepted · **Supersedes:** [ADR 0002](0002-local-quality-gate.md)'s
-decision to run GitHub Actions by hand only
+decision to run GitHub Actions by hand only · **Amended:** CircleCI Free is the
+primary CI provider (#212, see [CI](../ci.md))
 
 ## Context
 
@@ -33,12 +34,41 @@ playing that role on a solo project) cannot see that the checks passed.
   `local-ci/make-check`, see below). Until then the rule rests on practice
   and on review.
 
+## CircleCI as the primary provider (#212)
+
+GitHub-hosted jobs fail on the account lock described below, and every failure
+notifies the owner. `.circleci/config.yml` therefore runs the same gate on
+CircleCI's Free plan, in four jobs named `proto`, `go`, `python-3.11` and
+`python-3.13`. Each job calls the same make targets as the Actions jobs, so the
+two providers cannot disagree about what a check means. [CI](../ci.md) has the
+jobs, the caches, the Free-plan limits, the setup the owner completes, and
+rollback.
+
+- CircleCI is the only CI. The Actions workflow is kept, runs only by hand
+  (`workflow_dispatch`), and is disabled in the repository's Actions
+  settings, so the billing lock no longer fails a run on every push. Its Go
+  job now installs Python, as the golden tests need it. Actions stay on for
+  the repository.
+- The required checks become the four CircleCI checks, in place of the
+  Actions names `proto`, `go`, `python` above.
+- `make check`, the pre-push hook and `make ci-report` are unchanged.
+- The Compose end-to-end test, the S3 test, the long chaos, fuzz and flaky
+  runs and the benchmarks stay on their own targets, outside CI.
+- The Free plan has a monthly credit allowance and is not unlimited. The
+  setup uses no paid feature (remote Docker, Docker layer caching, larger
+  resource classes).
+- What is committed is the configuration. Connecting the project, requiring
+  the checks and retiring the workflow are the owner's steps, in that order,
+  and only the first green CircleCI run makes the provider live.
+
 ## Workaround while hosted runners are unavailable
 
 On the owner's account every GitHub-hosted job currently fails within
-seconds, before any step runs. This is an account or billing problem, not a
-problem in the code. There are two ways round it, and both record the same
-checks on the PR.
+seconds, before any step runs. The jobs have no log, but each one's check
+run has an annotation that names the cause (confirmed 2026-10-27, #181):
+"The job was not started because your account is locked due to a billing
+issue." Only the account owner can clear it, under Settings, Billing.
+There are two ways round it, and both record the same checks on the PR.
 
 - **Self-hosted runner.** Every job uses `runs-on: ${{ vars.CI_RUNNER ||
   'ubuntu-latest' }}`. Register a self-hosted runner on the course VM
@@ -59,6 +89,14 @@ checks on the PR.
   statuses: write" on this repository. It refuses to run with uncommitted
   changes, and never prints the token. Run it after the last push to a PR.
   It does not depend on Actions at all, so it is the dependable option.
+  Since #189 every PR has been merged on this status: `make check` runs on
+  the course VM in a clean worktree of the PR's head commit, and the
+  status is posted through the API, where it shows on the PR. The status
+  is narrower than the workflow in one way: the Python checks run under
+  the VM's one interpreter, 3.12, where the workflow's matrix runs 3.11 and
+  3.13. A change that breaks only one of those versions can pass it, so
+  until Actions run again, a change to the Python package that uses
+  version-specific features is also tested under 3.11 by hand.
 
 ## Alternatives considered
 

@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 bench bench-codecs tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -82,10 +82,17 @@ monitoring-up:
 e2e: cluster-up mr
 	scripts/e2e.sh
 
+# Seeded chaos on the cluster (#29): worker kills and pauses and coordinator
+# restarts during word count jobs, which must all give the same output.
+# RUNS (default 5) runs from SEED (default 1); see scripts/chaos.sh.
+chaos: cluster-up mr
+	scripts/chaos.sh $(or $(RUNS),5) $(or $(SEED),1)
+
 # The same job with input and output in the s3 profile's store.
 e2e-s3: cluster-up
 	$(COMPOSE) --profile s3 up -d --wait s3
 	scripts/e2e.sh s3
+	cd go && go test -count=1 ./internal/storage -run TestGatewayContract -s3.endpoint=http://127.0.0.1:18790
 
 # One of the paper's benchmarks, with its data rates over time
 # (bench/README.md): make bench SCENARIO=grep|sort|zipf.
@@ -96,6 +103,12 @@ bench:
 # Bytes shuffled and job time per intermediate codec (bench/README.md).
 bench-codecs: cluster-up
 	bench/codecs.sh
+
+# The Go benchmarks against bench/baseline.txt, failing on a slowdown of
+# more than THRESHOLD percent (default 20); PERF_UPDATE=1 rewrites the
+# baseline (#160). See scripts/perf.sh.
+perf:
+	PYTHON=$(PYTHON) scripts/perf.sh
 
 test: go-test py-test
 
@@ -142,23 +155,40 @@ proto-check: proto-lint proto-breaking proto
 	@test -z "$$(git ls-files --others --exclude-standard -- go/gen python/mapreduce_reloaded/gen)" || \
 		(echo "generated code has new files: git add them" && exit 1)
 
-# papermap and statusweb read docs and deployment files outside the Go
-# module, which the test cache does not track; -count=1 runs them every time.
-# -shuffle=on randomizes each package's test order to expose dependencies.
-# Failures print the seed; -shuffle=SEED repeats that order.
+# papermap and statusweb read docs, Python tests and deployment files outside
+# the Go module, which the test cache does not track; -count=1 runs them every
+# time. -shuffle=on runs each package's tests in a random order, so that no
+# test depends on another; a failure prints the seed, and -shuffle=SEED
+# repeats the order.
+# MR_PYTHON lets go/cmd/mr compare the Go examples with Python's (#153); a
+# relative PYTHON is a command name, looked up on the PATH.
+# Each package's coverage must stay at or over its floor in go/cover-floors.txt
+# and python/cover-floors.txt (scripts/cover.py, #161).
 go-test:
-	cd go && go test -race -shuffle=on ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
 flaky:
 	cd go && go test -race -shuffle=on -count=20 -timeout 90m ./internal/coordinator ./internal/worker ./internal/shuffle ./cmd/...
 
+# Run every Go fuzz target for FUZZTIME (default 20s) each, by hand: make
+# check runs only their stored seeds (#152). See scripts/fuzz.sh.
+fuzz:
+	scripts/fuzz.sh
+
 go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
 
 py-test:
-	cd python && $(PYTHON) -m pytest -q
+	cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
+	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
+
+# The tests, then each package's coverage against its floor.
+cover: test
+	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt --report
+	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt --report
 
 py-lint:
 	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench

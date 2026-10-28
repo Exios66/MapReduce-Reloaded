@@ -163,6 +163,15 @@ def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsy
     ]
 
 
+def test_e5_table_reports_coordinator_time_as_its_plot_does(plotter, capsys):
+    module, _ = plotter
+    module.table("E5", [row("compiled", 38), row("interpreted", 403)])
+    assert capsys.readouterr().out.splitlines()[-2:] == [
+        "| compiled | wordcount | 4 | 38.00 (38.00–38.00) | 1 of 1 |",
+        "| interpreted | wordcount | 4 | 403.00 (403.00–403.00) | 1 of 1 |",
+    ]
+
+
 def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, capsys):
     module, pyplot = plotter
     results, out = tmp_path / "results", tmp_path / "plots"
@@ -259,3 +268,134 @@ def test_timeline_with_no_valid_run_draws_empty_bars(plotter, tmp_path, exp):
     right.barh.assert_called_once()
     assert right.barh.call_args.args[1] == []
     right.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
+
+
+def tasks_file(path, job, samples, total=4):
+    with path.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["seconds", "job", "kind", "state", "value"])
+        for seconds, done in samples:
+            writer.writerow([seconds, job, "map", "total", total])
+            writer.writerow([seconds, job, "map", "completed", done])
+            writer.writerow([seconds, "job-other", "map", "completed", total])
+
+
+def test_map_phase_ends_when_every_map_task_is_done(plotter, tmp_path):
+    module, _ = plotter
+    path = tmp_path / "tasks.csv"
+    tasks_file(path, "job-1", [(1.0, 0), (1.5, 2), (3.0, 4), (3.5, 4)])
+    assert module.map_phase(path, "job-1") == pytest.approx(2.0)
+    tasks_file(path, "job-1", [(1.0, 0), (1.5, 3)])
+    assert module.map_phase(path, "job-1") is None
+
+
+def test_e5_compares_job_and_map_phase_times(plotter, tmp_path):
+    module, pyplot = plotter
+    jobs, maps = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (jobs, maps)
+    (tmp_path / "E5").mkdir()
+    rows = []
+    for n, (setting, seconds, phase) in enumerate(
+        (
+            ("compiled", 10, 8),
+            ("naive", 100, 80),
+            ("interpreted", 15, 12),
+            ("interpreted", 99, 1),
+        ),
+        start=1,
+    ):
+        job = f"job-{n}"
+        rows.append(row(setting, seconds, valid="0" if n == 4 else "1") | {"run": "1", "job": job})
+        tasks_file(tmp_path / "E5" / f"tasks-{setting}-1.csv", job, [(0, 0), (phase, 4)])
+    # Run 4 is invalid and overwrote nothing that counts: its file is for job-4.
+    tasks_file(tmp_path / "E5" / "tasks-interpreted-1.csv", "job-3", [(0, 0), (12, 4)])
+
+    module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
+
+    for axis, heights in ((jobs, [10, 15, 100]), (maps, [8, 12, 80])):
+        call = axis.bar.call_args
+        assert call.args[0] == [0, 1, 2]
+        assert call.args[1] == pytest.approx(heights)
+        labels = [c.args[0] for c in axis.annotate.call_args_list]
+        assert labels == [
+            f"{heights[0]:.1f} s",
+            f"{heights[1]:.1f} s (1.5×)",
+            f"{heights[2]:.1f} s (10.0×)",
+        ]
+
+
+def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
+    module, pyplot = plotter
+    jobs, maps = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (jobs, maps)
+    rows = [
+        row("compiled", 10) | {"run": "1", "job": "job-1"},
+        row("interpreted", 105) | {"run": "1", "job": "job-2"},
+    ]
+
+    module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
+
+    assert jobs.bar.call_args.args[0] == [0, 1]
+    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words, api.Sum)"]
+    assert [c.args[0] for c in jobs.annotate.call_args_list] == ["10.0 s", "105.0 s (10.5×)"]
+
+
+@pytest.mark.parametrize("field", ["seconds", "map_output_bytes"])
+@pytest.mark.parametrize("bad_value", [None, "not-a-number"])
+def test_e1_rejects_missing_or_invalid_measurements(plotter, tmp_path, field, bad_value):
+    module, pyplot = plotter
+    figure = Mock()
+    pyplot.subplots.return_value = figure, (Mock(), Mock())
+    measurement = row("s1.0-on")
+    if bad_value is None:
+        del measurement[field]
+    else:
+        measurement[field] = bad_value
+
+    with pytest.raises(KeyError if bad_value is None else ValueError):
+        module.e1([measurement], tmp_path / "E1.png", light(module))
+
+    figure.savefig.assert_not_called()
+
+
+def test_e1_propagates_save_errors(plotter, tmp_path):
+    module, pyplot = plotter
+    figure = Mock()
+    figure.savefig.side_effect = OSError("disk full")
+    left, right = Mock(), Mock()
+    left.get_legend_handles_labels.return_value = ([], [])
+    pyplot.subplots.return_value = figure, (left, right)
+
+    with pytest.raises(OSError, match="disk full"):
+        module.e1([row("s1.0-on")], tmp_path / "E1.png", light(module))
+
+
+@pytest.mark.parametrize("contents", ["", "setting,seconds,valid\n"])
+def test_main_skips_empty_e1_results(plotter, tmp_path, monkeypatch, capsys, contents):
+    module, pyplot = plotter
+    results = tmp_path / "results"
+    experiment = results / "E1"
+    experiment.mkdir(parents=True)
+    (experiment / "runs.csv").write_text(contents)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(results)])
+
+    module.main()
+
+    pyplot.subplots.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_e0_title_places_caption_on_a_second_line(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    axis.errorbar.return_value = [Mock()]
+    pyplot.subplots.return_value = figure, axis
+
+    module.e0([row("normal")], tmp_path / "E0.png", light(module))
+
+    title, subtitle = (call.args[2] for call in figure.text.call_args_list)
+    assert title == "E0: scaling over workers"
+    first, second = subtitle.split("\n")
+    assert first.startswith("Speed-up = job time on 1 worker")
+    assert "M = 32, R = 4" in second
+    figure.savefig.assert_called_once_with(tmp_path / "E0.png")

@@ -7,6 +7,7 @@ package wire
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"path/filepath"
 
@@ -81,11 +82,15 @@ func InputSplit(s formats.Split) (*pb.InputSplit, error) {
 	return &pb.InputSplit{Uri: uri, Offset: uint64(s.Start), Length: uint64(s.End - s.Start)}, nil
 }
 
-// Split returns the split m describes.
+// Split returns the split m describes. A range that does not fit in an
+// int64 file offset is rejected.
 func Split(m *pb.InputSplit) (formats.Split, error) {
 	path, err := Path(m.GetUri())
 	if err != nil {
 		return formats.Split{}, err
+	}
+	if m.GetOffset() > math.MaxInt64 || m.GetLength() > math.MaxInt64-m.GetOffset() {
+		return formats.Split{}, fmt.Errorf("wire: split [%d, +%d) is out of range", m.GetOffset(), m.GetLength())
 	}
 	start := int64(m.GetOffset())
 	return formats.Split{Path: path, Start: start, End: start + int64(m.GetLength())}, nil

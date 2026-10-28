@@ -22,7 +22,9 @@ case "${1:-}" in
 esac
 
 # Where Go is installed, and where its download and checksum list come from.
-# GO_DL_BASE can point at a mirror (or a local test server).
+# GO_DL_BASE can point at an HTTPS mirror. It must be HTTPS: the checksum
+# that vouches for the archive is fetched from the same place, so over plain
+# HTTP whoever can alter one response can alter both.
 GO_HOME="$HOME/.local/go"
 GO_DL_BASE=${GO_DL_BASE:-https://go.dev/dl}
 VENV="$REPO/python/.venv"
@@ -169,16 +171,20 @@ check_go() {
 install_go() {
     go_ok && return 0
     [ "$GOARCH" != unsupported ] || { echo "cannot install Go on this CPU" >&2; return 1; }
+    case "$GO_DL_BASE" in
+        https://*) ;;
+        *) echo "GO_DL_BASE must be an https:// URL, not $GO_DL_BASE" >&2; return 1 ;;
+    esac
     file="go$GO_WANT.linux-$GOARCH.tar.gz"
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
 
     echo "downloading $file ..."
-    curl -fsSL -o "$tmp/$file" "$GO_DL_BASE/$file"
+    curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$file" "$GO_DL_BASE/$file"
 
     # The expected SHA-256 comes from go.dev's published list of releases,
     # not from the download itself, so a corrupted or tampered file is caught.
-    curl -fsSL -o "$tmp/releases.json" "$GO_DL_BASE/?mode=json&include=all"
+    curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/releases.json" "$GO_DL_BASE/?mode=json&include=all"
     want=$(python3 -I - "$tmp/releases.json" "$file" <<'EOF'
 import json, sys
 releases = json.load(open(sys.argv[1]))
@@ -219,11 +225,18 @@ check_python() {
     fi
     report OK python "Python $pyver"
 
-    if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest' 2>/dev/null; then
+    if [ -x "$VENV/bin/python" ] && venv_ok; then
         report OK venv "$VENV"
     else
-        report MISSING venv "project venv not set up (run with --install)"
+        report MISSING venv "project venv not set up, or missing a dev dependency (run with --install)"
     fi
+}
+
+# venv_ok: true if the venv has the package and the dev tools make check
+# runs. A venv made before a dev dependency was added fails it, so
+# --install installs into it again.
+venv_ok() {
+    "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest, coverage' 2>/dev/null
 }
 
 # python_ok: true if python3 is 3.11+ with venv support. When it is not,
@@ -233,7 +246,7 @@ python_ok() {
 }
 
 install_venv() {
-    if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import mapreduce_reloaded, pytest' 2>/dev/null; then
+    if [ -x "$VENV/bin/python" ] && venv_ok; then
         return 0
     fi
     python3 -m venv "$VENV"

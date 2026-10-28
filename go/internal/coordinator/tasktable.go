@@ -28,6 +28,7 @@ type task struct {
 	worker   string                  // worker of the accepted attempt, once completed
 	outputs  []*pb.PartitionLocation // map tasks: one per partition, once completed
 	crashes  map[uint64]int          // attempts that crashed on each record
+	failures int                     // failed attempts, except fetches of lost map output
 	skip     []uint64                // records later attempts skip
 }
 
@@ -203,11 +204,24 @@ func (t *TaskTable) Fail(id Task, attempt uint32, worker string, f *pb.TaskFailu
 		delete(ts.running, attempt)
 		ts.idleIfStopped()
 		t.lose(f.GetLostOutput())
+		if f.GetLostOutput() == nil { // a lost map output is not this task's fault
+			ts.failures++
+		}
 		if f != nil && f.FailedRecord != nil && ts.crashed(f.GetFailedRecord()) {
 			t.skipped++
 		}
 	}
 	return nil
+}
+
+// Failures returns how many attempts of a task failed, not counting those
+// that could not fetch lost map output, or 0 for an invalid task.
+func (t *TaskTable) Failures(id Task) int {
+	ts, err := t.task(id)
+	if err != nil {
+		return 0
+	}
+	return ts.failures
 }
 
 // Skip returns the records that attempts of a task skip, in the order they

@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/exios66/mapreduce-reloaded/go/pkg/api"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -492,6 +494,41 @@ func TestPausedTaskRequest(t *testing.T) {
 	}
 }
 
+// The retention bound applies while the coordinator is idle too. Finishing
+// the newest job must not leave KeepJobs+1 ended jobs until another submit.
+func TestKeepJobsAfterCompletion(t *testing.T) {
+	for _, keep := range []int{1, 2} {
+		t.Run(fmt.Sprintf("keep=%d", keep), func(t *testing.T) {
+			s, w, first := newJobWith(t, Config{KeepJobs: keep}, 1)
+			in := filepath.Join(t.TempDir(), "in.txt")
+			if err := os.WriteFile(in, []byte("a\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for n := 1; n <= keep+1; n++ {
+				if !succeed(t, s, w, next(t, s, w), outputs(0, 1)) || !succeed(t, s, w, next(t, s, w), nil) {
+					t.Fatal("completion rejected")
+				}
+				if n <= keep {
+					if _, err := s.SubmitJob(ctx, &pb.SubmitJobRequest{Job: &pb.JobSpec{
+						Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1,
+					}}); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for n := 2; n <= keep+1; n++ {
+				if st := jobStatus(t, s, fmt.Sprintf("job-%d", n)); st.GetState() != pb.JobState_JOB_STATE_SUCCEEDED {
+					t.Fatalf("retained job not succeeded: %v", st)
+				}
+			}
+			_, err := s.GetJobStatus(ctx, &pb.GetJobStatusRequest{JobId: first})
+			if status.Code(err) != codes.NotFound {
+				t.Errorf("oldest ended job %s is still retained after %d completions (KeepJobs=%d): %v", first, keep+1, keep, err)
+			}
+		})
+	}
+}
+
 // A worker is told to stop the attempts it should no longer run (§3.6).
 func TestHeartbeatCancels(t *testing.T) {
 	s, w, _ := newJob(t, 1)
@@ -578,4 +615,49 @@ func TestMonitor(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+// A submission cannot choose how much state the coordinator allocates.
+func TestSubmitJobTaskCountLimits(t *testing.T) {
+	in := filepath.Join(t.TempDir(), "in.txt")
+	if err := os.WriteFile(in, []byte("a b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		job  *pb.JobSpec
+		want string
+	}{
+		{"reducers", &pb.JobSpec{NumReduceTasks: api.MaxReduceTasks + 1}, "reduce tasks R"},
+		{"mappers", &pb.JobSpec{NumReduceTasks: 1, NumMapTasks: api.MaxMapTasks + 1}, "map tasks M"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.job.Program, tc.job.Inputs, tc.job.Output = "wordcount", []string{in}, t.TempDir()
+			_, err := NewServer(Config{}).SubmitJob(ctx, &pb.SubmitJobRequest{Job: tc.job})
+			assertCode(t, err, codes.InvalidArgument)
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestSubmitJobRejectsTooManySplits(t *testing.T) {
+	in := filepath.Join(t.TempDir(), "big.txt")
+	f, err := os.Create(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(api.MaxMapTasks + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	job := &pb.JobSpec{Program: "wordcount", Inputs: []string{in}, Output: t.TempDir(), NumReduceTasks: 1, SplitSizeBytes: 1}
+	_, err = NewServer(Config{}).SubmitJob(ctx, &pb.SubmitJobRequest{Job: job})
+	assertCode(t, err, codes.InvalidArgument)
+	if !strings.Contains(err.Error(), "map tasks") && !strings.Contains(err.Error(), "the most is") {
+		t.Fatalf("got %v, want a split limit error", err)
+	}
 }

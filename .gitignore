@@ -15,6 +15,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .hypothesis/
+.coverage
+/python/cover.json
 
 # Job data, the host client and benchmark output
 /data/

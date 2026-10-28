@@ -1,0 +1,63 @@
+name: Test gap
+description: Behavior the tests do not cover, or a kind of test the project lacks.
+title: "Tests: <what is not checked>"
+labels: ["tests"]
+assignees: ["Exios66"]
+body:
+  - type: textarea
+    id: gap
+    attributes:
+      label: "What is not tested"
+      description: "The behavior, the code path or the kind of test. Say how you know: a coverage report, a bug that got through, or a read of the code."
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: "What could break unseen"
+      description: "The failure that would go unnoticed, and who would feel it."
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: "Kind of test"
+      options:
+        - Unit
+        - Property-based or fuzz
+        - In-process cluster
+        - Multi-process end to end
+        - Compose or deployment
+        - Chaos or fault injection
+        - Performance or memory limit
+        - Cross-language (Go and Python)
+        - Shell scripts
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: "Where it belongs"
+      description: "The package or file, and the existing tests it should sit next to."
+      placeholder: "go/internal/worker/disk_test.go"
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance criteria"
+      description: "Each new test must fail without the code it guards. Say how it runs: in `make check`, or in its own target."
+      value: |
+        - [ ] The test fails when the guarded code is removed or broken.
+        - [ ] It runs in `make check PYTHON=python`, or in a named target documented in docs/testing.md.
+        - [ ] It is deterministic: a fixed seed, no sleeps that race a clock.
+    validations:
+      required: true
+  - type: input
+    id: tracking
+    attributes:
+      label: "Tracking issue"
+      description: "The `epic` issue this belongs to, such as `#162`."
+      placeholder: "#162"
+    validations:
+      required: false

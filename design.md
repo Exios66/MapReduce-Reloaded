@@ -27,7 +27,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E4 run, [results](bench/README.md#evaluation-e0e4); E5 planned |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e5) |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -98,7 +98,9 @@ gRPC with protobuf messages, defined once in [`proto/`](proto/) and
 generated for Go and Python ([ADR 0003](docs/design/0003-rpc-contract.md)). The
 assignment's "boss" is our coordinator. Boss → workers runs in the replies:
 a worker asks with `RequestTask` and the coordinator answers with a task, so
-only workers open connections to the coordinator.
+only workers open connections to the coordinator. The RPCs are not encrypted
+or authenticated: the cluster trusts its network, and Compose publishes the
+coordinator on the VM's loopback only ([ADR 0018](docs/design/0018-trust-model.md)).
 
 | From → to | RPCs | Notes |
 |---|---|---|
@@ -144,8 +146,8 @@ resume a broken fetch at a byte offset and detect corruption.
 ### Tests
 
 Every check is a make target. `make check` runs them before every push, and
-GitHub Actions runs them on every pull request, on pushes to `main`, and
-on manual dispatches ([ADR 0014](docs/design/0014-ci-on-pull-requests.md)).
+CircleCI runs them on every pull request and on pushes to `main`
+([ADR 0014](docs/design/0014-ci-on-pull-requests.md), [CI](docs/ci.md)).
 
 | Kind | What it checks | Where |
 |---|---|---|
@@ -241,7 +243,7 @@ M, R and the commit.
 | E2 | Do backup tasks hide a straggler? | sort, 1 GiB, M = 32; one worker throttled to 0.2 CPU (`docker update --cpus 0.2`) at the start; coordinator `-backups` on and off; also no straggler | Tasks completed against time, one line per setting, as the paper's Figure 3; job-time bars beside it |
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
-| E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` | Job time and map-phase time, bars |
+| E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled
@@ -255,12 +257,12 @@ whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|all`
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|all`
 runs the experiments and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
 draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
-has the commands. E0, E1 and E2 report the coordinator's job time; E3 and E4
+has the commands. E0, E1, E2 and E5 report the coordinator's job time; E3 and E4
 report the time from submission until `mr status` sees the job finish,
 because a restarted coordinator times a job from its replay.
 
@@ -277,7 +279,7 @@ parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
-[`bench/README.md`](bench/README.md#evaluation-e0e4), with the commands that
+[`bench/README.md`](bench/README.md#evaluation-e0e5), with the commands that
 made them; the data is in `bench/evaluation/`. What they showed (course VM,
 2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
 workers for word count but only 2.3× for grep, whose one-second job is mostly
@@ -285,7 +287,11 @@ fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
 15× to 78× fewer bytes with the combiner, more with more skew, and ran 18%
 to 44% faster. E2's straggler cost 33% with backups and 101% without. E3 cost
 about the 10 s detection timeout when the kill came early and 27 s at 75%,
-when finished map output was lost. E4's restart cost 1.6 s.
+when finished map output was lost. E4's restart cost 1.6 s. E5's job file
+made word count 10.5× slower (399 s against 38 s), nearly all in the map
+phase; a profile traced most of it to the job file's per-byte word test, and
+with the compiled helpers `api.Words` and `api.Sum` the job file takes 91 s
+(2.4×).
 
 ### Process
 
@@ -294,12 +300,16 @@ four engineering practices:
 
 - **Never push to `main`.** Work goes to a branch, and `main` changes only by
   merging a pull request.
-- **Actions run tests on pull requests.** `.github/workflows/ci.yml` runs the
-  `make check` targets on every PR. While the account's hosted runners fail,
-  `make ci-report` runs the same checks and records the result on the PR's
-  commit ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165).
+- **CI runs tests on pull requests.** CircleCI (`.circleci/config.yml`) runs
+  the `make check` targets on every PR. GitHub's hosted runners fail on the
+  account's billing lock, so the Actions workflow runs only by hand; `make
+  ci-report` can still record a local run on the PR's commit
+  ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165, #212).
 - **Many small pull requests.** One concern each, as the roadmap's
   course-deliverable items are listed.
+  Issues and pull requests start from the forms and templates in
+  [`.github/`](.github/), which ask for the checks, the docs and the review
+  that each one needs.
 - **Feedback sought and given.** An AI agent reviews my pull requests with
   inline comments, and I answer each thread with a fix or a reason (sought).
   I review at least one pull request written by an AI agent and leave

@@ -21,7 +21,7 @@ chaos test passes 50 seeded runs.
 
 The host client with uploads to a shared `/data` mount, user job files
 submitted with each job, the benchmark harness and the evaluation of the
-special features (E0–E4, [below](#results)) are done. Next is experiment E5 (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
+special features (E0–E5, [below](#results)) are done (see [the course deliverables](docs/roadmap.md#course-deliverables-honors-project-1)
 and [design](design.md#key-decisions)). Python workers and Go↔Python interoperability (Phase 5) and the
 rest of Phase 6 are stretch goals. The [roadmap](docs/roadmap.md) has the full
 plan, and [the roadmap explained](docs/roadmap-explained.md) walks through it
@@ -80,7 +80,6 @@ is a complete one that works with the example data:
 package job
 
 import (
-	"bytes"
 	"strconv"
 
 	"mapreduce/api"
@@ -88,15 +87,14 @@ import (
 
 // Map is called once per input line: key is the line's byte offset, value the line.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	for _, w := range bytes.FieldsFunc(value, isSpace) {
-		if err := out.Emit(w, []byte("1")); err != nil {
+	one := []byte("1")
+	for _, w := range api.Words(value) {
+		if err := out.Emit(w, one); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-func isSpace(r rune) bool { return r == ' ' || '\t' <= r && r <= '\r' }
 
 // Reduce is called once per key, with every value emitted for it.
 func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), out api.Emitter) error {
@@ -110,11 +108,16 @@ func Reduce(ctx api.Context, key []byte, values func(yield func([]byte) bool), o
 }
 
 // Combine is optional: it runs on each map task's output before the shuffle.
-var Combine = Reduce
+// api.Sum does what Reduce does, in compiled code.
+var Combine = api.Sum
 ```
 
 `Map` and `Reduce` emit keys and values as bytes. Only the standard library
-and `mapreduce/api` can be imported. `ctx.Param("name")` reads a
+and `mapreduce/api` can be imported. The job file is interpreted, so work done
+for every byte or every value is best left to compiled code: the standard
+library, `api.Words` (split a line on ASCII whitespace) and `api.Sum` (total
+base-10 counts, as a `Reduce` or `Combine`). Splitting lines with a function
+of your own instead makes word count's map 6× slower. `ctx.Param("name")` reads a
 `-param name=value` given at submission.
 
 ### 4. Submit it
@@ -264,7 +267,7 @@ and `mr cat` resolve `/data/...` to `$MR_DATA_DIR` (default `./data`).
 Measured on the course VM (4 vCPUs, 8 GB, four one-CPU workers) on 1 GiB
 inputs with M = 32 and R = 4; each number is the median of three runs, and
 every run's output matched the normal run's. The tables, the raw CSVs, the
-logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e4)
+logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e5)
 and [`bench/evaluation/`](bench/evaluation/).
 
 | Experiment | Result |
@@ -274,6 +277,7 @@ and [`bench/evaluation/`](bench/evaluation/).
 | E2: backup tasks | With one worker slowed to 0.2 CPU, backups bring the job from 23.7 s down to 15.7 s |
 | E3: losing a worker | Every job finishes with the right output; the cost is the 10 s failure timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the write-ahead log costs 1.6 s (13%) and keeps every finished task |
+| E5: an interpreted job file | Word count as a job file takes 91 s against 38 s compiled (2.4×) with the compiled helpers `api.Words` and `api.Sum`, and 399 s (10.5×) without them |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
@@ -298,6 +302,11 @@ and [`bench/evaluation/`](bench/evaluation/).
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E4-dark.png">
   <img alt="E4: tasks completed over time and job time across a coordinator restart" src="bench/evaluation/E4.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E5-dark.png">
+  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="bench/evaluation/E5.png">
 </picture>
 
 ## Benchmarks
@@ -342,10 +351,14 @@ virtualenv's `python`, pass `PYTHON=...` (`make check PYTHON=python`).
 `make check` is the gate: it checks the generated code, runs the linters,
 and runs every test, including a short chaos run that kills workers and
 restarts the coordinator during jobs. The pre-push hook runs it before every
-push, and GitHub Actions runs the same targets on every pull request. Work
-reaches `main` only through pull requests. If hosted Actions runners are
-unavailable, `make ci-report` posts the result as a commit status instead
-(see ADR 0014). See
+push, and CI runs the same targets on every pull request in four jobs
+(`proto`, `go`, `python-3.11`, `python-3.13`). Work reaches `main` only
+through pull requests. CI runs on CircleCI's Free plan; the configuration is
+in `.circleci/config.yml`, and the owner connects the service, so see
+[CI](docs/ci.md) for the setup, the required checks and the Free-plan limits.
+The GitHub Actions workflow is disabled and kept for a run by hand, and
+`make ci-report` posts the result as a commit status when no hosted service
+is available. See
 [ADR 0002](docs/design/0002-local-quality-gate.md) and
 [ADR 0014](docs/design/0014-ci-on-pull-requests.md).
 

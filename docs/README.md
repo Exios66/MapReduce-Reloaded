@@ -11,6 +11,11 @@ Where to start depends on the question.
   roadmap explained](roadmap-explained.md) in plain language.
 - **What do the files look like?** [File format](file-format.md): the MRKV
   block format, its codecs, and the partition hash.
+- **How is it tested, and how do I run each kind of test?** [Testing](testing.md),
+  with the coverage floors.
+- **What checks run on a pull request, and how is CI set up?** [CI](ci.md):
+  the four CircleCI jobs, caching, the Free-plan limits, the steps the owner
+  completes, and troubleshooting.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
@@ -36,10 +41,11 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0011](design/0011-bad-records.md) | Skipping bad records after two crashes |
 | [0012](design/0012-observability.md) | Status page, hand-written metrics and structured logs |
 | [0013](design/0013-commit-on-object-storage.md) | Committing output on object storage |
-| [0014](design/0014-ci-on-pull-requests.md) | CI on every pull request (supersedes part of 0002) |
+| [0014](design/0014-ci-on-pull-requests.md) | CI on every pull request, now on CircleCI Free (supersedes part of 0002) |
 | [0015](design/0015-user-job-files.md) | User job files, interpreted by the workers |
 | [0016](design/0016-shared-storage-and-host-client.md) | Shared storage is a host directory, and the client runs on the host |
 | [0017](design/0017-disk-and-memory-bounds.md) | Workers delete ended jobs' map output; disk, memory and logs are bounded |
+| [0018](design/0018-trust-model.md) | The cluster trusts its network; what that costs, and what is bounded |
 
 ## Explainers
 

@@ -2,7 +2,7 @@
 results of bench/experiments.sh, and prints a Markdown table of each
 experiment's job times for bench/README.md.
 
-For each of E0 to E4 whose bench/results/EXPERIMENT/runs.csv
+For each of E0 to E5 whose bench/results/EXPERIMENT/runs.csv
 exists, this writes OUT_DIR/EXPERIMENT.png on a light background and
 OUT_DIR/EXPERIMENT-dark.png on a dark one. Every point is the median of
 the valid runs, with the range as an error bar; runs whose output differed
@@ -526,15 +526,98 @@ def e4(rows, results, out, t):
     finish(fig, out)
 
 
+def map_phase(path, job):
+    """Seconds from a job's first sample in a scrape-tasks.py file until all
+    its map tasks are completed, or None if the file never shows that."""
+    total, done, t0 = None, {}, None
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            if row["job"] != job or row["kind"] != "map":
+                continue
+            t = float(row["seconds"])
+            t0 = t if t0 is None else t0
+            if row["state"] == "total":
+                total = int(row["value"])
+            elif row["state"] == "completed":
+                done[t] = int(row["value"])
+    end = next((t for t in sorted(done) if total and done[t] >= total), None)
+    return None if end is None else end - t0
+
+
+def e5(rows, results, out, t):
+    """Saves E5's comparison to out, in theme t: job time and map-phase time
+    of word count compiled into the workers, as the example job file (which
+    calls the compiled helpers) and as the naive job file (which does not),
+    each labelled with its multiple of the compiled time. Settings with no
+    valid run are left out, so older results with two settings still plot.
+    Only valid="1" runs count; a run without a tasks file has no map-phase
+    time. Missing fields, invalid numbers, and file errors propagate."""
+    settings = {
+        "compiled": "compiled",
+        "interpreted": "job file\n(api.Words, api.Sum)",
+        "naive": "job file\n(own word test)",
+    }
+    present = [k for k in settings if valid(rows, setting=k)]
+    phases = {}
+    for setting in present:
+        times = []
+        for r in valid(rows, setting=setting):
+            path = results / "E5" / f"tasks-{setting}-{r['run']}.csv"
+            m = map_phase(path, r["job"]) if path.exists() else None
+            if m is not None:
+                times.append({"phase": m})
+        phases[setting] = spread(times, "phase")
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4.4))
+    for ax, title, stats in (
+        (axes[0], "Job time (s)", [spread(valid(rows, setting=k), "seconds") for k in present]),
+        (axes[1], "Map phase (s)", [phases[k] for k in present]),
+    ):
+        kept = [(j, st) for j, st in enumerate(stats) if st]
+        xs, med = [j for j, _ in kept], [st[0] for _, st in kept]
+        colors = [t["series"][list(settings).index(present[j])] for j in xs]
+        ax.bar(xs, med, width=0.55, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2)
+        ranges(ax, t, xs, med, [st[1] for _, st in kept], [st[2] for _, st in kept])
+        base = stats[0][0] if stats and stats[0] and present[0] == "compiled" else 0
+        for j, st in kept:
+            label = f"{st[0]:.1f} s"
+            if j > 0 and base > 0:
+                label += f" ({st[0] / base:.1f}×)"
+            ax.annotate(
+                label,
+                (j, st[2]),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                color=t["ink2"],
+                fontsize=9,
+            )
+        top = max((st[2] for _, st in kept), default=0) or 1
+        ax.set_xticks(range(len(present)), [settings[k] for k in present])
+        ax.set_xlim(-0.6, len(present) - 0.4)
+        ax.set_ylim(0, top * 1.15)
+        ax.set_title(title)
+        ax.grid(axis="x", visible=False)
+    heading(
+        fig,
+        t,
+        "E5: what an interpreted job file costs in word count",
+        "The same program, compiled into the workers or sent as a job file the workers interpret.\n"
+        + label_note(rows)
+        + "; labels give the multiple of the compiled time.",
+    )
+    finish(fig, out, top=0.8)
+
+
 def table(exp, rows):
     """Prints a Markdown job-time table grouped by setting, program, and workers.
 
-    Uses coordinator seconds for E0, E1, and E2 and wall_seconds otherwise.
+    Uses coordinator seconds, as the plots do, except for E3 and E4, whose
+    kill or restart makes wall_seconds the job time.
     Each group shows the median and range of valid="1" runs and their count
     out of all runs; groups without valid runs show an em dash for time.
     Missing fields, invalid numbers, and output errors propagate.
     """
-    field = "seconds" if exp in ("E0", "E1", "E2") else "wall_seconds"
+    field = "wall_seconds" if exp in ("E3", "E4") else "seconds"
     print(f"\n{exp}\n")
     print("| Setting | Program | Workers | Job time (s) | Valid runs |")
     print("|---|---|---:|---|---:|")
@@ -560,7 +643,7 @@ def main():
 
     Results default to bench/results; output defaults to the results path.
     Creates the output directory, writes EXPERIMENT.png and
-    EXPERIMENT-dark.png for each nonempty E0 to E4 runs.csv, replacing
+    EXPERIMENT-dark.png for each nonempty E0 to E5 runs.csv, replacing
     existing plots, and prints tables to stdout.
     Missing or empty CSVs are skipped. Filesystem, CSV parsing, plotting,
     and table errors propagate.
@@ -574,6 +657,7 @@ def main():
         "E2": lambda rows, png, t: e2(rows, results, png, t),
         "E3": lambda rows, png, t: e3(rows, results, png, t),
         "E4": lambda rows, png, t: e4(rows, results, png, t),
+        "E5": lambda rows, png, t: e5(rows, results, png, t),
     }
     for exp, fn in draw.items():
         rows = load(results, exp)

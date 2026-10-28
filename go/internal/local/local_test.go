@@ -183,3 +183,34 @@ func TestErrors(t *testing.T) {
 var failMapper = api.MapFunc(func(api.Context, []byte, []byte, api.Emitter) error {
 	return errors.New("boom")
 })
+
+// BenchmarkWordCount runs word count over the corpus in local mode, with
+// the combiner and 4 reduce tasks.
+func BenchmarkWordCount(b *testing.B) {
+	for b.Loop() {
+		spec := api.JobSpec{Program: wordcount.Program, Inputs: corpusInputs, Output: filepath.Join(b.TempDir(), "out"), R: 4}
+		if _, err := Run(spec, b.TempDir()); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// Local runs reject a split size that makes more map tasks than the limit,
+// as the coordinator does, instead of running every one.
+func TestRunRejectsTooManySplits(t *testing.T) {
+	in := filepath.Join(t.TempDir(), "big.txt")
+	f, err := os.Create(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(api.MaxMapTasks + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	spec := api.JobSpec{Program: wordcount.Program, Inputs: []string{in}, Output: t.TempDir(), SplitSize: 1, R: 1}
+	if _, err := Run(spec, t.TempDir()); err == nil || !strings.Contains(err.Error(), "the most is") {
+		t.Fatalf("got %v, want a split limit error", err)
+	}
+}

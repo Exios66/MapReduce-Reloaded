@@ -52,9 +52,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is in part: E0–E4
-run with `bench/experiments.sh`; E5 (interpreted job files) has not yet been
-run. Phase 5, the rest of Phase 6 and #59 stay stretch goals.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals.
 
 ## Context
 
@@ -108,8 +106,8 @@ week-by-week schedule and a plain-language walkthrough, is in
   one PR, and each commit covers one concept.
 - Every feature ships with tests. `make check` should pass before every push;
   the pre-push hook runs it in clones where `make hooks` was run
-  ([ADR 0002](design/0002-local-quality-gate.md)), and GitHub Actions runs it
-  on every pull request ([ADR 0014](design/0014-ci-on-pull-requests.md)).
+  ([ADR 0002](design/0002-local-quality-gate.md)), and CircleCI runs it on
+  every pull request ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 - Each phase adds a short architecture decision record (ADR) under
   [`design/`](design/), covering the decision, the alternatives and the
   rationale.
@@ -268,7 +266,7 @@ Each phase ends in a runnable, tested state.
 - Heartbeats with timeouts, map re-execution on worker loss; reduce attempts get the new locations.
 - Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
-- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. Driving the same faults against the Compose cluster is #29.
+- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs and a torn log tail too (part of #155). Driving the same faults against the Compose cluster is #29.
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
 - Locality-aware scheduling, the status web UI, Prometheus `/metrics`, and all paper example programs.
@@ -304,7 +302,7 @@ Each phase ends in a runnable, tested state.
 
 - **Unit tests:** partitioner (cross-language hash vectors), external sort, record framing round-trip, task-table state machine (property-based).
 - **Golden tests:** every example job in distributed mode must produce output identical to `--local` mode on a fixed corpus (e.g. Project Gutenberg texts and a synthetic web-link graph).
-- **Fault-injection tests:** `cd go && go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). A Compose driver is #29.
+- **Fault-injection tests:** `cd go && go test ./internal/worker -run TestChaos -chaos.runs=50` (3 runs by default in `make check`). `make chaos` does the same on the Compose cluster's containers (`docker kill`, `docker pause`, coordinator crashes), seeded (#29).
 - **Interop tests:** the Phase 5 matrix.
 - **End-to-end smoke test:** `make e2e` starts the Compose cluster, submits word count with `mr submit`, compares the output with the golden output, and checks the job's reduce tasks in `/metrics`.
 - **Benchmarks** (`bench/`): throughput, job completion time, and the cost of stragglers with and without backup tasks.

@@ -93,6 +93,15 @@ Each ends with `e2e: output matches the golden output`. The golden output
 is what local mode produces, so this also shows the cluster agrees with
 the single-process oracle (§4.7).
 
+```sh
+make chaos RUNS=5 SEED=1     # worker kills and pauses, coordinator crashes, mid-job
+```
+
+`make chaos` runs word count over a 256 MiB Zipf input once undisturbed,
+then RUNS times with three to five seeded events each, and ends with
+`chaos: 5 runs from seed 1, each with the reference output`. A failing
+run prints its seed; `scripts/chaos.sh 1 SEED` replays it.
+
 ### 5.3 Upload data, submit a job file and read its output
 
 ```sh
@@ -150,16 +159,16 @@ Each run writes `rates.csv`, `samples.csv`, `status.txt` and `result.json`
 python/.venv/bin/pip install matplotlib     # once, for the plots
 mkdir -p bench/results
 nohup bench/experiments.sh all > bench/results/experiments.log 2>&1 &
-tail -f bench/results/experiments.log        # about an hour for all four
+tail -f bench/results/experiments.log        # about 90 minutes for all six
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E1|E2|E3|E4` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4|E5` runs one experiment of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
-SSH drops. The plots land in `bench/plots/E0.png` … `E4.png`, and the
+SSH drops. The plots land in `bench/plots/E0.png` … `E5.png`, and the
 script prints the tables that go in [`bench/README.md`](../bench/README.md#experiments).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
-E5 (the cost of interpreting a job file) is not in the script yet (#179).
+E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 
 ### 5.7 Monitoring (optional)
 

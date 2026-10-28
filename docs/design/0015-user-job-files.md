@@ -88,17 +88,23 @@ var Combine = Reduce
 - Each worker interprets the source once per job, then uses the same
   `api.Program` for every task of that job. A file that does not compile, or
   lacks `Map` or `Reduce`, must not be treated as an ordinary task failure.
-  Today `TaskTable.Fail` makes a failed task idle again, and only a
-  bad-record limit (`MaxSkippedRecords`) ends a job, so the task would be
-  retried forever. The design has two parts:
+  `TaskTable.Fail` makes a failed task idle again, so without more the task
+  would be retried until the attempt cap ended the job. The design has two
+  parts:
   - (Built.) The coordinator loads the source with the same interpreter when it
     accepts the submit, and rejects the submit with the interpreter's error
     (`InvalidArgument`). Most errors never reach a worker.
-  - (Planned.) `TaskFailure` gets a `fatal` field (a proto change). A worker that fails
-    to load the source, which can happen only if the interpreter differs from
+  - (Built, #176.) `TaskFailure` has a `fatal` field. A worker that fails
+    to load the job, which can happen only if its interpreter differs from
     the coordinator's, sets it. The coordinator then ends the job at once
-    through the same path as the bad-record limit, with the message shown in
-    `mr status`, and does not requeue the task.
+    through the same path as the bad-record limit, with "cannot run: …"
+    shown in `mr status`, and does not requeue the task.
+  - (Built, #176.) Any other task failure is retried, but a task whose
+    attempts fail `-max-task-failures` times (default 8; 0 for no limit)
+    ends its job with the last error. Only failures reported by the
+    running attempt count, and not reduce failures that name a lost map
+    output, since those are another task's fault. The limit must exceed
+    `SkipAfter` (2), so a crashing record is still skipped first.
 - Registered program names still work. `mr` takes a `.go` path or a name in
   the same position, so the examples, the golden tests and the benchmarks
   keep running compiled code.
@@ -122,7 +128,21 @@ var Combine = Reduce
 - Users write ordinary Go against a small API and submit a file. No rebuild
   and no restart.
 - Interpreted code is slower than compiled code. The evaluation measures
-  word count both ways, so the cost is known rather than guessed.
+  word count both ways, so the cost is known rather than guessed (E5). A
+  profile of word count's Map on 8 MiB of Zipf text (Apple M1) found most of
+  the cost was in calls from compiled code back into the interpreter, not in
+  the call into the job file: `bytes.FieldsFunc` with an interpreted
+  `isSpace` ran 92× slower than compiled, `bytes.Fields` 17×, and one
+  `Emit` per line 3×. So `mapreduce/api` offers compiled helpers for work
+  done per byte or per value: `api.Words` splits a line on ASCII whitespace
+  (the compiled wordcount's rule; `bytes.Fields` also splits on Unicode
+  spaces), and `api.Sum` totals counts, with a plain-func `values` so a job
+  file can use it as `Combine` or `Reduce`. With them the example's Map is
+  16× slower than compiled rather than 92×, and its Combine runs at
+  compiled speed. `bench/jobs/wordcount-naive.go` keeps the version
+  without them, and `BenchmarkMap` in `go/internal/jobfile` measures both.
+  On the cluster (E5, 1 GiB, four workers) the job file takes 91 s with the
+  helpers and 399 s without, against 38 s compiled.
 - Recovery and bad-record skipping ([ADR 0011](0011-bad-records.md)) are
   established for compiled `api.Program` callbacks: `TestBadRecords` in
   `go/internal/task/task_test.go` covers Map and Reduce panics. Once

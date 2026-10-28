@@ -118,7 +118,37 @@ What the numbers show:
     cost time. The Phase 7 benchmarks (#57, #58) will measure that across
     machines.
 
-## Evaluation (E0–E4)
+## Benchmarks and limits (#160)
+
+The cluster runs above need Docker and a person to read them. These run in
+`go test`, on one machine:
+
+- Benchmarks of the external sort (in memory, spilling 10 runs, spilling
+  with zstd), the MRKV writer and reader for each codec, the combiner, a
+  64 MB shuffle fetch, a local-mode word count, the partition hash and the
+  job-file helpers. `make perf` runs them 6 times (`COUNT`), compares the
+  median time per op with `bench/baseline.txt`, and fails if one is more
+  than 20% slower (`THRESHOLD`). The baseline is from the course VM; on
+  another CPU the comparison is printed but cannot fail. After a change
+  that is meant to be slower or faster, `PERF_UPDATE=1 make perf` on the VM
+  writes a new baseline, to commit with the change. If `benchstat` is
+  installed, its table is printed too. Two runs on the VM in a row
+  differed by at most 3.6%.
+- `TestSortMemoryBounded` (`internal/extsort`) sorts 80 MB with a 4 MB
+  budget and checks that the live heap stays under 16 MB while adding and
+  while merging the 25 runs; measured 4.2 and 6.0 MB uncompressed, 6.2 and
+  9.8 MB with zstd. A sorter that never spills holds the whole input and
+  fails it.
+- `TestReduceMemoryBounded` (`internal/task`) merges 100 map outputs, 76 MB
+  in all, through a reduce and checks the heap stays under 256 KB a source;
+  measured 14.2 MB, about 140 KB a source (a 64 KB block decompressed and
+  as stored, and the file buffer).
+- `TestCompressionRatio` (`internal/formats/kv`) checks the corpus's
+  intermediate data against the measured ratios plus 0.05: word-count
+  records 0.368 with zstd and 0.532 with Snappy, line records 0.446 and
+  0.673.
+
+## Evaluation (E0–E5)
 
 The performance evaluation in [design](../design.md#performance-evaluation),
 run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,
@@ -137,6 +167,8 @@ Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/supers
 its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
+E5 ran at `6b6c7be`; its harness log is
+[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log).
 
 ### E0: scaling over workers
 
@@ -240,3 +272,30 @@ record the offset between those two clocks.
   coordinator replays its log and keeps every task that had finished; the
   plot's flat step at the restart is the time the coordinator was down and
   the workers' reconnects.
+
+### E5: what an interpreted job file costs
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E5-dark.png">
+  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="evaluation/E5.png">
+</picture>
+
+| Setting | Job time (s) | Map phase (s) |
+|---|---|---|
+| compiled `wordcount` | 38.12 (38.09–38.77) | 37.0 |
+| job file, `examples/wordcount.go` (`api.Words`, `api.Sum`) | 91.08 (90.69–91.28) | 84.0 |
+| job file, `bench/jobs/wordcount-naive.go` (its own word test) | 398.97 (395.71–399.10) | 391.5 |
+
+- A job file costs 2.4× the compiled job when it uses the compiled helpers,
+  and 10.5× when it splits words itself. Nearly all of the difference is in
+  the map phase (map and combine), where the interpreted code runs once per
+  line or per word; the reduce phase takes about 7 s instead of 1 s. All
+  three give the same output, and the map output is the same 88.8 MB.
+- The job time is the coordinator's; the map phase runs from the first map
+  task's start until every map task is done, from the coordinator's task
+  counts.
+- A profile of the map function (ADR 0015) found the cost was mostly the job
+  file's own word test, which `bytes.FieldsFunc` called back into the
+  interpreter for every byte, not the call into the job file. The compiled
+  helpers for that work (`api.Words`, `api.Sum`) cut the job from 399 s to
+  91 s.

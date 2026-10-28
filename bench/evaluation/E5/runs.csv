@@ -1,0 +1,10 @@
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E5,compiled,wordcount,4,1,1073741824,32,4,,SUCCEEDED,38.775,38.766,3,0,88755466,1,job-11
+E5,interpreted,wordcount,4,1,1073741824,32,4,,SUCCEEDED,90.685,90.711,4,0,88755466,1,job-12
+E5,naive,wordcount,4,1,1073741824,32,4,,SUCCEEDED,399.095,399.238,5,0,88755466,1,job-13
+E5,interpreted,wordcount,4,2,1073741824,32,4,,SUCCEEDED,91.278,91.224,4,0,88755466,1,job-14
+E5,naive,wordcount,4,2,1073741824,32,4,,SUCCEEDED,395.710,395.810,4,0,88755466,1,job-15
+E5,compiled,wordcount,4,2,1073741824,32,4,,SUCCEEDED,38.095,38.202,3,0,88755466,1,job-16
+E5,naive,wordcount,4,3,1073741824,32,4,,SUCCEEDED,398.972,399.055,6,0,88755466,1,job-17
+E5,compiled,wordcount,4,3,1073741824,32,4,,SUCCEEDED,38.118,38.227,3,0,88755466,1,job-18
+E5,interpreted,wordcount,4,3,1073741824,32,4,,SUCCEEDED,91.083,91.087,5,0,88755466,1,job-19
