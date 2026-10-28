@@ -17,7 +17,7 @@ from test_coordinator_server import (
 )
 
 from mapreduce_reloaded.coordinator.recover import recover
-from mapreduce_reloaded.coordinator.server import TEMP_DIR, Config, RpcError, Server
+from mapreduce_reloaded.coordinator.server import HEAL_EVERY, TEMP_DIR, Config, RpcError, Server
 from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2, log_pb2, types_pb2
 from mapreduce_reloaded.wal import Log
 
@@ -297,36 +297,62 @@ def test_cleanup_after_log(restart, tmp_path):
     assert not temp.exists()
 
 
-def test_a_failed_append_stops_the_coordinator(restart, tmp_path):
+def test_a_failed_append_stops_the_coordinator_until_the_log_works(restart, tmp_path):
     """A report that ends the job but cannot be logged leaves the job ended
     in memory only: no RPC may reveal that, nor may the output be cleaned
-    up, until a restart rebuilds the state from the log."""
+    up. Once the log can be reopened, the server rebuilds itself from it,
+    as a restart would, without anyone restarting it."""
     inp = write(tmp_path / "in.txt")
     out = tmp_path / "out"
-    c = restart()
+    wall, clock = [1000.0], [0.0]
+    c = restart(Config(now=lambda: wall[0], clock=lambda: clock[0]))
     w = c.register()
     job = c.submit(program="wordcount", inputs=[inp], output=str(out), num_reduce_tasks=1)
     c.succeed(w, c.next(w), outputs(0, 1))
     last = c.next(w)
+    # The log fails, and cannot be reopened either, as on a full disk.
     c.s._cfg.log.close()
+    os.rename(restart.path, restart.path + ".away")
+    os.mkdir(restart.path)
     req = coordinator_pb2.ReportTaskRequest(
         worker_id=w, attempt=last, success=coordinator_pb2.TaskSuccess()
     )
     assert code(c.s.ReportTask, req).name == "UNAVAILABLE"
-    for rpc, msg in [
-        (c.s.GetJobStatus, coordinator_pb2.GetJobStatusRequest(job_id=job)),
-        (c.s.RegisterWorker, coordinator_pb2.RegisterWorkerRequest()),
-        (c.s.Heartbeat, coordinator_pb2.HeartbeatRequest(worker_id=w)),
-        (c.s.RequestTask, coordinator_pb2.RequestTaskRequest(worker_id=w)),
-        (c.s.ReportTask, req),
-        (c.s.SubmitJob, coordinator_pb2.SubmitJobRequest(job=types_pb2.JobSpec())),
-    ]:
-        with pytest.raises(Exception) as e:
-            rpc(msg, CTX)
-        assert e.value.code.name == "UNAVAILABLE", rpc
-        assert "restart the coordinator" in e.value.details
+    for round in range(2):  # the second retries reopening the log, and fails
+        if round:
+            clock[0] += HEAL_EVERY
+        for rpc, msg in [
+            (c.s.GetJobStatus, coordinator_pb2.GetJobStatusRequest(job_id=job)),
+            (c.s.RegisterWorker, coordinator_pb2.RegisterWorkerRequest()),
+            (c.s.Heartbeat, coordinator_pb2.HeartbeatRequest(worker_id=w)),
+            (c.s.RequestTask, coordinator_pb2.RequestTaskRequest(worker_id=w)),
+            (c.s.ReportTask, req),
+            (c.s.SubmitJob, coordinator_pb2.SubmitJobRequest(job=types_pb2.JobSpec())),
+        ]:
+            assert code(rpc, msg).name == "UNAVAILABLE", rpc
     assert (out / TEMP_DIR).is_dir()
-    assert restart().status(job).state == REDUCING
+    # Space is freed. The server retries no more than once a HEAL_EVERY, on
+    # the monotonic clock: setting the wall clock back does not delay it.
+    wall[0] -= 86400
+    os.rmdir(restart.path)
+    os.rename(restart.path + ".away", restart.path)
+    assert code(c.s.GetJobStatus, coordinator_pb2.GetJobStatusRequest(job_id=job)).name == (
+        "UNAVAILABLE"
+    )
+    clock[0] += HEAL_EVERY
+    try:
+        assert c.status(job).state == REDUCING
+        assert c.heartbeat(w).reregister  # workers register again, as after a restart
+        w = c.register()
+        assert c.succeed(w, c.next(w))
+        assert c.status(job).state == SUCCEEDED
+    finally:
+        c.s.close()
+    assert restart().status(job).state == SUCCEEDED  # the healed server logs again
+
+
+def test_close_without_a_log():
+    Server().close()
 
 
 def test_replay_keeps_reused_output(restart, tmp_path):
@@ -425,3 +451,21 @@ def test_recover_replays_a_lost_worker(restart, tmp_path):
     assert c.s.expire(time.monotonic() + 3600) == [w]
     assert c.status(job).map_tasks_completed == 0
     assert restart(cfg).status(job).map_tasks_completed == 0
+
+
+def test_id_prefix(tmp_path):
+    """id_prefix begins every worker and job ID of a server without a log,
+    so that a restarted one does not give out the last run's IDs. recover
+    ignores it: the log keeps IDs unique."""
+    inp = write(tmp_path / "in.txt")
+    s, log = recover(Config(id_prefix="x-"), str(tmp_path / "coordinator.log"))
+    try:
+        for c, worker, job in [
+            (Coordinator(Server(Config(id_prefix="x-"))), "x-w1", "job-x-1"),
+            (Coordinator(s), "r1-w1", "job-1"),
+        ]:
+            assert c.register() == worker
+            out = str(tmp_path / worker)
+            assert c.submit(program="wordcount", inputs=[inp], output=out) == job
+    finally:
+        log.close()

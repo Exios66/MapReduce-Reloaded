@@ -196,3 +196,28 @@ def test_install_go_requires_https(fake_go_download):
     run, *_ = fake_go_download
     result = run(GO_DL_BASE="http://example.invalid/dl")
     assert result.returncode != 0 and "https" in result.stderr
+
+
+def _excluded(patterns) -> set[str]:
+    """The paths a reviewer's exclusion globs name, without glob dressing."""
+    return {re.sub(r"^!?(\*\*?/)?|/\*\*?$", "", p) for p in patterns}
+
+
+def test_ai_reviewers_skip_the_same_files():
+    rabbit = re.findall(
+        r'^    - "(!.+)"$',
+        (ROOT / ".coderabbit.yaml").read_text().split("  path_filters:\n", 1)[1],
+        re.M,
+    )
+    codeant = json.loads((ROOT / ".codeant/configuration.json").read_text())
+    # CodeAnt's schema takes one comma-separated string, not a list.
+    excluded = codeant["file_filters"]["config"]["exclude_files"]
+    assert isinstance(excluded, str)
+    assert _excluded(rabbit) == _excluded(excluded.split(","))
+
+
+def test_codeant_instructions_apply_to_pull_requests():
+    # Without "pr" in scope an instruction reaches only the IDE plugin.
+    rules = json.loads((ROOT / ".codeant/instructions.json").read_text())["instructions"]
+    assert rules and all("pr" in r.get("scope", ["ide"]) for r in rules)
+    assert len({r["id"] for r in rules}) == len(rules)

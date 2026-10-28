@@ -32,10 +32,16 @@ append takes milliseconds, and something has to order the appends.
    the state, appends the decision, and only then replies. No one sees the
    change before the log holds it, because no one can read the state until
    the lock is released. A submitted job is logged before it is created.
-3. **A failed append stops all further changes.** The state is then ahead
-   of the log, so the log must keep failing (`*wal.Log` does). Every later
-   change fails with `Unavailable` until the coordinator is restarted from
-   its log.
+3. **A failed append stops every RPC until the coordinator rebuilds itself
+   from its log.** The state is then ahead of the log, such as a job ended
+   by a report the log never took, so the log must keep failing (`*wal.Log`
+   does) and every RPC, reads included, fails with `Unavailable`. At most
+   once a second, an RPC instead reopens the log and recovers from it in
+   place, as a restart would: the change the log never took is dropped,
+   running attempts stop, and workers register again. A full disk thus
+   stops the cluster only until space is freed, with no one restarting
+   the coordinator. A coordinator given a log without a path, as in tests,
+   stays stopped until restarted.
 4. **The log keeps only the jobs the coordinator keeps** (#178). When
    `-keep-jobs` makes the coordinator forget ended jobs, it rewrites the
    log under the lock without their records (`wal.Log.Compact`), and once

@@ -33,7 +33,6 @@ import (
 	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
 	"github.com/exios66/mapreduce-reloaded/go/internal/rpcguard"
 	"github.com/exios66/mapreduce-reloaded/go/internal/statusweb"
-	"github.com/exios66/mapreduce-reloaded/go/internal/wal"
 )
 
 // options are the coordinator's flags.
@@ -129,11 +128,10 @@ func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (
 		if err := os.MkdirAll(o.dataDir, 0o755); err != nil {
 			return err
 		}
-		var log *wal.Log
-		if srv, log, err = coordinator.Recover(cfg, filepath.Join(o.dataDir, "coordinator.log")); err != nil {
+		if srv, _, err = coordinator.Recover(cfg, filepath.Join(o.dataDir, "coordinator.log")); err != nil {
 			return err
 		}
-		defer func() { err = errors.Join(err, log.Close()) }()
+		defer func() { err = errors.Join(err, srv.Close()) }()
 	}
 	lis, err := net.Listen("tcp", o.addr)
 	if err != nil {
