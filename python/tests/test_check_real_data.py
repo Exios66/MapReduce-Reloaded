@@ -105,3 +105,21 @@ def test_main_rejects_bad_arguments(tmp_path, monkeypatch, argv):
     with pytest.raises(SystemExit) as e:
         real.main(argv)
     assert e.value.code == 2
+
+
+def test_split_book(tmp_path):
+    """split-book.py writes each chapter after the contents list as a file,
+    replacing an earlier split, and leaves no temporary directory."""
+    book = tmp_path / "book.txt"
+    book.write_bytes(
+        b"BOOK ONE: x\nCHAPTER I\n"  # the contents list
+        b"BOOK ONE: x\ntitle\nCHAPTER I\none\nCHAPTER II\ntwo\nFIRST EPILOGUE\nCHAPTER I\nthree\n"
+    )
+    (tmp_path / "warpeace-chapters").mkdir()
+    (tmp_path / "warpeace-chapters/stale.txt").write_text("old\n")
+    script = ROOT / "scripts/split-book.py"
+    subprocess.run([sys.executable, script, book, tmp_path], capture_output=True, check=True)
+    files = sorted(p.name for p in (tmp_path / "warpeace-chapters").iterdir())
+    assert files == ["b01-c001.txt", "b01-c002.txt", "b02-c001.txt"]
+    assert (tmp_path / "warpeace-chapters/b01-c002.txt").read_bytes() == b"CHAPTER II\ntwo\n"
+    assert not (tmp_path / "warpeace-chapters.part").exists()
