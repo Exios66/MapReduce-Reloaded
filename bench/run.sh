@@ -3,11 +3,13 @@
 # its data rates over time, its counters and the machine it ran on to
 # bench/results/SCENARIO-STAMP/.
 #
-# Usage: bench/run.sh grep|sort|zipf
+# Usage: bench/run.sh grep|sort|zipf|book
 #
 # grep runs the grep example over bench/gen-grep.py's records for the
 # pattern XYZ (§5.2), sort runs distsort over bench/gen-sort.py's records
-# (§5.3), and zipf runs word count over bench/gen-zipf.py's skewed words.
+# (§5.3), zipf runs word count over bench/gen-zipf.py's skewed words, and
+# book runs it over bench/gen-book.py's lines of War and Peace, real English
+# (scripts/fetch-data.sh warpeace fetches the book).
 # The environment sets the run: WORKERS (default 4), SIZE in bytes (default
 # 256 MiB), M (default 16) and R (default 4) tasks, SEED (default 42) and
 # INTERVAL, the seconds between samples of /metrics (default 0.5).
@@ -35,8 +37,9 @@ case $scenario in
 grep) gen=gen-grep.py program=grep params=(-param pattern=XYZ) ;;
 sort) gen=gen-sort.py program=distsort params=() ;;
 zipf) gen=gen-zipf.py program=wordcount params=() ;;
+book) gen=gen-book.py program=wordcount params=() ;;
 *)
-    echo "usage: bench/run.sh grep|sort|zipf" >&2
+    echo "usage: bench/run.sh grep|sort|zipf|book" >&2
     exit 2
     ;;
 esac

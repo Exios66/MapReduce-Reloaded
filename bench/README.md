@@ -17,6 +17,7 @@ writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 | [`gen-sort.py`](gen-sort.py) | TeraSort-style 100-byte records with random 10-byte keys, as in the paper's sort (§5.3) | `distsort` |
 | [`gen-zipf.py`](gen-zipf.py) | Lines of words from a vocabulary of 100,000, with Zipf-distributed frequencies (exponent S, 1 by default) | Word count with a skewed key |
 | [`gen-weblog.py`](gen-weblog.py) | Requests in the Common Log Format for 10,000 pages; the page is drawn with probability proportional to 1 / N | `urlfreq` |
+| [`gen-book.py`](gen-book.py) | Whole lines of War and Peace, every line once a pass in a new order, to any size; [`scripts/fetch-data.sh`](../scripts/fetch-data.sh) fetches the book | Word count on real English (E6) |
 | [`gen-links.py`](gen-links.py) | A source page, a tab and a target page, over 100,000 pages; targets are drawn with probability proportional to 1 / N | `reverselinks` |
 
 - `gen-grep.py`: the rest of each record is lowercase letters and digits,
@@ -48,7 +49,7 @@ rise in steps of whole tasks. The shuffle is counted as it is fetched.
 `python/tests/test_bench_rates.py` tests both scripts against a fake
 `/metrics`.
 
-`make bench SCENARIO=grep|sort|zipf` runs one benchmark with them on the
+`make bench SCENARIO=grep|sort|zipf|book` runs one benchmark with them on the
 Compose cluster, through [`run.sh`](run.sh):
 
 | Scenario | Input | Program |
