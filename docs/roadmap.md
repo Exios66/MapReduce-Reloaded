@@ -282,7 +282,6 @@ Each phase ends in a runnable, tested state.
 - `docs/paper-mapping.md` complete: every row F1–F24 linked to code and tests (F24 with Phase 7).
 
 **Phase 5 — Python parity & interop**
-
 - Finish the Python worker (the coordinator is done, #36).
 - Python UDF host for Go workers (subprocess over stdio, using the proto framing).
 - Interop matrix in `tests/interop/`: {Go, Py} coordinator × {Go, Py} worker × {Go, Py} UDF, all byte-identical to local mode.
