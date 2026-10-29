@@ -65,7 +65,7 @@ other Program.
 
 ## How we know it works
 
-- **Golden files:** word count over three public-domain books
+- **Golden files:** word count over four public-domain books, one German
   (`testdata/corpus`) must match `expected/` byte for byte, in both
   languages, with and without the combiner.
 - The expected files come from `scripts/make-corpus-expected.py`, a separate
