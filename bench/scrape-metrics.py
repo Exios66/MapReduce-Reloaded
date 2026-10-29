@@ -12,6 +12,7 @@ Usage: python3 bench/scrape-metrics.py INTERVAL DURATION URL...
 """
 
 import csv
+import os
 import sys
 import time
 import urllib.request
@@ -34,7 +35,7 @@ def main():
     interval, duration, urls = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3:]
     out = csv.writer(sys.stdout, lineterminator="\n")
     out.writerow(["seconds", "url", "metric", "value"])
-    start = time.monotonic()
+    start = float(os.environ.get("MR_BENCH_START_MONOTONIC", time.monotonic()))
     tick = start
     try:
         while tick - start <= duration:

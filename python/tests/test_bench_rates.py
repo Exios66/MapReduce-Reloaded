@@ -3,6 +3,7 @@
 import csv
 import http.server
 import io
+import os
 import subprocess
 import sys
 import threading
@@ -57,6 +58,19 @@ def test_scrape():
     assert {r["url"] for r in rows} == {url}
     assert [int(r["value"]) for r in rows] == [1000, 2000, 3000]
     assert [float(r["seconds"]) for r in rows] == pytest.approx([0.0, 0.2, 0.4], abs=0.05)
+
+
+def test_samplers_use_a_shared_monotonic_origin():
+    origin = time.monotonic() - 2
+    env = dict(os.environ, MR_BENCH_START_MONOTONIC=str(origin))
+    # Unreachable endpoints are fine: the common origin must also bound duration.
+    for script, args in (
+        ("scrape-metrics.py", (0.1, 0.5, "http://127.0.0.1:1/metrics")),
+        ("scrape-tasks.py", (0.1, 0.5, "http://127.0.0.1:1/metrics")),
+    ):
+        start = time.monotonic()
+        assert len(run(script, *args, env=env).splitlines()) == 1
+        assert time.monotonic() - start < 1
 
 
 def test_plot_without_samples(tmp_path):

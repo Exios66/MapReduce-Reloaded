@@ -55,6 +55,14 @@ mr:
 		-v "$(CURDIR)/go:/src:ro" -v "$(CURDIR)/bin:/bin-out" -w /src \
 		golang:1.26-alpine go build -buildvcs=false -o /bin-out/mr ./cmd/mr; fi
 
+# Host tools for the fixed-VM paper campaign; no cluster is changed here.
+.PHONY: paper-tools
+paper-tools: mr
+	cd go && go build -o ../bin/paper-data ./tools/paper-data
+	git diff --quiet HEAD
+	docker build --label org.opencontainers.image.revision=$$(git rev-parse HEAD) -t mapreduce-reloaded -f deploy/docker/Dockerfile go
+	$(PYTHON) -c 'import hashlib,json,pathlib,subprocess; run=lambda *a: subprocess.check_output(a,text=True).strip(); json.dump(dict(commit=run("git","rev-parse","HEAD"),image=run("docker","image","inspect","-f","{{.Id}}","mapreduce-reloaded"),tools={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in ("bin/mr","bin/paper-data")}),open("bin/paper-build.json","w"),indent=2)'
+
 # Example input in shared storage: the test corpus at /data/input/corpus and
 # a 10 MB web log at /data/input/weblog/access.log.
 upload-example: data mr

@@ -10,6 +10,7 @@ examples/distsort 99
 examples/grep 89
 examples/internal/run -  # run by every example's tests
 examples/invertedindex 88
+examples/papersort 99
 examples/reverselinks 99
 examples/termvector 92
 examples/urlfreq 99

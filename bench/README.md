@@ -7,6 +7,30 @@ below are copied from a run, with the machine it ran on.
 The [proposed 10 GB paper comparison](10gb-paper-run.md) records the next
 run's scope, VM handover and storage prerequisites. It is not a result.
 
+### Fixed-VM campaign commands
+
+After explicit handover, `make paper-tools` builds the host tools and labeled
+worker image from the same clean revision; it does not start containers.
+`bench/paper.sh prepare grep native` prepares input, and
+`bench/paper.sh run grep native normal` runs and independently validates one
+trial. Use `sort zstdkv` for the explicitly named compressed-KV-input,
+intermediate and output variant; `sort native` remains capacity-gated.
+Sort settings are `normal`, `no-backups`, and `restart`; the last requires
+`EVENT_AFTER` seconds, calibrated from a normal run. `SIZE` is decimal bytes,
+default 10000000000, and `M` defaults to 160. Smaller calibration jobs use
+the same commands. `SPACE_BUDGET_BYTES` sets the required free space **after
+input preparation**, from measured intermediate/output peaks plus reserve;
+never lower it simply to admit an unsafe job.
+
+Each trial writes `bench/results/paper-*/` with validation, input manifest,
+effective Compose configuration, tool/image provenance, resource samples,
+events, counters, rate plots and logs. The existing rate curves count split
+bytes, fetched shuffle bytes and pre-encoding output payload respectively;
+they are not three equivalent physical disk-throughput measurements. Only
+stopped, successfully verified output is removed. Failed output and the
+run-specific WAL stay for diagnosis; future trials use a fresh WAL. One
+account-wide lock excludes overlapping campaign commands.
+
 ## Data generators (#57)
 
 Each generator writes reproducible input to stdout from a size in bytes and

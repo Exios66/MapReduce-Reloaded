@@ -11,6 +11,7 @@ Usage: python3 bench/scrape-tasks.py INTERVAL DURATION URL
 """
 
 import csv
+import os
 import re
 import sys
 import time
@@ -23,7 +24,7 @@ def main():
     interval, duration, url = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
     out = csv.writer(sys.stdout, lineterminator="\n")
     out.writerow(["seconds", "job", "kind", "state", "value"])
-    start = time.monotonic()
+    start = float(os.environ.get("MR_BENCH_START_MONOTONIC", time.monotonic()))
     tick = start
     try:
         while tick - start <= duration:
