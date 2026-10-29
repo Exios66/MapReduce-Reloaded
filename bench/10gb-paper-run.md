@@ -1,6 +1,8 @@
 # Intent: the paper's benchmarks at 10 GB on the course VM
 
 **Status: proposed; no implementation or new benchmark results in this PR.**
+The authorized execution scope includes VM cleanup, cluster configuration
+changes and benchmark jobs, subject to the handover and safety gates below.
 Wait for the parallel VM work to finish and its owner to hand over the
 cluster before cleanup, reconfiguration or execution. Preserve that work's
 results. This proposal does not authorize deleting unrelated files, stopping
@@ -39,8 +41,10 @@ found only about 5 GB free while other work was in progress; remeasure after
 handover. Native sort needs over 30 GB of live job data before headroom:
 10 GB input, intermediate files of similar size, and roughly 10.1 GB of
 current text-format output, plus spills, retries and speculative attempts.
-The text writer adds a tab before each record's newline. Capacity for the
-paper-style key-plus-record representation must be measured separately.
+The text writer adds a tab before each record's newline. The primary
+10-byte-key plus 99-byte-record representation instead writes **111 bytes
+per text output record: 11.1 GB**, with 10.9 GB of emitted key/value payload
+before framing. Budget its larger intermediate files separately too.
 Cleanup alone is not proof that either uncompressed sort will fit.
 
 Investigate the smallest options in this order:
@@ -49,12 +53,21 @@ Investigate the smallest options in this order:
    directly into the existing shared `/data` mount under a temporary name,
    validate its size, then rename. Keep one dataset at a time. Avoid the
    experiment runner's host temporary copy followed by a volume copy.
-   Validate and archive each result before removing its completed output.
+   Validate and archive diagnostics and summaries before removing completed
+   output; do not retain another full output copy on the VM. Stop losing
+   speculative attempts and reclaim old scratch before generating the next
+   dataset or admitting another trial.
    Retain input while worker failure could require map re-execution.
 2. **Existing compression, named variants.** Measure the actual generator's
    intermediate compression ratio before committing to 10 GB. Try the
    existing zstd intermediate codec first. Compressed output additionally
    requires the existing KV output format; text output cannot take a codec.
+   If input also needs compression, use existing zstd KV input in 160
+   nonempty shards: KV files cannot be split, so one shard is one map task.
+   Stream one uninterrupted generator into the shards without materializing
+   a text copy or restarting its random stream per shard. Preserve each
+   original line as the value and its logical byte offset as the input key;
+   verify decoded equivalence and exactly 625,000 records per shard.
    Run the comparison matrix within each storage configuration; do not
    compare native normal sort against compressed backups-off sort.
 3. **Framework extension only if needed.** A deterministic, seekable
@@ -71,18 +84,43 @@ need durable reduce-commit coordination and failure tests, not just cleanup.
 Gate generation and submission on measured peak-space budgets, including
 concurrent tasks and operational reserve. The existing 5 GiB pre-run check
 and 2 GiB worker threshold are not sufficient capacity guarantees at this
-size. Calibrate with smaller inputs first. Stop safely on insufficient
-space or timeout; never delete output while its job remains active. A native
+size. Calibrate with smaller inputs first. On timeout or unsafe disk pressure,
+stop the matrix and stop the benchmark-owned coordinator and workers to
+quiesce attempts: status `TIMEOUT` alone does not cancel anything. Preserve
+diagnostics and WAL; coordinator restart replays an active job. Do not delete
+its data or restart against removed inputs until the abandoned job cannot
+resume. No next trial or input rotation until all attempts have stopped and
+old scratch is reclaimed, even after a successful status. A native
 configuration that cannot safely fit remains blocked, not silently replaced
 or reported as completed.
+
+## VM handover and execution
+
+1. Obtain the other agent's handover, preserve its results and identify any
+   workloads that must remain running. Check processes as well as Compose:
+   tests may run a separate coordinator and workers outside containers.
+2. Inventory disk use again. State the exact cleanup targets and blast
+   radius before removal. Prefer reproducible build caches and selected
+   completed benchmark artifacts; do not prune volumes, WAL, source trees,
+   unrelated coursework or active-job data indiscriminately. Recheck free
+   space after cleanup rather than adding up potentially shared cache sizes.
+3. Build a reviewed revision, recreate only this project's core services,
+   and verify four one-CPU workers, memory limits and consistent image IDs.
+   Replace the two-worker/256-MB soak configuration; do not carry it into
+   the primary runs. Record unrelated load and keep it out of timed trials.
+4. Run correctness smoke tests and smaller storage calibration. Admit each
+   10 GB configuration only if its measured budget passes; validate every
+   result, preserve evidence, then reclaim its completed data safely.
 
 ## Evidence and implementation boundaries
 
 Extend [the existing experiment runner](experiments.sh), samplers, plots and
 their Python tests rather than introducing another benchmark framework.
-Consult the ponytail reviewer before implementation. Keep the assignment's
-four one-CPU worker deployment, host client, shared storage and correctness
-requirements intact. Coordinate the tested source revision with the
+Consult the ponytail reviewer before implementation. Use the runner's
+already-built **host client for submission and polling**, replacing its
+current container submission. Keep the assignment's four one-CPU workers,
+shared storage and correctness requirements intact. Coordinate the tested
+source revision with the
 [parallel soak work](https://github.com/Exios66/MapReduce-Reloaded/pull/251),
 then record the actual running images and resource limits.
 
@@ -91,7 +129,11 @@ then record the actual running images and resource limits.
   do not infer statistical significance from three trials.
 - Reuse byte-rate and task samplers. Record event outcomes, cache policy,
   machine contention, logical bytes, physical stored bytes and peak disk and
-  memory usage. Generated bytes are not physical disk throughput.
+  memory usage. Input counters count split bytes (compressed file sizes for
+  KV); output counters count emitted key/value payload before framing and
+  compression. Both update at attempt completion; shuffle counts fetched
+  bytes. Label these distinct quantities and measure stored sizes separately.
+  Neither cached input nor generated bytes establish physical disk throughput.
 - Independently validate grep's matching-record multiset; validate sort's
   record count, framing, global key order and preservation of input records.
   A checksum against the first run alone does not establish correctness.
@@ -102,6 +144,11 @@ then record the actual running images and resource limits.
 - Publish new results separately from the existing 1 GiB evaluation. Compare
   shapes and relative costs with the paper, explicitly noting shared VM
   hardware, no GFS output replication, different scale and any format changes.
+  Our reducers wait for every map to finish; maps sort partitions and reducers
+  stream-merge them. The paper overlaps map/shuffle and has a reduce-side
+  sorting gap, so those curve shapes are not equivalent. Existing rate plots
+  accumulate activity and handle resets; they do not reproduce the paper's
+  negative input rate for lost map work.
 
 This intent PR changes documentation only. It neither reserves the VM nor
 claims that a 10 GB configuration has passed validation or fits safely yet.
