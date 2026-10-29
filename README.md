@@ -9,13 +9,13 @@ Dean & Ghemawat, [*MapReduce: Simplified Data Processing on Large Clusters*](htt
 (OSDI 2004), extended for modern infrastructure: object storage, compression,
 containers, gRPC, observability and user job files. Go runs the cluster;
 Python is the reference implementation of the API, the file format and local
-mode, and gives the same bytes for the same uncompressed job.
+mode and a coordinator server, and gives the same bytes for the same uncompressed job.
 
 ## Quick start
 
 Needs Docker with Compose, GNU `make`, and Python 3.11+ (for the example
 data). Go is optional: `make mr` builds the client in Docker without it.
-The cluster needs 4 CPUs, about 3.3 GB of memory and a few GB of disk;
+The cluster needs 4 vCPUs, about 3.3 GB of memory and a few GB of disk;
 [Cluster VM](docs/cluster-vm.md) has the budgets and the setup.
 
 ```sh
