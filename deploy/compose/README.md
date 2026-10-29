@@ -2,15 +2,18 @@
 
 The cluster on one VM ([cluster VM](../../docs/cluster-vm.md)): one
 coordinator and four workers, each worker limited to one CPU, started with
-`make cluster-up` and stopped with `make cluster-down`. Every container
-sees the host's `data/` directory at `/data` (shared storage, ADR 0016),
-the test corpus read-only at `/corpus`, and the named `output` volume at
-`/out` (job output and the coordinator's write-ahead log). All published
+`make cluster-up` and stopped with `make cluster-down`. The coordinator,
+the workers, and the `mr` tools container share the host's `data/`
+directory at `/data` (shared storage, ADR 0016), the test corpus read-only
+at `/corpus`, and the named `output` volume at `/out` (job output and the
+coordinator's write-ahead log). The `s3` service mounts the corpus and its
+own output volume at different paths (`/data/corpus`, `/data/out`), and the
+monitoring services mount only their own configuration. All published
 ports are bound to `127.0.0.1` only.
 
 - [`compose.yaml`](compose.yaml): the main project. The coordinator runs
   `-data-dir /out/wal` with 256 MB; each worker has 768 MB, `cpus: 1`, and
-  a 2 GiB minimum-free-disk gate. Profiles, all off by default: `mr` (the
+  a 2 GiB minimum-free-disk gate. Profiles, all off by default: `tools` (the
   `mr` tools container), `s3` (a local S3-compatible store), `monitoring`
   (Prometheus and Grafana; see `monitoring/`).
 - [`soak.yaml`](soak.yaml): override for the soak run (#160, `make soak`).

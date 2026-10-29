@@ -62,8 +62,9 @@ removes the containers and keeps `data/`.
 | Operations | Status page, Prometheus metrics, Grafana dashboard, chaos test with seeded worker kills and coordinator crashes |
 | Languages | Go cluster and Python reference implementation; the same bytes for the same uncompressed job |
 
-Phases 0–4 and most of Phase 6 are done; Python workers and Go↔Python
-interoperability (Phase 5) are stretch goals. See the [roadmap](docs/roadmap.md)
+Phases 0–4 and most of Phase 6 are done; Python workers and full Go↔Python
+interoperability (Phase 5) are stretch goals — the Python-coordinator/Go-worker
+combination is already tested (`make py-e2e`). See the [roadmap](docs/roadmap.md)
 and the [final report](docs/report.md).
 
 ## Results

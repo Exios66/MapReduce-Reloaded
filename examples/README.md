@@ -7,8 +7,8 @@ example programs (those live in `go/examples/`).
   ([README](../README.md#quick-start)) and the demo. It is sent with the
   job and interpreted by the workers (ADR 0015); nothing is compiled or
   uploaded for it.
-- [`demo.ipynb`](demo.ipynb): the five-minute demo walkthrough, cell by
-  cell, matching [`docs/demo.md`](../docs/demo.md).
+- [`demo.ipynb`](demo.ipynb): the demo walkthrough from the runbook (§5),
+  cell by cell.
 
 The compiled example programs — `grep`, `distsort`, `wordcount`,
 `invertedindex`, `reverselinks`, `termvector`, `urlfreq` — are registered

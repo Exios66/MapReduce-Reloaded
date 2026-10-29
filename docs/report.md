@@ -14,7 +14,8 @@ API, file format, partition hash and local mode as a reference, and also
 provides a coordinator server, and for
 the same uncompressed job both produce the same bytes. All 24 of the
 paper's features (F1–F24) are built and each is named with the test that
-proves it. The paper's §5 experiments and seven more (E0–E6) ran on the VM.
+proves it. The paper's §5 experiments (grep, sort, backups, failures) were reproduced
+on the VM, alongside further experiments E0, E1, and E4–E6.
 The mechanisms behave as the paper says: phases overlap, backups cut a
 straggler's tail (17.6 s without them, 11.2 s with), and a job survives a
 lost worker or a restarted coordinator with the same output. What changes
