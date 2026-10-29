@@ -27,7 +27,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e5) |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e6) |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -245,6 +245,7 @@ M, R and the commit.
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
 | E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
+| E6 | How much does the combiner save on real text? | Word count, 1 GiB each, combiner on and off, on three inputs: `crawl-eng`, Common Crawl's English pages (the real-text result); `crawl`, its pages in every language, where scripts without spaces make runs of text one word; `book`, War and Peace's lines repeated, a fixed vocabulary and so a best case | Bytes shuffled and job time, grouped bars per input |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled
@@ -258,7 +259,7 @@ whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|all`
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|E6|all`
 runs the experiments and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
@@ -280,7 +281,7 @@ parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
-[`bench/README.md`](bench/README.md#evaluation-e0e5), with the commands that
+[`bench/README.md`](bench/README.md#evaluation-e0e6), with the commands that
 made them; the data is in `bench/evaluation/`. What they showed (course VM,
 2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
 workers for word count but only 2.3× for grep, whose one-second job is mostly

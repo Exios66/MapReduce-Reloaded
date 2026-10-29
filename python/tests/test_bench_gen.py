@@ -2,6 +2,7 @@
 
 import collections
 import datetime
+import gzip
 import re
 import subprocess
 import sys
@@ -96,3 +97,69 @@ def test_zipf_skew():
     assert words[b"w1"] > 1.7 * words[b"w2"]
     flat = collections.Counter(generate("zipf", 200_000, 42, 0).split())
     assert flat[b"w1"] < 0.001 * total
+
+
+def test_book(tmp_path):
+    """gen-book.py writes whole non-blank lines of the book, every line once
+    a pass in a new order, and stops at the first line that reaches SIZE."""
+    book = tmp_path / "book.txt"
+    book.write_bytes(b"one two\r\n\nthree\n  \nfour five six\n")
+    want = sorted([b"one two", b"three", b"four five six"])
+    out = generate("book", 60, 1, book)
+    lines = out.split(b"\n")
+    assert lines.pop() == b""
+    assert len(out) >= 60 and len(out) - len(lines[-1]) - 1 < 60
+    passes = [lines[i : i + 3] for i in range(0, 6, 3)]
+    assert [sorted(p) for p in passes] == [want, want]
+    assert generate("book", 60, 1, book) == out
+    assert generate("book", 600, 1, book) != generate("book", 600, 7, book)
+
+
+def test_book_needs_the_book(tmp_path):
+    r = subprocess.run(
+        [sys.executable, BENCH / "gen-book.py", "10", "1", tmp_path / "none.txt"],
+        capture_output=True,
+    )
+    assert r.returncode != 0 and b"fetch-data.sh" in r.stderr
+
+
+def wet_file(path, pages):
+    """Writes a gzipped WET file of (language, text) conversion records."""
+    out = b"WARC/1.0\r\nWARC-Type: warcinfo\r\nContent-Length: 2\r\n\r\nx\n\r\n\r\n"
+    for lang, text in pages:
+        head = b"WARC/1.0\r\nWARC-Type: conversion\r\nWARC-Target-URI: http://h.example/\r\n"
+        if lang:
+            head += b"WARC-Identified-Content-Language: %s\r\n" % lang
+        out += head + b"Content-Length: %d\r\n\r\n%s\r\n\r\n" % (len(text), text)
+    path.write_bytes(gzip.compress(out))
+
+
+def test_crawl(tmp_path):
+    """gen-crawl.py writes each page's text as a line, files in name order,
+    keeping the pages whose first language is LANG, or all, and stops at the
+    first page that reaches SIZE."""
+    wet_file(
+        tmp_path / "b.warc.wet.gz", [(b"eng", b"three"), (b"jpn,eng", b"\xe6\x97\xa5\xe6\x9c\xac")]
+    )
+    wet_file(
+        tmp_path / "a.warc.wet.gz",
+        [(b"eng,fra", b"one  two\n"), (b"fra", b"un"), (None, b"none"), (b"eng", b" \n")],
+    )
+    assert generate("crawl", 29, "all", tmp_path) == "one two\nun\nnone\nthree\n日本\n".encode()
+    assert generate("crawl", 14, "eng", tmp_path) == b"one two\nthree\n"
+    assert generate("crawl", 8, "eng", tmp_path) == b"one two\n"
+    assert generate("crawl", 9, "eng", tmp_path) == b"one two\nthree\n"
+    with pytest.raises(subprocess.CalledProcessError):
+        generate("crawl", 15, "eng", tmp_path)
+
+
+@pytest.mark.parametrize(
+    "pages, message", [(None, b"fetch-data.sh crawl"), ([(b"eng", b"x")], b"under 100")]
+)
+def test_crawl_needs_enough_text(tmp_path, pages, message):
+    if pages:
+        wet_file(tmp_path / "a.warc.wet.gz", pages)
+    r = subprocess.run(
+        [sys.executable, BENCH / "gen-crawl.py", "100", "eng", tmp_path], capture_output=True
+    )
+    assert r.returncode != 0 and message in r.stderr

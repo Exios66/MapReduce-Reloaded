@@ -158,15 +158,16 @@ Each run writes `rates.csv`, `samples.csv`, `status.txt` and `result.json`
 ```sh
 python/.venv/bin/pip install matplotlib     # once, for the plots
 mkdir -p bench/results
+scripts/fetch-data.sh warpeace crawl         # E6's inputs; `all` checks them first
 nohup bench/experiments.sh all > bench/results/experiments.log 2>&1 &
-tail -f bench/results/experiments.log        # about 90 minutes for all six
+tail -f bench/results/experiments.log        # about 2 hours for all seven
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E1|E2|E3|E4|E5` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6` runs one experiment of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
-SSH drops. The plots land in `bench/plots/E0.png` … `E5.png`, and the
-script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e5).
+SSH drops. The plots land in `bench/plots/E0.png` … `E6.png`, and the
+script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 

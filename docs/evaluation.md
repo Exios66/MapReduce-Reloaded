@@ -21,9 +21,15 @@ had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 
 The grep and sort rows ran with `bench/run.sh` at commit `2707160`; their
 directories hold the samples, the rates, the counters and the machine. E0,
-E2 and E3 are the course evaluation in
-[bench/README.md](../bench/README.md#evaluation-e0e5), each the median of
+E2, E3 and E6 are the course evaluation in
+[bench/README.md](../bench/README.md#evaluation-e0e6), each the median of
 three runs.
+
+E6 repeats §4.3's combiner measurement on real text at 1 GiB. On crawled
+English the combiner cut the bytes shuffled 5.2× and the job time 14%; on
+crawled pages in every language, 3.2× and 7%; on the book, 33× and 22%.
+The book's fixed 41,631-word vocabulary is a best case, so the earlier
+book-only result overstated what real text saves.
 
 ## Grep (§5.2)
 
