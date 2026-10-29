@@ -5,8 +5,8 @@ Actions jobs on the owner's account fail within seconds on a billing lock
 ([ADR 0014](design/0014-ci-on-pull-requests.md)). CircleCI runs the same make
 targets as `make check`, in six jobs, but only the jobs a PR's files
 implicate (see [Implicated-only CI](#implicated-only-ci)). CircleCI is the project's only CI: the
-Actions workflow is kept for a run by hand, and is disabled in the
-repository's Actions settings (2026-10-27).
+repository has no GitHub Actions workflow (the last one was deleted on
+2026-10-29; see [Setup](#setup-by-the-owner), step 5).
 
 **What is committed and what is not.** This repository holds the
 configuration: [`.circleci/config.yml`](../.circleci/config.yml) (the setup
@@ -196,12 +196,14 @@ these. Do them in order. Each step is safe to stop after.
    `main`: require a pull request, and require the six CircleCI checks.
    Pick them from the list GitHub offers after step 2, using the names it
    shows there (usually `ci/circleci: proto` and so on); do not type them in.
-5. **Retire the Actions workflow.** Done on 2026-10-27: the triggers of
-   `.github/workflows/ci.yml` are `workflow_dispatch` alone, and the workflow
-   is disabled under Actions (`gh workflow disable CI`), since every run failed
-   on the billing lock and notified the owner. Actions stays on for the
-   repository (GitHub's own Dependency Graph workflow uses it). Remove any
-   Actions check from the required list.
+5. **Retire the Actions workflow.** Done: on 2026-10-27 the workflow was
+   limited to `workflow_dispatch` and disabled (`gh workflow disable CI`),
+   since every run failed on the billing lock and notified the owner, and on
+   2026-10-29 `.github/workflows/ci.yml` was deleted, so no check depends on
+   Actions. A test fails if `.github/workflows/` comes back. No Actions check
+   is in the required list. GitHub's automatic dependency submission (the
+   "Dependency Graph" runs under Actions) is a repository setting, not a
+   file here: Settings, Code security, Dependency graph.
 6. **Confirm the plan.** Open the CircleCI Plan page and confirm it still says
    Free.
 
@@ -249,10 +251,11 @@ that does not depend on any hosted service.
 
 ## Rollback
 
-If CircleCI has to go: remove the six checks from branch protection, enable
-the workflow again (`gh workflow enable CI`), set the triggers of
-`.github/workflows/ci.yml` back to `pull_request`, `push` to `main` and
-`workflow_dispatch`, and (if the Actions account lock persists) use
+If CircleCI has to go: remove the six checks from branch protection, restore
+`.github/workflows/ci.yml` from git history (`git show
+1717257:.github/workflows/ci.yml`), set its triggers back to
+`pull_request`, `push` to `main` and `workflow_dispatch`, enable it
+(`gh workflow enable CI`), and (if the Actions account lock persists) use
 `CI_RUNNER` or `make ci-report` as in ADR 0014. Delete `.circleci/` when no PR
 needs it. Nothing else depends on it.
 
@@ -265,8 +268,8 @@ App, with triggers for pull requests (opened and pushed) and for pushes to
 `ci/circleci: lint` and `ci/circleci: mapping-coverage`.
 The first runs found two problems, both fixed: buf v1.74.0 needs a newer Go
 than go.mod's (the generator install now allows `GOTOOLCHAIN=auto`), and buf
-breaking cannot clone a blobless checkout (`proto` checks out in full). The
-Actions workflow is disabled and runs only by hand (Setup, step 5).
+breaking cannot clone a blobless checkout (`proto` checks out in full). There
+is no Actions workflow (Setup, step 5).
 
 CircleCI reads this configuration from each branch, so a branch made before
 it reached `main` gets no checks until `main` is merged into it.

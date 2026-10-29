@@ -21,7 +21,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CIRCLE = (ROOT / ".circleci/config.yml").read_text()
 CONT = (ROOT / ".circleci/continue-config.yml").read_text()
-ACTIONS = (ROOT / ".github/workflows/ci.yml").read_text()
 MAKEFILE = (ROOT / "Makefile").read_text()
 INSTALL_GO = ROOT / "scripts/ci-install-go.sh"
 
@@ -87,22 +86,14 @@ def test_golangci_lint_has_one_pin():
     vm = re.search(
         r"^GOLANGCI_VERSION=(\S+)$", (ROOT / "scripts/vm-setup.sh").read_text(), re.M
     ).group(1)
-    assert re.findall(r"golangci-lint@(v[\d.]+)", ACTIONS) == [vm]
     # CircleCI reads the pin from the script rather than repeating it.
     assert "scripts/vm-setup.sh" in CONT and vm not in CONT
     assert vm in (ROOT / "docs/ci.md").read_text()
 
 
-def test_actions_runs_only_by_hand():
-    # CircleCI is the CI; the Actions workflow is kept for a manual run only.
-    on = ACTIONS.split("\non:\n", 1)[1].split("\n\n", 1)[0]
-    assert on.split() == ["workflow_dispatch:"]
-
-
-def test_actions_go_job_can_run_the_python_golden_tests():
-    go_job = ACTIONS.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
-    assert "python-version: " in go_job and 'pip install -e "python[dev]"' in go_job
-    assert "make go-lint go-test py-e2e PYTHON=python" in go_job
+def test_circleci_is_the_only_ci():
+    # No GitHub Actions workflow: CircleCI runs every check (docs/ci.md).
+    assert not (ROOT / ".github/workflows").exists()
 
 
 def test_ci_runs_the_python_coordinator_with_go_workers():
@@ -131,7 +122,6 @@ def test_ci_runs_shellcheck():
     go_job = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
     assert "scripts/vm-setup.sh --shellcheck" in go_job
     assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in go_job
-    assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in ACTIONS
     assert "SHELLCHECK_VERSION" not in CONT  # one pin, in vm-setup.sh
 
 

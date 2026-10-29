@@ -47,11 +47,10 @@ providers cannot disagree about what a check means, and `lint` and
 jobs, the caches, the Free-plan limits, the setup the owner completes, and
 rollback.
 
-- CircleCI is the only CI. The Actions workflow is kept, runs only by hand
-  (`workflow_dispatch`), and is disabled in the repository's Actions
-  settings, so the billing lock no longer fails a run on every push. Its Go
-  job now installs Python, as the golden tests need it. Actions stay on for
-  the repository.
+- CircleCI is the only CI. The Actions workflow was first kept, run only
+  by hand (`workflow_dispatch`) and disabled in the repository's Actions
+  settings, so the billing lock no longer failed a run on every push; on
+  2026-10-29 it was deleted (docs/ci.md, Setup, step 5).
 - The required checks become the four CircleCI checks, in place of the
   Actions names `proto`, `go`, `python` above.
 - `make check`, the pre-push hook and `make ci-report` are unchanged.
