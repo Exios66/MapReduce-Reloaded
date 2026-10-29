@@ -37,7 +37,7 @@ code generation in `proto` cannot change files `go` is testing.
 
 ## Implicated-only CI
 
-CircleCI dynamic configuration (ADR 0019) runs only the jobs a PR's files
+CircleCI dynamic configuration (ADR 0020) runs only the jobs a PR's files
 implicate. `.circleci/config.yml` is the setup config: one setup workflow
 runs the `path-filtering` orb against `main`, sets five boolean pipeline
 parameters from the changed files, and continues with
@@ -51,7 +51,22 @@ parameters from the changed files, and continues with
 | `proto/**` | proto |
 | `*.sh` | go (sh-lint lives in the go job) |
 | `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
+| docs files Python tests assert on (`docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `design.md`, `README.md`, `docs/design/0001-*`, `docs/design/0014-*`) | python-3.11, python-3.13, lint |
+| `docs/paper-mapping.md` additionally | go (the Go paper-mapping test reads it) |
+| `bench/README.md`, `bench/*.py` | python-3.11, python-3.13, lint (Python tests execute the generators and assert on the README) |
+| `deploy/compose/*.yaml`, `deploy/compose/README.md` | python-3.11, python-3.13, lint (deploy tests validate the compose files and the guide) |
+| `deploy/compose/monitoring/**` | go, lint (the dashboard test reads the Grafana dashboard) |
+| `examples/README.md`, `go/examples/**` | python-3.11, python-3.13, lint (the Python examples-guide test reads both) |
 | anything else | the mapping-coverage job fails; the author adds a mapping |
+
+Setup image pin: the filter job passes `tag: "3.12"`, not the orb default.
+Orb 1.1.0 defaults the tag to 3.8, and the get-pip.py bootstrap its
+Set-parameters step downloads now requires Python 3.10 or newer, so the
+first setup run failed on the default image (job #1111). The pin is a
+major.minor tag, not rolling `current`, so the image cannot silently
+regress; any 3.10+ tag works. (Bumping within 1.x would not fix it: even
+1.3.0 defaults to 3.9. If the orb is ever bumped to 2.x+, re-check its
+default tag against that floor before dropping the pin.)
 
 Echo-skip semantics: every job always exists in the workflow, so every
 required check always reports. A job whose inputs did not change runs only

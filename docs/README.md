@@ -57,6 +57,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0017](design/0017-disk-and-memory-bounds.md) | Workers delete ended jobs' map output; disk, memory and logs are bounded |
 | [0018](design/0018-trust-model.md) | The cluster trusts its network; what that costs, and what is bounded |
 | [0019](design/0019-late-speculation.md) | LATE speculation as an opt-in mode beside the paper's backup tasks |
+| [0020](design/0020-implicated-only-ci.md) | Implicated-only CI: dynamic config runs only the jobs a PR's files implicate |
 
 ## Explainers
 
