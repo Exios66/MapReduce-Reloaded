@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
+	"github.com/exios66/mapreduce-reloaded/go/internal/memlimit"
 	"github.com/exios66/mapreduce-reloaded/go/internal/rpcguard"
 	"github.com/exios66/mapreduce-reloaded/go/internal/shuffle"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
@@ -65,6 +67,7 @@ func start(ctx context.Context, args []string, stderr io.Writer) int {
 		return 2
 	}
 	if err = logs.Setup(c.logFormat); err == nil {
+		limitHeap(memlimit.FromCgroup())
 		err = run(ctx, c, nil)
 	}
 	if err != nil {
@@ -97,6 +100,19 @@ func parse(args []string, stderr io.Writer) (config, error) {
 		err = fmt.Errorf("-min-free-mib %d is too large", c.minFreeMiB)
 	}
 	return c, err
+}
+
+// limitHeap keeps the Go heap under the container's memory limit, if there
+// is one: the runtime collects harder instead of the kernel killing the
+// process (#47). A quarter of the limit is left for stacks, gRPC and the
+// buffers outside the heap accounting.
+func limitHeap(limit int64) {
+	if limit <= 0 {
+		return
+	}
+	heap := limit - limit/4
+	debug.SetMemoryLimit(heap)
+	slog.Info("memory limit from the cgroup", "bytes", limit, "heap_limit_bytes", heap)
 }
 
 // run serves map output and runs tasks using c until the coordinator says to

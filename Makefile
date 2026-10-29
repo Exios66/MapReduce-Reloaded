@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -88,6 +88,12 @@ monitoring-up:
 
 e2e: cluster-up mr
 	scripts/e2e.sh
+
+# The soak run of #160: 1 GiB with the combiner off on two workers limited
+# to 256 MB, which must finish with no out-of-memory kill (the acceptance
+# criterion of #47). Needs the cluster and a few minutes; not in make check.
+soak: data
+	scripts/soak.sh
 
 # Seeded chaos on the cluster (#29): worker kills and pauses and coordinator
 # restarts during word count jobs, which must all give the same output.

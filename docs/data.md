@@ -74,8 +74,8 @@ process. The first three take about 1.5 minutes and peak at 1.1 GB of memory, an
 The real data tests what the synthetic inputs cannot:
 
 - **War and Peace** is real English prose at ten times the corpus's size,
-  with LF line endings (the corpus is all CRLF). It has a real vocabulary:
-  22,167 of its 41,631 words occur once.
+  with LF line endings (the English corpus texts are CRLF; the German one is
+  LF). It has a real vocabulary: 22,167 of its 41,631 words occur once.
 - **The NASA log** has the irregularities a generator leaves out. Eleven
   requests hold bytes outside ASCII, and one line has too few fields, which
   urlfreq skips as documented.
@@ -130,5 +130,3 @@ The real data tests what the synthetic inputs cannot:
   and Peace's lines repeated (`bench/gen-book.py`), a fixed 41,631-word
   vocabulary, so it is the combiner's best case and not real text at that
   scale. The book alone overstated the saving (33× and 22%).
-- **The golden corpus** has no non-English text in `main` yet. Branch
-  `corpus-utf8` adds a German text in UTF-8.

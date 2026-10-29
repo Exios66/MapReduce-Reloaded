@@ -1,5 +1,9 @@
 # MapReduce-Reloaded
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/Exios66/MapReduce-Reloaded/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Exios66/MapReduce-Reloaded/tree/main)
+![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)
+
 A from-scratch re-implementation of Google's MapReduce, as described in
 Dean & Ghemawat, [*MapReduce: Simplified Data Processing on Large Clusters*](https://research.google.com/archive/mapreduce-osdi04.pdf)
 (OSDI 2004), extended for modern infrastructure: object storage, compression,
@@ -151,6 +155,9 @@ reduce  4/4
 counters at any time. While a job runs, the status page is at
 <http://127.0.0.1:18780/>.
 
+![The status page during a chaos run: a job completes with two backup
+attempts, the next is mapping, and the workers list their running tasks](docs/assets/status-chaos.gif)
+
 ### 5. Read the output
 
 Reduce task r writes `part-r-0000r` in the output directory, one
@@ -170,6 +177,10 @@ make cluster-down                                             # remove the conta
 `make monitoring-up` adds Prometheus (`127.0.0.1:19090`) and a Grafana
 dashboard (`127.0.0.1:13000`), and `make e2e-s3` runs the same job with its
 input and output in an S3-compatible store.
+
+[`examples/demo.ipynb`](examples/demo.ipynb) runs this whole sequence in
+Jupyter: upload, submit, read, plot, a second program, the metrics, and a
+local-mode check.
 
 ### Run a job on one machine, without Docker
 
