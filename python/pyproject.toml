@@ -27,6 +27,8 @@ dev = [
     "zstandard>=0.25",
     "python-snappy>=0.7",
 ]
+# Run the demo notebook: examples/demo.ipynb
+notebook = ["nbconvert>=7", "ipykernel>=6"]
 # make mutate-py
 mutation = ["mutmut>=3.8"]
 
