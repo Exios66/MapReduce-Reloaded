@@ -86,7 +86,7 @@ fi
 # (#144, #158). The scrape interval is 5 s, so give it a few.
 "${compose[@]}" --profile monitoring up -d --wait prometheus >/dev/null
 series=
-for _ in $(seq 30); do
+for _ in $(seq "${E2E_PROMETHEUS_TRIES:-30}"); do # fewer tries in tests
     series=$(curl -fsS --max-time 5 --get http://127.0.0.1:19090/api/v1/query \
         --data-urlencode "query=mr_job_tasks{job=\"$id\"}" || true)
     case "$series" in *"\"job\":\"$id\""*) break ;; esac
