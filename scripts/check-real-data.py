@@ -5,9 +5,9 @@ against an independent oracle (docs/data.md).
 Usage: check-real-data.py [--mr BIN] [--python PY] [-m M] [-r R] [--no-python] [NAME ...]
 
 NAME is warpeace (word count), nasa (urlfreq), webgoogle (reverselinks),
-chapters (invertedindex over War and Peace's chapters as files) or docs
-(termvector over its chapters as documents, one host per part); the
-default is every dataset that data/input/ holds. Like
+chapters (invertedindex over War and Peace's chapters as files) or
+commoncrawl (termvector over a Common Crawl WET file's pages); the default
+is every dataset that data/input/ holds. Like
 make-corpus-expected.py, the oracle is stdlib only and written from the
 programs' documented behavior, without the Go or Python code it checks:
 lines end at "\\n" (a "\\r" before it is dropped), words are maximal runs
@@ -35,7 +35,7 @@ DATASETS = {
     "nasa": ("urlfreq", "nasa/access.log"),
     "webgoogle": ("reverselinks", "webgoogle/links.tsv"),
     "chapters": ("invertedindex", "warpeace-chapters/*.txt"),
-    "docs": ("termvector", "warpeace-docs/docs.tsv"),
+    "commoncrawl": ("termvector", "commoncrawl/pages.tsv"),
 }
 
 

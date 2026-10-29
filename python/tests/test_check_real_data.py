@@ -1,7 +1,10 @@
 """Tests for scripts/check-real-data.py, which checks the example programs
 over the datasets of scripts/fetch-data.sh against its own oracle."""
 
+import gzip
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -72,3 +75,29 @@ def test_main_without_data(tmp_path, monkeypatch, capsys):
 def test_main_rejects_an_unknown_dataset():
     with pytest.raises(SystemExit):
         real.main(["nope"])
+
+
+def warc(kind, body, url=b"http://h.example/p"):
+    head = b"WARC/1.0\r\nWARC-Type: %s\r\n" % kind
+    if url:
+        head += b"WARC-Target-URI: %s\r\n" % url
+    return head + b"Content-Length: %d\r\n\r\n%s\r\n\r\n" % (len(body), body)
+
+
+@pytest.mark.parametrize("compress", [False, True])
+def test_wet_to_tsv(compress):
+    """Each conversion record becomes "URL<TAB>text" with whitespace runs
+    made one space; warcinfo and records without a URL are left out."""
+    wet = (
+        warc(b"warcinfo", b"software: x\r\n", url=b"")
+        + warc(b"conversion", "Grüße  aus\n\tBerlin\r\n".encode())
+        + warc(b"conversion", b"no url", url=b"")
+        + warc(b"conversion", b"", url=b"https://g.example/")
+    )
+    if compress:
+        wet = gzip.compress(wet[: len(wet) // 2]) + gzip.compress(wet[len(wet) // 2 :])
+    r = subprocess.run(
+        [sys.executable, ROOT / "scripts/wet-to-tsv.py"], input=wet, capture_output=True, check=True
+    )
+    assert r.stdout == "http://h.example/p\tGrüße aus Berlin\nhttps://g.example/\t\n".encode()
+    assert b"2 pages" in r.stderr
