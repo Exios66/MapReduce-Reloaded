@@ -747,7 +747,7 @@ func TestUsageMatchesTheFlags(t *testing.T) {
 		t.Fatal("no flags were registered")
 	}
 	documented := map[string]bool{}
-	for _, m := range regexp.MustCompile(`\s-([a-z][a-z-]*)`).FindAllStringSubmatch(usage, -1) {
+	for _, m := range regexp.MustCompile(`[\s\[]-([a-z][a-z-]*)`).FindAllStringSubmatch(usage, -1) {
 		documented[m[1]] = true
 	}
 	for name := range registered {
