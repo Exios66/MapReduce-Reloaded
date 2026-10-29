@@ -7,7 +7,7 @@ Full spec: the "Partitioning" section of [file-format.md](../file-format.md#part
 A job has R reduce tasks. Every map task must decide, for each key it
 outputs, which of the R reducers gets it. The paper's rule (§3.1, §4.1) is:
 
-```
+```text
 partition(key) = hash(key) mod R
 ```
 
@@ -27,7 +27,7 @@ So the hash is fixed in the spec and written out by hand in both languages.
 
 ## FNV-1a in five lines
 
-```
+```text
 h = 0xcbf29ce484222325        # fixed starting value
 for each byte b of the key:
     h = h XOR b               # mix the byte in

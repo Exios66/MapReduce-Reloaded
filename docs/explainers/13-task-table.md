@@ -9,7 +9,7 @@ and `Registry` holds the live workers.
 
 ## The state machine
 
-```
+```text
 IDLE --Assign--> IN_PROGRESS --Complete--> COMPLETED
   ^                   |                        |
   +--- Fail, or worker lost -------------------+ (map tasks only)

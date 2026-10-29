@@ -16,7 +16,7 @@ Connect to the campus VPN first; the VM is not reachable without it.
 On your laptop, add an alias to `~/.ssh/config` once, with your own host
 and user name (they stay out of this public repository):
 
-```
+```text
 Host mr-vm
     HostName <your-vm-hostname>
     User <your-username>
