@@ -1,6 +1,7 @@
 """Tests for the coordinator's gRPC service, ported from
 go/internal/coordinator/server_test.go and failure_test.go."""
 
+import dataclasses
 import errno
 import os
 import shutil
@@ -10,7 +11,7 @@ import time
 import grpc
 import pytest
 
-from mapreduce_reloaded.coordinator import SKIP_AFTER, server
+from mapreduce_reloaded.coordinator import SKIP_AFTER, Task, server
 from mapreduce_reloaded.coordinator.server import (
     MAX_LOST,
     TEMP_DIR,
@@ -19,6 +20,7 @@ from mapreduce_reloaded.coordinator.server import (
     _base36,
     serve,
 )
+from mapreduce_reloaded.coordinator.tasktable import LateParams
 from mapreduce_reloaded.coordinator.wire import MAX_REDUCE_TASKS, input_split, path, uri, validate
 from mapreduce_reloaded.formats import Split
 from mapreduce_reloaded.gen.mapreduce.v1 import (
@@ -101,6 +103,12 @@ class Coordinator:
     def heartbeat(self, worker, *running):
         progress = [coordinator_pb2.TaskProgress(attempt=a) for a in running]
         req = coordinator_pb2.HeartbeatRequest(worker_id=worker, running=progress)
+        return self.s.Heartbeat(req, CTX)
+
+    def report_progress(self, worker, attempt, fraction):
+        """Sends a heartbeat in which worker says attempt has processed fraction."""
+        progress = coordinator_pb2.TaskProgress(attempt=attempt, fraction_done=fraction)
+        req = coordinator_pb2.HeartbeatRequest(worker_id=worker, running=[progress])
         return self.s.Heartbeat(req, CTX)
 
 
@@ -632,6 +640,87 @@ def test_heartbeat_cancels(new_job):
     assert list(c.heartbeat(other, attempt, stale).cancel) == [attempt, stale]
     c.succeed(w, attempt, outputs(0, 1))
     assert len(c.heartbeat(w, attempt).cancel) == 1
+
+
+def test_heartbeat_records_progress(new_job):
+    # A heartbeat records the progress of the attempts that run on the worker,
+    # and only those, at the coordinator's clock; it changes no scheduling.
+    c, w, _ = new_job(cfg=Config(now=lambda: 1234.5))
+    other = c.register()
+    attempt = c.request(w).map_task.attempt
+    tasks = c.s._active.tasks
+    c.report_progress(w, attempt, 0.25)
+    assert tasks.fraction(Task(MAP, 0), w) == 0.25
+    c.report_progress(w, attempt, 0.1)  # arrived out of order
+    assert tasks.fraction(Task(MAP, 0), w) == 0.25
+    assert tasks._maps[0].running[attempt.attempt].reported == 1234.5
+    assert list(c.report_progress(other, attempt, 0.75).cancel) == [attempt]
+    assert tasks.fraction(Task(MAP, 0), w) == 0.25
+    st = c.s.status()
+    assert st.workers[0].progress == {Task(MAP, 0): 0.25}
+    assert st.workers[1].progress == {}
+
+
+@pytest.mark.parametrize(
+    "cfg, silent, reported",
+    [
+        (Config(backups=True), "backup 1", "backup 1"),
+        (Config(backups=False, speculation="paper"), "backup 1", "backup 1"),
+        (Config(backups=True, speculation="paper"), "backup 1", "backup 1"),
+        (Config(backups=False), "wait", "wait"),
+        (Config(speculation="off"), "wait", "wait"),
+        (Config(backups=True, speculation="off"), "wait", "wait"),
+        (Config(backups=False, speculation="late"), "wait", "backup 1"),
+        (Config(backups=True, speculation="late"), "wait", "backup 1"),
+    ],
+    ids=["legacy on", "paper", "paper, backups set", "legacy off", "off", "off, backups set"]
+    + ["late", "late, backups set"],
+)
+def test_speculation_modes(new_job, cfg, silent, reported):
+    # Speculation picks how an idle worker gets a backup of the one running
+    # task. "paper" is exactly what backups did: a backup at once, whatever
+    # the task has reported. "late" waits for it to report progress, and
+    # "off" never starts one. Empty means backups decides.
+    def ask(report):
+        """What a second worker is told 10 s after the first started its
+        task, which has reported 0.1 done if report is set."""
+        now = [1000.0]
+        c, w, _ = new_job(cfg=dataclasses.replace(cfg, heartbeat_interval=1.0, now=lambda: now[0]))
+        other = c.register()
+        attempt = c.request(w).map_task.attempt
+        now[0] += 10
+        if report:
+            c.report_progress(w, attempt, 0.1)
+        resp = c.request(other)
+        return f"backup {resp.map_task.attempt.attempt}" if resp.HasField("map_task") else "wait"
+
+    assert (ask(False), ask(True)) == (silent, reported)
+
+
+def test_config_positional_arguments():
+    # New fields go last, so that positional arguments keep their meaning.
+    def locate(s):
+        return ["h"]
+
+    cfg = Config(3.0, 10.0, 1.0, True, locate)
+    assert (cfg.backups, cfg.locate, cfg.speculation) == (True, locate, "")
+
+
+def test_late_defaults():
+    # LATE's settings default to those of Zaharia et al. (OSDI 2008).
+    assert Config(heartbeat_interval=3.0).late_params() == LateParams(0.1, 25.0, 25.0, 6.0)
+    assert Config(
+        speculative_cap=0.5, slow_task_percentile=10, slow_node_percentile=30, min_runtime=1
+    ).late_params() == LateParams(0.5, 10, 30, 1)
+    for s, ok in {
+        "": True,
+        "paper": True,
+        "late": True,
+        "off": True,
+        "Late": False,
+        "on": False,
+    }.items():
+        assert server.valid_speculation(s) is ok, s
 
 
 def test_heartbeat_cancels_an_ended_jobs_attempts(new_job):

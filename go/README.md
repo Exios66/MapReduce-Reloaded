@@ -16,7 +16,7 @@ go run ./cmd/mr run -local -m 3 -r 4 wordcount /tmp/wc '../testdata/corpus/*.txt
 | Command | What it does |
 |---|---|
 | [`mr`](cmd/mr/) | Runs jobs: `mr run -local` in one process, `mr submit` on a cluster, `mr status` for a job's state and counters |
-| [`coordinator`](cmd/coordinator/) | The paper's master (§3.2). Flags: `-addr` (default `:7070`), `-http` (status page and `/metrics`, default `:8080`), `-data-dir` (write-ahead log; without it a restart loses the job), `-backups` (default on), `-keep-jobs` (ended jobs kept for `mr status`, default 100), `-max-task-failures` (default 8), `-log-format text\|json` |
+| [`coordinator`](cmd/coordinator/) | The paper's master (§3.2). Flags: `-addr` (default `:7070`), `-http` (status page and `/metrics`, default `:8080`), `-data-dir` (write-ahead log; without it a restart loses the job), `-backups` (default on), `-speculation` (`paper`, `late` or `off`: how backups start; default `paper`, or `off` with `-backups=false`; ADR 0019), `-keep-jobs` (ended jobs kept for `mr status`, default 100), `-max-task-failures` (default 8), `-log-format text\|json` |
 | [`worker`](cmd/worker/) | Runs tasks for a coordinator. Flags: `-coordinator`, `-listen` (serves map output, default `:7071`), `-advertise`, `-work-dir`, `-http` (serves `/metrics`), `-min-free-mib` (default 1024), `-log-format` |
 
 The Dockerfile in [`deploy/docker`](../deploy/docker/) builds all three into one

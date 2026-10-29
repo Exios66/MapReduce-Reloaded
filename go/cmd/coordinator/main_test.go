@@ -42,6 +42,38 @@ func TestParseFlags(t *testing.T) {
 	}
 }
 
+// -speculation picks how backups start; without it, -backups decides, and
+// -backups=false conflicts with paper or late.
+func TestParseSpeculation(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string // the effective mode: Backups and Speculation of the config
+	}{
+		{nil, "paper"},
+		{[]string{"-backups=false"}, "off"},
+		{[]string{"-speculation", "paper"}, "paper"},
+		{[]string{"-speculation=late"}, "late"},
+		{[]string{"-speculation=off"}, "off"},
+		{[]string{"-backups=false", "-speculation=off"}, "off"},
+	} {
+		o, err := parse(tc.args, io.Discard)
+		if err != nil {
+			t.Errorf("parse(%q): %v", tc.args, err)
+			continue
+		}
+		cfg := config(o)
+		got := cfg.Speculation
+		if got == "" && cfg.Backups {
+			got = "paper"
+		} else if got == "" {
+			got = "off"
+		}
+		if got != tc.want {
+			t.Errorf("parse(%q) gives %q, want %q", tc.args, got, tc.want)
+		}
+	}
+}
+
 // Bad flags exit with status 2 and say why; a failure to run exits with 1.
 func TestStartErrors(t *testing.T) {
 	for _, tc := range []struct {
@@ -53,6 +85,9 @@ func TestStartErrors(t *testing.T) {
 		{[]string{"extra"}, 2, `unexpected arguments ["extra"]`},
 		{[]string{"-keep-jobs", "-1"}, 2, "-keep-jobs is -1"},
 		{[]string{"-max-task-failures", "2"}, 2, "-max-task-failures is 2"},
+		{[]string{"-speculation", "fast"}, 2, `-speculation is "fast"`},
+		{[]string{"-backups=false", "-speculation=late"}, 2, "-backups=false conflicts with -speculation=late"},
+		{[]string{"-backups=false", "-speculation=paper"}, 2, "-backups=false conflicts with -speculation=paper"},
 		{[]string{"-log-format", "xml"}, 1, `log format "xml"`},
 		{[]string{"-addr", "nowhere:-1", "-http", ""}, 1, "coordinator: listen tcp"},
 		{[]string{"-h"}, 0, "Usage of coordinator"},

@@ -156,8 +156,9 @@ Kept open as `[stretch]` issues:
   map and reduce functions on Go workers, and a test matrix over every
   Go/Python combination.
 - **Modern extensions (#43–#55):** an external shuffle service,
-  coordinator high availability, LATE-style speculation, skew handling,
-  memory-aware spilling, tracing, mTLS, Kubernetes, Parquet and JSON
-  Lines, a job service, job DAGs, incremental execution and WebAssembly
+  coordinator high availability, LATE-style speculation (built as an
+  opt-in coordinator mode, [ADR 0019](design/0019-late-speculation.md), and
+  not yet evaluated), skew handling, memory-aware spilling, tracing, mTLS,
+  Kubernetes, Parquet and JSON Lines, a job service, job DAGs, incremental execution and WebAssembly
   user functions.
 - **Their evaluation (#59)** against this baseline.

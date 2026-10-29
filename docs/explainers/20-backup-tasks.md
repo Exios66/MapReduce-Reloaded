@@ -19,7 +19,9 @@ slower.
 
 Backups are on in `cmd/coordinator` and can be turned off with
 `-backups=false`. `coordinator.Config` leaves them off, so that tests can
-count attempts exactly.
+count attempts exactly. `-speculation=late` swaps the choice of task for
+LATE's, which uses the progress workers report (ADR 0019); this page is
+about the paper's rule, the default.
 
 ## Choices
 

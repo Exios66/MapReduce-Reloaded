@@ -4,7 +4,7 @@
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
-# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|all
+# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
@@ -25,6 +25,10 @@
 #   its pages in every language, which favors the combiner less; and book,
 #   War and Peace's lines repeated (bench/gen-book.py), a fixed-vocabulary
 #   best case. It needs scripts/fetch-data.sh warpeace crawl.
+# - E7 (#59, not part of `all`): distsort on four workers throttled to
+#   different CPU limits, with the coordinator's speculation set to the
+#   paper's rule (mixed-paper), LATE (mixed-late) or none (mixed-off);
+#   E7_CPUS sets the four limits and E7_SETTINGS picks some settings.
 #
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
@@ -55,10 +59,11 @@ metrics=http://127.0.0.1:18780/metrics
 tmp=$(mktemp -d)
 sampler=
 ready=
-slow= # the worker E2 throttles, restored however the script exits
+slow= # the workers E2 and E7 throttle (container IDs), restored however the script exits
 cleanup() {
+    local c
     [ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
-    [ -z "$slow" ] || docker update --cpus 1 "$slow" >/dev/null 2>&1 || true
+    for c in $slow; do docker update --cpus 1 "$c" >/dev/null 2>&1 || true; done
     rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -399,6 +404,85 @@ e2() {
     configure 4
 }
 
+# E7 is #59: the paper's backup rule, LATE and no backups, on workers of
+# different speeds. The four workers get the CPU limits in E7_CPUS (the
+# first worker gets the first), where E2 slows one. E7_SETTINGS limits it to
+# some settings, which take turns as in E2. It is not part of `all`, and
+# bench/plot-experiments.py does not draw it: runs.csv has the job times and
+# the backup counts.
+e7_settings=${E7_SETTINGS:-mixed-paper mixed-late mixed-off}
+e7_cpus=${E7_CPUS:-1 0.6 0.3 0.15}
+
+# throttle CPUS...: limits the running workers to CPUS, one value each, in
+# the order compose lists them. It saves their IDs in slow, so that cleanup
+# and unthrottle restore them.
+throttle() {
+    local ids i cpus=("$@")
+    mapfile -t ids < <("${compose[@]}" ps -q worker)
+    if [ "${#ids[@]}" != "$#" ]; then
+        echo "experiments: ${#ids[@]} workers are running; expected $# CPU limits" >&2
+        exit 1
+    fi
+    slow=${ids[*]}
+    for i in "${!ids[@]}"; do
+        docker update --cpus "${cpus[$i]}" "${ids[$i]}" >/dev/null
+    done
+}
+
+unthrottle() {
+    local c
+    for c in $slow; do docker update --cpus 1 "$c" >/dev/null; done
+    slow=
+}
+
+e7() {
+    local order s v n
+    # A misspelled setting would run as the paper's rule and be left out of
+    # the comparison, so reject it before the cluster starts.
+    for s in $e7_settings; do
+        case $s in
+        mixed-paper | mixed-late | mixed-off) ;;
+        *)
+            echo "E7_SETTINGS: unknown setting '$s'; expected mixed-paper, mixed-late or mixed-off" >&2
+            exit 2
+            ;;
+        esac
+    done
+    # shellcheck disable=SC2086 # E7_CPUS is a list
+    set -- $e7_cpus
+    if [ $# != 4 ]; then
+        echo "E7_CPUS: '$e7_cpus' has $# limits; expected 4, one for each worker" >&2
+        exit 2
+    fi
+    for v in "$@"; do
+        if ! [[ $v =~ ^([0-9]+\.?[0-9]*|\.[0-9]+)$ ]] || ! awk -v v="$v" 'BEGIN { exit !(v > 0) }'; then
+            echo "E7_CPUS: '$v' is not a positive number of CPUs" >&2
+            exit 2
+        fi
+    done
+    begin E7
+    for n in $(seq "$repeat"); do
+        order=$e7_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e7_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            case $setting in
+            mixed-off) configure 4 backups-off.yaml ;;
+            mixed-late) configure 4 speculation-late.yaml ;;
+            *) configure 4 ;;
+            esac
+            throttle "$@"
+            start_sampler tasks "bench/results/E7/tasks-$setting-$n.csv"
+            run E7 "$setting" distsort "$n" 4 ""
+            stop_sampler
+            unthrottle
+        done
+    done
+    configure 4
+}
+
 e3() {
     begin E3
     configure 4
@@ -491,6 +575,7 @@ E3) e3 ;;
 E4) e4 ;;
 E5) e5 ;;
 E6) e6 ;;
+E7) e7 ;;
 all)
     need_e6 # before E0, not after E5
     # Not an && list: set -e does not apply to a function called there.
@@ -503,7 +588,7 @@ all)
     e6
     ;;
 *)
-    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|all" >&2
+    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all" >&2
     exit 2
     ;;
 esac

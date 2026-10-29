@@ -40,12 +40,39 @@ def test_parse_flags():
 
 
 @pytest.mark.parametrize(
+    "args, want",
+    [
+        ([], "paper"),
+        (["-backups=false"], "off"),
+        (["-speculation", "paper"], "paper"),
+        (["-speculation=late"], "late"),
+        (["--speculation=off"], "off"),
+        (["-backups=false", "-speculation=off"], "off"),
+    ],
+)
+def test_parse_speculation(args, want):
+    # -speculation picks how backups start; without it, -backups decides.
+    assert cmd.config(cmd.parse(args)).effective_speculation() == want
+
+
+@pytest.mark.parametrize(
     "args, code, msg",
     [
         (["-nope"], 2, "unrecognized arguments: -nope"),
         (["extra"], 2, "unrecognized arguments: extra"),
         (["-keep-jobs", "-1"], 2, "-keep-jobs is -1"),
         (["-max-task-failures", "2"], 2, "-max-task-failures is 2"),
+        (["-speculation", "fast"], 2, '-speculation is "fast"'),
+        (
+            ["-backups=false", "-speculation=late"],
+            2,
+            "-backups=false conflicts with -speculation=late",
+        ),
+        (
+            ["-backups=false", "-speculation=paper"],
+            2,
+            "-backups=false conflicts with -speculation=paper",
+        ),
         (["-log-format", "xml"], 2, "log format 'xml'"),
         (["-backups=maybe"], 2, "invalid boolean value 'maybe'"),
         (["-h"], 0, ""),

@@ -35,7 +35,7 @@ func (Text) Open(ctx context.Context, s Split) (RecordReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &textReader{f: f, br: bufio.NewReader(f), pos: pos, end: s.End}
+	r := &textReader{f: f, br: bufio.NewReader(f), pos: pos, start: s.Start, end: s.End}
 	if s.Start > 0 {
 		r.skipPartialLine(s.End - s.Start)
 	}
@@ -74,6 +74,7 @@ type textReader struct {
 	f        io.Closer
 	br       *bufio.Reader
 	pos, end int64 // offset of the next unread byte; end of the split
+	start    int64 // start of the split
 	key      []byte
 	line     []byte // the current line, including its terminator
 	err      error
@@ -114,6 +115,10 @@ func (r *textReader) Value() []byte {
 	line := bytes.TrimSuffix(r.line, []byte("\n"))
 	return bytes.TrimSuffix(line, []byte("\r"))
 }
+
+// Offset returns the bytes of the split consumed, including the partial line
+// before its first line.
+func (r *textReader) Offset() int64 { return max(r.pos-r.start, 0) }
 
 func (r *textReader) Err() error   { return r.err }
 func (r *textReader) Close() error { return r.f.Close() }
