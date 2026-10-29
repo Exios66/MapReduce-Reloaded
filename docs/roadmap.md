@@ -156,6 +156,7 @@ Each item maps to a paper section and will get a test.
 Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 
 **Tier A — infrastructure (2004 → 2026)**
+
 - **Pluggable storage** instead of GFS: local FS, **S3-compatible object storage** (VersityGW in Compose), and optionally GCS/Azure. The `Storage` interface handles listing, ranged reads and atomic commit.
 - **gRPC + protobuf** instead of the custom RPC layer. Supports streaming shuffle, deadlines and retries.
 - **Containers**: Docker images for the coordinator and worker, `docker-compose.yml` for a local cluster, and a Helm chart/manifests for Kubernetes.
@@ -163,6 +164,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 - **Compression** (zstd/snappy) for intermediate and output files, plus checksums (CRC32C) on every block.
 
 **Tier B — robustness and operations**
+
 - **Coordinator high availability**: leader election via an etcd lease, or embedded Raft (`hashicorp/raft`). This builds on the F9 WAL.
 - **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); its evaluation is pending in #59 (experiment E7, not yet run).
 - **Skew handling**: sample-based range partitioner (TeraSort-style) and hot-key salting.
@@ -172,6 +174,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 - **Autoscaling**: Kubernetes horizontal pod autoscaling (HPA) or KEDA, scaled on the queue depth of pending tasks.
 
 **Tier C — flexibility (fits modern workloads)**
+
 - **Multi-language user-defined functions (UDFs)**: Go native; Python via a worker subprocess speaking the shared proto ("streaming" mode, like Hadoop Streaming but typed); optional WASM UDFs for sandboxing.
 - **Columnar formats**: Parquet/Arrow input and output, and JSON Lines.
 - **Job DAGs / pipelines**: chain jobs (`map→reduce→map→reduce`) with a typed Python/Go builder API. This is a lightweight step toward Spark/Beam.
@@ -182,7 +185,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 
 ## 3. Architecture
 
-```
+```text
             ┌──────────── mr CLI / REST / Python SDK ────────────┐
             ▼                                                     │
    ┌──────────────────┐        WAL        ┌───────────────┐       │
@@ -212,7 +215,7 @@ or an S3-compatible store (#41), every worker is Go, and the UDF host is Phase 5
 
 ## 4. Repository layout
 
-```
+```text
 MapReduce-Reloaded/
 ├── design.md                    # key decisions; one job's lifecycle; differences from the paper
 ├── proto/mapreduce/v1/          # coordinator, shuffle, types, log .proto  ← shared contract
@@ -252,37 +255,45 @@ MapReduce-Reloaded/
 Each phase ends in a runnable, tested state.
 
 **Phase 0 — Foundations (about 1 week)**
+
 - Write `proto/` messages and services: `Task`, `TaskKind`, `TaskState`, `RequestTask`, `ReportTask`, `Heartbeat`, `FetchPartition` (server-stream), `SubmitJob`, `JobStatus`, `Counters`.
 - Write `docs/file-format.md`: length-prefixed `(key, value)` records with block CRC32C and optional compression. Both languages must read and write it identically.
 - Set up the Go module and Python package skeletons, the Makefile (`buf` or `protoc` codegen), and the local quality gate (`make check` plus a pre-push hook: buf lint and breaking checks, generated-code freshness, go test, pytest, ruff, golangci-lint).
 
 **Phase 1 — Sequential core + local mode (F1, F15–F17, F20)**
+
 - Public API in both languages, plus text/kv input formats and the external merge sort.
 - `mr run --local wordcount input/ out/`: the whole pipeline in one process. This mode is the **correctness oracle** for every later phase.
 
 **Phase 2 — Distributed core (F2–F7, F10, F12, F14)**
+
 - Coordinator task table and scheduler; workers pull tasks; map partitions spill to local disk; the shuffle server streams partitions; reducers fetch, merge and reduce; atomic rename commit.
 - Run with Docker Compose: 1 coordinator and 4 workers on a shared volume.
 
 **Phase 3 — Fault tolerance (F8, F9, F13, F18, F19, F22)**
+
 - Heartbeats with timeouts, map re-execution on worker loss; reduce attempts get the new locations.
 - Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
 - **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs, broken fetches, a torn log tail, a clock set back, full disks, bad records and S3 commit failures too (#155). Driving the same faults against the Compose cluster is #29.
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
+
 - Locality-aware scheduling, the status web UI, Prometheus `/metrics`, and all paper example programs.
 - `docs/paper-mapping.md` complete: every row F1–F24 linked to code and tests (F24 with Phase 7).
 
 **Phase 5 — Python parity & interop**
+
 - Finish the Python worker (the coordinator is done, #36).
 - Python UDF host for Go workers (subprocess over stdio, using the proto framing).
 - Interop matrix in `tests/interop/`: {Go, Py} coordinator × {Go, Py} worker × {Go, Py} UDF, all byte-identical to local mode.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
+
 - In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #45; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
+
 - Reproduce the paper's §5 experiments at small scale:
   - grep over about 10 GB, plotting input rate over time;
   - sort (TeraSort-style), comparing normal, no-backup-tasks, and "200 tasks killed" runs, as in the paper's Figure 3.

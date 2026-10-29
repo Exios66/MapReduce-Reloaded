@@ -23,6 +23,8 @@ dev = [
     "hypothesis>=6",
     "coverage>=7",
     "ruff>=0.5",
+    # Markdown style check for make md-lint (pymarkdown, .pymarkdown.json).
+    "pymarkdownlnt==0.9.41",
     "grpcio-tools==1.84.1",
     "zstandard>=0.25",
     "python-snappy>=0.7",

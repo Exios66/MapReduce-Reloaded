@@ -73,7 +73,8 @@ LATE does better on mixed speeds is open (#59).
       25th percentile of the candidates' rates.
    5. *Choice.* Of those, the task with the largest estimated time left;
       ties go to the attempt that started first, then the lowest index.
-   - The cap and the two percentiles are `Config` fields
+
+   - The cap, the two percentiles and the minimum runtime are `Config` fields
      (`SpeculativeCap`, `SlowTaskPercentile`, `SlowNodePercentile`,
      `MinRuntime`). A zero field means its default. None is a flag.
 5. **Percentile.** The linear interpolation between the closest ranks of

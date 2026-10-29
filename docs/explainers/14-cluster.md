@@ -14,7 +14,7 @@ and ask again", or "shut down". It hands out map tasks first and reduce
 tasks only once every map task has completed, because each reducer needs a
 piece of every map output.
 
-```
+```sh
 coordinator -addr :7070
 worker -coordinator host:7070     # as many as you like
 mr submit -coordinator host:7070 -wait wordcount out/ 'in/*.txt'
