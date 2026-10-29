@@ -26,20 +26,25 @@ def check(directory, job, maps, reduces, completed_mono, completed_epoch):
                 key = (row["url"], float(row["seconds"]))
                 rounds.setdefault(key, set()).add(row["metric"])
     terminal = {
-        url for (url, seconds), metrics in rounds.items()
+        url
+        for (url, seconds), metrics in rounds.items()
         if seconds >= completed and metrics == COUNTERS
     }
     baselines = {
-        url for (url, seconds), metrics in rounds.items()
+        url
+        for (url, seconds), metrics in rounds.items()
         if seconds < completed and metrics == COUNTERS
     }
     assert len(terminal) == 4 and terminal == baselines, "missing worker rate coverage"
     done = set()
     with (path / "tasks.csv").open() as stream:
         for row in csv.DictReader(stream):
-            if row["job"] == job and row["state"] == "completed" and float(row["seconds"]) >= completed:
-                if int(row["value"]) == {"map": maps, "reduce": reduces}[row["kind"]]:
-                    done.add(row["kind"])
+            if (
+                row["job"] == job
+                and row["state"] == "completed"
+                and float(row["seconds"]) >= completed
+            ) and int(row["value"]) == {"map": maps, "reduce": reduces}[row["kind"]]:
+                done.add(row["kind"])
     assert done == {"map", "reduce"}, "missing terminal task counts for this job"
     resources = set()
     with (path / "resources.jsonl").open() as stream:
@@ -52,4 +57,15 @@ def check(directory, job, maps, reduces, completed_mono, completed_epoch):
 
 
 if __name__ == "__main__":
-    print(json.dumps(check(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), float(sys.argv[6]))))
+    print(
+        json.dumps(
+            check(
+                sys.argv[1],
+                sys.argv[2],
+                int(sys.argv[3]),
+                int(sys.argv[4]),
+                float(sys.argv[5]),
+                float(sys.argv[6]),
+            )
+        )
+    )
