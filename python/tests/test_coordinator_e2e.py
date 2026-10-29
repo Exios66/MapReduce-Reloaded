@@ -1,7 +1,8 @@
 """The scenarios of go/internal/e2e/process_test.go, ported to pytest and run
 against the Python coordinator (#36): python -m mapreduce_reloaded.coordinator
 as a process, with the Go worker and mr commands, over localhost sockets.
-The tests are skipped if the Go commands cannot be built, or fail if
+The tests are skipped if the Go commands cannot be built, or a recovery
+scenario finishes before it can be interrupted; they fail instead if
 MR_REQUIRE_GO is set, as make py-e2e sets it for CI's go job."""
 
 import json
@@ -22,11 +23,17 @@ ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(not hasattr(signal, "SIGKILL"), reason="needs Unix signals")
 
 
+def must_run():
+    """Returns pytest.skip, or pytest.fail when MR_REQUIRE_GO is set, so a
+    scenario that cannot run fails CI's go job instead of passing it."""
+    return pytest.fail if os.environ.get("MR_REQUIRE_GO") else pytest.skip
+
+
 @pytest.fixture(scope="module")
 def bin_dir(tmp_path_factory):
     """Builds the Go worker and mr commands once, or skips, or fails with
     MR_REQUIRE_GO."""
-    give_up = pytest.fail if os.environ.get("MR_REQUIRE_GO") else pytest.skip
+    give_up = must_run()
     if shutil.which("go") is None:
         give_up("go is not installed")
     out = tmp_path_factory.mktemp("bin")
@@ -250,7 +257,7 @@ def test_worker_killed(cluster, bin_dir, tmp_path):
     job = c.submit("-m", "12", "-r", "4", "wordcount", str(out), input)
     st = c.wait(job, 30, lambda st: not st.get("map", "0/").startswith("0/"))
     if st["state"] == "SUCCEEDED":
-        pytest.skip("the job finished before a worker could be killed")
+        must_run()("the job finished before a worker could be killed")
     c.workers[0].stop(signal.SIGKILL, 5)
     st = c.wait(job, 45)
     assert st["state"] == "SUCCEEDED", st
@@ -268,7 +275,7 @@ def test_coordinator_restart(cluster, bin_dir, tmp_path):
     job = c.submit("-m", "12", "-r", "4", "wordcount", str(out), input)
     st = c.wait(job, 30, lambda st: not st.get("map", "0/").startswith("0/"))
     if st["state"] == "SUCCEEDED":
-        pytest.skip("the job finished before the coordinator could be killed")
+        must_run()("the job finished before the coordinator could be killed")
     c.coord.stop(signal.SIGKILL, 5)
     c.start_coordinator()
     st = c.wait(job, 45)
