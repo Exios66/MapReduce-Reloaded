@@ -64,7 +64,7 @@ Shared storage is the directory `data/`, which every container sees at
 the containers see, and the same path goes in the job.
 
 ```sh
-make upload-example   # the corpus (3 books) to /data/input/corpus, a 10 MB web log to /data/input/weblog
+make upload-example   # the corpus (4 books) to /data/input/corpus, a 10 MB web log to /data/input/weblog
 bin/mr upload ~/my-logs /data/input/logs      # your own files, directories or quoted globs
 ```
 
