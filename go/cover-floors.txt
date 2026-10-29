@@ -39,3 +39,4 @@ internal/wire 93
 internal/worker 92
 pkg/api 97
 tools/mutate 27  # the rest runs go test on each mutant: make mutate
+tools/paper-data 88  # VM measurement: 89.7% on 2026-10-29

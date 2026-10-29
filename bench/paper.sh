@@ -34,7 +34,10 @@ free_bytes() { df -B1 . | awk 'NR == 2 { print $4 }'; }
 require_space() {
     local free
     free=$(free_bytes)
-    [[ "$free" =~ ^[0-9]+$ ]] && [ "$free" -ge "$1" ] || { echo "paper: need $1 free bytes, have ${free:-unknown}; no job started" >&2; exit 1; }
+    if [[ ! "$free" =~ ^[0-9]+$ ]] || [ "$free" -lt "$1" ]; then
+        echo "paper: need $1 free bytes, have ${free:-unknown}; no job started" >&2
+        exit 1
+    fi
 }
 
 if [ "$action" = prepare ]; then
@@ -73,7 +76,7 @@ host_out=data/out/paper-$stamp
 mkdir -p "$dir" data/out
 chmod a+rwx data/out
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml -f "$dir/compose.json")
-samplers=() event_pid= owned=0 finished=0
+samplers=() event_pid='' owned=0 finished=0
 cleanup() {
     local pid
     if [ -n "$event_pid" ]; then
@@ -161,7 +164,7 @@ PY
 done
 [ "$baseline" = 1 ] || { echo "paper: missing worker sample baselines" >&2; exit 1; }
 params=() r=8 program=papersort
-if [ "$scenario" = grep ]; then params=(-param pattern=XYZ); r=1; program=grep; fi
+if [ "$scenario" = grep ]; then params=(-param pattern=XYZ); r=1; program='grep'; fi
 read -r start start_mono < <(python3 -c 'import time; print(time.time(), time.monotonic())')
 job=$(timeout "$deadline" "$mr" submit -m "$m" -r "$r" -input-format "$format" -intermediate-codec "$codec" -output-format "$format" -output-codec "$codec" "${params[@]}" "$program" "$out" "/data/${data#data/}/part-m-*" 2> "$dir/submit.log")
 [[ "$job" =~ ^job-[a-z0-9-]+$ ]] || { echo "paper: invalid submitted job ID: $job" >&2; exit 1; }
@@ -196,7 +199,10 @@ state=
 while [ "$state" != SUCCEEDED ] && [ "$state" != FAILED ]; do
     free=$(free_bytes)
     printf '%s,%s\n' "$(date +%s.%N)" "$free" >> "$dir/disk.csv"
-    [[ "$free" =~ ^[0-9]+$ ]] && [ "$free" -ge $((2 << 30)) ] || { echo "paper: emergency disk reserve reached" >&2; exit 1; }
+    if [[ ! "$free" =~ ^[0-9]+$ ]] || [ "$free" -lt $((2 << 30)) ]; then
+        echo "paper: emergency disk reserve reached" >&2
+        exit 1
+    fi
     remaining=$(python3 -c 'import sys,time; print(max(0,float(sys.argv[1])+float(sys.argv[2])-time.monotonic()))' "$start_mono" "$deadline")
     awk -v r="$remaining" 'BEGIN { exit !(r > 0) }' || { echo "paper: TIMEOUT; stopping and retaining data" >&2; exit 1; }
     poll_timeout=$(awk -v r="$remaining" 'BEGIN { print r < 5 ? r : 5 }')

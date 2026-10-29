@@ -1,6 +1,7 @@
 # Intent: the paper's benchmarks at 10 GB on the course VM
 
-**Status: proposed; no implementation or new benchmark results in this PR.**
+**Status: campaign tooling implemented; validation and benchmark evidence
+must be recorded per revision. No 10 GB results are claimed here.**
 The authorized execution scope includes VM cleanup, cluster configuration
 changes and benchmark jobs, subject to the handover and safety gates below.
 Wait for the parallel VM work to finish and its owner to hand over the
@@ -114,11 +115,11 @@ or reported as completed.
 
 ## Evidence and implementation boundaries
 
-Extend [the existing experiment runner](experiments.sh), samplers, plots and
-their Python tests rather than introducing another benchmark framework.
-Consult the ponytail reviewer before implementation. Use the runner's
-already-built **host client for submission and polling**, replacing its
-current container submission. Keep the assignment's four one-CPU workers,
+The [campaign frontend](paper.sh) reuses the existing generators, host CLI,
+MRKV implementation, samplers and rate plots; historical E0–E6 runs remain
+in [their original runner](experiments.sh). Consult the ponytail reviewer
+before implementation. Use the **host client for submission and polling**,
+not the historical runner's container submission. Keep four one-CPU workers,
 shared storage and correctness requirements intact. Coordinate the tested
 source revision with the
 [parallel soak work](https://github.com/Exios66/MapReduce-Reloaded/pull/251),
@@ -150,5 +151,5 @@ then record the actual running images and resource limits.
   accumulate activity and handle resets; they do not reproduce the paper's
   negative input rate for lost map work.
 
-This intent PR changes documentation only. It neither reserves the VM nor
-claims that a 10 GB configuration has passed validation or fits safely yet.
+Tooling alone does not establish that a 10 GB configuration fits safely or
+has passed validation. Archive the measured evidence before making that claim.
