@@ -157,6 +157,27 @@ def test_backups_override_keeps_recovery_enabled(docker_compose):
     assert command[command.index("-data-dir") + 1] == "/out/wal"
 
 
+def test_soak_override_lowers_the_worker_limit(docker_compose):
+    result = subprocess.run(
+        [
+            *docker_compose,
+            "-f",
+            str(COMPOSE.with_name("soak.yaml")),
+            "config",
+            "--format",
+            "json",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=os.environ | {"COMPOSE_PROFILES": ""},
+        timeout=30,
+    )
+    worker = json.loads(result.stdout)["services"]["worker"]
+    assert worker["mem_limit"] == "256m"
+    assert worker["command"][0] == "worker"
+
+
 def test_promtool_config():
     promtool = shutil.which("promtool")
     if not promtool:

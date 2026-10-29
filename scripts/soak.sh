@@ -35,7 +35,8 @@ if [ ! -f "$input" ]; then
     python3 bench/gen-zipf.py "$size" 42 1.0 > "$input.tmp" && mv "$input.tmp" "$input"
 fi
 
-result=$("${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 \
+# A job whose workers all die never ends, and -wait would poll forever.
+result=$(timeout 1800 "${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 \
     -m 32 -r 4 -combiner=false -wait wordcount "$job" "/data/input/${input##*/}")
 printf '%s\n' "$result"
 case "$result" in
@@ -52,7 +53,10 @@ if [ -n "$oom" ]; then
     exit 1
 fi
 
-rm -rf "data${job#/data}"
+case $job in
+/data/out/*) rm -rf "data${job#/data}" ;;
+*) echo "soak: refusing to delete $job" >&2; exit 1 ;;
+esac
 printf '%s\n' "$result" | awk -F'\t' '$1 == "seconds" { printf "soak: job time %.1f s\n", $2 }
 $1 == "map.output.bytes" { printf "soak: map output %.2f GB\n", $2 / 1e9 }'
 echo "soak: $size bytes with the combiner off finished on $workers workers at 256 MB, no OOM kill"
