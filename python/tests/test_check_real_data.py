@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-_spec = importlib.util.spec_from_file_location("check_real_data", ROOT / "scripts/check-real-data.py")
+SCRIPT = ROOT / "scripts/check-real-data.py"
+_spec = importlib.util.spec_from_file_location("check_real_data", SCRIPT)
 real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(real)
 
