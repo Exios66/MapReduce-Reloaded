@@ -14,6 +14,7 @@ the epilogues being parts 16 and 17. Text before a part's first chapter
 """
 
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -43,10 +44,15 @@ def chapters(text: bytes) -> list[tuple[int, int, list[bytes]]]:
 def main(argv: list[str]) -> int:
     book, out = Path(argv[0]), Path(argv[1])
     found = chapters(book.read_bytes())
-    files = out / "warpeace-chapters"
-    files.mkdir(parents=True, exist_ok=True)
+    # Written to a temporary directory and renamed when complete, so a failed
+    # split leaves no warpeace-chapters/ for fetch-data.sh to take as done.
+    files, part_dir = out / "warpeace-chapters", out / "warpeace-chapters.part"
+    shutil.rmtree(part_dir, ignore_errors=True)
+    part_dir.mkdir(parents=True)
     for part, chapter, lines in found:
-        (files / f"b{part:02d}-c{chapter:03d}.txt").write_bytes(b"\n".join(lines) + b"\n")
+        (part_dir / f"b{part:02d}-c{chapter:03d}.txt").write_bytes(b"\n".join(lines) + b"\n")
+    shutil.rmtree(files, ignore_errors=True)
+    part_dir.rename(files)
     print(f"split-book: {len(found)} chapters in {max(p for p, _, _ in found)} parts")
     return 0
 

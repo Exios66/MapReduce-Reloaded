@@ -33,7 +33,8 @@
 #
 # Each download's SHA-256 sum is checked against the pin below, so a
 # changed file upstream fails here instead of changing results. A dataset
-# already fetched is not fetched again.
+# already fetched is not fetched again, unless it changed since: each
+# file's own SHA-256 is kept next to it as FILE.sha256 and checked.
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -85,26 +86,29 @@ download() {
 }
 
 # fetch NAME FILE URL SHA256 FILTER: writes data/input/NAME/FILE from the
-# download, through FILTER, unless it is there.
+# download, through FILTER, unless it is there and unchanged.
 fetch() {
     out=$dest/$1/$2
-    if [ -f "$out" ]; then
+    if [ -f "$out" ] && [ -f "$out.sha256" ] && [ "$(sha256 "$out")" = "$(cat "$out.sha256")" ]; then
         echo "fetch-data: $out is already there"
         return 0
     fi
+    [ ! -f "$out" ] || echo "fetch-data: $out changed since it was written; fetching it again" >&2
     download "$3" "$4"
     mkdir -p "$dest/$1"
     # Filter to a temporary file next to the output first: in a pipeline, sh
     # would only see the last command's exit status, and a half-written file
     # would look done. In the same directory, mv is an atomic rename.
     $5 <"$tmp" >"$out.part"
+    sha256 "$out.part" >"$out.sha256"
     mv "$out.part" "$out"
     echo "fetch-data: wrote $out ($(wc -c <"$out" | tr -d ' ') bytes)"
 }
 
 gutenberg() { awk '/^\*\*\* *START OF/ { on = 1; next } /^End of .*Project Gutenberg/ { on = 0 } on'; }
 nasa() { gzip -dc; }
-snap() { gzip -dc | grep -v '^#'; }
+# grep would hide a failed gzip, so the archive is tested first.
+snap() { gzip -t "$tmp" && gzip -dc | grep -v '^#'; }
 wet() { python3 "$root/scripts/wet-to-tsv.py"; }
 
 what=${1:-all}
@@ -116,7 +120,8 @@ nasa | webgoogle | commoncrawl | crawl) ;;
     exit 2
     ;;
 esac
-# War and Peace's chapters, as files and as documents (scripts/split-book.py).
+# War and Peace's chapters, as files (scripts/split-book.py), which renames
+# the directory into place only when every chapter is written.
 case $what in warpeace | all)
     if [ ! -d "$dest/warpeace-chapters" ]; then
         python3 "$root/scripts/split-book.py" "$dest/warpeace/warpeace.txt" "$dest"
