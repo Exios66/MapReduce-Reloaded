@@ -272,7 +272,14 @@ def e0(rows, out, t):
 
 
 def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
-    """Combiner-on and -off bars per group, with a 2px surface gap."""
+    """Combiner-on and -off bars per group, with a 2px surface gap.
+
+    stats_on and stats_off align with groups and contain (median, low, high)
+    triples or None to omit a bar. Values and range bars are divided by scale.
+    Nonempty ticks supply group labels; otherwise labels use "S = " followed
+    by each group name without its first character. A nonempty xlabel sets
+    the x-axis label; otherwise the existing label is retained.
+    """
     width = 0.32
     for offset, stats, color, label in (
         (-width / 2, stats_on, t["series"][0], "combiner on"),
@@ -300,9 +307,15 @@ def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
 
 def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
     """Saves a combiner comparison to out, in theme t: bytes shuffled and
-    job time, combiner on and off, per group, each group labeled with the
-    saving. Only valid="1" runs count. Missing fields, invalid numbers, and
-    file errors propagate."""
+    job time, combiner on and off, per group.
+
+    groups gives setting prefixes matched as GROUP-on and GROUP-off, in
+    display order; ticks supplies their labels. Bars show valid="1" medians
+    and minimum-to-maximum ranges, in decimal MB and coordinator seconds.
+    Missing valid runs omit a bar; savings require both medians to be positive.
+    Rows must be nonempty. Saves to out and closes the figure on success.
+    Missing fields, invalid numbers, and plotting or file errors propagate.
+    """
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
     for ax, field, scale, axis_title, saving in (
         (
@@ -346,8 +359,13 @@ def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
 
 def e1(rows, out, t):
     """Saves E1's combiner comparison to out, in theme t: bytes shuffled
-    and job time, combiner on and off, per Zipf exponent, each group labeled
-    with the saving."""
+    and job time, combiner on and off, per Zipf exponent in numeric order.
+
+    Settings have the form sEXPONENT-on or sEXPONENT-off. Only valid="1"
+    runs contribute to medians and ranges; savings require positive medians
+    for both settings. Rows must be nonempty. Missing fields, invalid numbers,
+    and plotting or file errors propagate.
+    """
     exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
     combiner_bars(
         rows,
@@ -363,7 +381,13 @@ def e1(rows, out, t):
 def e6(rows, out, t):
     """Saves E6's combiner comparison to out, in theme t: bytes shuffled
     and job time, combiner on and off, per input: crawled English, crawled
-    pages in every language, and the book."""
+    pages in every language, and the book, in that order.
+
+    Matches crawl-eng, crawl, and book settings with -on or -off suffixes.
+    Only valid="1" runs contribute to medians and ranges; missing valid runs
+    omit a bar. Rows must be nonempty. Missing fields, invalid numbers, and
+    plotting or file errors propagate.
+    """
     inputs = ["crawl-eng", "crawl", "book"]
     combiner_bars(
         rows,
