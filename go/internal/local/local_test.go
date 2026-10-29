@@ -19,10 +19,10 @@ import (
 const corpus = "../../../testdata/corpus"
 
 // corpusSize is the size of the corpus's text files, in bytes.
-const corpusSize = 337637
+const corpusSize = 461826
 
 // outputSize is the size of the expected word count output, in bytes.
-const outputSize = 118674
+const outputSize = 175998
 
 var corpusInputs = []string{filepath.Join(corpus, "*.txt")}
 
@@ -49,9 +49,9 @@ func TestWordCountGolden(t *testing.T) {
 	for _, m := range []int{1, 3, 7} {
 		out, counts := runJob(t, wordcount.Program, m, 4)
 		assertSameFiles(t, filepath.Join(corpus, "expected"), out)
-		if counts[task.MapInputBytes] != corpusSize || counts[task.MapOutputRecords] != 59372 ||
-			counts[task.ReduceInputRecords] != counts[combine.OutputRecords] || counts[task.ReduceOutputRecords] != 11786 ||
-			counts[task.ReduceOutputBytes] != outputSize-2*11786 { // each line adds a tab and a newline
+		if counts[task.MapInputBytes] != corpusSize || counts[task.MapOutputRecords] != 78658 ||
+			counts[task.ReduceInputRecords] != counts[combine.OutputRecords] || counts[task.ReduceOutputRecords] != 16851 ||
+			counts[task.ReduceOutputBytes] != outputSize-2*16851 { // each line adds a tab and a newline
 			t.Errorf("M=%d: counters %v", m, counts)
 		}
 	}

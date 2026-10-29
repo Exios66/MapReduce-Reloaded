@@ -71,7 +71,7 @@ other Program.
 - The expected files come from `scripts/make-corpus-expected.py`, a separate
   program written only with the standard library. It shares no code with
   either implementation.
-- Counters agree with it too: 59,372 words, 11,786 distinct.
+- Counters agree with it too: 78,658 words, 16,851 distinct.
 
 ## Likely review questions
 
