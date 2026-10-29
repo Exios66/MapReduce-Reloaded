@@ -309,9 +309,10 @@ import (
 	"mapreduce/api"
 )
 
-// Map sleeps in map task 0, so the coordinator sees a straggler.
+// Map sleeps in map task 0's first attempt, so the coordinator sees a
+// straggler; the backup attempt is fast and wins.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	if ctx.Task().Index == 0 {
+	if ctx.Task().Index == 0 && ctx.Task().Attempt == 0 {
 		time.Sleep(3 * time.Second)
 	}
 	for _, w := range api.Words(value) {
