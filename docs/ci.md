@@ -20,7 +20,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
-| `go` | `make go-lint go-test` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors) | `cimg/python:3.13`, medium |
+| `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
 | `python-3.11` | `make py-lint md-lint py-test` (ruff, the Markdown link check, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint md-lint py-test` | `cimg/python:3.13`, small |
 
@@ -46,8 +46,16 @@ How each job meets its requirements:
 - **golangci-lint.** Built from source by the job's Go, at the version in
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
   and the VM setup use the same pin, and a test fails if they drift.
+- **shellcheck.** The `go` job installs the release pinned in
+  `scripts/vm-setup.sh` (`--shellcheck`, which checks its SHA-256 sum) and
+  runs `make sh-lint` with `MR_REQUIRE_SHELLCHECK=1`. Locally, `make lint`
+  skips shellcheck with a message if it is not installed; in CI a missing
+  shellcheck fails the job.
 - **Python in the Go job.** The Go golden tests run the Python reference
-  implementation, so the `go` job installs `python[dev]` too.
+  implementation, so the `go` job installs `python[dev]` too. With both
+  installed, it also runs `make py-e2e`: the Python coordinator with the Go
+  worker and `mr` commands. The Python jobs have no Go and skip those
+  tests; `py-e2e` sets `MR_REQUIRE_GO`, which turns the skip into a failure.
 - **Breaking-change check.** The `proto` job fetches `origin/main` fresh and
   runs `make proto-check PROTO_FETCH=false`. If the fetch fails, the job
   fails; the check is never skipped. A fork's build has no deploy key, so the
@@ -75,6 +83,15 @@ on pushes to `main`. It needs no secrets, so a build triggered by a fork's PR
 does not see any. Whether CircleCI builds fork PRs at all is a project
 setting (Project Settings, Advanced, "Build fork pull requests"). Leave it on
 only while no secret is added to the project. The checks need none.
+
+"Auto-cancel redundant workflows" is on (Project Settings, Advanced): a new
+push to a PR branch cancels that branch's run still in progress, which saves
+Free-plan credits. CircleCI never auto-cancels on `main`.
+
+Branch protection requires a PR to be up to date with `main`. A PR that
+passed before another one merged must merge `main` in (a merge commit, not
+a rebase) and pass again, so two PRs that each pass alone, but break when
+combined, cannot both land.
 
 ## Free plan
 
@@ -128,6 +145,7 @@ these. Do them in order. Each step is safe to stop after.
 |---|---|
 | Pull request required, `main` | GitHub |
 | `proto`, `go`, `python-3.11`, `python-3.13` | CircleCI, as GitHub names them |
+| Branch up to date with `main` before merging | GitHub (strict status checks, on since 2026-10-28) |
 | `local-ci/make-check` | optional, from `make ci-report` |
 
 `make check`, the pre-push hook and `make ci-report` are unchanged. The hook
