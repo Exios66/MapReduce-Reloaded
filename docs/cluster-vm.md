@@ -23,6 +23,7 @@ Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
 | OS | Ubuntu 24.04.4 LTS, kernel 6.8.0-139-generic, x86_64 |
 | Docker | Engine 29.8.1, Compose 5.5.1; the user is in the `docker` group |
 | Tools | git 2.43.0, Python 3.12.3; Go 1.26.0 is installed by `scripts/vm-setup.sh --install`; `make` and `gcc` are not installed by default (`sudo apt-get install -y make gcc`) |
+| Network | Inter-worker traffic runs over the host-local Docker network (service-name DNS); it was never measured, and the paper's gigabit figure must not be imported for it. |
 
 The budgets below are planned against these totals. The VM is shared with
 other coursework, so what is free at any moment is less;

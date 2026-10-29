@@ -21,14 +21,14 @@ Each requirement of the assignment, and where this repository meets it.
 
 | Requirement | Where | State |
 |---|---|---|
-| Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
+| Docker Compose on one VM with 4 vCPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
 | Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | built |
 | Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | built |
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e6) |
-| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E6 run, [results](bench/README.md#evaluation-e0e6) |
+| Never push to `main`; small pull requests; CircleCI runs tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
 ## Key decisions
@@ -337,8 +337,10 @@ four engineering practices:
   one process, using the same `split`, `task` and `extsort` code as the
   cluster (§4.7).
 - **Python reference** (`python/mapreduce_reloaded`). A second implementation
-  of the API, splitting, partition hash, sort, combiner, file format and
-  local mode. It shares the proto contract and the MRKV format with Go
+  of the API, splitting, partition hash, sort, combiner, file format,
+  local mode, and a coordinator server (`python/mapreduce_reloaded/coordinator/`)
+  that runs Go workers (see `make py-e2e`). There is no Python worker yet.
+  It shares the proto contract and the MRKV format with Go
   ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
 
 ## A job's lifecycle
@@ -605,7 +607,7 @@ no reducer is told about them.
 | Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](docs/file-format.md), [explainer](docs/explainers/09-external-sort.md) |
 | M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is an exact M (ADR 0016). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](docs/explainers/12-splits.md) |
 | User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](docs/design/0015-user-job-files.md) |
-| One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
+| One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode, and it also has a coordinator server; it has no worker yet, and the Compose cluster is Go-only. | A second implementation checks the contract, and only the Go cluster needs the full distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
 | Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB of RAM: one coordinator and four workers, each limited to one CPU. | It is the hardware available, it still exercises every protocol path, and the CPU limits make spreading tasks over workers pay off. | [cluster VM](docs/cluster-vm.md), [explainer](docs/explainers/14-cluster.md) |
 
 ## Where to look next
