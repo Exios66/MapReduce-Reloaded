@@ -90,9 +90,7 @@ def test_explicit_ids_are_case_sensitive(repo):
     repo("b.md", '<a id="MySection"></a>\n<p data-id="x">id="y"</p>\n`<a id="fake">`\n')
     bad = "mysection x y fake".split()
     md = repo("a.md", "[a](b.md#MySection) " + " ".join(f"[{a}](b.md#{a})" for a in bad))
-    assert check(md) == [
-        f"a.md:1: b.md#{a}: no such heading or anchor" for a in bad
-    ]
+    assert check(md) == [f"a.md:1: b.md#{a}: no such heading or anchor" for a in bad]
 
 
 def test_unquoted_html_attributes_are_checked(repo):
