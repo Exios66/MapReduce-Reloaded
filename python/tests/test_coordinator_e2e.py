@@ -240,6 +240,9 @@ def test_word_count(cluster, tmp_path):
     )  # fmt: skip
     assert "SUCCEEDED" in report
     assert parts(out) == parts(ROOT / "testdata/corpus/expected")
+    counters = dict(line.split("\t", 1) for line in report.splitlines() if "\t" in line)
+    assert counters["map.output.records"] == "78658", counters
+    assert counters["reduce.output.records"] == "16851", counters
     for w in c.workers:
         assert w.stop(signal.SIGTERM, 1) == 0, w.name
     # The coordinator waits a second on purpose, for idle workers to hear
@@ -296,3 +299,85 @@ def test_coordinator_restart(cluster, bin_dir, tmp_path):
     st = c.wait(job, 45)
     assert st["state"] == "SUCCEEDED", st
     assert parts(out) == want
+
+
+SLOW_JOB = """package job
+
+import (
+	"time"
+
+	"mapreduce/api"
+)
+
+// Map sleeps in map task 0, so the coordinator sees a straggler.
+func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
+	if ctx.Task().Index == 0 && string(key) == "0" {
+		time.Sleep(3 * time.Second)
+	}
+	for _, w := range api.Words(value) {
+		if err := out.Emit(w, []byte("1")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+var Reduce = api.Sum
+var Combine = api.Sum
+"""
+
+BAD_JOB = """package job
+
+import "mapreduce/api"
+
+// Map panics on the first record of map task 0, which the coordinator must
+// skip after its retries (§4.6).
+func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
+	if ctx.Task().Index == 0 && string(key) == "0" {
+		panic("bad record")
+	}
+	for _, w := range api.Words(value) {
+		if err := out.Emit(w, []byte("1")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+var Reduce = api.Sum
+var Combine = api.Sum
+"""
+
+
+def test_backups_finish_a_straggler(cluster, tmp_path):
+    """A map task that sleeps is finished by a backup attempt on another
+    worker, and the backup wins (§3.6)."""
+    job_file = tmp_path / "slow.go"
+    job_file.write_text(SLOW_JOB)
+    c = cluster(3)
+    out = tmp_path / "out"
+    report = c.mr(
+        "submit", "-coordinator", c.addr, "-m", "4", "-r", "2", "-wait",
+        str(job_file), str(out), str(ROOT / "testdata/corpus") + "/*.txt",
+    )  # fmt: skip
+    status = dict(line.split("\t", 1) for line in report.splitlines() if "\t" in line)
+    assert "SUCCEEDED" in report
+    assert int(status["backups"]) >= 1, status
+    assert int(status["backups_won"]) >= 1, status
+    assert parts(out) == parts(ROOT / "testdata/corpus/expected")
+
+
+def test_bad_records_are_skipped(cluster, tmp_path):
+    """A map task that panics on one record is retried, then that record is
+    skipped and the job succeeds (§4.6)."""
+    job_file = tmp_path / "bad.go"
+    job_file.write_text(BAD_JOB)
+    c = cluster(3)
+    out = tmp_path / "out"
+    report = c.mr(
+        "submit", "-coordinator", c.addr, "-m", "4", "-r", "2", "-wait",
+        str(job_file), str(out), str(ROOT / "testdata/corpus") + "/*.txt",
+    )  # fmt: skip
+    status = dict(line.split("\t", 1) for line in report.splitlines() if "\t" in line)
+    assert "SUCCEEDED" in report
+    assert status["skipped.records"] == "1", status
