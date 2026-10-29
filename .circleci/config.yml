@@ -65,5 +65,6 @@ workflows:
             ^deploy/compose/README\.md$ run-python true
             ^deploy/compose/.*\.yaml$ run-python true
             ^deploy/compose/monitoring/.*$ run-go true
+            ^deploy/compose/monitoring/.*$ run-python true
             ^examples/README\.md$ run-python true
             ^go/examples/.*$ run-python true

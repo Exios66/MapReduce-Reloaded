@@ -55,7 +55,7 @@ parameters from the changed files, and continues with
 | `docs/paper-mapping.md` additionally | go (the Go paper-mapping test reads it) |
 | `bench/README.md`, `bench/*.py` | python-3.11, python-3.13, lint (Python tests execute the generators and assert on the README) |
 | `deploy/compose/*.yaml`, `deploy/compose/README.md` | python-3.11, python-3.13, lint (deploy tests validate the compose files and the guide) |
-| `deploy/compose/monitoring/**` | go, lint (the dashboard test reads the Grafana dashboard) |
+| `deploy/compose/monitoring/**` | go, python-3.11, python-3.13, lint (the Go dashboard test reads the Grafana dashboard; the Python deploy tests check the Prometheus config, the Grafana provisioning and the dashboard) |
 | `examples/README.md`, `go/examples/**` | python-3.11, python-3.13, lint (the Python examples-guide test reads both) |
 | anything else | the mapping-coverage job fails; the author adds a mapping |
 

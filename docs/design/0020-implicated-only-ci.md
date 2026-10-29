@@ -66,7 +66,7 @@ regexes; `re.search` semantics in the guard script.
 | `docs/paper-mapping.md` additionally | go (the Go paper-mapping test reads it) |
 | `bench/README.md`, `bench/*.py` | python-3.11, python-3.13, lint |
 | `deploy/compose/*.yaml`, `deploy/compose/README.md` | python-3.11, python-3.13, lint |
-| `deploy/compose/monitoring/**` | go, lint |
+| `deploy/compose/monitoring/**` | go, python, lint |
 | `examples/README.md`, `go/examples/**` | python-3.11, python-3.13, lint |
 | anything else | guard fails the pipeline; the author adds a mapping |
 
@@ -102,7 +102,7 @@ regexes; `re.search` semantics in the guard script.
   docs. That is why the paper-mapping file runs go and python, the
   documentation pages the Python documentation tests assert on run python,
   compose files and the compose guide run python, the monitoring tree runs
-  go, and bench scripts run python. Adding a new asserted file requires
+  go and python, and bench scripts run python. Adding a new asserted file requires
   adding its mapping in the same PR; the guard only checks that a file
   matches some pattern, so under-mapping a test input is a review catch,
   not something the guard can detect.
