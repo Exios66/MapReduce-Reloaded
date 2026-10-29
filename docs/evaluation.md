@@ -22,7 +22,7 @@ had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 The grep and sort rows ran with `bench/run.sh` at commit `2707160`; their
 directories hold the samples, the rates, the counters and the machine. E0,
 E2 and E3 are the course evaluation in
-[bench/README.md](../bench/README.md#evaluation-e0e5), each the median of
+[bench/README.md](../bench/README.md#evaluation-e0e6), each the median of
 three runs.
 
 ## Grep (§5.2)

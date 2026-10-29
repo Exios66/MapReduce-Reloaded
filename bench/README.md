@@ -151,7 +151,7 @@ The cluster runs above need Docker and a person to read them. These run in
   records 0.368 with zstd and 0.532 with Snappy, line records 0.446 and
   0.673.
 
-## Evaluation (E0–E5)
+## Evaluation (E0–E6)
 
 The performance evaluation in [design](../design.md#performance-evaluation),
 run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,

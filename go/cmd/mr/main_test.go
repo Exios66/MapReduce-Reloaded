@@ -730,6 +730,47 @@ func TestSharedPathErrors(t *testing.T) {
 	}
 }
 
+// The usage text and the README's flag table name exactly the flags the
+// commands register, so a renamed or dropped flag fails here (#159).
+func TestUsageMatchesTheFlags(t *testing.T) {
+	registered := map[string]bool{}
+	for _, args := range [][]string{{"run", "-h"}, {"submit", "-h"}, {"status", "-h"}} {
+		var stderr bytes.Buffer
+		if err := run(args, io.Discard, &stderr); !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("%v: %v, want flag.ErrHelp", args, err)
+		}
+		for _, m := range regexp.MustCompile(`(?m)^  -([a-z][a-z-]*)`).FindAllStringSubmatch(stderr.String(), -1) {
+			registered[m[1]] = true
+		}
+	}
+	if len(registered) == 0 {
+		t.Fatal("no flags were registered")
+	}
+	documented := map[string]bool{}
+	for _, m := range regexp.MustCompile(`\s-([a-z][a-z-]*)`).FindAllStringSubmatch(usage, -1) {
+		documented[m[1]] = true
+	}
+	for name := range registered {
+		if !documented[name] {
+			t.Errorf("the usage text does not name -%s", name)
+		}
+	}
+	for name := range documented {
+		if !registered[name] {
+			t.Errorf("the usage text names -%s, which no command registers", name)
+		}
+	}
+	readme, err := os.ReadFile("../../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range regexp.MustCompile(`(?m)^\| \x60-([a-z][a-z-]*)`).FindAllStringSubmatch(string(readme), -1) {
+		if !registered[m[1]] {
+			t.Errorf("the README documents -%s, which no command registers", m[1])
+		}
+	}
+}
+
 // A failed command exits with status 1 and prints its error after "mr:".
 func TestExitCode(t *testing.T) {
 	var stderr bytes.Buffer

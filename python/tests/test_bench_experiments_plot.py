@@ -165,12 +165,12 @@ def test_e6_groups_the_three_inputs_in_order(plotter, tmp_path):
     assert list(ticks) == [0, 1, 2]
     assert labels == ["crawled\nEnglish", "crawled, every\nlanguage", "book"]
     # Settings are matched by name, so the rows' order does not matter.
-    assert [bar.args[1] for bar in shuffled.bar.call_args_list] == pytest.approx(
-        ([3, 5, 1], [12, 14, 10])
-    )
-    assert [bar.args[1] for bar in seconds.bar.call_args_list] == pytest.approx(
-        ([3, 5, 1], [4, 6, 2])
-    )
+    heights = [bar.args[1] for bar in shuffled.bar.call_args_list]
+    assert heights[0] == pytest.approx([3, 5, 1])
+    assert heights[1] == pytest.approx([12, 14, 10])
+    heights = [bar.args[1] for bar in seconds.bar.call_args_list]
+    assert heights[0] == pytest.approx([3, 5, 1])
+    assert heights[1] == pytest.approx([4, 6, 2])
 
 
 def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsys):

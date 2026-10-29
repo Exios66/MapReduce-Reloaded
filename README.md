@@ -267,7 +267,7 @@ and `mr cat` resolve `/data/...` to `$MR_DATA_DIR` (default `./data`).
 Measured on the course VM (4 vCPUs, 8 GB, four one-CPU workers) on 1 GiB
 inputs with M = 32 and R = 4; each number is the median of three runs, and
 every run's output matched the normal run's. The tables, the raw CSVs, the
-logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e5)
+logs and the commands are in [`bench/README.md`](bench/README.md#evaluation-e0e6)
 and [`bench/evaluation/`](bench/evaluation/).
 
 | Experiment | Result |

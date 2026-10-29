@@ -94,7 +94,7 @@ change behavior:
 | E5: interpreted job file | 2.4× slower than compiled with the compiled helpers, 10.5× without |
 
 [Evaluation](evaluation.md) compares each run with the paper's figure;
-[bench/README.md](../bench/README.md#evaluation-e0e5) has the plots, the
+[bench/README.md](../bench/README.md#evaluation-e0e6) has the plots, the
 tables and the commands, and `bench/evaluation/` has the data.
 
 ## How it is tested
