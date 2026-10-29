@@ -55,23 +55,36 @@ def _run(cmd, check=True):
 def fetch_main():
     """Fetch origin/main, falling back to the public URL (proto job pattern)."""
     try:
-        _run(["git", "fetch", "--quiet", "origin",
-              "+refs/heads/main:refs/remotes/origin/main"])
+        _run(
+            [
+                "git",
+                "fetch",
+                "--quiet",
+                "origin",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ]
+        )
         return
     except subprocess.CalledProcessError:
         pass
-    url = _run(["git", "config", "--get", "remote.origin.url"],
-               check=False).stdout.strip()
+    url = _run(["git", "config", "--get", "remote.origin.url"], check=False).stdout.strip()
     if url.startswith("git@github.com:"):
-        slug = url[len("git@github.com:"):]
+        slug = url[len("git@github.com:") :]
     elif "github.com/" in url:
         slug = url.split("github.com/", 1)[1]
     else:
         slug = url
     if slug.endswith(".git"):
         slug = slug[:-4]
-    _run(["git", "fetch", "--quiet", f"https://github.com/{slug}.git",
-          "+refs/heads/main:refs/remotes/origin/main"])
+    _run(
+        [
+            "git",
+            "fetch",
+            "--quiet",
+            f"https://github.com/{slug}.git",
+            "+refs/heads/main:refs/remotes/origin/main",
+        ]
+    )
 
 
 def changed_files():
@@ -84,19 +97,25 @@ def changed_files():
 def main():
     patterns = load_patterns(SETUP_CONFIG.read_text())
     if not patterns:
-        print("check-ci-mapping: no mapping block found in .circleci/config.yml",
-              file=sys.stderr)
+        print(
+            "check-ci-mapping: no mapping block found in .circleci/config.yml",
+            file=sys.stderr,
+        )
         return 1
     fetch_main()
     files = changed_files()
     bad = unmatched_files(files, patterns)
     if bad:
-        print("check-ci-mapping: these changed files match no CI mapping "
-              "pattern:", file=sys.stderr)
+        print(
+            "check-ci-mapping: these changed files match no CI mapping pattern:",
+            file=sys.stderr,
+        )
         for f in bad:
             print(f"  {f}", file=sys.stderr)
-        print("Add a mapping for each file in .circleci/config.yml "
-              "(docs/ci.md).", file=sys.stderr)
+        print(
+            "Add a mapping for each file in .circleci/config.yml (docs/ci.md).",
+            file=sys.stderr,
+        )
         return 1
     print(f"check-ci-mapping: {len(files)} changed file(s), all mapped.")
     return 0

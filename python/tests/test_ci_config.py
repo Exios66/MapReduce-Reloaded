@@ -35,8 +35,17 @@ def go_mod_version() -> str:
 
 def test_circleci_runs_the_six_required_checks():
     workflow = CONT.split("\nworkflows:\n", 1)[1]
-    names = re.findall(r"^\s+- (proto|go|lint|mapping-coverage)$|^\s+name: (python-3\.\d+)$", workflow, re.M)
-    assert sorted(a or b for a, b in names) == ["go", "lint", "mapping-coverage", "proto", "python-3.11", "python-3.13"]
+    names = re.findall(
+        r"^\s+- (proto|go|lint|mapping-coverage)$|^\s+name: (python-3\.\d+)$", workflow, re.M
+    )
+    assert sorted(a or b for a, b in names) == [
+        "go",
+        "lint",
+        "mapping-coverage",
+        "proto",
+        "python-3.11",
+        "python-3.13",
+    ]
 
 
 def test_circleci_calls_the_make_targets():

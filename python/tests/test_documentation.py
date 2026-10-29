@@ -211,7 +211,10 @@ def test_ci_documentation_names_the_configured_circleci_checks():
     provider = adr.split("## CircleCI as the primary provider", 1)[1]
     named = re.search(r"jobs named (.*?)\. Each job", provider)
     assert named
-    assert set(re.findall(r"\b(?:proto|go|python-\d+\.\d+|lint|mapping-coverage)\b", named[1])) == configured
+    assert (
+        set(re.findall(r"\b(?:proto|go|python-\d+\.\d+|lint|mapping-coverage)\b", named[1]))
+        == configured
+    )
     requirements = prose("design.md").split("## Key decisions", 1)[0]
     assert "CircleCI runs tests on PRs" in requirements
     assert "Actions run tests on PRs" not in requirements
