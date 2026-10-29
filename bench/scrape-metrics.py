@@ -9,6 +9,7 @@ takes longer than INTERVAL delays the next one. A URL that does
 not answer in a round is left out of that round.
 
 Usage: python3 bench/scrape-metrics.py INTERVAL DURATION URL...
+Use DURATION=0 to collect until the caller terminates and joins the process.
 """
 
 import csv
@@ -38,7 +39,7 @@ def main():
     start = float(os.environ.get("MR_BENCH_START_MONOTONIC", time.monotonic()))
     tick = start
     try:
-        while tick - start <= duration:
+        while duration == 0 or tick - start <= duration:
             # Stamped when the round starts, which is later than its tick
             # if the round before took longer than INTERVAL.
             now = time.monotonic() - start

@@ -3,6 +3,7 @@
 import csv
 import http.server
 import io
+import json
 import os
 import subprocess
 import sys
@@ -71,6 +72,53 @@ def test_samplers_use_a_shared_monotonic_origin():
         start = time.monotonic()
         assert len(run(script, *args, env=env).splitlines()) == 1
         assert time.monotonic() - start < 1
+
+
+@pytest.mark.parametrize("script", ["scrape-metrics.py", "scrape-tasks.py"])
+def test_samplers_can_outlive_the_job_deadline_until_joined(script):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(
+                b"mr_worker_map_input_bytes_total 100\n"
+                b'mr_job_tasks{job="job-1",kind="map",state="completed"} 1\n'
+            )
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    process = subprocess.Popen(
+        [sys.executable, BENCH / script, "0.05", "0", f"http://127.0.0.1:{server.server_port}"],
+        env=dict(os.environ, MR_BENCH_START_MONOTONIC=str(time.monotonic() - 10)),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            process.communicate(timeout=0.3)
+    finally:
+        process.terminate()
+        stdout, _ = process.communicate(timeout=5)
+        server.shutdown()
+    assert len(stdout.splitlines()) >= 3
+
+
+def test_rates_use_recorded_restart_even_when_counter_did_not_drop(tmp_path):
+    samples = tmp_path / "samples.csv"
+    samples.write_text(
+        "seconds,url,metric,value\n"
+        "0,a,mr_worker_map_input_bytes_total,0\n"
+        "1,a,mr_worker_map_input_bytes_total,1000000\n"
+        "2,a,mr_worker_map_input_bytes_total,1500000\n"
+        "3,a,mr_worker_map_input_bytes_total,2000000\n"
+    )
+    (tmp_path / "restart.json").write_text(json.dumps({"url": "a"}))
+    (tmp_path / "clock.json").write_text(json.dumps({"epoch": 100}))
+    (tmp_path / "events.csv").write_text("event,epoch,exit_code\nkilled,101.5,0\n")
+    rows = list(csv.DictReader(io.StringIO(run("plot-rates.py", samples, "--restart-dir", tmp_path))))
+    assert [float(r["input"]) for r in rows] == [1.0, 1.5, 0.5]
 
 
 def test_plot_without_samples(tmp_path):

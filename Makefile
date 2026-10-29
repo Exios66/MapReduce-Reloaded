@@ -57,11 +57,13 @@ mr:
 
 # Host tools for the fixed-VM paper campaign; no cluster is changed here.
 .PHONY: paper-tools
-paper-tools: mr
+paper-tools:
+	test -z "$$(git status --porcelain --untracked-files=all -- . ':!.tools')"
+	$(MAKE) mr
 	cd go && go build -o ../bin/paper-data ./tools/paper-data
-	git diff --quiet HEAD
-	docker build --label org.opencontainers.image.revision=$$(git rev-parse HEAD) -t mapreduce-reloaded -f deploy/docker/Dockerfile go
-	$(PYTHON) -c 'import hashlib,json,pathlib,subprocess; run=lambda *a: subprocess.check_output(a,text=True).strip(); json.dump(dict(commit=run("git","rev-parse","HEAD"),image=run("docker","image","inspect","-f","{{.Id}}","mapreduce-reloaded"),tools={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in ("bin/mr","bin/paper-data")}),open("bin/paper-build.json","w"),indent=2)'
+	docker build --iidfile bin/paper-image.id --label org.opencontainers.image.revision=$$(git rev-parse HEAD) -t mapreduce-paper:$$(git rev-parse HEAD) -f deploy/docker/Dockerfile go
+	test -z "$$(git status --porcelain --untracked-files=all -- . ':!.tools')"
+	$(PYTHON) -c 'import hashlib,json,pathlib,subprocess; json.dump(dict(commit=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),image=pathlib.Path("bin/paper-image.id").read_text().strip(),tools={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in ("bin/mr","bin/paper-data")}),open("bin/paper-build.json","w"),indent=2)'
 
 # Example input in shared storage: the test corpus at /data/input/corpus and
 # a 10 MB web log at /data/input/weblog/access.log.

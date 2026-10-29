@@ -8,6 +8,7 @@ seconds,job,kind,state,value. seconds counts from the first round. A round
 in which the coordinator does not answer, as while it restarts, is left out.
 
 Usage: python3 bench/scrape-tasks.py INTERVAL DURATION URL
+Use DURATION=0 to collect until the caller terminates and joins the process.
 """
 
 import csv
@@ -27,7 +28,7 @@ def main():
     start = float(os.environ.get("MR_BENCH_START_MONOTONIC", time.monotonic()))
     tick = start
     try:
-        while tick - start <= duration:
+        while duration == 0 or tick - start <= duration:
             now = time.monotonic() - start
             try:
                 with urllib.request.urlopen(url, timeout=interval) as resp:

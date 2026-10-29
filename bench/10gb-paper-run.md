@@ -153,3 +153,110 @@ then record the actual running images and resource limits.
 
 Tooling alone does not establish that a 10 GB configuration fits safely or
 has passed validation. Archive the measured evidence before making that claim.
+
+## Full-size resume checklist
+
+**Hold:** other VM work was still active at the last handover check. The
+commands below are prepared instructions, not executed results. Do not SSH,
+clean, build, run tests or change services until the owner confirms exclusive
+access. Keep the prepared native grep input and all rejected-trial evidence.
+
+### 1. Establish and test the exact revision
+
+- Confirm processes, other sessions, Docker activity and ownership of the
+  shared `mapreduce` project. The campaign lock excludes campaign commands
+  for this account, not other agents or automation.
+- Use the existing separate campaign worktree. Inspect its changes before
+  `git pull --ff-only`; never reset the other checkout or a running check.
+- Review and commit any required VM formatting fixes. Run the targeted
+  regressions, shell lint and full quality gate **on the VM**. Then build
+  the pinned image/tools from that clean commit:
+
+  ```bash
+  export PATH="$HOME/.local/bin:$HOME/MapReduce-Reloaded/python/.venv/bin:$HOME/.local/go/bin:$PWD/.tools/bin:$PATH"
+  python -m pytest -q python/tests/test_paper_campaign.py python/tests/test_bench_rates.py
+  shellcheck bench/paper.sh
+  make check PYTHON="$HOME/MapReduce-Reloaded/python/.venv/bin/python"
+  make paper-tools
+  ```
+
+- Repeat the existing 100 MB native grep/sort and 1 GB zstd-KV normal,
+  backups-off and calibrated-restart smokes. Reuse their prepared inputs;
+  `prepare` must never overwrite them. Require valid output, pinned worker
+  **and coordinator** images, complete telemetry, and stopped attempts.
+- Archive the gate log and build stamp with their exact commit. These review
+  fixes have not yet passed the VM gate; older `f56cadc` passes do not cover them.
+
+### 2. Reuse the prepared 10 GB grep input
+
+The existing `data/paper-input-grep-native-10000000000-160/` manifest records
+100,000,000 records, 10,000,000,000 bytes and 923 matches. Do **not** run
+`prepare` again for this dataset. Inventory actual shards and current free
+space, then, only after the gates above:
+
+```bash
+for trial in 1 2 3; do
+    SIZE=10000000000 M=160 bench/paper.sh run grep native normal || break
+done
+```
+
+A failure stops the sequence. Preserve its data and diagnose it before any
+new trial. Each accepted result must report M160/R1, exactly 100M accepted
+input records, exactly 10GB accepted input bytes, and all 923 output records.
+Archive all three accepted results and validation before selecting the
+completed grep dataset for deletion. State that cleanup's exact scope first;
+no broad data, volume or image pruning.
+
+### 3. Admit sort only with a measured storage budget
+
+Remeasure after approved, named cleanup. The earlier 1 GB zstd-KV calibration
+stored 558,913,313 input bytes, 572,223,482 accepted intermediate bytes and
+575,189,846 output bytes. Linear extrapolation alone gives about **17.1 GB
+of simultaneous data at 10 GB logical input**, before spare attempts, spills,
+logs and operational reserve. It is a floor, not an admission budget.
+
+- Calibrate the new revision with M160 and include normal, backups-off and
+  restart peaks. Account for in-flight/speculative copies and scratch, not
+  only the accepted intermediate/output sizes.
+- Record the resulting conservative budget and free-space measurement.
+  `SPACE_BUDGET_BYTES` is required free space **after** input exists; never
+  count input space twice or lower the gate just to pass.
+- Prepare `sort zstdkv` only after the preparation gate fits, then check
+  run admission again. If either fails, keep sort blocked and identify
+  additional safe cleanup or engineering work. Native sort stays separately
+  blocked unless its own larger budget genuinely fits.
+- Use an untimed-for-comparison full-size normal calibration to select an
+  injection delay during mapping. Freeze that `EVENT_AFTER` across restart
+  trials; retain the calibration as a separately labeled result.
+
+After admission, execute this balanced order with the same input, M160/R8,
+image, interval and cache policy. Do not dispatch the whole table blindly;
+validate and stop/join each trial before advancing.
+
+| Round | First | Second | Third |
+|---|---|---|---|
+| 1 | normal | no-backups | restart |
+| 2 | no-backups | restart | normal |
+| 3 | restart | normal | no-backups |
+
+Each trial uses:
+
+```bash
+# Replace these only with the documented calibration values.
+SPACE_BUDGET_BYTES="$measured_budget" EVENT_AFTER="$calibrated_delay" \
+    SIZE=10000000000 M=160 bench/paper.sh run sort zstdkv "$setting"
+```
+
+Stop on disk pressure, missed injection, provenance mismatch, missing samples
+or failed validation. Do not substitute another storage format mid-matrix.
+
+### 4. Publish evidence, not a success assumption
+
+Retain private raw diagnostics. Publish sanitized manifests, build identity,
+accepted counters, actual events, validations, sampled resource extrema,
+rate curves and per-trial times. Remove private host paths and environment
+details from public copies, not from the private originals. Report three
+trials per setting with medians and ranges, no cold-cache claim and no
+statistical-significance claim. Record any capacity-blocked configuration.
+Reconcile hosted review threads against the tested revision; seek owner
+approval rather than merging independently.

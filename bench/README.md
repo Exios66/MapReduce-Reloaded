@@ -10,7 +10,10 @@ run's scope, VM handover and storage prerequisites. It is not a result.
 ### Fixed-VM campaign commands
 
 After explicit handover, `make paper-tools` builds the host tools and labeled
-worker image from the same clean revision; it does not start containers.
+worker image from the same clean revision, including an untracked-file check;
+it does not start containers. The `.tools` tool-directory symlink is the only
+untracked-path exception. Builds use a revision-specific `mapreduce-paper`
+tag and record the build's own immutable image ID, not the shared image tag.
 `bench/paper.sh prepare grep native` prepares input, and
 `bench/paper.sh run grep native normal` runs and independently validates one
 trial. Use `sort zstdkv` for the explicitly named compressed-KV-input,
@@ -30,6 +33,25 @@ they are not three equivalent physical disk-throughput measurements. Only
 stopped, successfully verified output is removed. Failed output and the
 run-specific WAL stay for diagnosis; future trials use a fresh WAL. One
 account-wide lock excludes overlapping campaign commands.
+
+Before service replacement, the runner verifies source/tool/image provenance
+and input shard sizes. Both services are pinned to the recorded image with
+builds and pulls disabled. Accepted task counters must match the manifest's
+input bytes and records; grep's output alone cannot prove the full input ran.
+Collectors stay alive until joined, independently of the job timeout.
+Evidence checks use explicit errors (also under `PYTHONOPTIMIZE`) and require
+baseline, terminal and in-job coverage. Maximum gaps are three sample
+intervals, with a one-second floor for counters and a six-second floor for
+resources;
+only the recorded worker's restart window is exempted. Resource calls have
+a timeout, a delay between calls, and child-process cleanup. Recorded
+restart events also reset that worker's rate series, even without an
+observed counter drop. Memory and free-space extrema are **sampled**, not
+guaranteed instantaneous peaks.
+
+See the [full-size resume checklist](10gb-paper-run.md#full-size-resume-checklist)
+before admitting 10 GB runs. The current VM hold still requires explicit
+exclusive-access confirmation; a prepared plan is not permission to run it.
 
 ## Data generators (#57)
 

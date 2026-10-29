@@ -61,9 +61,17 @@ fi
 [ -f "$data/manifest.json" ] || { echo "paper: prepare $scenario $variant first" >&2; exit 2; }
 physical=$(python3 - "$data/manifest.json" "$size" "$m" "$format" <<'PY'
 import json, sys
+from pathlib import Path
 x = json.load(open(sys.argv[1]))
-assert x['logical_bytes'] == int(sys.argv[2]) and x['shards'] == int(sys.argv[3])
-assert x['format'] == sys.argv[4]
+if x['logical_bytes'] != int(sys.argv[2]) or x['records'] * 100 != int(sys.argv[2]) or x['shards'] != int(sys.argv[3]) or x['format'] != sys.argv[4]:
+    raise ValueError('input manifest does not match this workload')
+directory = Path(sys.argv[1]).parent
+extension = 'txt' if x['format'] == 'text' else 'kv'
+parts = [directory / f'part-m-{i:05d}.{extension}' for i in range(x['shards'])]
+if set(directory.glob('part-m-*')) != set(parts) or any(p.is_symlink() or not p.is_file() for p in parts):
+    raise ValueError('unexpected input shards')
+if sum(p.stat().st_size for p in parts) != x['physical_bytes']:
+    raise ValueError('input sizes changed after preparation')
 print(x['physical_bytes'])
 PY
 )
@@ -99,20 +107,45 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-python3 - "$dir/compose.json" "$stamp" "$setting" <<'PY'
+# Fail before changing any service, and never resolve the shared mutable tag.
+image=$(python3 - "$dir" "$(git rev-parse HEAD)" <<'PY'
+import hashlib, json, re, subprocess, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+stamp = json.load(open('bin/paper-build.json'))
+if stamp['commit'] != sys.argv[2]:
+    raise ValueError('stale build: run make paper-tools')
+if subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all', '--', '.', ':!.tools']).strip():
+    raise ValueError('source changed after build, including untracked files')
+if set(stamp['tools']) != {'bin/mr', 'bin/paper-data'}:
+    raise ValueError('incomplete tool provenance')
+for name, want in stamp['tools'].items():
+    if hashlib.sha256(Path(name).read_bytes()).hexdigest() != want:
+        raise ValueError('stale tool: ' + name)
+if not re.fullmatch(r'sha256:[0-9a-f]{64}', stamp['image']):
+    raise ValueError('invalid immutable image ID')
+image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', stamp['image']]))
+if image[0]['Id'] != stamp['image'] or image[0]['Config']['Labels'].get('org.opencontainers.image.revision') != stamp['commit']:
+    raise ValueError('image does not match the recorded revision')
+(p/'image.json').write_text(json.dumps(image, indent=2))
+(p/'build.json').write_text(json.dumps(stamp, indent=2))
+print(stamp['image'])
+PY
+)
+python3 - "$dir/compose.json" "$stamp" "$setting" "$image" <<'PY'
 import json, sys
 coordinator = ['coordinator', '-addr', ':7070', '-http', ':8080', '-data-dir', '/data/paper-wal-' + sys.argv[2]]
 if sys.argv[3] == 'no-backups': coordinator += ['-backups=false']
 worker = ['worker', '-coordinator', 'coordinator:7070', '-http', ':8081', '-min-free-mib', '4096']
-json.dump({'services': {'coordinator': {'command': coordinator}, 'worker': {'command': worker, 'mem_limit': '768m', 'cpus': 1}}}, open(sys.argv[1], 'w'))
+node = {'image': sys.argv[4], 'pull_policy': 'never'}
+json.dump({'services': {'coordinator': {**node, 'command': coordinator}, 'worker': {**node, 'command': worker, 'mem_limit': '768m', 'cpus': 1}}}, open(sys.argv[1], 'w'))
 PY
 # Every trial has a fresh WAL: never replay a timed-out campaign accidentally.
 mkdir "data/paper-wal-$stamp"
 chmod a+rwx "data/paper-wal-$stamp"
 "${compose[@]}" config --format json > "$dir/effective-compose.json"
 owned=1
-"${compose[@]}" up -d --force-recreate --scale worker=4 coordinator worker > "$dir/start.log" 2>&1
-"${compose[@]}" up -d --scale worker=4 coordinator worker >> "$dir/start.log" 2>&1
+"${compose[@]}" up -d --no-build --pull never --force-recreate --scale worker=4 coordinator worker > "$dir/start.log" 2>&1
 registered=0
 for _ in $(seq 120); do
     registered=$(curl -fsS --max-time 2 http://127.0.0.1:18780/metrics | awk '$1 == "mr_workers" { print $2 }') || registered=0
@@ -127,30 +160,46 @@ while IFS= read -r id; do
     urls+=("http://$ip:8081/metrics")
 done < <("${compose[@]}" ps -q worker)
 docker inspect "${ids[@]}" > "$dir/workers.json"
-docker image inspect mapreduce-reloaded > "$dir/image.json"
-python3 - "$dir" "$(git rev-parse HEAD)" <<'PY'
-import hashlib, json, subprocess, sys
+docker inspect "$("${compose[@]}" ps -q coordinator)" > "$dir/coordinator.json"
+python3 - "$dir" <<'PY'
+import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
-stamp = json.load(open('bin/paper-build.json'))
-assert stamp['commit'] == sys.argv[2], 'stale build: run make paper-tools'
-assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no']).strip(), 'tracked source changed after build'
-for name, want in stamp['tools'].items():
-    assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == want, 'stale tool: ' + name
-assert json.load(open(p/'image.json'))[0]['Id'] == stamp['image']
-assert all(w['Image'] == stamp['image'] and w['HostConfig']['NanoCpus'] == 1000000000 and w['HostConfig']['Memory'] == 768*1024**2 for w in json.load(open(p/'workers.json')))
-(p/'build.json').write_text(json.dumps(stamp, indent=2))
+stamp = json.load(open(p/'build.json'))
+workers = json.load(open(p/'workers.json'))
+coordinator = json.load(open(p/'coordinator.json'))
+if len(workers) != 4 or len(coordinator) != 1 or any(w['Image'] != stamp['image'] for w in workers + coordinator):
+    raise ValueError('running services do not match the pinned image')
+if any(w['HostConfig']['NanoCpus'] != 1000000000 or w['HostConfig']['Memory'] != 768*1024**2 for w in workers):
+    raise ValueError('unexpected worker resource limits')
 PY
 read -r clock_epoch MR_BENCH_START_MONOTONIC < <(python3 -c 'import time; print(time.time(), time.monotonic())')
 export MR_BENCH_START_MONOTONIC
 printf '{"epoch":%s,"monotonic":%s}\n' "$clock_epoch" "$MR_BENCH_START_MONOTONIC" > "$dir/clock.json"
-python3 bench/scrape-metrics.py "$interval" "$deadline" "${urls[@]}" > "$dir/samples.csv" &
+# Zero duration means collect until joined, including baseline and terminal rounds.
+python3 bench/scrape-metrics.py "$interval" 0 "${urls[@]}" > "$dir/samples.csv" &
 samplers+=("$!")
-python3 bench/scrape-tasks.py "$interval" "$deadline" http://127.0.0.1:18780/metrics > "$dir/tasks.csv" &
+python3 bench/scrape-tasks.py "$interval" 0 http://127.0.0.1:18780/metrics > "$dir/tasks.csv" &
 samplers+=("$!")
 (
+    child=''
+    stop_resource_child() {
+        if [ -n "$child" ]; then
+            kill "$child" 2>/dev/null || true
+            wait "$child" 2>/dev/null || true
+        fi
+    }
+    trap stop_resource_child EXIT
+    trap 'exit 0' INT TERM
     while true; do
-        docker stats --no-stream --format '{"epoch":"'"$(date +%s.%N)"'","name":{{json .Name}},"memory":{{json .MemUsage}},"cpu":{{json .CPUPerc}}}' "${ids[@]}" 9>&- || true
+        timeout -k 1 5 docker stats --no-stream --format '{"epoch":"'"$(date +%s.%N)"'","name":{{json .Name}},"memory":{{json .MemUsage}},"cpu":{{json .CPUPerc}}}' "${ids[@]}" 9>&- &
+        child=$!
+        wait "$child" || true
+        child=''
+        sleep "$interval" 9>&- &
+        child=$!
+        wait "$child" || true
+        child=''
     done
 ) > "$dir/resources.jsonl" 2> "$dir/resources-errors.log" &
 samplers+=("$!")
@@ -170,11 +219,16 @@ done
 params=() r=8 program=papersort
 if [ "$scenario" = grep ]; then params=(-param pattern=XYZ); r=1; program='grep'; fi
 read -r start start_mono < <(python3 -c 'import time; print(time.time(), time.monotonic())')
+python3 - "$start" "$start_mono" "$interval" > "$dir/submission-clock.json" <<'PY'
+import json, sys
+print(json.dumps(dict(zip(('epoch', 'monotonic', 'interval'), map(float, sys.argv[1:])))))
+PY
 job=$(timeout "$deadline" "$mr" submit -m "$m" -r "$r" -input-format "$format" -intermediate-codec "$codec" -output-format "$format" -output-codec "$codec" "${params[@]}" "$program" "$out" "/data/${data#data/}/part-m-*" 2> "$dir/submit.log")
 [[ "$job" =~ ^job-[a-z0-9-]+$ ]] || { echo "paper: invalid submitted job ID: $job" >&2; exit 1; }
 submitted=$(date +%s.%N)
 printf 'event,epoch,exit_code\nsubmitted,%s,0\n' "$submitted" > "$dir/events.csv"
 if [ "$setting" = restart ]; then
+    printf '{"url":"%s"}\n' "${urls[0]}" > "$dir/restart.json"
     (
         sleep "$EVENT_AFTER"
         timeout 5 "$mr" status "$job" > "$dir/event-status.txt"
@@ -227,7 +281,8 @@ if [ -n "$event_pid" ]; then
 import csv, sys
 events = {r['event']: float(r['epoch']) for r in csv.DictReader(open(sys.argv[1]))}
 status = dict(line.split(None, 1) for line in open(sys.argv[2]) if line.strip())
-assert events['killed'] < float(sys.argv[3]) + float(status['seconds']), 'worker killed after possible job completion'
+if events['killed'] >= float(sys.argv[3]) + float(status['seconds']):
+    raise ValueError('worker killed after possible job completion')
 PY
 fi
 sleep "$(awk -v i="$interval" 'BEGIN { print 2*i }')"
@@ -256,15 +311,22 @@ docker inspect "${ids[@]}" > "$dir/workers-after.json"
 if grep -q '"OOMKilled": true' "$dir/workers-after.json"; then echo "paper: OOM kill; invalid trial" >&2; exit 1; fi
 "$tool" verify -kind "$scenario" -format "$format" -parts "$r" -manifest "$data/manifest.json" "$host_out" > "$dir/validation.json"
 cp "$data/manifest.json" "$dir/input-manifest.json"
-python3 bench/plot-rates.py "$dir/samples.csv" > "$dir/rates.csv"
-if python3 -c 'import matplotlib' 2>/dev/null; then python3 bench/plot-rates.py "$dir/samples.csv" "$dir/rates.png"; fi
-python3 - "$dir" "$scenario" "$variant" "$setting" "$size" "$m" "$r" "$start" "$submitted" "$end" "$budget" "$(git rev-parse HEAD)" "$(git status --porcelain | wc -l)" "$start_mono" "$end_mono" <<'PY'
+plot_args=()
+if [ "$setting" = restart ]; then plot_args=(--restart-dir "$dir"); fi
+python3 bench/plot-rates.py "$dir/samples.csv" "${plot_args[@]}" > "$dir/rates.csv"
+if python3 -c 'import matplotlib' 2>/dev/null; then python3 bench/plot-rates.py "$dir/samples.csv" "$dir/rates.png" "${plot_args[@]}"; fi
+python3 - "$dir" "$scenario" "$variant" "$setting" "$size" "$m" "$r" "$start" "$submitted" "$end" "$budget" "$(git rev-parse HEAD)" "$(git status --porcelain --untracked-files=all -- . ':!.tools' | wc -l)" "$start_mono" "$end_mono" <<'PY'
 import json, os, platform, sys
 from pathlib import Path
 p = Path(sys.argv[1])
 status = dict(line.split(None, 1) for line in (p/'status.txt').read_text().splitlines() if line.strip())
-assert status['map'] == f'{sys.argv[6]}/{sys.argv[6]}'
-assert status['reduce'] == f'{sys.argv[7]}/{sys.argv[7]}'
+if status['map'] != f'{sys.argv[6]}/{sys.argv[6]}' or status['reduce'] != f'{sys.argv[7]}/{sys.argv[7]}':
+    raise ValueError('unexpected task counts')
+manifest = json.load(open(p/'input-manifest.json'))
+if int(status['map.input.records']) != manifest['records'] or int(status['map.input.bytes']) != manifest['physical_bytes']:
+    raise ValueError('executed input does not match the prepared workload')
+if int(status.get('skipped.records', 0)) != 0:
+    raise ValueError('benchmark skipped input records')
 record = dict(scenario=sys.argv[2], variant=sys.argv[3], setting=sys.argv[4], logical_bytes=int(sys.argv[5]), m=int(sys.argv[6]), r=int(sys.argv[7]), start_epoch=float(sys.argv[8]), submitted_epoch=float(sys.argv[9]), end_epoch=float(sys.argv[10]), wall_seconds=float(sys.argv[15])-float(sys.argv[14]), space_budget_bytes=int(sys.argv[11]), commit=sys.argv[12], dirty=int(sys.argv[13]) != 0, status=status, validation=json.load(open(p/'validation.json')), cpus=os.cpu_count(), kernel=platform.release())
 record['memory_bytes'] = int(next(line.split()[1] for line in open('/proc/meminfo') if line.startswith('MemTotal:'))) * 1024
 record['cpu'] = next(line.split(':', 1)[1].strip() for line in open('/proc/cpuinfo') if line.startswith('model name'))
