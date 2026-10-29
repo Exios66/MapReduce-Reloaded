@@ -171,6 +171,10 @@ make cluster-down                                             # remove the conta
 dashboard (`127.0.0.1:13000`), and `make e2e-s3` runs the same job with its
 input and output in an S3-compatible store.
 
+[`examples/demo.ipynb`](examples/demo.ipynb) runs this whole sequence in
+Jupyter: upload, submit, read, plot, a second program, the metrics, and a
+local-mode check.
+
 ### Run a job on one machine, without Docker
 
 Local mode runs every task in one process (§4.7). It is the oracle that
