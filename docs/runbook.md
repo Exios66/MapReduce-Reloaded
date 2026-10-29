@@ -180,6 +180,19 @@ make monitoring-up
 Open <http://127.0.0.1:13000/> on your laptop for the Grafana dashboard.
 This adds 512 MB of memory limits.
 
+### 5.8 The soak run (#160)
+
+```sh
+make soak        # 1 GiB with the combiner off, two workers at 256 MB
+```
+
+This is the acceptance criterion of #47: a job whose intermediate data is
+larger than the workers' memory limit must spill to disk, not be killed.
+It uses `deploy/compose/soak.yaml`, which lowers each worker's limit to
+256 MB, and fails if any container was OOM-killed. The input is cached in
+`data/input/` between runs; `SIZE` and `WORKERS` override the defaults.
+About five minutes.
+
 ## 6. Shut down
 
 ```sh
