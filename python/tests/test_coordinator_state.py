@@ -189,6 +189,38 @@ def test_backups():
     assert tt.backups() == (2, 1)
 
 
+def test_set_fraction():
+    # A reported fraction is recorded, clamped, for an attempt running on the
+    # reporting worker only, with the time it was heard. It is for status: it
+    # does not change which task gets a backup (§3.6).
+    tt = TaskTable(2, 1)
+    a = assign(tt, M0, "w1")
+    assign(tt, M1, "w2")
+    nan = float("nan")
+    for name, (id, attempt, worker, f, ok, want) in {
+        "recorded": (M0, a, "w1", 0.5, True, 0.5),
+        "another worker's": (M0, a, "w2", 0.9, False, 0.5),
+        "unknown attempt": (M0, a + 1, "w1", 0.9, False, 0.5),
+        "NaN": (M0, a, "w1", nan, False, 0.5),
+        "latest, even if lower": (M0, a, "w1", 0.25, True, 0.25),
+        "over 1": (M0, a, "w1", 7, True, 1.0),
+        "under 0": (M0, a, "w1", -1, True, 0.0),
+        "infinite": (M0, a, "w1", float("inf"), True, 1.0),
+    }.items():
+        assert tt.set_fraction(id, attempt, worker, f, 99.0) is ok, name
+        assert tt.fraction(M0, "w1") == want, name
+    assert tt._maps[0].running[a].reported == 99.0
+    assert tt.fraction(M1, "w2") == 0, "an attempt that has not reported"
+    assert tt.fraction(M0, "w2") == 0, "a worker not running the task"
+    assert not tt.set_fraction(Task(MAP, 9), a, "w1", 0.5, 99.0)
+    assert tt.fraction(Task(MAP, 9), "w1") == 0, "no such task"
+
+    # M1 started later but is further along; M0 still gets the backup.
+    tt.set_fraction(M1, 0, "w2", 0.9, 99.0)
+    tt.set_fraction(M0, a, "w1", 0.1, 99.0)
+    assert tt.backup("w3") == M0
+
+
 @pytest.mark.parametrize("kind", [MAP, REDUCE])
 def test_backup_oldest_first(kind):
     # The task whose attempt started first, the likeliest straggler, gets the

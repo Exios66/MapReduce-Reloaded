@@ -540,6 +540,40 @@ func TestClusterStopsLosingAttempt(t *testing.T) {
 	}
 }
 
+// A running task's progress travels in the worker's heartbeats to the
+// coordinator's status: above 0 once the task has read some input, and
+// never above 1.
+func TestClusterReportsProgress(t *testing.T) {
+	for program, tc := range map[string]struct {
+		stuck chan struct{}
+		task  coordinator.Task
+	}{
+		"test.slow-map":    {mapStuck, coordinator.Task{Kind: pb.TaskKind_TASK_KIND_MAP}},
+		"test.hang-reduce": {reduceStuck, coordinator.Task{Kind: pb.TaskKind_TASK_KIND_REDUCE}},
+	} {
+		t.Run(program, func(t *testing.T) {
+			c := newCluster(t)
+			c.submit(program)
+			kill := c.addWorker()
+			<-tc.stuck
+			var got float32
+			for got == 0 {
+				if c.ctx.Err() != nil {
+					t.Fatal("no progress reported")
+				}
+				time.Sleep(10 * time.Millisecond)
+				if w := c.srv.Status().Workers; len(w) > 0 {
+					got = w[0].Progress[tc.task]
+				}
+			}
+			if got > 1 {
+				t.Errorf("progress %v, want at most 1", got)
+			}
+			kill()
+		})
+	}
+}
+
 // A worker that its coordinator declared dead hears so from its next
 // heartbeat, and registers again without waiting for its attempt to end.
 func TestClusterReregistersOnHeartbeat(t *testing.T) {

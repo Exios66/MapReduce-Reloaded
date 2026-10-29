@@ -42,6 +42,8 @@ var tmpl = template.Must(template.New("status").Funcs(template.FuncMap{
 		}
 		return fmt.Sprintf("%d%%", (uint64(done)*100+uint64(total)/2)/uint64(total))
 	},
+	// fraction is a running task's reported progress as a rounded percentage.
+	"fraction": func(f float32) string { return fmt.Sprintf("%d%%", int(float64(f)*100+0.5)) },
 	// state is the job state without its enum prefix, for the badge: "mapping".
 	"state": func(s pb.JobState) string {
 		return strings.ToLower(strings.TrimPrefix(s.String(), "JOB_STATE_"))

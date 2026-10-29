@@ -64,8 +64,8 @@ STATUS = Status(
         _job(job_id="job-3", state=coordinator_pb2.JOB_STATE_SUCCEEDED),
     ],
     workers=[
-        WorkerStatus(Worker("w2", types_pb2.WorkerInfo(host="host-b"), AT), [M0]),
-        WorkerStatus(Worker("w3", types_pb2.WorkerInfo(), AT), []),
+        WorkerStatus(Worker("w2", types_pb2.WorkerInfo(host="host-b"), AT), [M0], {M0: 0.426}),
+        WorkerStatus(Worker("w3", types_pb2.WorkerInfo(), AT), [], {}),
     ],
     lost=[LostWorker("w1", AT, [M0])],
 )
@@ -109,6 +109,7 @@ def test_page(get):
         "w3",
         "w1",
         str(M0),
+        f"{M0}</span> 43%<br>",
         "&lt;script&gt;",
         "prefers-color-scheme: dark",
     ]:

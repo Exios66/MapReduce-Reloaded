@@ -26,6 +26,11 @@ func TestStatus(t *testing.T) {
 		t.Fatalf("workers %+v; want %s running %v, then %s idle", st.Workers, a, m0, b)
 	}
 
+	s.active.tasks.SetFraction(m0, 0, a, 0.5, time.Now())
+	if st := s.Status(); st.Workers[0].Progress[m0] != 0.5 || st.Workers[1].Progress != nil {
+		t.Fatalf("progress %v, %v; want %s at 0.5 and %s none", st.Workers[0].Progress, st.Workers[1].Progress, a, b)
+	}
+
 	lostAt := time.Now().Add(90 * time.Second)
 	s.workers.Heartbeat(b, lostAt.Add(-time.Second))
 	s.Expire(lostAt)

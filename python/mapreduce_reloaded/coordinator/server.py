@@ -124,10 +124,12 @@ class LostWorker(NamedTuple):
 
 class WorkerStatus(NamedTuple):
     """A live worker, last seen by the coordinator's clock (now), and the
-    tasks of the active job it is running."""
+    tasks of the active job it is running, with the fraction of each one's
+    input the worker last reported processed."""
 
     worker: Worker
     running: list[Task]
+    progress: dict[Task, float]
 
 
 class Status(NamedTuple):
@@ -355,7 +357,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             workers = []
             for w in self._workers.all():
                 w.last_seen = at - (tick - w.last_seen)  # heartbeats are timed by _clock
-                workers.append(WorkerStatus(w, running.get(w.id, [])))
+                tasks = running.get(w.id, [])
+                progress = {t: self._active.tasks.fraction(t, w.id) for t in tasks}
+                workers.append(WorkerStatus(w, tasks, progress))
             return Status(at, [j.status() for j in self._order], workers, list(self._lost))
 
     def now(self) -> float:
@@ -436,6 +440,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             for p in request.running:
                 if not self._runs(p.attempt, worker):
                     resp.cancel.append(p.attempt)
+                    continue
+                a = p.attempt
+                self._active.tasks.set_fraction(
+                    Task(a.task.kind, a.task.index), a.attempt, worker, p.fraction_done, self.now()
+                )
             return resp
 
     def _runs(self, attempt: types_pb2.TaskAttemptId, worker: str) -> bool:

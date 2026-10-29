@@ -223,9 +223,13 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 		resp.ActiveJobs.JobIds = []string{s.active.id}
 	}
 	for _, p := range req.GetRunning() {
-		if id := p.GetAttempt(); !s.runs(id, worker) {
+		id := p.GetAttempt()
+		if !s.runs(id, worker) {
 			resp.Cancel = append(resp.Cancel, id)
+			continue
 		}
+		t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
+		s.active.tasks.SetFraction(t, id.GetAttempt(), worker, p.GetFractionDone(), s.now())
 	}
 	return resp, nil
 }

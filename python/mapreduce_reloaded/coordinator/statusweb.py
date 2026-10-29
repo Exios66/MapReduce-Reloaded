@@ -310,7 +310,10 @@ def page(st: Status, dark: bool = False) -> str:
         '<th scope="col">Running</th></tr></thead>\n<tbody>\n'
     )
     for w in st.workers:
-        running = "".join(f'<span class="mono">{e(str(t))}</span><br>' for t in w.running)
+        running = "".join(
+            f'<span class="mono">{e(str(t))}</span> {int(w.progress[t] * 100 + 0.5)}%<br>'
+            for t in w.running
+        )
         out.append(
             f'<tr><td class="mono">{e(w.worker.id)}</td><td>{e(w.worker.info.host)}</td>'
             f'<td class="nowrap">{_clock(w.worker.last_seen)}</td><td>{running}</td></tr>\n'

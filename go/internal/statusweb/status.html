@@ -118,7 +118,7 @@ tbody tr:last-child td { border-bottom: 0; }
 <thead><tr><th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Last seen</th><th scope="col">Running</th></tr></thead>
 <tbody>
 {{range .Workers}}
-<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}}</td><td>{{range .Running}}<span class="mono">{{.}}</span><br>{{end}}</td></tr>
+<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}}</td><td>{{$p := .Progress}}{{range .Running}}<span class="mono">{{.}}</span> {{fraction (index $p .)}}<br>{{end}}</td></tr>
 {{else}}
 <tr><td colspan="4">No workers.</td></tr>
 {{end}}

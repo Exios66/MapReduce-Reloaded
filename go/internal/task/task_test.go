@@ -124,6 +124,38 @@ func TestMapInputBytes(t *testing.T) {
 	}
 }
 
+// Map reports the fraction of its split it has read after each record: never
+// less than before, never over 1, and 1 once it has read the last line. It
+// reports nothing unless asked.
+func TestMapProgress(t *testing.T) {
+	spec, split := setup(t, "a b a\nc\nd e\n")
+	var got []float64
+	ctx := WithProgress(t.Context(), func(f float64) { got = append(got, f) })
+	if _, _, err := Map(ctx, spec, api.TaskID{Kind: api.MapTask}, split, t.TempDir(), nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if want := []float64{6.0 / 12, 8.0 / 12, 1}; !slices.Equal(got, want) {
+		t.Fatalf("reported %v, want %v", got, want)
+	}
+
+	// A split in the middle of the file counts from its own start.
+	got = nil
+	split.Start = 6
+	if _, _, err := Map(ctx, spec, api.TaskID{Kind: api.MapTask, Attempt: 1}, split, t.TempDir(), nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if want := []float64{2.0 / 6, 1}; !slices.Equal(got, want) {
+		t.Fatalf("second half: reported %v, want %v", got, want)
+	}
+
+	if WithProgress(t.Context(), nil) != t.Context() {
+		t.Error("a nil report changed the context")
+	}
+	if _, _, err := Map(t.Context(), spec, api.TaskID{Kind: api.MapTask, Attempt: 2}, split, t.TempDir(), nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // dirSize returns the total size of the regular files directly in dir.
 func dirSize(t *testing.T, dir string) int64 {
 	t.Helper()

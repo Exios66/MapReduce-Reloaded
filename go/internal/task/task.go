@@ -42,6 +42,21 @@ func MapOutput(dir string, m, r int) string {
 	return filepath.Join(dir, fmt.Sprintf("map-%05d-r-%05d.kv", m, r))
 }
 
+type progressKey struct{}
+
+// WithProgress returns a context that makes Map call report after each
+// record with the fraction of the split's bytes it has read, from 0 to 1. It
+// runs on the attempt's goroutine once per record, so it must be quick. The
+// fraction counts reading the input only: it reaches 1 before Map sorts and
+// writes the output. Map reports nothing for an input reader that cannot say
+// how far it has read.
+func WithProgress(ctx context.Context, report func(fraction float64)) context.Context {
+	if report == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, progressKey{}, report)
+}
+
 // Map runs a map task attempt: it maps one split and writes one sorted,
 // combined MRKV file per reduce task to dir, named by MapOutput. It skips the
 // split's records numbered in skip (§4.6). User code logs to log, which
@@ -96,6 +111,9 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 	}
 	defer closeJoin(&err, records)
 	tc.Count(MapInputBytes, split.End-split.Start)
+	report, _ := ctx.Value(progressKey{}).(func(float64))
+	pos, positioned := records.(formats.Positioned)
+	total := float64(split.End - split.Start)
 	emit := emitter(func(key, value []byte) error {
 		tc.Count(MapOutputRecords, 1)
 		return sorters[partitioner.Partition(key, spec.R)].Add(key, value)
@@ -107,6 +125,9 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 		tc.Count(MapInputRecords, 1)
 		if err := tc.call(n, func() error { return p.Mapper.Map(tc, records.Key(), records.Value(), emit) }); err != nil {
 			return nil, nil, err
+		}
+		if report != nil && positioned && total > 0 {
+			report(float64(pos.Offset()) / total)
 		}
 	}
 	if err := records.Err(); err != nil {

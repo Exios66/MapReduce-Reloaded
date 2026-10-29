@@ -10,7 +10,7 @@ import time
 import grpc
 import pytest
 
-from mapreduce_reloaded.coordinator import SKIP_AFTER, server
+from mapreduce_reloaded.coordinator import SKIP_AFTER, Task, server
 from mapreduce_reloaded.coordinator.server import (
     MAX_LOST,
     TEMP_DIR,
@@ -101,6 +101,12 @@ class Coordinator:
     def heartbeat(self, worker, *running):
         progress = [coordinator_pb2.TaskProgress(attempt=a) for a in running]
         req = coordinator_pb2.HeartbeatRequest(worker_id=worker, running=progress)
+        return self.s.Heartbeat(req, CTX)
+
+    def report_progress(self, worker, attempt, fraction):
+        """Sends a heartbeat in which worker says attempt has processed fraction."""
+        progress = coordinator_pb2.TaskProgress(attempt=attempt, fraction_done=fraction)
+        req = coordinator_pb2.HeartbeatRequest(worker_id=worker, running=[progress])
         return self.s.Heartbeat(req, CTX)
 
 
@@ -632,6 +638,23 @@ def test_heartbeat_cancels(new_job):
     assert list(c.heartbeat(other, attempt, stale).cancel) == [attempt, stale]
     c.succeed(w, attempt, outputs(0, 1))
     assert len(c.heartbeat(w, attempt).cancel) == 1
+
+
+def test_heartbeat_records_progress(new_job):
+    # A heartbeat records the progress of the attempts that run on the worker,
+    # and only those, at the coordinator's clock; it changes no scheduling.
+    c, w, _ = new_job(cfg=Config(now=lambda: 1234.5))
+    other = c.register()
+    attempt = c.request(w).map_task.attempt
+    tasks = c.s._active.tasks
+    c.report_progress(w, attempt, 0.25)
+    assert tasks.fraction(Task(MAP, 0), w) == 0.25
+    assert tasks._maps[0].running[attempt.attempt].reported == 1234.5
+    assert list(c.report_progress(other, attempt, 0.75).cancel) == [attempt]
+    assert tasks.fraction(Task(MAP, 0), w) == 0.25
+    st = c.s.status()
+    assert st.workers[0].progress == {Task(MAP, 0): 0.25}
+    assert st.workers[1].progress == {}
 
 
 def test_heartbeat_cancels_an_ended_jobs_attempts(new_job):

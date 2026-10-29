@@ -50,9 +50,12 @@ close "close" is.
 - **A threshold such as the last 5% of tasks.** It needs a number the paper
   does not give and that depends on the job's size. "Nothing idle" needs no
   tuning, and by then the free workers have nothing better to do.
-- **Back up on measured slowness.** It needs progress reports from
-  workers, which they do not send, and a rule for what counts as slow. How
-  long an attempt has run is the measure the coordinator already has.
+- **Back up on measured slowness.** It needs a rule for what counts as
+  slow. Workers now report each attempt's `fraction_done` in their
+  heartbeats (ADR 0009) and the coordinator keeps the latest value and when
+  it arrived, but only for the status page: backups still follow the rule
+  above. How long an attempt has run is the measure the scheduler uses. The
+  reported fraction is the input a LATE-style rule would use (#45).
 - **Back up the first task by index.** It was the rule until the start
   times were logged. It can back up a task that has just started while an
   older one waits.

@@ -584,6 +584,42 @@ func TestHeartbeatCancels(t *testing.T) {
 	}
 }
 
+// A heartbeat records the progress of the attempts that run on the worker,
+// and only those, at the coordinator's clock; it changes no scheduling.
+func TestHeartbeatProgress(t *testing.T) {
+	at := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	s, w, _ := newJobWith(t, Config{Now: func() time.Time { return at }}, 1)
+	other, _ := s.RegisterWorker(ctx, &pb.RegisterWorkerRequest{Worker: &pb.WorkerInfo{}})
+	attempt := next(t, s, w)
+	m0 := Task{mapKind, 0}
+	beat := func(worker string, f float32) {
+		t.Helper()
+		_, err := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: worker, Running: []*pb.TaskProgress{{Attempt: attempt, FractionDone: f}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	fraction := func() float32 { return s.active.tasks.Fraction(m0, w) }
+
+	beat(w, 0.25)
+	if got := fraction(); got != 0.25 {
+		t.Fatalf("fraction %v after a heartbeat of 0.25", got)
+	}
+	if got := s.active.tasks.maps[0].running[attempt.GetAttempt()].reported; !got.Equal(at) {
+		t.Errorf("reported at %v, want %v", got, at)
+	}
+	beat(other.GetWorkerId(), 0.75) // not its attempt: cancelled, not recorded
+	if got := fraction(); got != 0.25 {
+		t.Errorf("fraction %v after another worker reported 0.75, want 0.25", got)
+	}
+	if st := s.Status(); st.Workers[0].Progress[m0] != 0.25 {
+		t.Errorf("status progress %v, want 0.25", st.Workers[0].Progress)
+	}
+	if st := s.Status(); st.Workers[1].Progress != nil {
+		t.Errorf("idle worker's progress %v, want none", st.Workers[1].Progress)
+	}
+}
+
 // A worker that goes quiet is declared dead, and its completed map task is
 // run again (§3.3).
 func TestExpire(t *testing.T) {

@@ -1,5 +1,6 @@
 """The task table, mirroring go/internal/coordinator/tasktable.go."""
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import NamedTuple
@@ -34,6 +35,8 @@ class _Run:
     worker: str
     started: float
     backup: bool  # started while another attempt of the task was running (§3.6)
+    fraction: float = 0.0  # of its input the worker last reported processed
+    reported: float = 0.0  # when the coordinator heard it; 0 before the first report
 
 
 @dataclass
@@ -174,6 +177,28 @@ class TaskTable:
         ts.running[attempt] = _Run(worker, started, backup)
         ts.state = IN_PROGRESS
         return attempt
+
+    def set_fraction(self, id: Task, attempt: int, worker: str, fraction: float, at: float) -> bool:
+        """Records that attempt of task id, running on worker, reported at at
+        that it had processed fraction of its input, clamped to 0 to 1.
+        Reports whether it recorded it: not if the attempt is not running on
+        worker, or fraction is NaN. The fraction is for status only and does
+        not affect scheduling."""
+        if not self.runs(id, attempt, worker) or math.isnan(fraction):
+            return False
+        r = self._task(id).running[attempt]
+        r.fraction, r.reported = min(max(fraction, 0.0), 1.0), at
+        return True
+
+    def fraction(self, id: Task, worker: str) -> float:
+        """Returns the fraction of its input that the attempt of task id
+        running on worker last reported processed, or 0 if it has not
+        reported or no attempt of the task runs on worker."""
+        try:
+            running = self._task(id).running.values()
+        except ValueError:
+            return 0.0
+        return next((r.fraction for r in running if r.worker == worker), 0.0)
 
     def complete(self, id: Task, attempt: int, worker: str, outputs=()) -> bool:
         """Records that worker finished an attempt. A map task's outputs must

@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -323,6 +324,63 @@ func TestBackupOldestFirst(t *testing.T) {
 			}
 			mustAssign(t, tt, next, "w4")
 		}
+	}
+}
+
+// A reported fraction is recorded, clamped, for an attempt running on the
+// reporting worker only, with the time it was heard. It is for status: it does
+// not change which task gets a backup (§3.6).
+func TestSetFraction(t *testing.T) {
+	tt := NewTaskTable(2, 1)
+	m0, m1 := Task{mapKind, 0}, Task{mapKind, 1}
+	a := mustAssign(t, tt, m0, "w1")
+	mustAssign(t, tt, m1, "w2")
+	at := clock.Add(time.Minute)
+
+	for _, tc := range []struct {
+		name    string
+		id      Task
+		attempt uint32
+		worker  string
+		f       float32
+		ok      bool
+		want    float32
+	}{
+		{"recorded", m0, a, "w1", 0.5, true, 0.5},
+		{"another worker's", m0, a, "w2", 0.9, false, 0.5},
+		{"unknown attempt", m0, a + 1, "w1", 0.9, false, 0.5},
+		{"no such task", Task{mapKind, 9}, a, "w1", 0.9, false, 0.5},
+		{"NaN", m0, a, "w1", float32(math.NaN()), false, 0.5},
+		{"latest, even if lower", m0, a, "w1", 0.25, true, 0.25},
+		{"over 1", m0, a, "w1", 7, true, 1},
+		{"under 0", m0, a, "w1", -1, true, 0},
+		{"infinite", m0, a, "w1", float32(math.Inf(1)), true, 1},
+	} {
+		if ok := tt.SetFraction(tc.id, tc.attempt, tc.worker, tc.f, at); ok != tc.ok {
+			t.Errorf("%s: SetFraction = %v, want %v", tc.name, ok, tc.ok)
+		}
+		if got := tt.Fraction(m0, "w1"); got != tc.want {
+			t.Errorf("%s: Fraction = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if got := tt.maps[0].running[a].reported; !got.Equal(at) {
+		t.Errorf("reported at %v, want %v", got, at)
+	}
+	if got := tt.Fraction(m1, "w2"); got != 0 {
+		t.Errorf("Fraction of an attempt that has not reported = %v, want 0", got)
+	}
+	if got := tt.Fraction(m0, "w2"); got != 0 {
+		t.Errorf("Fraction on a worker not running the task = %v, want 0", got)
+	}
+	if got := tt.Fraction(Task{mapKind, 9}, "w1"); got != 0 {
+		t.Errorf("Fraction of no task = %v, want 0", got)
+	}
+
+	// m1 started later but is further along; m0 still gets the backup.
+	tt.SetFraction(m1, 0, "w2", 0.1, at)
+	tt.SetFraction(m0, a, "w1", 0.9, at)
+	if next, _ := tt.Backup("w3"); next != m0 {
+		t.Errorf("Backup(w3) = %v, want %v, the attempt that started first", next, m0)
 	}
 }
 

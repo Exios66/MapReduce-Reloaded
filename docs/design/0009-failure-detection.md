@@ -38,6 +38,18 @@ no need to dial back into them.
    report for a reset task is ignored, so a task's counts and output come
    from one accepted attempt.
 
+5. **Heartbeats also carry progress.** Each `TaskProgress` has the
+   attempt's `fraction_done`, from 0 to 1: for a map task the bytes of its
+   split read, for a reduce task the bytes of its map outputs read (the
+   merge fetches and reduces in one pass, so there are no separate copy and
+   sort phases to weigh). The coordinator records it only for an attempt
+   running on the reporting worker, with the time it heard it, and shows it
+   on the status page. It does not affect liveness: any heartbeat from a
+   known worker counts, whatever it says. The paper's pings (§3.3) carry no
+   such figure, and it does not specify per-task fractions; the status page
+   (§4.8) shows how much of the computation is done. This is the input a
+   LATE-style policy would use (#45); ADR 0010 says what it does not do yet.
+
 ## Alternatives rejected
 
 - **The coordinator pings workers.** It would need a connection back to

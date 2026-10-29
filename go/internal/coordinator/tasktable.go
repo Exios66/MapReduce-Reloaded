@@ -8,6 +8,7 @@ package coordinator
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
@@ -37,6 +38,9 @@ type run struct {
 	worker  string
 	started time.Time
 	backup  bool // started while another attempt of the task was running (§3.6)
+
+	fraction float32   // of its input the worker last reported processed; 0 before the first report
+	reported time.Time // when the coordinator heard it; zero before the first report
 }
 
 // SkipAfter is how many attempts must crash on a record before later
@@ -159,6 +163,38 @@ func (t *TaskTable) Assign(id Task, worker string, started time.Time) (uint32, e
 	ts.running[attempt] = run{worker: worker, started: started, backup: backup}
 	ts.state = pb.TaskState_TASK_STATE_IN_PROGRESS
 	return attempt, nil
+}
+
+// SetFraction records that attempt of task id, running on worker, reported at
+// at that it had processed fraction of its input, clamped to 0 to 1. It
+// reports whether it recorded it: not if the attempt is not running on
+// worker, or fraction is NaN. The fraction is for status only and
+// does not affect scheduling.
+func (t *TaskTable) SetFraction(id Task, attempt uint32, worker string, fraction float32, at time.Time) bool {
+	ts, err := t.task(id)
+	if err != nil || !ts.runsOn(attempt, worker) || math.IsNaN(float64(fraction)) {
+		return false
+	}
+	r := ts.running[attempt]
+	r.fraction, r.reported = min(max(fraction, 0), 1), at
+	ts.running[attempt] = r
+	return true
+}
+
+// Fraction returns the fraction of its input that the attempt of task id
+// running on worker last reported processed, or 0 if it has not reported or
+// no attempt of the task runs on worker.
+func (t *TaskTable) Fraction(id Task, worker string) float32 {
+	ts, err := t.task(id)
+	if err != nil {
+		return 0
+	}
+	for _, r := range ts.running {
+		if r.worker == worker {
+			return r.fraction
+		}
+	}
+	return 0
 }
 
 // Complete records that worker finished an attempt. A map task's outputs
