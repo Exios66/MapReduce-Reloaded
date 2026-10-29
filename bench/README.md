@@ -2,7 +2,8 @@
 
 Scripts that measure the cluster. Each one runs on the Compose cluster and
 writes its raw results to `bench/results/`, which git ignores. The numbers
-below are copied from a run, with the machine it ran on.
+below are copied from a run, with the machine it ran on. Rule: every results
+table names its machine, in the text above it or in its caption.
 
 ## Data generators (#57)
 
@@ -107,6 +108,8 @@ VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
 | distsort | none | 68,353,231 | 1.00 | 2.25 (1.98–2.37) |
 | distsort | zstd | 31,892,233 | 0.47 | 2.40 (2.22–2.58) |
 | distsort | snappy | 51,049,537 | 0.75 | 2.28 (2.23–2.34) |
+
+<sub>Table: codec results on the development machine (4 vCPUs, Intel Xeon 2.1 GHz, 16 GB), 2026-10-24, not the course VM.</sub>
 
 What the numbers show:
 
