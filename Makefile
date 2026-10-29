@@ -39,6 +39,13 @@ data:
 	mkdir -p data/input data/out
 	chmod a+rwx data/out
 
+# Real datasets for the example programs, fetched into data/input/ and
+# checked in Go and Python against an independent oracle (docs/data.md).
+# Not in make check: they are 300 MB and take minutes.
+real-data: mr
+	scripts/fetch-data.sh
+	$(PYTHON) scripts/check-real-data.py
+
 # The host client, bin/mr (ADR 0016), built with the host's Go if it has
 # one, otherwise in the same golang image the cluster's image is built from.
 mr:
