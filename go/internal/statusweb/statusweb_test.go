@@ -29,7 +29,7 @@ var status = source{
 	At: at,
 	Jobs: []*pb.GetJobStatusResponse{{
 		JobId: "job-1", State: pb.JobState_JOB_STATE_MAPPING, MapTasksTotal: 7, MapTasksCompleted: 3, ReduceTasksTotal: 4,
-		Counters:    &pb.Counters{Values: map[string]int64{"map.input_records": 12, `odd"name`: 1}},
+		Counters:    &pb.Counters{Values: map[string]int64{"map.input_records": 12, "map.input.records": 20, "map.output.records": 8, `odd"name`: 1}},
 		Error:       "<script>",
 		SubmittedAt: timestamppb.New(at.Add(-2500 * time.Millisecond)),
 	}, {
@@ -66,13 +66,19 @@ func TestPage(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %s", resp.Status)
 	}
-	for _, want := range []string{"job-1", "JOB_STATE_MAPPING", "<td>2.5s</td>", "<td>1m30s</td>", "3 started, 1 won", "3/7", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), "&lt;script&gt;"} {
+	for _, want := range []string{"job-1", "badge state-mapping", ">mapping<", ">2.5s<", ">1m30s<", "3 started, 1 won", "3/7 &middot; 43%", `max="7" value="3"`, "map in <b>20</b>", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), "&lt;script&gt;", "prefers-color-scheme: dark"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
 	if strings.Contains(body, "<script>") {
 		t.Error("page did not escape the job's error")
+	}
+	if !strings.Contains(body, "<body>") {
+		t.Error("page is dark by default")
+	}
+	if _, dark := get(t, "/?theme=dark"); !strings.Contains(dark, `<body class="dark">`) {
+		t.Error("?theme=dark did not set the dark class")
 	}
 	if resp, _ := get(t, "/nope"); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("/nope: status %s, want 404", resp.Status)
