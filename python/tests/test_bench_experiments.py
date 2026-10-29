@@ -74,10 +74,12 @@ def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(experimen
     assert lines == [*expected, "defaults|1.0|"]
 
 
-def test_e6_pairs_the_combiner_on_book_text_and_restores_defaults(experiment, tmp_path):
+def test_e6_pairs_the_combiner_on_each_text_and_restores_defaults(experiment, tmp_path):
     invoke, _ = experiment
     (tmp_path / "data/input/warpeace").mkdir(parents=True)
     (tmp_path / "data/input/warpeace/warpeace.txt").write_text("text\n")
+    (tmp_path / "data/input/crawl").mkdir(parents=True)
+    (tmp_path / "data/input/crawl/a.warc.wet.gz").write_text("")
     result = invoke(
         """
         begin() { printf 'begin|%s\n' "$1"; }
@@ -88,34 +90,50 @@ def test_e6_pairs_the_combiner_on_book_text_and_restores_defaults(experiment, tm
         after='printf \'defaults|%s|%s\\n\' "$text" "${submit_flags[*]-}"',
     )
     expected = ["begin|E6", "configure|4"]
-    for run, combiner in ((1, "on"), (1, "off"), (2, "off"), (2, "on"), (3, "on"), (3, "off")):
-        flag = "" if combiner == "on" else "-combiner=false"
-        expected.append(f"E6|book-{combiner}|wordcount|{run}|book|{flag}")
+    for text in ("crawl-eng", "crawl", "book"):
+        for run, combiner in ((1, "on"), (1, "off"), (2, "off"), (2, "on"), (3, "on"), (3, "off")):
+            flag = "" if combiner == "on" else "-combiner=false"
+            expected.append(f"E6|{text}-{combiner}|wordcount|{run}|{text}|{flag}")
     assert result.stdout.splitlines() == [*expected, "defaults|zipf|"]
 
 
-def test_e6_needs_the_book(experiment):
+@pytest.mark.parametrize("have", ["", "book", "crawl"])
+def test_e6_needs_the_book_and_the_crawl(experiment, tmp_path, have):
     invoke, _ = experiment
+    if have == "book":
+        (tmp_path / "data/input/warpeace").mkdir(parents=True)
+        (tmp_path / "data/input/warpeace/warpeace.txt").write_text("text\n")
+    if have == "crawl":
+        (tmp_path / "data/input/crawl").mkdir(parents=True)
+        (tmp_path / "data/input/crawl/a.warc.wet.gz").write_text("")
     result = invoke("begin() { echo begun; }", "E6", check=False)
     assert result.returncode == 1
     assert "begun" not in result.stdout
-    assert "scripts/fetch-data.sh warpeace" in result.stderr
+    assert "scripts/fetch-data.sh warpeace and scripts/fetch-data.sh crawl" in result.stderr
 
 
-def test_book_input_uses_gen_book(experiment):
+@pytest.mark.parametrize(
+    "text, generator",
+    [
+        ("book", "bench/gen-book.py 100 42"),
+        ("crawl", "bench/gen-crawl.py 100 all"),
+        ("crawl-eng", "bench/gen-crawl.py 100 eng"),
+    ],
+)
+def test_real_text_inputs(experiment, text, generator):
     invoke, log = experiment
     result = invoke(
-        """
-        in_volume() { return 1; }
-        python3() { printf 'generate:%s\n' "$*" >> "$CALL_LOG"; echo generated; }
-        compose_stub() { :; }
+        f"""
+        in_volume() {{ return 1; }}
+        python3() {{ printf 'generate:%s\n' "$*" >> "$CALL_LOG"; echo generated; }}
+        compose_stub() {{ :; }}
         compose=(compose_stub)
-        text=book
+        text={text}
         input wordcount
         """
     )
-    assert result.stdout == "/out/exp-input-wordcount-100-book.txt\n"
-    assert log.read_text().splitlines() == ["generate:bench/gen-book.py 100 42"]
+    assert result.stdout == f"/out/exp-input-wordcount-100-{text}.txt\n"
+    assert log.read_text().splitlines() == [f"generate:{generator}"]
 
 
 def test_e5_rotates_compiled_and_job_files_and_clears_them(experiment):

@@ -19,9 +19,12 @@
 #   as a job file that the workers interpret: examples/wordcount.go, which
 #   calls the compiled helpers api.Words and api.Sum, and
 #   bench/jobs/wordcount-naive.go, which does not.
-# - E6: word count over real English, bench/gen-book.py's lines of War and
-#   Peace, with the combiner and without it, as E1 does for Zipf words.
-#   It needs the book: scripts/fetch-data.sh warpeace.
+# - E6: word count over real text, with the combiner and without it, as E1
+#   does for Zipf words, on three inputs: crawl-eng, the English pages of
+#   Common Crawl's text (bench/gen-crawl.py), the real-text result; crawl,
+#   its pages in every language, which favors the combiner less; and book,
+#   War and Peace's lines repeated (bench/gen-book.py), a fixed-vocabulary
+#   best case. It needs scripts/fetch-data.sh warpeace crawl.
 #
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
@@ -31,14 +34,15 @@
 # Every run's output is checksummed and compared with the first normal run
 # on the same input; a run that differs has valid=0 and is not plotted.
 # The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt
-# (-SIZE-S.txt for word count's Zipf exponent S) between
+# (-SIZE-S.txt for word count's Zipf exponent S, -SIZE-TEXT.txt for E6's
+# book, crawl and crawl-eng) between
 # experiments, and make cluster-down removes them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 repeat=${REPEAT:-3}
 zipf=1.0      # word count's Zipf exponent; E1 varies it
-text=zipf     # word count's input, zipf or book; E6 sets book
+text=zipf     # word count's input: zipf, book, crawl or crawl-eng; E6 sets the last three
 submit_flags=() # extra mr submit flags; E1 sets -combiner=false
 jobfile=        # a job file to submit in place of the program; E5 sets it
 size=${SIZE:-1073741824}
@@ -102,12 +106,16 @@ input() {
     grep) gen=(bench/gen-grep.py "$size" 42) ;;
     distsort) gen=(bench/gen-sort.py "$size" 42) ;;
     wordcount)
-        gen=(bench/gen-zipf.py "$size" 42 "$zipf")
-        path=/out/exp-input-$1-$size-$zipf.txt
-        if [ "$text" = book ]; then
-            gen=(bench/gen-book.py "$size" 42)
-            path=/out/exp-input-$1-$size-book.txt
-        fi
+        path=/out/exp-input-$1-$size-$text.txt
+        case $text in
+        zipf)
+            gen=(bench/gen-zipf.py "$size" 42 "$zipf")
+            path=/out/exp-input-$1-$size-$zipf.txt
+            ;;
+        book) gen=(bench/gen-book.py "$size" 42) ;;
+        crawl) gen=(bench/gen-crawl.py "$size" all) ;;
+        crawl-eng) gen=(bench/gen-crawl.py "$size" eng) ;;
+        esac
         ;;
     esac
     if ! in_volume test -f "$path"; then
@@ -317,24 +325,26 @@ e1() {
     zipf=1.0 submit_flags=()
 }
 
-# E6 is E1 on real text: word count over gen-book.py's lines of War and
-# Peace, with the combiner on and off, in the same alternating order.
+# E6 is E1 on real text: word count over crawled English pages, crawled
+# pages in every language and War and Peace's lines repeated, with the
+# combiner on and off, in the same alternating order.
 e6() {
-    if [ ! -f data/input/warpeace/warpeace.txt ]; then
-        echo "experiments: E6 needs War and Peace; run scripts/fetch-data.sh warpeace" >&2
+    if [ ! -f data/input/warpeace/warpeace.txt ] || ! ls data/input/crawl/*.warc.wet.gz >/dev/null 2>&1; then
+        echo "experiments: E6 needs War and Peace and Common Crawl's text; run scripts/fetch-data.sh warpeace and scripts/fetch-data.sh crawl" >&2
         exit 1
     fi
     begin E6
     configure 4
     local n combiner order
-    text=book
-    for n in $(seq "$repeat"); do
-        order="on off"
-        [ $((n % 2)) = 1 ] || order="off on"
-        for combiner in $order; do
-            submit_flags=()
-            [ "$combiner" = on ] || submit_flags=(-combiner=false)
-            run E6 "book-$combiner" wordcount "$n" 4 ""
+    for text in crawl-eng crawl book; do
+        for n in $(seq "$repeat"); do
+            order="on off"
+            [ $((n % 2)) = 1 ] || order="off on"
+            for combiner in $order; do
+                submit_flags=()
+                [ "$combiner" = on ] || submit_flags=(-combiner=false)
+                run E6 "$text-$combiner" wordcount "$n" 4 ""
+            done
         done
     done
     text=zipf submit_flags=()

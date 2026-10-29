@@ -119,7 +119,14 @@ The real data tests what the synthetic inputs cannot:
 
 - **Timing curves on real text.** War and Peace is about 3 MB, so a cluster
   job over it ends in about a second, too fast for the data-rate plots of
-  §5. Branch `book-scale` adds `bench/gen-book.py`, which builds a
-  gigabyte-scale input from the book's lines, and experiment E6.
+  §5. Branch `book-scale` adds experiment E6, word count at 1 GiB with
+  the combiner on and off, on three inputs. `crawl-eng` is the English
+  pages of ten Common Crawl WET files (`scripts/fetch-data.sh crawl`,
+  `bench/gen-crawl.py`), the real-text result. `crawl` is the same pages in
+  every language, which favors the combiner less: Chinese, Japanese and
+  Thai text has no spaces, so a run of it is one word, and a mix of
+  languages has more distinct words. `book` is War and Peace's lines
+  repeated (`bench/gen-book.py`), a fixed 41,631-word vocabulary, so it is
+  the combiner's best case and not real text at that scale.
 - **The golden corpus** has no non-English text. Branch `corpus-utf8` adds
   a German text in UTF-8.

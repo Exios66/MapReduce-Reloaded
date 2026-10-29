@@ -120,3 +120,41 @@ def test_book_needs_the_book(tmp_path):
         capture_output=True,
     )
     assert r.returncode != 0 and b"fetch-data.sh" in r.stderr
+
+
+def wet_file(path, pages):
+    """Writes a gzipped WET file of (language, text) conversion records."""
+    import gzip
+
+    out = b"WARC/1.0\r\nWARC-Type: warcinfo\r\nContent-Length: 2\r\n\r\nx\n\r\n\r\n"
+    for lang, text in pages:
+        head = b"WARC/1.0\r\nWARC-Type: conversion\r\nWARC-Target-URI: http://h.example/\r\n"
+        if lang:
+            head += b"WARC-Identified-Content-Language: %s\r\n" % lang
+        out += head + b"Content-Length: %d\r\n\r\n%s\r\n\r\n" % (len(text), text)
+    path.write_bytes(gzip.compress(out))
+
+
+def test_crawl(tmp_path):
+    """gen-crawl.py writes each page's text as a line, files in name order,
+    keeping the pages whose first language is LANG, or all, and stops at the
+    first page that reaches SIZE."""
+    wet_file(tmp_path / "b.warc.wet.gz", [(b"eng", b"three"), (b"jpn,eng", b"\xe6\x97\xa5\xe6\x9c\xac")])
+    wet_file(
+        tmp_path / "a.warc.wet.gz",
+        [(b"eng,fra", b"one  two\n"), (b"fra", b"un"), (None, b"none"), (b"eng", b" \n")],
+    )
+    assert generate("crawl", 100, "all", tmp_path) == "one two\nun\nnone\nthree\n日本\n".encode()
+    assert generate("crawl", 100, "eng", tmp_path) == b"one two\nthree\n"
+    assert generate("crawl", 8, "eng", tmp_path) == b"one two\n"
+    assert generate("crawl", 9, "eng", tmp_path) == b"one two\nthree\n"
+
+
+@pytest.mark.parametrize("pages, message", [(None, b"fetch-data.sh crawl"), ([(b"eng", b"x")], b"under 100")])
+def test_crawl_needs_enough_text(tmp_path, pages, message):
+    if pages:
+        wet_file(tmp_path / "a.warc.wet.gz", pages)
+    r = subprocess.run(
+        [sys.executable, BENCH / "gen-crawl.py", "100", "eng", tmp_path], capture_output=True
+    )
+    assert r.returncode != 0 and message in r.stderr

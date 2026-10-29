@@ -4,12 +4,12 @@
 
 Each pass writes every non-blank line of the book once, in a new random
 order, so word frequencies and line lengths are the book's own at any
-size, unlike gen-zipf.py's drawn words. Two things differ from a real
-collection that large: the vocabulary stops at the book's (41,631 words for
-War and Peace), where a real one keeps growing, and each line repeats once
-per pass, about every 3 MB. Word count's combiner folds repeats within a
-map task either way, so its savings depend on the frequencies, which are
-real. A fixed seed makes the output reproducible.
+size, unlike gen-zipf.py's drawn words. It is not a real collection that
+large: the vocabulary stops at the book's (41,631 words for War and Peace),
+where a real one keeps growing, and each line repeats once per pass, about
+every 3 MB, so a map task sees the same words many times over. That makes
+it a best case for word count's combiner; bench/gen-crawl.py's crawled
+text is the real one. A fixed seed makes the output reproducible.
 
 Usage: python3 bench/gen-book.py SIZE [SEED] [BOOK]
 """
