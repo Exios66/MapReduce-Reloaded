@@ -126,8 +126,9 @@ The other plots (E2–E5), the raw CSVs, the machine and the commands are in
 
 The coordinator splits the input and hands tasks to workers that ask for
 them; map output stays on the worker that made it, and reducers fetch it
-from there. Every decision is logged before the reply, so a restarted
-coordinator resumes the job. [Design](design.md) follows one job end to end.
+from there. With `-data-dir` (as the Compose cluster sets it) every decision
+is logged before the reply, so a restarted coordinator resumes the job.
+[Design](design.md) follows one job end to end.
 
 ## The `mr` command
 
@@ -141,7 +142,7 @@ mr cat </data/output-dir>
 
 | Flag | Meaning |
 |---|---|
-| `-m M` | Exact number of map tasks. Default: one per 64 MiB of input |
+| `-m M` | The number of map tasks to ask for. The input is cut into M splits by size, but each non-empty file gets at least one (more files than M means one task per file), and a file too small to split that finely gets fewer; `mr submit` prints the resulting count. Default: one per 64 MiB |
 | `-r R` | Number of reduce tasks and output files. Default: 2 per worker |
 | `-wait` | Wait for the job and print its status and counters |
 | `-combiner=false` | Do not run the job's `Combine` |
