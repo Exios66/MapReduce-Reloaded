@@ -249,7 +249,9 @@ func percentile(sorted []float64, p float64) float64 {
 	if lo+1 >= len(sorted) {
 		return sorted[len(sorted)-1]
 	}
-	return sorted[lo] + (sorted[lo+1]-sorted[lo])*(rank-float64(lo))
+	// The conversion keeps arm64 from fusing the product into an FMA, which
+	// would round differently from Python.
+	return sorted[lo] + float64((sorted[lo+1]-sorted[lo])*(rank-float64(lo)))
 }
 
 // phase returns the kind and tasks of the current phase: map tasks until
@@ -311,15 +313,17 @@ func (t *TaskTable) Assign(id Task, worker string, started time.Time) (uint32, e
 // SetFraction records that attempt of task id, running on worker, reported at
 // at that it had processed fraction of its input, clamped to 0 to 1. It
 // reports whether it recorded it: not if the attempt is not running on
-// worker, or fraction is NaN. The fraction is for status only and
-// does not affect scheduling.
+// worker, or fraction is NaN. The attempt keeps the larger of the stored
+// and the new fraction, so heartbeats that arrive out of order cannot lower
+// it. The paper's rule for backups (Backup) ignores the fraction; LateBackup
+// uses it (ADR 0019).
 func (t *TaskTable) SetFraction(id Task, attempt uint32, worker string, fraction float32, at time.Time) bool {
 	ts, err := t.task(id)
 	if err != nil || !ts.runsOn(attempt, worker) || math.IsNaN(float64(fraction)) {
 		return false
 	}
 	r := ts.running[attempt]
-	r.fraction, r.reported = min(max(fraction, 0), 1), at
+	r.fraction, r.reported = max(r.fraction, min(max(fraction, 0), 1)), at
 	ts.running[attempt] = r
 	return true
 }
@@ -451,9 +455,13 @@ func (t *TaskTable) lose(lost *pb.PartitionLocation) {
 }
 
 // ResetWorker handles the loss of a worker (§3.3): its running attempts
-// stop, and its completed map tasks must run again. It returns the tasks
-// that became idle.
+// stop, its completed map tasks must run again, and its record of completed
+// attempts for LateBackup is forgotten, so that a dead worker does not
+// count in the slow-node percentile. It returns the tasks that became idle.
 func (t *TaskTable) ResetWorker(worker string) []Task {
+	for _, history := range t.speeds {
+		delete(history, worker)
+	}
 	var reset []Task
 	for i := range t.maps {
 		ts := &t.maps[i]
@@ -476,8 +484,10 @@ func (t *TaskTable) ResetWorker(worker string) []Task {
 // StopAll stops every running attempt, as when the coordinator restarts:
 // the attempts' workers will register again under new IDs. Completed tasks
 // stay completed; a map output that turns out to be lost is reported by
-// the reduce task that cannot fetch it.
+// the reduce task that cannot fetch it. The workers' records of completed
+// attempts are forgotten too: they are under IDs that will not return.
 func (t *TaskTable) StopAll() {
+	clear(t.speeds)
 	for _, ts := range [][]task{t.maps, t.reduces} {
 		for i := range ts {
 			clear(ts[i].running)

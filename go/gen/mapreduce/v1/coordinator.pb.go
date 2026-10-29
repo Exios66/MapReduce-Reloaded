@@ -948,9 +948,9 @@ type TaskProgress struct {
 	// Fraction of the attempt's input processed so far, from 0.0 to 1.0: for
 	// a map task, the bytes of its split read; for a reduce task, the bytes of
 	// its map outputs read. It never decreases within an attempt. The
-	// coordinator only shows it on the status page: backups still go to the
-	// attempt that started first (§3.6, ADR 0010). The paper does not specify
-	// it; it is the input a LATE-style estimate of time left would use (#45).
+	// coordinator shows it on the status page. The paper's backup rule (§3.6,
+	// ADR 0010) ignores it; LATE mode uses it to estimate each task's time
+	// left (ADR 0019). The paper does not specify it.
 	FractionDone  float32 `protobuf:"fixed32,2,opt,name=fraction_done,json=fractionDone,proto3" json:"fraction_done,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

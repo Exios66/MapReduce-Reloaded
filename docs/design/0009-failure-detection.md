@@ -43,8 +43,9 @@ no need to dial back into them.
    split read, for a reduce task the bytes of its map outputs read (the
    merge fetches and reduces in one pass, so there are no separate copy and
    sort phases to weigh). The coordinator records it only for an attempt
-   running on the reporting worker, with the time it heard it, and shows it
-   on the status page. It does not affect liveness: any heartbeat from a
+   running on the reporting worker, with the time it heard it, and keeps the
+   larger of the stored and the new value, so that heartbeats arriving out of
+   order cannot lower it. It shows the value on the status page. It does not affect liveness: any heartbeat from a
    known worker counts, whatever it says. The paper's pings (§3.3) carry no
    such figure, and it does not specify per-task fractions; the status page
    (§4.8) shows how much of the computation is done. It is also the input

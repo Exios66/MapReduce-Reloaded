@@ -605,6 +605,10 @@ func TestHeartbeatProgress(t *testing.T) {
 	if got := fraction(); got != 0.25 {
 		t.Fatalf("fraction %v after a heartbeat of 0.25", got)
 	}
+	beat(w, 0.1) // arrived out of order
+	if got := fraction(); got != 0.25 {
+		t.Fatalf("fraction %v after a late heartbeat of 0.1, want 0.25", got)
+	}
 	if got := s.active.tasks.maps[0].running[attempt.GetAttempt()].reported; !got.Equal(at) {
 		t.Errorf("reported at %v, want %v", got, at)
 	}

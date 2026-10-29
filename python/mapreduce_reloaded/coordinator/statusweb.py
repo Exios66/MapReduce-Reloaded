@@ -311,7 +311,7 @@ def page(st: Status, dark: bool = False) -> str:
     )
     for w in st.workers:
         running = "".join(
-            f'<span class="mono">{e(str(t))}</span> {int(w.progress[t] * 100 + 0.5)}%<br>'
+            f'<span class="mono">{e(str(t))}</span> {int(w.progress.get(t, 0.0) * 100 + 0.5)}%<br>'
             for t in w.running
         )
         out.append(

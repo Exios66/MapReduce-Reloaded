@@ -83,11 +83,6 @@ class Config:
     # that asks for work gets a second attempt of a task still running
     # elsewhere (§3.6).
     backups: bool = True
-    # How backup attempts start once no task of the current phase is idle:
-    # SPECULATION_PAPER (the paper's rule, §3.6), SPECULATION_LATE (LATE,
-    # Zaharia et al., OSDI 2008) or SPECULATION_OFF. Empty means backups
-    # decides: paper if it is set, off if not.
-    speculation: str = ""
     # Returns the hosts or zones that hold a split, which map tasks then
     # prefer to run on (§3.4). It runs once per split, when the job is
     # submitted.
@@ -121,6 +116,11 @@ class Config:
     # it, as the log keeps IDs unique. Last, so positional arguments keep
     # the meaning they had before it was added.
     id_prefix: str = ""
+    # How backup attempts start once no task of the current phase is idle:
+    # SPECULATION_PAPER (the paper's rule, §3.6), SPECULATION_LATE (LATE,
+    # Zaharia et al., OSDI 2008) or SPECULATION_OFF. Empty means backups
+    # decides: paper if it is set, off if not.
+    speculation: str = ""
     # The LATE settings (see LateParams). A zero field means its default: 0.1
     # of the workers, the 25th percentile for tasks and for workers, and twice
     # heartbeat_interval.

@@ -651,6 +651,8 @@ def test_heartbeat_records_progress(new_job):
     tasks = c.s._active.tasks
     c.report_progress(w, attempt, 0.25)
     assert tasks.fraction(Task(MAP, 0), w) == 0.25
+    c.report_progress(w, attempt, 0.1)  # arrived out of order
+    assert tasks.fraction(Task(MAP, 0), w) == 0.25
     assert tasks._maps[0].running[attempt.attempt].reported == 1234.5
     assert list(c.report_progress(other, attempt, 0.75).cancel) == [attempt]
     assert tasks.fraction(Task(MAP, 0), w) == 0.25
@@ -693,6 +695,15 @@ def test_speculation_modes(new_job, cfg, silent, reported):
         return f"backup {resp.map_task.attempt.attempt}" if resp.HasField("map_task") else "wait"
 
     assert (ask(False), ask(True)) == (silent, reported)
+
+
+def test_config_positional_arguments():
+    # New fields go last, so that positional arguments keep their meaning.
+    def locate(s):
+        return ["h"]
+
+    cfg = Config(3.0, 10.0, 1.0, True, locate)
+    assert (cfg.backups, cfg.locate, cfg.speculation) == (True, locate, "")
 
 
 def test_late_defaults():

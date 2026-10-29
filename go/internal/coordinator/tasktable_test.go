@@ -511,6 +511,99 @@ func TestLateBackupStuckTaskFirst(t *testing.T) {
 	}
 }
 
+// finish assigns task id to worker at late, and completes it took later. A
+// map task reports r partitions.
+func finish(t *testing.T, tt *TaskTable, id Task, worker string, took time.Duration, r int) {
+	t.Helper()
+	a, err := tt.Assign(id, worker, late)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outs []*pb.PartitionLocation
+	if id.Kind == mapKind {
+		outs = outputs(id.Index, r)
+	}
+	if ok, err := tt.CompleteAt(id, a, worker, outs, late.Add(took)); !ok || err != nil {
+		t.Fatalf("complete %v: %v, %v", id, ok, err)
+	}
+}
+
+// Workers of equal speed are not slow: only a speed below the percentile
+// refuses a backup.
+func TestLateBackupAcceptsEqualSpeeds(t *testing.T) {
+	tt := NewTaskTable(4, 1)
+	for i, w := range []string{"w1", "w2", "w3"} {
+		finish(t, tt, Task{mapKind, uint32(i)}, w, 10*time.Second, 1)
+	}
+	m3 := Task{mapKind, 3}
+	startAt(t, tt, m3, "w5", 0, 0.1, 20*time.Second)
+	for _, w := range []string{"w1", "w2", "w3"} {
+		if got := lateBackup(tt, w, 100*time.Second, lateParams(100), 5); got != m3.String() {
+			t.Errorf("LateBackup(%s) = %s, want %s", w, got, m3)
+		}
+	}
+}
+
+// The speeds of a phase's kind of task are kept apart: a worker slow at map
+// tasks is not refused a reduce task's backup for that, and its reduce
+// attempts do not count toward its map speed.
+func TestLateBackupSeparatesKinds(t *testing.T) {
+	tt := NewTaskTable(2, 3)
+	finish(t, tt, Task{mapKind, 0}, "w1", 5*time.Second, 3)   // speed 0.2
+	finish(t, tt, Task{mapKind, 1}, "w2", 100*time.Second, 3) // speed 0.01
+	finish(t, tt, Task{reduceKind, 0}, "w2", 10*time.Second, 3)
+	finish(t, tt, Task{reduceKind, 1}, "w3", 10*time.Second, 3)
+	r2 := Task{reduceKind, 2}
+	startAt(t, tt, r2, "w5", 0, 0.1, 20*time.Second)
+	// In reduce speeds w2 and w3 are equal at 0.1. Were the kinds mixed, w2
+	// would have 0.055 against a 25th percentile of 0.0775.
+	for _, w := range []string{"w1", "w2", "w3"} {
+		if got := lateBackup(tt, w, 100*time.Second, lateParams(100), 5); got != r2.String() {
+			t.Errorf("LateBackup(%s) = %s, want %s", w, got, r2)
+		}
+	}
+	if h := tt.speeds[mapKind]; len(h) != 2 || h["w2"].n != 1 {
+		t.Errorf("map speeds %v, want w1 and w2 with one attempt each", h)
+	}
+}
+
+// A lost worker's speed leaves the slow-node percentile, so that dead fast
+// workers do not make the live ones look slow. A restart forgets them all.
+func TestLateBackupForgetsLostWorkers(t *testing.T) {
+	tt := NewTaskTable(7, 1)
+	for i, w := range []string{"w1", "w2", "w3", "w4", "w5", "w6"} {
+		took := 5 * time.Second // w1 to w4 are fast
+		if i >= 4 {
+			took = 20 * time.Second
+		}
+		finish(t, tt, Task{mapKind, uint32(i)}, w, took, 1)
+	}
+	m6 := Task{mapKind, 6}
+	startAt(t, tt, m6, "w7", 0, 0.1, 20*time.Second)
+	now := 100 * time.Second
+	// Speeds 0.2 four times, 0.05 twice: the 25th percentile is 0.0875.
+	for _, w := range []string{"w5", "w6"} {
+		if got := lateBackup(tt, w, now, lateParams(100), 7); got != "none" {
+			t.Errorf("with w1 to w4 alive, LateBackup(%s) = %s, want none", w, got)
+		}
+	}
+	for _, w := range []string{"w1", "w2", "w3", "w4"} {
+		tt.ResetWorker(w)
+	}
+	for _, w := range []string{"w5", "w6"} {
+		if got := lateBackup(tt, w, now, lateParams(100), 7); got != m6.String() {
+			t.Errorf("with w1 to w4 lost, LateBackup(%s) = %s, want %s", w, got, m6)
+		}
+	}
+	if h := tt.speeds[mapKind]; len(h) != 2 {
+		t.Errorf("speeds %v, want only w5 and w6", h)
+	}
+	tt.StopAll()
+	if len(tt.speeds) != 0 {
+		t.Errorf("speeds %v after a restart, want none", tt.speeds)
+	}
+}
+
 // Percentiles interpolate linearly between the closest ranks.
 func TestPercentile(t *testing.T) {
 	for _, tc := range []struct {
@@ -534,8 +627,8 @@ func TestPercentile(t *testing.T) {
 }
 
 // A reported fraction is recorded, clamped, for an attempt running on the
-// reporting worker only, with the time it was heard. It is for status: it does
-// not change which task gets a backup (§3.6).
+// reporting worker only, with the time it was heard, and never lowered. The
+// paper's rule does not change which task gets a backup (§3.6).
 func TestSetFraction(t *testing.T) {
 	tt := NewTaskTable(2, 1)
 	m0, m1 := Task{mapKind, 0}, Task{mapKind, 1}
@@ -557,9 +650,10 @@ func TestSetFraction(t *testing.T) {
 		{"unknown attempt", m0, a + 1, "w1", 0.9, false, 0.5},
 		{"no such task", Task{mapKind, 9}, a, "w1", 0.9, false, 0.5},
 		{"NaN", m0, a, "w1", float32(math.NaN()), false, 0.5},
-		{"latest, even if lower", m0, a, "w1", 0.25, true, 0.25},
+		{"a lower one is ignored", m0, a, "w1", 0.25, true, 0.5},
+		{"a higher one is kept", m0, a, "w1", 0.75, true, 0.75},
 		{"over 1", m0, a, "w1", 7, true, 1},
-		{"under 0", m0, a, "w1", -1, true, 0},
+		{"under 0 after 1", m0, a, "w1", -1, true, 1},
 		{"infinite", m0, a, "w1", float32(math.Inf(1)), true, 1},
 	} {
 		if ok := tt.SetFraction(tc.id, tc.attempt, tc.worker, tc.f, at); ok != tc.ok {
@@ -571,6 +665,9 @@ func TestSetFraction(t *testing.T) {
 	}
 	if got := tt.maps[0].running[a].reported; !got.Equal(at) {
 		t.Errorf("reported at %v, want %v", got, at)
+	}
+	if tt.SetFraction(m1, 0, "w2", -1, at); tt.Fraction(m1, "w2") != 0 {
+		t.Errorf("a fraction under 0 gave %v, want 0", tt.Fraction(m1, "w2"))
 	}
 	if got := tt.Fraction(m1, "w2"); got != 0 {
 		t.Errorf("Fraction of an attempt that has not reported = %v, want 0", got)

@@ -39,9 +39,11 @@ LATE does better on mixed speeds is open (#59).
    tries an idle task first, and calls `LateBackup` only if there is none,
    so no backup delays a task that has not started. A worker held back for
    locality still waits instead.
-3. **How progress is measured.** An attempt's fraction is the latest
+3. **How progress is measured.** An attempt's fraction is the largest
    `fraction_done` its worker reported: bytes of the split read for a map
-   task, bytes of map output read for a reduce task (ADR 0009). Its rate is
+   task, bytes of map output read for a reduce task (ADR 0009). The
+   coordinator keeps the larger of the stored and the new value, so a
+   heartbeat that arrives late cannot lower it. Its rate is
    that fraction divided by the seconds since the coordinator assigned the
    attempt, and its estimated time left is `(1 - fraction) / rate`. A rate
    of 0 counts as an infinite time left. The paper scores a reduce task in
@@ -56,8 +58,11 @@ LATE does better on mixed speeds is open (#59).
    2. *Slow-node refusal.* A worker's speed is the mean of `1/duration`
       over the attempts it completed in the job, for the kind of task in the
       current phase. A worker whose speed is below the 25th percentile of
-      all workers' speeds gets no backup. A worker that has completed none
-      is not refused. (The paper scores a node by the work it has done;
+      all workers' speeds gets no backup; a speed equal to it is not
+      refused. A worker that has completed none is not refused. When a
+      worker is declared lost (ADR 0009), its speeds are forgotten, so that
+      dead workers do not count in the percentile. Speeds are kept apart for
+      map and reduce tasks. (The paper scores a node by the work it has done;
       completed attempts are simpler and need no extra state.)
    3. *Candidates.* The tasks that could get a backup on this worker (ADR
       0010, decision 2) whose attempt has run at least `MinRuntime` and has
@@ -83,9 +88,10 @@ LATE does better on mixed speeds is open (#59).
 7. **After a restart, LATE starts cold.** Fractions and arrival times are
    in memory only. The restart stops every attempt and the workers register
    under new IDs (ADR 0007), so no task is a candidate until a new attempt
-   has run `MinRuntime` and reported. Replay rebuilds the durations of
-   attempts completed before the restart from the logged times, but under
-   the old worker IDs, so every worker starts with no history and none is
+   has run `MinRuntime` and reported. Replay does rebuild the durations of
+   attempts completed before the restart from the logged times, but they
+   are under the old worker IDs, so the restart forgets them (as a lost
+   worker's are forgotten). Every worker starts with no history and none is
    refused.
 
 ## Alternatives rejected

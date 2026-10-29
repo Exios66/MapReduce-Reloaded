@@ -285,12 +285,14 @@ class TaskTable:
         """Records that attempt of task id, running on worker, reported at at
         that it had processed fraction of its input, clamped to 0 to 1.
         Reports whether it recorded it: not if the attempt is not running on
-        worker, or fraction is NaN. The fraction is for status only and does
-        not affect scheduling."""
+        worker, or fraction is NaN. The attempt keeps the larger of the stored
+        and the new fraction, so heartbeats that arrive out of order cannot
+        lower it. The paper's rule for backups (backup) ignores the fraction;
+        late_backup uses it (ADR 0019)."""
         if not self.runs(id, attempt, worker) or math.isnan(fraction):
             return False
         r = self._task(id).running[attempt]
-        r.fraction, r.reported = min(max(fraction, 0.0), 1.0), at
+        r.fraction, r.reported = max(r.fraction, min(max(fraction, 0.0), 1.0)), at
         return True
 
     def fraction(self, id: Task, worker: str) -> float:
@@ -378,9 +380,13 @@ class TaskTable:
             self._maps_done -= 1
 
     def reset_worker(self, worker: str) -> list[Task]:
-        """Handles the loss of a worker (§3.3): its running attempts stop, and
-        its completed map tasks must run again. Returns the tasks that became
+        """Handles the loss of a worker (§3.3): its running attempts stop, its
+        completed map tasks must run again, and its record of completed
+        attempts for late_backup is forgotten, so that a dead worker does not
+        count in the slow-node percentile. Returns the tasks that became
         idle."""
+        for history in self._speeds.values():
+            history.pop(worker, None)
         reset = []
         for i, ts in enumerate(self._maps):
             if ts.state == COMPLETED and ts.worker == worker:
@@ -398,7 +404,9 @@ class TaskTable:
         """Stops every running attempt, as when the coordinator restarts: the
         attempts' workers will register again under new IDs. Completed tasks
         stay completed; a map output that turns out to be lost is reported by
-        the reduce task that cannot fetch it."""
+        the reduce task that cannot fetch it. The workers' records of completed
+        attempts are forgotten too: they are under IDs that will not return."""
+        self._speeds.clear()
         for ts in self._maps + self._reduces:
             ts.running.clear()
             ts.idle_if_stopped()

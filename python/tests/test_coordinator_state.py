@@ -301,6 +301,63 @@ def test_late_backup_stuck_task_first():
     assert late_backup(TaskTable(2, 1), "w1", 100, late(100), 5) is None, "idle table"
 
 
+def finish(tt, id, worker, took, r):
+    """Assigns task id to worker at BASE, and completes it took seconds
+    later. A map task reports r partitions."""
+    a = tt.assign(id, worker, BASE)
+    assert tt.complete(id, a, worker, outputs(id.index, r) if id.kind == MAP else (), BASE + took)
+
+
+def test_late_backup_accepts_equal_speeds():
+    # Workers of equal speed are not slow: only a speed below the percentile
+    # refuses a backup.
+    tt = TaskTable(4, 1)
+    for i, w in enumerate(["w1", "w2", "w3"]):
+        finish(tt, Task(MAP, i), w, 10, 1)
+    m3 = Task(MAP, 3)
+    start_at(tt, m3, "w5", 0, 0.1, 20)
+    for w in ("w1", "w2", "w3"):
+        assert late_backup(tt, w, 100, late(100), 5) == m3, w
+
+
+def test_late_backup_separates_kinds():
+    # The speeds of a phase's kind of task are kept apart: a worker slow at
+    # map tasks is not refused a reduce task's backup for that, and its reduce
+    # attempts do not count toward its map speed.
+    tt = TaskTable(2, 3)
+    finish(tt, Task(MAP, 0), "w1", 5, 3)  # speed 0.2
+    finish(tt, Task(MAP, 1), "w2", 100, 3)  # speed 0.01
+    finish(tt, Task(REDUCE, 0), "w2", 10, 3)
+    finish(tt, Task(REDUCE, 1), "w3", 10, 3)
+    r2 = Task(REDUCE, 2)
+    start_at(tt, r2, "w5", 0, 0.1, 20)
+    # In reduce speeds w2 and w3 are equal at 0.1. Were the kinds mixed, w2
+    # would have 0.055 against a 25th percentile of 0.0775.
+    for w in ("w1", "w2", "w3"):
+        assert late_backup(tt, w, 100, late(100), 5) == r2, w
+    assert {w: s.n for w, s in tt._speeds[MAP].items()} == {"w1": 1, "w2": 1}
+
+
+def test_late_backup_forgets_lost_workers():
+    # A lost worker's speed leaves the slow-node percentile, so that dead fast
+    # workers do not make the live ones look slow. A restart forgets them all.
+    tt = TaskTable(7, 1)
+    for i, w in enumerate(["w1", "w2", "w3", "w4", "w5", "w6"]):
+        finish(tt, Task(MAP, i), w, 5 if i < 4 else 20, 1)  # w1 to w4 are fast
+    m6 = Task(MAP, 6)
+    start_at(tt, m6, "w7", 0, 0.1, 20)
+    # Speeds 0.2 four times, 0.05 twice: the 25th percentile is 0.0875.
+    for w in ("w5", "w6"):
+        assert late_backup(tt, w, 100, late(100), 7) is None, w
+    for w in ("w1", "w2", "w3", "w4"):
+        tt.reset_worker(w)
+    for w in ("w5", "w6"):
+        assert late_backup(tt, w, 100, late(100), 7) == m6, w
+    assert set(tt._speeds[MAP]) == {"w5", "w6"}
+    tt.stop_all()
+    assert not tt._speeds
+
+
 @pytest.mark.parametrize(
     "values, p, want",
     [
@@ -321,8 +378,8 @@ def test_percentile(values, p, want):
 
 def test_set_fraction():
     # A reported fraction is recorded, clamped, for an attempt running on the
-    # reporting worker only, with the time it was heard. It is for status: it
-    # does not change which task gets a backup (§3.6).
+    # reporting worker only, with the time it was heard, and never lowered. The
+    # paper's rule does not change which task gets a backup (§3.6).
     tt = TaskTable(2, 1)
     a = assign(tt, M0, "w1")
     assign(tt, M1, "w2")
@@ -332,14 +389,17 @@ def test_set_fraction():
         "another worker's": (M0, a, "w2", 0.9, False, 0.5),
         "unknown attempt": (M0, a + 1, "w1", 0.9, False, 0.5),
         "NaN": (M0, a, "w1", nan, False, 0.5),
-        "latest, even if lower": (M0, a, "w1", 0.25, True, 0.25),
+        "a lower one is ignored": (M0, a, "w1", 0.25, True, 0.5),
+        "a higher one is kept": (M0, a, "w1", 0.75, True, 0.75),
         "over 1": (M0, a, "w1", 7, True, 1.0),
-        "under 0": (M0, a, "w1", -1, True, 0.0),
+        "under 0 after 1": (M0, a, "w1", -1, True, 1.0),
         "infinite": (M0, a, "w1", float("inf"), True, 1.0),
     }.items():
         assert tt.set_fraction(id, attempt, worker, f, 99.0) is ok, name
         assert tt.fraction(M0, "w1") == want, name
     assert tt._maps[0].running[a].reported == 99.0
+    tt.set_fraction(M1, 0, "w2", -1, 99.0)
+    assert tt.fraction(M1, "w2") == 0, "a fraction under 0"
     assert tt.fraction(M1, "w2") == 0, "an attempt that has not reported"
     assert tt.fraction(M0, "w2") == 0, "a worker not running the task"
     assert not tt.set_fraction(Task(MAP, 9), a, "w1", 0.5, 99.0)
