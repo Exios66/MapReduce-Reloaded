@@ -111,7 +111,7 @@ input() {
     echo "$path"
 }
 
-params() { [ "$1" = grep ] && echo "-param pattern=XYZ" || true; }
+params() { if [ "$1" = grep ]; then echo "-param pattern=XYZ"; fi; }
 
 checksum() { in_volume sh -c "cat $1/part-r-* | sha256sum | cut -d' ' -f1"; }
 

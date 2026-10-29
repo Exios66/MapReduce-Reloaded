@@ -182,6 +182,15 @@ jobs:
       - python-deps:
           python: "3.13"
       - golangci-lint
+      # make check skips shellcheck where it is missing; CI must not.
+      - run:
+          name: Install shellcheck
+          command: |
+            scripts/vm-setup.sh --shellcheck
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: make sh-lint
+          command: MR_REQUIRE_SHELLCHECK=1 make sh-lint
       - run:
           name: make go-lint go-test py-e2e
           command: make go-lint go-test py-e2e PYTHON=python

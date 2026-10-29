@@ -91,6 +91,27 @@ def test_ci_runs_the_python_coordinator_with_go_workers():
     assert "MR_REQUIRE_GO=1" in target and "tests/test_coordinator_e2e.py" in target
 
 
+def test_make_lint_runs_shellcheck_on_every_script():
+    """make lint includes sh-lint, which lints every tracked *.sh and the
+    pre-push hook, and skips with a message where shellcheck is missing."""
+    assert re.search(r"^lint: .*\bsh-lint\b", MAKEFILE, re.M)
+    assert "SH_FILES = $(shell git ls-files '*.sh') .githooks/pre-push" in MAKEFILE
+    target = MAKEFILE.split("\nsh-lint:\n", 1)[1].split("\n\n", 1)[0]
+    assert "command -v shellcheck" in target and "skipping" in target
+    assert "MR_REQUIRE_SHELLCHECK" in target
+
+
+def test_ci_runs_shellcheck():
+    """CI installs shellcheck from the vm-setup.sh pin and runs sh-lint with
+    MR_REQUIRE_SHELLCHECK, so a missing shellcheck fails the go job rather
+    than skipping."""
+    go_job = CIRCLE.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
+    assert "scripts/vm-setup.sh --shellcheck" in go_job
+    assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in go_job
+    assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in ACTIONS
+    assert "SHELLCHECK_VERSION" not in CIRCLE  # one pin, in vm-setup.sh
+
+
 def test_install_go_reads_the_version_from_go_mod():
     out = subprocess.run([INSTALL_GO, "--version"], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == go_mod_version()
