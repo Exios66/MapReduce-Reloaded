@@ -1,6 +1,7 @@
 """Tests for the coordinator's gRPC service, ported from
 go/internal/coordinator/server_test.go and failure_test.go."""
 
+import dataclasses
 import errno
 import os
 import shutil
@@ -19,6 +20,7 @@ from mapreduce_reloaded.coordinator.server import (
     _base36,
     serve,
 )
+from mapreduce_reloaded.coordinator.tasktable import LateParams
 from mapreduce_reloaded.coordinator.wire import MAX_REDUCE_TASKS, input_split, path, uri, validate
 from mapreduce_reloaded.formats import Split
 from mapreduce_reloaded.gen.mapreduce.v1 import (
@@ -655,6 +657,59 @@ def test_heartbeat_records_progress(new_job):
     st = c.s.status()
     assert st.workers[0].progress == {Task(MAP, 0): 0.25}
     assert st.workers[1].progress == {}
+
+
+@pytest.mark.parametrize(
+    "cfg, silent, reported",
+    [
+        (Config(backups=True), "backup 1", "backup 1"),
+        (Config(backups=False, speculation="paper"), "backup 1", "backup 1"),
+        (Config(backups=True, speculation="paper"), "backup 1", "backup 1"),
+        (Config(backups=False), "wait", "wait"),
+        (Config(speculation="off"), "wait", "wait"),
+        (Config(backups=True, speculation="off"), "wait", "wait"),
+        (Config(backups=False, speculation="late"), "wait", "backup 1"),
+        (Config(backups=True, speculation="late"), "wait", "backup 1"),
+    ],
+    ids=["legacy on", "paper", "paper, backups set", "legacy off", "off", "off, backups set"]
+    + ["late", "late, backups set"],
+)
+def test_speculation_modes(new_job, cfg, silent, reported):
+    # Speculation picks how an idle worker gets a backup of the one running
+    # task. "paper" is exactly what backups did: a backup at once, whatever
+    # the task has reported. "late" waits for it to report progress, and
+    # "off" never starts one. Empty means backups decides.
+    def ask(report):
+        """What a second worker is told 10 s after the first started its
+        task, which has reported 0.1 done if report is set."""
+        now = [1000.0]
+        c, w, _ = new_job(cfg=dataclasses.replace(cfg, heartbeat_interval=1.0, now=lambda: now[0]))
+        other = c.register()
+        attempt = c.request(w).map_task.attempt
+        now[0] += 10
+        if report:
+            c.report_progress(w, attempt, 0.1)
+        resp = c.request(other)
+        return f"backup {resp.map_task.attempt.attempt}" if resp.HasField("map_task") else "wait"
+
+    assert (ask(False), ask(True)) == (silent, reported)
+
+
+def test_late_defaults():
+    # LATE's settings default to those of Zaharia et al. (OSDI 2008).
+    assert Config(heartbeat_interval=3.0).late_params() == LateParams(0.1, 25.0, 25.0, 6.0)
+    assert Config(
+        speculative_cap=0.5, slow_task_percentile=10, slow_node_percentile=30, min_runtime=1
+    ).late_params() == LateParams(0.5, 10, 30, 1)
+    for s, ok in {
+        "": True,
+        "paper": True,
+        "late": True,
+        "off": True,
+        "Late": False,
+        "on": False,
+    }.items():
+        assert server.valid_speculation(s) is ok, s
 
 
 def test_heartbeat_cancels_an_ended_jobs_attempts(new_job):

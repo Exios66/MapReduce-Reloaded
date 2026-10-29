@@ -620,6 +620,77 @@ func TestHeartbeatProgress(t *testing.T) {
 	}
 }
 
+// Speculation picks how an idle worker gets a backup of the one running task.
+// "paper" is exactly what Backups did: a backup at once, whatever the task
+// has reported. "late" waits for it to report progress, and "off" never
+// starts one. Empty means Backups decides.
+func TestSpeculationModes(t *testing.T) {
+	at := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	// ask returns what a second worker is told 10 s after the first started
+	// its task, which has reported 0.1 done if report is set.
+	ask := func(cfg Config, report bool) string {
+		cfg.HeartbeatInterval = time.Second
+		now := at
+		cfg.Now = func() time.Time { return now }
+		s, w, _ := newJobWith(t, cfg, 1)
+		other := register(t, s)
+		attempt := next(t, s, w)
+		now = at.Add(10 * time.Second)
+		if report {
+			_, err := s.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: w, Running: []*pb.TaskProgress{{Attempt: attempt, FractionDone: 0.1}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		resp, err := s.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: other})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := resp.GetMapTask(); m != nil {
+			return fmt.Sprint("backup ", m.GetAttempt().GetAttempt())
+		}
+		return "wait"
+	}
+	for _, tc := range []struct {
+		name             string
+		cfg              Config
+		silent, reported string
+	}{
+		{"legacy on", Config{Backups: true}, "backup 1", "backup 1"},
+		{"paper", Config{Speculation: SpeculationPaper}, "backup 1", "backup 1"},
+		{"paper, backups set", Config{Backups: true, Speculation: SpeculationPaper}, "backup 1", "backup 1"},
+		{"legacy off", Config{}, "wait", "wait"},
+		{"off", Config{Speculation: SpeculationOff}, "wait", "wait"},
+		{"off, backups set", Config{Backups: true, Speculation: SpeculationOff}, "wait", "wait"},
+		{"late", Config{Speculation: SpeculationLate}, "wait", "backup 1"},
+		{"late, backups set", Config{Backups: true, Speculation: SpeculationLate}, "wait", "backup 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if silent, reported := ask(tc.cfg, false), ask(tc.cfg, true); silent != tc.silent || reported != tc.reported {
+				t.Errorf("task that never reported: %s; that reported: %s; want %s, %s", silent, reported, tc.silent, tc.reported)
+			}
+		})
+	}
+}
+
+// LATE's settings default to those of Zaharia et al. (OSDI 2008).
+func TestLateDefaults(t *testing.T) {
+	p := Config{HeartbeatInterval: 3 * time.Second}.lateParams()
+	want := LateParams{SpeculativeCap: 0.1, SlowTaskPercentile: 25, SlowNodePercentile: 25, MinRuntime: 6 * time.Second}
+	if p != want {
+		t.Errorf("defaults %+v, want %+v", p, want)
+	}
+	set := Config{SpeculativeCap: 0.5, SlowTaskPercentile: 10, SlowNodePercentile: 30, MinRuntime: time.Second}
+	if got := set.lateParams(); got != (LateParams{0.5, 10, 30, time.Second}) {
+		t.Errorf("settings %+v", got)
+	}
+	for s, ok := range map[string]bool{"": true, "paper": true, "late": true, "off": true, "Late": false, "on": false} {
+		if ValidSpeculation(s) != ok {
+			t.Errorf("ValidSpeculation(%q) = %v", s, !ok)
+		}
+	}
+}
+
 // A worker that goes quiet is declared dead, and its completed map task is
 // run again (§3.3).
 func TestExpire(t *testing.T) {

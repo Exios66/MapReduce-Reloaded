@@ -36,7 +36,51 @@ class _Run:
     started: float
     backup: bool  # started while another attempt of the task was running (§3.6)
     fraction: float = 0.0  # of its input the worker last reported processed
-    reported: float = 0.0  # when the coordinator heard it; 0 before the first report
+    reported: float | None = None  # when the coordinator heard it; None before the first report
+
+
+@dataclass
+class _Speed:
+    """The sum of 1/duration, in 1/s, over a worker's completed attempts of
+    one kind, and their number."""
+
+    sum: float = 0.0
+    n: int = 0
+
+    def mean(self) -> float:
+        return self.sum / self.n
+
+
+class LateParams(NamedTuple):
+    """The settings of TaskTable.late_backup, from Zaharia et al., "Improving
+    MapReduce Performance in Heterogeneous Environments" (OSDI 2008). A zero
+    field has no default here: Config fills them in."""
+
+    # The share of the workers that may be running backup attempts at once,
+    # with room for at least one.
+    speculative_cap: float
+    # The percentile of the candidates' progress rates at or below which a
+    # task may get a backup.
+    slow_task_percentile: float
+    # The percentile of the workers' speeds below which a worker gets no
+    # backup.
+    slow_node_percentile: float
+    # How long, in seconds, an attempt must have run before it may get a
+    # backup.
+    min_runtime: float
+
+
+def percentile(sorted_values: list[float], p: float) -> float:
+    """Returns the p-th percentile of sorted_values, which must not be empty
+    unless the result is unused: the linear interpolation between the values
+    at the ranks on either side of p/100*(len-1)."""
+    if not sorted_values:
+        return 0.0
+    rank = min(max(p, 0.0), 100.0) / 100 * (len(sorted_values) - 1)
+    lo = int(rank)
+    if lo + 1 >= len(sorted_values):
+        return sorted_values[-1]
+    return sorted_values[lo] + (sorted_values[lo + 1] - sorted_values[lo]) * (rank - lo)
 
 
 @dataclass
@@ -123,6 +167,9 @@ class TaskTable:
         self._skipped = 0  # records on every task's skip list
         self._backups = 0  # backup attempts started
         self._backup_wins = 0  # tasks completed by a backup attempt
+        # Each worker's record of completed attempts, per kind of task, for
+        # late_backup.
+        self._speeds: dict[int, dict[str, _Speed]] = {}
 
     def next(self, rank: Callable[[int], int] | None = None) -> Task | None:
         """Returns an idle task to run: a map task, or a reduce task once
@@ -152,6 +199,62 @@ class TaskTable:
             if ts.can_back_up(worker) and (best is None or ts.started() < tasks[best].started()):
                 best = i
         return None if best is None else Task(kind, best)
+
+    def late_backup(self, worker: str, now: float, p: LateParams, n_workers: int) -> Task | None:
+        """Returns the in-progress task of the current phase that should get a
+        backup attempt on worker at now, following LATE (Zaharia et al. 2008),
+        or None. n_workers is the number of registered workers. Its rules:
+
+        1. If the running backup attempts number at least speculative_cap of
+           n_workers (rounded down, but at least 1), there is none.
+        2. A worker's speed is the mean of 1/duration over its completed
+           attempts of the phase's kind. If worker has completed some and its
+           speed is below the slow_node_percentile of the speeds of all
+           workers that have, there is none. A worker with no history passes.
+        3. The candidates are the tasks that can get a backup on worker (see
+           backup) whose one attempt has run for at least min_runtime and has
+           reported its progress at least once. An attempt's rate is the
+           fraction it reported done divided by the seconds it has run. The
+           slow candidates are those with a rate at or below the
+           slow_task_percentile of the candidates' rates.
+        4. Of those, the task with the most time left, (1-fraction)/rate, wins,
+           and a rate of 0 counts as infinite time left. Ties go to the attempt
+           that started first, then the lowest task index.
+
+        A percentile is the linear interpolation between the closest ranks of
+        the sorted values: at rank p/100*(n-1). backup does not use any of
+        this."""
+        if self._running_backups() >= max(1, int(p.speculative_cap * n_workers)):
+            return None
+        kind, tasks = self._phase()
+        history = self._speeds.get(kind, {})
+        if worker in history:
+            speeds = sorted(s.mean() for s in history.values())
+            if history[worker].mean() < percentile(speeds, p.slow_node_percentile):
+                return None
+        candidates = []  # (index, started, rate, time left)
+        for i, ts in enumerate(tasks):
+            if not ts.can_back_up(worker):
+                continue
+            for r in ts.running.values():  # the only one
+                elapsed = now - r.started
+                if elapsed < p.min_runtime or elapsed <= 0 or r.reported is None:
+                    continue
+                rate = r.fraction / elapsed
+                left = (1 - r.fraction) / rate if rate > 0 else math.inf
+                candidates.append((i, r.started, rate, left))
+        slow = percentile(sorted(c[2] for c in candidates), p.slow_task_percentile)
+        best = None
+        for c in candidates:
+            if c[2] > slow:
+                continue
+            if best is None or c[3] > best[3] or (c[3] == best[3] and c[1] < best[1]):
+                best = c
+        return None if best is None else Task(kind, best[0])
+
+    def _running_backups(self) -> int:
+        """Returns the number of running backup attempts."""
+        return sum(r.backup for ts in self._maps + self._reduces for r in ts.running.values())
 
     def _phase(self):
         """Returns the kind and tasks of the current phase: map tasks until
@@ -200,12 +303,16 @@ class TaskTable:
             return 0.0
         return next((r.fraction for r in running if r.worker == worker), 0.0)
 
-    def complete(self, id: Task, attempt: int, worker: str, outputs=()) -> bool:
-        """Records that worker finished an attempt. A map task's outputs must
-        hold one location per partition, in order. Reports whether the result
-        was accepted: False if the task already completed or the attempt is
-        not running on worker, for example because its worker was declared
-        lost."""
+    def complete(
+        self, id: Task, attempt: int, worker: str, outputs=(), at: float | None = None
+    ) -> bool:
+        """Records that worker finished an attempt, at at if given. A map
+        task's outputs must hold one location per partition, in order. Reports
+        whether the result was accepted: False if the task already completed
+        or the attempt is not running on worker, for example because its
+        worker was declared lost. If it was accepted, the time since the
+        attempt started is added to worker's record for late_backup; no at,
+        or one not after the start, adds nothing."""
         ts = self._task(id)
         if not ts.runs_on(attempt, worker):
             return False
@@ -217,6 +324,9 @@ class TaskTable:
             self._reduces_done += 1
         if ts.running[attempt].backup:
             self._backup_wins += 1
+        if at is not None and at > ts.running[attempt].started:
+            s = self._speeds.setdefault(id.kind, {}).setdefault(worker, _Speed())
+            s.sum, s.n = s.sum + 1 / (at - ts.running[attempt].started), s.n + 1
         ts.running.clear()
         ts.state, ts.worker = COMPLETED, worker
         return True

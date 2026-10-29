@@ -38,6 +38,19 @@ type Config struct {
 	// idle, a worker that asks for work gets a second attempt of a task
 	// still running elsewhere (§3.6).
 	Backups bool
+	// Speculation chooses how backup attempts are started once no task of
+	// the current phase is idle: SpeculationPaper (the paper's rule, §3.6),
+	// SpeculationLate (LATE, Zaharia et al., OSDI 2008) or SpeculationOff.
+	// Empty means Backups decides: paper if it is set, off if not.
+	Speculation string
+	// SpeculativeCap, SlowTaskPercentile, SlowNodePercentile and MinRuntime
+	// are the LATE settings (see LateParams). A zero field means its
+	// default: 0.1 of the workers, the 25th percentile for tasks and for
+	// workers, and twice HeartbeatInterval.
+	SpeculativeCap     float64
+	SlowTaskPercentile float64
+	SlowNodePercentile float64
+	MinRuntime         time.Duration
 	// Locate, if set, returns the hosts or zones that hold a split, which
 	// map tasks then prefer to run on (§3.4). It runs once per split, when
 	// the job is submitted.
@@ -66,6 +79,49 @@ type Config struct {
 	// Now, if set, replaces time.Now as the coordinator's clock, for tests
 	// of a clock that is set back.
 	Now func() time.Time
+}
+
+// The values of Config.Speculation.
+const (
+	SpeculationPaper = "paper"
+	SpeculationLate  = "late"
+	SpeculationOff   = "off"
+)
+
+// ValidSpeculation reports whether s is a value of Config.Speculation:
+// "", paper, late or off.
+func ValidSpeculation(s string) bool {
+	return s == "" || s == SpeculationPaper || s == SpeculationLate || s == SpeculationOff
+}
+
+// speculation returns how the server starts backup attempts.
+func (c Config) speculation() string {
+	switch {
+	case c.Speculation != "":
+		return c.Speculation
+	case c.Backups:
+		return SpeculationPaper
+	}
+	return SpeculationOff
+}
+
+// lateParams returns the LATE settings, with the defaults of Zaharia et al.
+// (OSDI 2008) for the zero fields.
+func (c Config) lateParams() LateParams {
+	p := LateParams{c.SpeculativeCap, c.SlowTaskPercentile, c.SlowNodePercentile, c.MinRuntime}
+	if p.SpeculativeCap == 0 {
+		p.SpeculativeCap = 0.1
+	}
+	if p.SlowTaskPercentile == 0 {
+		p.SlowTaskPercentile = 25
+	}
+	if p.SlowNodePercentile == 0 {
+		p.SlowNodePercentile = 25
+	}
+	if p.MinRuntime == 0 {
+		p.MinRuntime = 2 * c.HeartbeatInterval
+	}
+	return p
 }
 
 // Log is where a coordinator records its decisions. After a failed Append
@@ -403,7 +459,7 @@ func (s *Server) compact() {
 
 // RequestTask hands an idle worker its next task: map tasks first, the
 // nearest to their input (§3.4), reduce tasks once every map task has
-// completed (§3.1), then backup attempts if enabled (§3.6).
+// completed (§3.1), then backup attempts if enabled (§3.6, or LATE).
 // It returns a wait instruction when no task is ready, or a shutdown
 // instruction after Shutdown. Errors are NotFound for an unknown worker,
 // Internal if assigning a task fails, or Unavailable if recording it fails
@@ -427,8 +483,10 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 		switch {
 		case ok && s.holdBack(t, info, now):
 			ok = false
-		case !ok && s.cfg.Backups:
+		case !ok && s.cfg.speculation() == SpeculationPaper:
 			t, ok = s.active.tasks.Backup(worker)
+		case !ok && s.cfg.speculation() == SpeculationLate:
+			t, ok = s.active.tasks.LateBackup(worker, now, s.cfg.lateParams(), s.workers.Len())
 		}
 		if ok {
 			return s.assign(t, worker, now)
@@ -581,7 +639,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 		}
 		return false, s.active != j, err
 	}
-	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
+	accepted, err = j.tasks.CompleteAt(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs(), at)
 	if accepted {
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()

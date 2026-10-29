@@ -525,6 +525,23 @@ func TestClusterBackupTasks(t *testing.T) {
 	}
 }
 
+// With LATE, a task that has reported progress but is slow gets a backup on
+// a worker with nothing else to do, which finishes it while the slow attempt
+// is still running.
+func TestClusterLateBackupTasks(t *testing.T) {
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Speculation = coordinator.SpeculationLate })
+	job := c.submit("test.slow-map")
+	c.addWorker()
+	<-mapStuck
+	c.addWorker()
+	if st := c.succeeded(job); st.GetBackupWins() < 1 || st.GetBackupAttempts() < st.GetBackupWins() {
+		t.Errorf("status %v; want the slow map task won by a backup", st)
+	}
+	status := c.wait(job)
+	assertGolden(t, c.output())
+	assertMapOutputRecords(t, status)
+}
+
 // The losing attempt of a backed-up task is stopped once its twin finishes
 // (§3.6), so its worker is free again and exits when the job ends.
 func TestClusterStopsLosingAttempt(t *testing.T) {

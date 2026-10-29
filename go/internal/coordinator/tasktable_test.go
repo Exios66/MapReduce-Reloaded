@@ -327,6 +327,212 @@ func TestBackupOldestFirst(t *testing.T) {
 	}
 }
 
+// late is a base time for the LATE tests.
+var late = time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+
+// lateParams are LATE's defaults, except for the slow task percentile.
+func lateParams(slowTask float64) LateParams {
+	return LateParams{SpeculativeCap: 1, SlowTaskPercentile: slowTask, SlowNodePercentile: 25}
+}
+
+// startAt assigns task id to worker at late+after, and reports that it had
+// processed fraction at late+reportAt.
+func startAt(t *testing.T, tt *TaskTable, id Task, worker string, after time.Duration, fraction float32, reportAt time.Duration) uint32 {
+	t.Helper()
+	attempt, err := tt.Assign(id, worker, late.Add(after))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tt.SetFraction(id, attempt, worker, fraction, late.Add(reportAt)) {
+		t.Fatalf("progress of %v not recorded", id)
+	}
+	return attempt
+}
+
+// lateBackup returns the task LateBackup picks for worker at late+after, or "none".
+func lateBackup(tt *TaskTable, worker string, after time.Duration, p LateParams, workers int) string {
+	if got, ok := tt.LateBackup(worker, late.Add(after), p, workers); ok {
+		return got.String()
+	}
+	return "none"
+}
+
+// LATE backs up the candidate with the most time left, not the slowest one,
+// among the slow candidates (Zaharia et al. 2008).
+func TestLateBackupPicksLongestTimeLeft(t *testing.T) {
+	tt := NewTaskTable(3, 1)
+	m0, m1 := Task{mapKind, 0}, Task{mapKind, 1}
+	// m0 has done 0.5 in 100 s: rate 0.005, 100 s left.
+	startAt(t, tt, m0, "w1", 0, 0.5, 100*time.Second)
+	// m1 has done 0.3 in 50 s: faster, 0.006, but 116.7 s left.
+	startAt(t, tt, m1, "w2", 50*time.Second, 0.3, 100*time.Second)
+	startAt(t, tt, Task{mapKind, 2}, "w3", 0, 0.9, 100*time.Second) // 0.009, 11.1 s left
+	now := 100 * time.Second
+
+	for _, tc := range []struct {
+		slowTask float64
+		want     Task
+	}{
+		{100, m1}, // every candidate is slow enough: m1 has the most time left
+		{50, m1},  // rates 0.005, 0.006, 0.009: the cut is 0.006, so m0 and m1
+		{25, m0},  // the cut is 0.0055, so only m0
+	} {
+		if got, ok := tt.LateBackup("w4", late.Add(now), lateParams(tc.slowTask), 4); !ok || got != tc.want {
+			t.Errorf("percentile %v: LateBackup = %v, %v; want %v", tc.slowTask, got, ok, tc.want)
+		}
+	}
+	if got := lateBackup(tt, "w1", now, lateParams(100), 4); got != m1.String() {
+		t.Errorf("w1 already runs m0 and may back up %s, got %s", m1, got)
+	}
+	if tt.backups != 0 {
+		t.Error("LateBackup started an attempt")
+	}
+}
+
+// LATE starts no more backup attempts than SpeculativeCap of the workers,
+// and at least one may run.
+func TestLateBackupCap(t *testing.T) {
+	tt := NewTaskTable(3, 1)
+	m0, m1 := Task{mapKind, 0}, Task{mapKind, 1}
+	startAt(t, tt, m0, "w1", 0, 0.1, 10*time.Second)
+	startAt(t, tt, m1, "w2", 0, 0.1, 10*time.Second)
+	p := LateParams{SpeculativeCap: 0.1, SlowTaskPercentile: 100, SlowNodePercentile: 25}
+	if got := lateBackup(tt, "w3", 10*time.Second, p, 10); got != m0.String() {
+		t.Fatalf("no backups yet: %s, want %s", got, m0)
+	}
+	mustAssign(t, tt, m0, "w3") // a backup, at some other time
+	// 10% of 10 workers is one, and it runs.
+	if got := lateBackup(tt, "w4", 10*time.Second, p, 10); got != "none" {
+		t.Errorf("at the cap of 1 of 10 workers: %s, want none", got)
+	}
+	// 10% of 3 is 0.3: the cap is at least 1.
+	if got := lateBackup(tt, "w4", 10*time.Second, p, 3); got != "none" {
+		t.Errorf("at the minimum cap of 1: %s, want none", got)
+	}
+	// 10% of 20 is 2.
+	if got := lateBackup(tt, "w4", 10*time.Second, p, 20); got != m1.String() {
+		t.Errorf("under the cap of 2 of 20 workers: %s, want %s", got, m1)
+	}
+}
+
+// A worker that is slower than SlowNodePercentile of the workers with
+// history gets no backup; one with no history gets one.
+func TestLateBackupSkipsSlowWorker(t *testing.T) {
+	tt := NewTaskTable(5, 1)
+	for i, tc := range []struct {
+		worker string
+		took   time.Duration
+	}{{"w1", 10 * time.Second}, {"w2", 20 * time.Second}, {"w3", 100 * time.Second}} {
+		id := Task{mapKind, uint32(i)}
+		a, err := tt.Assign(id, tc.worker, late)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := tt.CompleteAt(id, a, tc.worker, outputs(uint32(i), 1), late.Add(tc.took)); !ok || err != nil {
+			t.Fatalf("complete %v: %v, %v", id, ok, err)
+		}
+	}
+	m3 := Task{mapKind, 3}
+	startAt(t, tt, m3, "w5", 0, 0.1, 20*time.Second)
+	now := 100 * time.Second
+
+	// Speeds 0.1, 0.05 and 0.01 per second; the 25th percentile is 0.03.
+	for worker, want := range map[string]string{"w1": m3.String(), "w2": m3.String(), "w3": "none", "w4": m3.String()} {
+		if got := lateBackup(tt, worker, now, lateParams(100), 5); got != want {
+			t.Errorf("LateBackup(%s) = %s, want %s", worker, got, want)
+		}
+	}
+
+	// An attempt completed without a time, or not after it started, leaves
+	// no record.
+	a, _ := tt.Assign(Task{mapKind, 4}, "w4", late)
+	if ok, _ := tt.CompleteAt(Task{mapKind, 4}, a, "w4", outputs(4, 1), late); !ok {
+		t.Fatal("completion rejected")
+	}
+	if _, known := tt.speeds[mapKind]["w4"]; known {
+		t.Error("an attempt of no duration was recorded")
+	}
+}
+
+// A task is a candidate only once its attempt has run for MinRuntime and
+// reported its progress.
+func TestLateBackupWaitsForMinRuntime(t *testing.T) {
+	tt := NewTaskTable(2, 1)
+	m0, m1 := Task{mapKind, 0}, Task{mapKind, 1}
+	startAt(t, tt, m0, "w1", 0, 0.1, 5*time.Second)
+	if _, err := tt.Assign(m1, "w2", late); err != nil { // never reports
+		t.Fatal(err)
+	}
+	p := lateParams(100)
+	p.MinRuntime = 10 * time.Second
+	for _, tc := range []struct {
+		after time.Duration
+		want  string
+	}{
+		{5 * time.Second, "none"},
+		{9 * time.Second, "none"},
+		{10 * time.Second, m0.String()}, // m1 has not reported
+	} {
+		if got := lateBackup(tt, "w3", tc.after, p, 5); got != tc.want {
+			t.Errorf("after %v: %s, want %s", tc.after, got, tc.want)
+		}
+	}
+	// A clock set back is not a candidate either.
+	if got := lateBackup(tt, "w3", -time.Second, lateParams(100), 5); got != "none" {
+		t.Errorf("before the attempt started: %s, want none", got)
+	}
+}
+
+// An attempt that has reported no progress counts as having infinite time
+// left, so it is backed up first; among those, the oldest.
+func TestLateBackupStuckTaskFirst(t *testing.T) {
+	tt := NewTaskTable(4, 1)
+	m0, m1, m2, m3 := Task{mapKind, 0}, Task{mapKind, 1}, Task{mapKind, 2}, Task{mapKind, 3}
+	startAt(t, tt, m0, "w1", 5*time.Second, 0, 20*time.Second)
+	startAt(t, tt, m1, "w2", 0, 0.01, 20*time.Second) // started first, but moves
+	startAt(t, tt, m2, "w3", 5*time.Second, 0, 20*time.Second)
+	startAt(t, tt, m3, "w4", 2*time.Second, 0, 20*time.Second)
+	now := 100 * time.Second
+	p := lateParams(100)
+
+	if got := lateBackup(tt, "w5", now, p, 5); got != m3.String() {
+		t.Errorf("stuck tasks m0, m2 and m3: %s, want %s, the oldest", got, m3)
+	}
+	if got := lateBackup(tt, "w4", now, p, 5); got != m0.String() {
+		t.Errorf("w4 runs m3: %s, want %s, the next oldest by index", got, m0)
+	}
+	// Only the stuck tasks are slow enough at the 25th percentile.
+	if got := lateBackup(tt, "w5", now, lateParams(25), 5); got != m3.String() {
+		t.Errorf("at the 25th percentile: %s, want %s", got, m3)
+	}
+	// No candidates, no backup.
+	if got := lateBackup(NewTaskTable(2, 1), "w1", now, p, 5); got != "none" {
+		t.Errorf("idle table: %s, want none", got)
+	}
+}
+
+// Percentiles interpolate linearly between the closest ranks.
+func TestPercentile(t *testing.T) {
+	for _, tc := range []struct {
+		values []float64
+		p      float64
+		want   float64
+	}{
+		{nil, 25, 0},
+		{[]float64{7}, 25, 7},
+		{[]float64{1, 2, 3, 4}, 25, 1.75},
+		{[]float64{1, 2, 3, 4}, 0, 1},
+		{[]float64{1, 2, 3, 4}, 100, 4},
+		{[]float64{1, 2, 3, 4}, 150, 4},
+		{[]float64{1, 2, 3, 4}, -5, 1},
+		{[]float64{0, 10}, 50, 5},
+	} {
+		if got := percentile(tc.values, tc.p); got != tc.want {
+			t.Errorf("percentile(%v, %v) = %v, want %v", tc.values, tc.p, got, tc.want)
+		}
+	}
+}
+
 // A reported fraction is recorded, clamped, for an attempt running on the
 // reporting worker only, with the time it was heard. It is for status: it does
 // not change which task gets a backup (§3.6).
