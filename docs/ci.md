@@ -43,6 +43,11 @@ runs the `path-filtering` orb against `main`, sets five boolean pipeline
 parameters from the changed files, and continues with
 `.circleci/continue-config.yml`, which holds the jobs.
 
+Filtering applies to PR branches only. On `main` every job runs in full,
+whatever the push changed: each job's condition also holds when
+`pipeline.git.branch` is `main`, so `main` keeps the coverage it had before
+filtering, and the credits are saved on PR pushes, where most runs happen.
+
 | Changed files | Jobs run |
 |---|---|
 | `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod` | all (run-all) |

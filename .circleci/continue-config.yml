@@ -15,6 +15,10 @@
 # is a function of its inputs: if none of them changed, the result from
 # main stands.
 #
+# On main itself nothing is skipped: every condition also holds when the
+# branch is main, so each push to main runs the full suite. Filtering saves
+# credits on PR pushes only, and main keeps full coverage.
+#
 # The four original jobs keep their exact make targets. The `lint` job holds
 # `md-lint`, which used to run inside the Python jobs, and
 # `mapping-coverage` always runs and fails the pipeline if any changed file
@@ -185,6 +189,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-proto >>
           steps:
             - run:
@@ -194,6 +199,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-proto >>
           steps:
             # A full clone: buf breaking clones this repository to read main, and
@@ -229,6 +235,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-go >>
           steps:
             - run:
@@ -238,6 +245,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-go >>
           steps:
             - checkout
@@ -276,6 +284,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-python >>
           steps:
             - run:
@@ -285,6 +294,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-python >>
           steps:
             - checkout
@@ -309,6 +319,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-lint >>
           steps:
             - run:
@@ -318,6 +329,7 @@ jobs:
           condition:
             or:
               - << pipeline.parameters.run-all >>
+              - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-lint >>
           steps:
             - checkout

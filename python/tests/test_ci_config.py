@@ -275,3 +275,11 @@ def test_codeant_instructions_apply_to_pull_requests():
     rules = json.loads((ROOT / ".codeant/instructions.json").read_text())["instructions"]
     assert rules and all("pr" in r.get("scope", ["ide"]) for r in rules)
     assert len({r["id"] for r in rules}) == len(rules)
+
+
+def test_main_runs_every_job_unfiltered():
+    # Filtering saves credits on PRs only; on main each gated condition must
+    # also hold for the branch, so main keeps full coverage.
+    conditions = CONT.count("- << pipeline.parameters.run-all >>")
+    assert conditions == 8  # proto, go, python, lint: each a when and an unless
+    assert CONT.count("- equal: [main, << pipeline.git.branch >>]") == conditions

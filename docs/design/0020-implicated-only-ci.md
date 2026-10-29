@@ -117,6 +117,9 @@ regexes; `re.search` semantics in the guard script.
   match), never under-run.
 - The four original jobs keep their exact make targets; `make check`
   locally is unchanged. Only which PRs run them changes.
+- `main` is never filtered: every job's condition also holds when the
+  branch is `main`, so each push to `main` runs the full suite and its
+  results are the ones a skipped PR job relies on.
 
 ## Consequences
 
