@@ -37,14 +37,15 @@ with no floor fails too, so a new one must be given one. Each floor is one
 point under the value measured when it was set, rounded down. `make cover`
 runs the tests and prints each package's coverage beside its floor.
 
-Measured on 2026-10-27:
+Measured on 2026-10-29:
 
-- Go: 91.7% of 2,725 statements in 29 checked packages. The lowest are
-  `cmd/worker` (84.8%), `internal/wal` (86.0%), `cmd/coordinator` and
-  `cmd/mr` (86.8%). Unchecked: the generated protobuf code, the S3 test
+- Go: 89.8% of 3,003 statements in 31 checked packages. The lowest are
+  `cmd/worker` (85.6%), `internal/wal` (86.0%), `cmd/coordinator` (86.1%)
+  and `cmd/mr` (87.7%). Unchecked: the generated protobuf code, the S3 test
   server, `examples/internal/run` (a test helper) and `examples/wordcount`,
   which the cluster, local and golden tests run as their reference.
-- Python: 100% of 708 statements, the generated protobuf code left out.
+- Python: 100% of 2,042 statements in 5 checked packages, the generated
+  protobuf code left out.
   `tests/test_edges.py` covers the last error paths: the MRKV writer's
   `MAX_BLOCK_SIZE` checks, a bad Snappy length prefix, a write that
   accepts no bytes, and others.
