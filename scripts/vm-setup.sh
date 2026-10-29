@@ -6,6 +6,7 @@
 #   scripts/vm-setup.sh            check only: report what is missing, change nothing
 #   scripts/vm-setup.sh --install  also install Go, the Python venv and the
 #                                  tools make check uses, inside $HOME
+#   scripts/vm-setup.sh --shellcheck  install only shellcheck, as CI does
 #
 # The script never uses sudo and never installs or reconfigures Docker. When
 # something needs root, it prints the command for you to run instead.
@@ -18,7 +19,8 @@ MODE=check
 case "${1:-}" in
     "" | --check) MODE=check ;;
     --install) MODE=install ;;
-    *) echo "usage: $0 [--check | --install]" >&2; exit 2 ;;
+    --shellcheck) MODE=shellcheck ;;
+    *) echo "usage: $0 [--check | --install | --shellcheck]" >&2; exit 2 ;;
 esac
 
 # Where Go is installed, and where its download and checksum list come from.
@@ -339,6 +341,17 @@ install_devtools() {
 }
 
 # --- Main ---------------------------------------------------------------------
+if [ "$MODE" = shellcheck ]; then
+    check_machine >/dev/null
+    if [ "$GOARCH" = unsupported ]; then
+        echo "shellcheck: no pinned release for $(uname -s) $(uname -m)" >&2
+        exit 1
+    fi
+    [ -x "$TOOLS_BIN/shellcheck" ] || install_shellcheck
+    "$TOOLS_BIN/shellcheck" --version
+    exit 0
+fi
+
 check_machine
 if [ "$MODE" = install ]; then
     install_go

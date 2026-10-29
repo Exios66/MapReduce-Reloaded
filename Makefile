@@ -115,12 +115,15 @@ test: go-test py-test
 lint: go-lint py-lint sh-lint
 
 # shellcheck on every tracked shell script and the git hook (#159). Where it
-# is not installed, it says so and passes, as CI's jobs have none;
-# scripts/vm-setup.sh --install puts it in ~/.local/bin.
+# is not installed, it says so and passes, unless MR_REQUIRE_SHELLCHECK is
+# set, as CI's go job sets it. scripts/vm-setup.sh --install (or
+# --shellcheck) puts it in ~/.local/bin.
 SH_FILES = $(shell git ls-files '*.sh') .githooks/pre-push
 sh-lint:
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		shellcheck $(SH_FILES) && echo "sh-lint: shellcheck passed on $(words $(SH_FILES)) scripts"; \
+	elif [ -n "$$MR_REQUIRE_SHELLCHECK" ]; then \
+		echo "sh-lint: shellcheck is not installed, and MR_REQUIRE_SHELLCHECK is set" >&2; exit 1; \
 	else \
 		echo "sh-lint: shellcheck is not installed; skipping (scripts/vm-setup.sh installs it)"; \
 	fi

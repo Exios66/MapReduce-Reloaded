@@ -46,6 +46,11 @@ How each job meets its requirements:
 - **golangci-lint.** Built from source by the job's Go, at the version in
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
   and the VM setup use the same pin, and a test fails if they drift.
+- **shellcheck.** The `go` job installs the release pinned in
+  `scripts/vm-setup.sh` (`--shellcheck`, which checks its SHA-256 sum) and
+  runs `make sh-lint` with `MR_REQUIRE_SHELLCHECK=1`. Locally, `make lint`
+  skips shellcheck with a message if it is not installed; in CI a missing
+  shellcheck fails the job.
 - **Python in the Go job.** The Go golden tests run the Python reference
   implementation, so the `go` job installs `python[dev]` too.
 - **Breaking-change check.** The `proto` job fetches `origin/main` fresh and
