@@ -146,7 +146,7 @@ python3 bench/scrape-tasks.py "$interval" "$deadline" http://127.0.0.1:18780/met
 samplers+=("$!")
 (
     while true; do
-        docker stats --no-stream --format '{"epoch":"'"$(date +%s.%N)"'","name":{{json .Name}},"memory":{{json .MemUsage}},"cpu":{{json .CPUPerc}}}' "${ids[@]}" || true
+        docker stats --no-stream --format '{"epoch":"'"$(date +%s.%N)"'","name":{{json .Name}},"memory":{{json .MemUsage}},"cpu":{{json .CPUPerc}}}' "${ids[@]}" 9>&- || true
     done
 ) > "$dir/resources.jsonl" 2> "$dir/resources-errors.log" &
 samplers+=("$!")

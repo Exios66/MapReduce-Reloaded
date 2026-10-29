@@ -49,7 +49,8 @@ def test_paper_preparation_gates_disk_before_generating(campaign):
     fake.mkdir()
     df = fake / "df"
     df.write_text(
-        "#!/bin/sh\nprintf 'Filesystem 1B-blocks Used Available Use%% Mounted\\ndisk 100 100 0 100%% /\\n'\n"
+        "#!/bin/sh\nprintf 'Filesystem 1B-blocks Used Available Use%% Mounted\\n"
+        "disk 100 100 0 100%% /\\n'\n"
     )
     df.chmod(0o755)
     result = run("prepare", "grep", "native", PATH=f"{fake}:{os.environ['PATH']}")
