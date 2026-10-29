@@ -32,7 +32,7 @@ fi
 input="data/input/soak-input-$size.txt"
 if [ ! -f "$input" ]; then
     mkdir -p data/input
-    bench/gen-zipf.py "$size" 42 1.0 > "$input"
+    python3 bench/gen-zipf.py "$size" 42 1.0 > "$input.tmp" && mv "$input.tmp" "$input"
 fi
 
 result=$("${compose[@]}" run --rm -q mr submit -coordinator coordinator:7070 \
