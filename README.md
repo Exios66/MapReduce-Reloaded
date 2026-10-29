@@ -30,7 +30,7 @@ bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -5
 
 `mr submit` prints the job's id and status:
 
-```
+```text
 mr: 8 map tasks (-m 8)
 job-1   SUCCEEDED
 map     8/8
@@ -103,7 +103,7 @@ The other plots (E2–E5), the raw CSVs, the machine and the commands are in
 
 ## How a job runs
 
-```
+```text
                  mr submit
                      │  SubmitJob
                      ▼
@@ -133,7 +133,7 @@ is logged before the reply, so a restarted coordinator resumes the job.
 
 ## The `mr` command
 
-```
+```text
 mr run -local [job flags] <program | job.go> <output-dir> <inputs>
 mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program | job.go> <output-dir> <inputs>
 mr status [-coordinator addr] <job-id>
@@ -197,7 +197,7 @@ diff -r /tmp/wc /tmp/wc-py && echo identical
 
 ## Repository layout
 
-```
+```text
 proto/     gRPC/protobuf contract shared by Go and Python
 go/        Go implementation: coordinator, worker, mr, example programs
 python/    Python reference implementation: API, file format, local mode

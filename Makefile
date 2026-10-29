@@ -142,9 +142,23 @@ sh-lint:
 	fi
 
 # Every relative link and anchor in the tracked Markdown files resolves
-# (scripts/check-links.py, #159). CI's Python jobs run it.
+# (scripts/check-links.py, #159), and the Markdown style passes pymarkdown
+# (.pymarkdown.json: line length off, picture/sub HTML allowed). CI's
+# Python jobs run it; pymarkdown comes with python[dev]. Where it is not
+# installed, the style check is skipped unless MR_REQUIRE_PYMARKDOWN is set,
+# mirroring sh-lint's shellcheck handling.
+# PR templates live under .github and use HTML comments by design, so the
+# style scan skips them; the link check above still covers them.
+MD_FILES = $(shell git ls-files '*.md' | grep -v '^\.github/')
 md-lint:
 	$(PYTHON) scripts/check-links.py
+	@if $(PYTHON) -m pymarkdown --help >/dev/null 2>&1; then \
+		$(PYTHON) -m pymarkdown --config .pymarkdown.json scan $(MD_FILES); \
+	elif [ -n "$$MR_REQUIRE_PYMARKDOWN" ]; then \
+		echo "md-lint: pymarkdown is not installed" >&2; exit 1; \
+	else \
+		echo "md-lint: pymarkdown is not installed; skipping style check (install python[dev])"; \
+	fi
 
 fmt:
 	cd go && gofmt -w .

@@ -48,6 +48,7 @@ speak the same language if both understand the ticket format.
 | `WorkerInfo` | A worker's address, host, zone and capacity | §3.4 |
 
 **Why both tasks and attempts?** The same task can run more than once:
+
 - re-run after its worker dies (§3.3);
 - duplicated as a backup when it runs slowly (§3.6).
 
