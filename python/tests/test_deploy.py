@@ -174,7 +174,9 @@ def test_soak_override_lowers_the_worker_limit(docker_compose):
         timeout=30,
     )
     worker = json.loads(result.stdout)["services"]["worker"]
-    assert worker["mem_limit"] == "256m"
+    # Compose keeps "256m" in one version and normalizes it to bytes in another.
+    limit = worker["mem_limit"]
+    assert (int(limit[:-1]) << 20 if limit.endswith("m") else int(limit)) == 256 << 20
     assert worker["command"][0] == "worker"
 
 
