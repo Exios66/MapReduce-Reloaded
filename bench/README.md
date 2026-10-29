@@ -171,7 +171,9 @@ its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
 E5 ran at `6b6c7be`; its harness log is
-[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log).
+[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log). E6 ran at
+`b9bb3f4`; its harness log is
+[`evaluation/experiments-E6.log`](evaluation/experiments-E6.log).
 
 ### E0: scaling over workers
 
@@ -318,3 +320,35 @@ record the offset between those two clocks.
   interpreter for every byte, not the call into the job file. The compiled
   helpers for that work (`api.Words`, `api.Sum`) cut the job from 399 s to
   91 s.
+
+### E6: what the combiner saves on real text
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E6-dark.png">
+  <img alt="E6: bytes shuffled and job time, combiner on and off, on crawled English, crawled pages in every language, and the book" src="evaluation/E6.png">
+</picture>
+
+| Input | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
+|---|---:|---:|---:|---|---|---:|
+| Crawled English | 265,983,823 | 1,374,954,686 | 5.2% | 43.05 (42.82–43.69) | 50.06 (49.84–50.53) | 14% |
+| Crawled, every language | 417,952,270 | 1,320,092,762 | 31.7% | 41.19 (40.08–41.73) | 44.33 (43.84–44.68) | 7% |
+| Book (War and Peace lines) | 43,372,796 | 1,452,704,780 | 3.0% | 45.89 (45.80–46.27) | 59.08 (58.18–59.52) | 22% |
+
+- E1 varies the skew of a generated vocabulary; E6 uses real text. The
+  combiner cuts the bytes shuffled by 3.2× to 33×, and the job time by 7%
+  to 22%, as §4.3 predicts: the more often a key repeats within one map
+  task, the more records the combiner folds into one.
+- The book is the best case, and the earlier book-only E6 showed only it:
+  33× fewer bytes and 22% faster, because its 41,631-word vocabulary
+  repeats. Crawled English is the real-text answer: 5.2× fewer bytes and
+  14% faster.
+- Crawl in every language saves the least, 3.2× and 7%, because Chinese,
+  Japanese and Thai text has no spaces, so word count reads a whole run of
+  it as one word, and a mix of languages has more distinct words. There is
+  less for the combiner to fold per map task. It is also the fastest job in
+  both settings (41.2 s on), for the same reason: fewer words.
+- Every run is one 1 GiB input, M = 32, R = 4, and the median of three,
+  alternating the combiner on and off. `scripts/fetch-data.sh crawl`
+  downloads the ten pinned Common Crawl WET files; `bench/gen-crawl.py`
+  writes their English pages or every page. The book is War and Peace's
+  lines repeated (`bench/gen-book.py`).

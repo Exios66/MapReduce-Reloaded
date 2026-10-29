@@ -92,6 +92,7 @@ change behavior:
 | E1: combiner | 15× to 78× fewer bytes shuffled, 18–44% faster |
 | E4: coordinator restart | 1.6 s, every finished task kept |
 | E5: interpreted job file | 2.4× slower than compiled with the compiled helpers, 10.5× without |
+| E6: combiner on real text | 5.2× fewer bytes shuffled and 14% faster on crawled English, 3.2× and 7% in every language, 33× and 22% on the book (a best case) |
 
 [Evaluation](evaluation.md) compares each run with the paper's figure;
 [bench/README.md](../bench/README.md#evaluation-e0e6) has the plots, the
