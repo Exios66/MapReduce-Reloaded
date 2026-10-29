@@ -4,8 +4,10 @@ against an independent oracle (docs/data.md).
 
 Usage: check-real-data.py [--mr BIN] [--python PY] [-m M] [-r R] [--no-python] [NAME ...]
 
-NAME is warpeace (word count), nasa (urlfreq) or webgoogle (reverselinks);
-the default is every dataset that data/input/ holds. Like
+NAME is warpeace (word count), nasa (urlfreq), webgoogle (reverselinks),
+chapters (invertedindex over War and Peace's chapters as files) or docs
+(termvector over its chapters as documents, one host per part); the
+default is every dataset that data/input/ holds. Like
 make-corpus-expected.py, the oracle is stdlib only and written from the
 programs' documented behavior, without the Go or Python code it checks:
 lines end at "\\n" (a "\\r" before it is dropped), words are maximal runs
@@ -16,6 +18,7 @@ any output differs.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,11 +29,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "input"
 
-# name: (program, input file under data/input)
+# name: (program, input file or glob under data/input)
 DATASETS = {
     "warpeace": ("wordcount", "warpeace/warpeace.txt"),
     "nasa": ("urlfreq", "nasa/access.log"),
     "webgoogle": ("reverselinks", "webgoogle/links.tsv"),
+    "chapters": ("invertedindex", "warpeace-chapters/*.txt"),
+    "docs": ("termvector", "warpeace-docs/docs.tsv"),
 }
 
 
@@ -51,29 +56,66 @@ def lines(data: bytes):
         yield line[:-1] if line.endswith(b"\r") else line
 
 
-def wordcount(data: bytes) -> dict[bytes, bytes]:
-    return {w: b"%d" % n for w, n in Counter(data.split()).items()}
+def wordcount(files: list[Path]) -> dict[bytes, bytes]:
+    counts = Counter(w for f in files for w in f.read_bytes().split())
+    return {w: b"%d" % n for w, n in counts.items()}
 
 
-def urlfreq(data: bytes) -> dict[bytes, bytes]:
+def urlfreq(files: list[Path]) -> dict[bytes, bytes]:
     """Counts the seventh space-separated field of each line with seven or
     more."""
-    counts = Counter(f[6] for f in map(bytes.split, lines(data)) if len(f) >= 7)
+    fields = (line.split() for f in files for line in lines(f.read_bytes()))
+    counts = Counter(f[6] for f in fields if len(f) >= 7)
     return {url: b"%d" % n for url, n in counts.items()}
 
 
-def reverselinks(data: bytes) -> dict[bytes, bytes]:
+def reverselinks(files: list[Path]) -> dict[bytes, bytes]:
     """Maps each target to its distinct sources, sorted and joined by
     commas; lines without a tab are skipped."""
     sources = defaultdict(set)
-    for line in lines(data):
+    for line in (line for f in files for line in lines(f.read_bytes())):
         source, tab, target = line.partition(b"\t")
         if tab:
             sources[target].add(source)
     return {t: b",".join(sorted(s)) for t, s in sources.items()}
 
 
-ORACLES = {"wordcount": wordcount, "urlfreq": urlfreq, "reverselinks": reverselinks}
+def invertedindex(files: list[Path]) -> dict[bytes, bytes]:
+    """Maps each word to the base names of the files it occurs in, sorted,
+    without duplicates, and joined by commas."""
+    where = defaultdict(set)
+    for f in files:
+        for w in set(f.read_bytes().split()):
+            where[w].add(f.name.encode())
+    return {w: b",".join(sorted(names)) for w, names in where.items()}
+
+
+def termvector(files: list[Path], min_count: int = 2) -> dict[bytes, bytes]:
+    """Maps each host to the words of its documents, as word:count pairs,
+    most frequent first and then by word, without those that occur fewer
+    than min_count times. A document is a line: a URL, a tab and its text;
+    the host is the URL's part between "://" and the next "/", "?" or "#".
+    Lines without a tab or a host are skipped."""
+    vectors: dict[bytes, Counter] = {}
+    for line in (line for f in files for line in lines(f.read_bytes())):
+        url, tab, text = line.partition(b"\t")
+        host = re.split(rb"[/?#]", url.partition(b"://")[2], maxsplit=1)[0]
+        if tab and host:
+            vectors.setdefault(host, Counter()).update(text.split())
+    def encode(v: Counter) -> bytes:
+        terms = sorted(v.items(), key=lambda tn: (-tn[1], tn[0]))
+        return b" ".join(b"%s:%d" % (t, n) for t, n in terms if n >= min_count)
+
+    return {host: encode(v) for host, v in vectors.items()}
+
+
+ORACLES = {
+    "wordcount": wordcount,
+    "urlfreq": urlfreq,
+    "reverselinks": reverselinks,
+    "invertedindex": invertedindex,
+    "termvector": termvector,
+}
 
 
 def partitions(result: dict[bytes, bytes], r: int) -> list[bytes]:
@@ -102,12 +144,13 @@ def run(label: str, cmd: list[str], out: Path, want: list[bytes], r: int) -> boo
 def check(name: str, args, tmp: Path) -> bool:
     program, rel = DATASETS[name]
     path = DATA / rel
-    data = path.read_bytes()
+    files = sorted(DATA.glob(rel))
     start = time.monotonic()
-    result = ORACLES[program](data)
+    result = ORACLES[program](files)
     want = partitions(result, args.r)
+    size = sum(f.stat().st_size for f in files)
     print(
-        f"{name}: {program} over {len(data):,} bytes, {len(result):,} keys "
+        f"{name}: {program} over {len(files):,} files, {size:,} bytes, {len(result):,} keys "
         f"(oracle {time.monotonic() - start:.1f}s)"
     )
     job = ["-m", str(args.m), "-r", str(args.r), program]
@@ -131,7 +174,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if unknown := [n for n in args.names if n not in DATASETS]:
         parser.error(f"unknown dataset {', '.join(unknown)}; want {', '.join(DATASETS)}")
-    names = args.names or [n for n, (_, rel) in DATASETS.items() if (DATA / rel).exists()]
+    names = args.names or [n for n, (_, rel) in DATASETS.items() if any(DATA.glob(rel))]
     if not names:
         print("check-real-data: no data in data/input; run scripts/fetch-data.sh", file=sys.stderr)
         return 1

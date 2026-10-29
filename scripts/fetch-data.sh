@@ -9,7 +9,9 @@
 # - warpeace: War and Peace (Project Gutenberg #2600, via the GITenberg
 #   mirror), 3.2 MB, for word count. As in fetch-corpus.sh, only the text
 #   between the "*** START OF" line and the "End of ... Project Gutenberg"
-#   line is kept.
+#   line is kept. scripts/split-book.py then splits it into its 365
+#   chapters, as files for invertedindex (warpeace-chapters/) and as
+#   documents for termvector (warpeace-docs/).
 # - nasa: every HTTP request to NASA Kennedy Space Center's web server in
 #   July 1995 (Internet Traffic Archive), 1.9 million lines in the Common
 #   Log Format, 205 MB, for urlfreq. "The traces may be freely
@@ -84,6 +86,13 @@ nasa | webgoogle) ;;
 *)
     echo "usage: $0 [warpeace | nasa | webgoogle | all]" >&2
     exit 2
+    ;;
+esac
+# War and Peace's chapters, as files and as documents (scripts/split-book.py).
+case $what in warpeace | all)
+    if [ ! -f "$dest/warpeace-docs/docs.tsv" ]; then
+        python3 "$root/scripts/split-book.py" "$dest/warpeace/warpeace.txt" "$dest"
+    fi
     ;;
 esac
 case $what in nasa | all) fetch nasa access.log "$NASA_URL" "$NASA_SHA256" nasa ;; esac
