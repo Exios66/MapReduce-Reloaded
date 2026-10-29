@@ -36,12 +36,12 @@ def test_wordcount_golden(tmp_path, m):
     )
     counts = local.run(spec, str(tmp_path))
     assert_same_files(CORPUS / "expected", tmp_path / "out")
-    assert counts[local.MAP_INPUT_BYTES] == 337637  # the corpus size
-    assert counts[local.MAP_OUTPUT_RECORDS] == 59372
+    assert counts[local.MAP_INPUT_BYTES] == 461826  # the corpus size
+    assert counts[local.MAP_OUTPUT_RECORDS] == 78658
     assert counts[local.REDUCE_INPUT_RECORDS] == counts[combine.OUTPUT_RECORDS]
-    assert counts[local.REDUCE_OUTPUT_RECORDS] == 11786
-    # The expected files' 118,674 bytes, less a tab and a newline per line.
-    assert counts[local.REDUCE_OUTPUT_BYTES] == 118674 - 2 * 11786
+    assert counts[local.REDUCE_OUTPUT_RECORDS] == 16851
+    # The expected files' 175,998 bytes, less a tab and a newline per line.
+    assert counts[local.REDUCE_OUTPUT_BYTES] == 175998 - 2 * 16851
 
 
 def test_without_combiner(tmp_path):

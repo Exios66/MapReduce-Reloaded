@@ -343,7 +343,7 @@ func TestClusterWordCount(t *testing.T) {
 	c, _, status := runJob(t, "wordcount", 3)
 	assertGolden(t, c.output())
 	if status.GetMapTasksTotal() < 7 || status.GetReduceTasksCompleted() != 4 ||
-		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 11786 {
+		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 16851 {
 		t.Fatalf("status %v", status)
 	}
 }
@@ -413,8 +413,8 @@ func TestClusterSkipsBadRecords(t *testing.T) {
 	c, _, status := runJob(t, "test.bad-record", 2)
 	assertGolden(t, c.output())
 	assertMapOutputRecords(t, status)
-	if n := status.GetCounters().GetValues()[task.SkippedRecords]; n != 3 {
-		t.Fatalf("skipped %d records, want 3, one per input file", n)
+	if n := status.GetCounters().GetValues()[task.SkippedRecords]; n != 4 {
+		t.Fatalf("skipped %d records, want 4, one per input file", n)
 	}
 }
 
@@ -799,8 +799,8 @@ func TestClusterReRunsLostMapOutput(t *testing.T) {
 // however many times it ran.
 func assertMapOutputRecords(t *testing.T, status *pb.GetJobStatusResponse) {
 	t.Helper()
-	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 59372 {
-		t.Fatalf("%s = %d, want 59372", task.MapOutputRecords, got)
+	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 78658 {
+		t.Fatalf("%s = %d, want 78658", task.MapOutputRecords, got)
 	}
 }
 
