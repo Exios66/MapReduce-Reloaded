@@ -28,7 +28,7 @@ graphs. These are not public, so no run here can repeat them exactly.
 | §5.2 grep records | [`bench/gen-grep.py`](../bench/gen-grep.py) | generated | The same record size and match rate, so a grep's output has an exact number of lines |
 | §5.3 sort records | [`bench/gen-sort.py`](../bench/gen-sort.py) | generated | gensort-style ASCII records with 10-byte keys. The keys are random bytes, not printable ones, so distsort's range partitions are even |
 | §5.4, §5.5 | Experiments E2 and E3 on the sort input | generated | [Evaluation](evaluation.md) |
-| §2.3 word count | [`testdata/corpus`](../testdata/corpus/), three Gutenberg texts, 337 KB | yes | A golden output from an independent oracle |
+| §2.3 word count | [`testdata/corpus`](../testdata/corpus/), four Gutenberg texts, 462 KB | yes | A golden output from an independent oracle |
 | §2.3 word count, real text at size | War and Peace, 3.2 MB | fetched | Below |
 | §2.3 word count, skewed keys | [`bench/gen-zipf.py`](../bench/gen-zipf.py) | generated | Zipf frequencies with an exponent E1 varies |
 | §2.3 grep, inverted index, distributed sort | [`testdata/examples`](../testdata/examples/) | yes | Golden outputs, checked in both languages |
