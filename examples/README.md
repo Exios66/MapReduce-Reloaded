@@ -16,8 +16,9 @@ example programs (those live in `go/examples/`).
   cluster (`make cluster-up mr`), the example data (`make upload-example`)
   and `matplotlib`. It submits the compiled `wordcount` and `urlfreq`
   programs by name, not this directory's job file, and it ends by checking
-  local mode against the cluster. The [demo](../docs/demo.md) is the same
-  sequence for a live review, with timings.
+  local mode against the cluster. It kills no worker. The
+  [demo](../docs/demo.md) is the script for a live review, with timings: it
+  submits this directory's job file and kills a worker mid-job.
 
 To run either, start with the commands in the README's
 [quick start](../README.md#quick-start).
