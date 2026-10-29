@@ -110,8 +110,9 @@ def test_terminal_evidence_rejects_stale_or_missing_collectors(tmp_path):
     ) + "\n"
     (tmp_path / "samples.csv").write_text(gap)
     assert module.check(tmp_path, "job-1", 16, 8, 110, 1010)["verified"]
-    (tmp_path / "samples.csv").write_text(gap.replace(",u1,", ",unexpected,"))
-    (tmp_path / "tasks.csv").write_text("seconds,job,kind,state,value\n")
+    (tmp_path / "samples.csv").write_text(
+        "\n".join(row for row in gap.splitlines() if ",u1," not in row) + "\n"
+    )
     result = subprocess.run(
         [
             sys.executable, ROOT / "bench/check-paper-evidence.py", str(tmp_path),
