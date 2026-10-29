@@ -1,6 +1,6 @@
 # MapReduce-Reloaded
 
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/Exios66/MapReduce-Reloaded/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Exios66/MapReduce-Reloaded/tree/main)
+[![CircleCI](https://dl.circleci.com/status-badge/img/circleci/G3QnJG4kdzGF2XeRsnRapm/SfxKxSQXX24QadG7WkAKAa/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/circleci/G3QnJG4kdzGF2XeRsnRapm/SfxKxSQXX24QadG7WkAKAa/tree/main)
 ![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)
 
