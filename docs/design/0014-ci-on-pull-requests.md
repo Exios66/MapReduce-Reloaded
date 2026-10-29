@@ -27,12 +27,12 @@ playing that role on a solo project) cannot see that the checks passed.
 - A newer push to the same branch cancels the run still in progress.
 - `make check` and the pre-push hook stay. They catch failures before a
   push, and CI shows the result on the PR.
-- `main` is changed only through pull requests. That is a project rule, not
-  something GitHub enforces yet. To enforce it, the owner adds a branch
-  protection rule for `main` (Settings, Branches) that requires a pull
-  request and the status checks `proto`, `go`, `python` (or
-  `local-ci/make-check`, see below). Until then the rule rests on practice
-  and on review.
+- `main` is changed only through pull requests. That is enforced by a branch
+  protection rule for `main` (Settings, Branches; rule 85457483, strict
+  status checks on since 2026-10-28, settings verified 2026-10-29) that
+  requires a pull request and the four CircleCI checks (see "CircleCI as
+  the primary provider" below), with branches up to date before merging
+  and administrators exempt from the rule.
 
 ## CircleCI as the primary provider (#212)
 

@@ -44,6 +44,6 @@ run on a laptop (Docker Compose) or a cluster (Kubernetes).
 - Cross-implementation ("interop") tests become a core part of CI (Phase 5).
 - Mixed clusters become possible: a Go coordinator driving Python workers, or
   Go workers running Python map/reduce functions. Python has the API, the
-  file format and local mode, and the coordinator's task table and registry
-  (#36); its coordinator server, worker and UDF host are Phase 5 stretch
-  work (#35–#39).
+  file format and local mode, and a coordinator server (#36, tested against
+  Go workers via `make py-e2e`); its worker and UDF host remain Phase 5
+  stretch work (#37, #38).
