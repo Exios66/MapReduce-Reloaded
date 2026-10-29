@@ -3,8 +3,8 @@
 This repository recreates the system in Dean and Ghemawat,
 [*MapReduce: Simplified Data Processing on Large Clusters*](https://research.google.com/archive/mapreduce-osdi04.pdf)
 (OSDI 2004), for Honors Project 1: a MapReduce that runs with Docker Compose
-on one VM with 4 vCPUs and 8 GB, as four worker containers limited to one
-CPU each.
+on one VM with 4 vCPUs and 8 GB ([cluster VM](docs/cluster-vm.md)), as four
+worker containers limited to one CPU each.
 It is a solo project.
 
 The first section answers the assignment's design questions, with the
@@ -237,7 +237,8 @@ The write-ahead log is not compacted; it is small next to job data.
 
 All runs use the Compose cluster on the course VM: four workers at one CPU
 each, on 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory and a 35 GB
-disk ([the VM](docs/cluster-vm.md#the-vm)). `make bench` already generates the inputs, samples every worker's
+disk (33 GB root, shared; [the VM](docs/cluster-vm.md#the-vm), the source of
+truth for the VM's specification). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
 the machine in `result.json`. Every point is the median of three runs, with
 the range shown as an error bar. Each plot's caption states the input size,
@@ -279,7 +280,7 @@ Budget. Each run deletes its output first; the 1 GiB inputs are generated
 once and kept in the output volume. A run holds the input, the
 intermediate files in the workers' containers and the output on the same
 disk, about 3 GiB, within the disk budget in
-[cluster VM](docs/cluster-vm.md#disk-budget). E0 runs on 1 and 2 workers with
+[cluster VM](docs/cluster-vm.md#disk-budget) (33 GB root, shared). E0 runs on 1 and 2 workers with
 `docker compose up --scale worker=N`, which keeps the one-CPU limit. E2
 changes a coordinator flag, so it uses the Compose override
 `backups-off.yaml` (`-backups=false`); E7 also uses `speculation-late.yaml`
@@ -347,9 +348,10 @@ four engineering practices:
 - **Python reference** (`python/mapreduce_reloaded`). A second implementation
   of the API, splitting, partition hash, sort, combiner, file format,
   local mode, and a coordinator server (`python/mapreduce_reloaded/coordinator/`)
-  that runs Go workers (see `make py-e2e`). There is no Python worker yet.
-  It shares the proto contract and the MRKV format with Go
-  ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
+  that runs Go workers (see `make py-e2e` and the
+  [Python coordinator explainer](docs/explainers/25-python-coordinator.md)).
+  There is no Python worker yet. It shares the proto contract and the MRKV
+  format with Go ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
 
 ## A job's lifecycle
 
@@ -635,6 +637,6 @@ no reducer is told about them.
 - [Design records](docs/design/): ADRs 0001 to 0019, one per decision that
   shaped the code.
 - [Explainers](docs/explainers/): one plain-language page per feature, from the
-  RPC contract (03) to the status page (24).
+  RPC contract (03) to the Python coordinator (25).
 - [File format](docs/file-format.md): the MRKV specification.
 - [Cluster VM](docs/cluster-vm.md): how the Compose cluster is set up.

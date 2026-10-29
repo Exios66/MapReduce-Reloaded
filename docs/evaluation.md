@@ -25,6 +25,15 @@ E2, E3 and E6 are the course evaluation in
 [bench/README.md](../bench/README.md#evaluation-e0e6), each the median of
 three runs.
 
+Provenance of the machine. The E-series directories each hold a
+`machine.json`, written by `bench/experiments.sh`. The grep and sort
+directories predate it. They record the machine inside `result.json`, which
+`bench/run.sh` writes: CPU count and model, memory, kernel and Docker
+version, which match the VM table in [cluster VM](cluster-vm.md#the-vm).
+That block does not say which host it was. That these two runs were on the
+course VM comes from the context of the runs, not from a record. No
+`machine.json` was added for them afterwards.
+
 E6 repeats §4.3's combiner measurement on real text at 1 GiB. On crawled
 English the combiner cut the bytes shuffled 5.2× and the job time 14%; on
 crawled pages in every language, 3.2× and 7%; on the book, 33× and 22%.
