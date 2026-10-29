@@ -133,7 +133,7 @@ def main(argv: list[str]) -> int:
         parser.error(f"unknown dataset {', '.join(unknown)}; want {', '.join(DATASETS)}")
     names = args.names or [n for n, (_, rel) in DATASETS.items() if (DATA / rel).exists()]
     if not names:
-        print("check-real-data: no dataset in data/input; run scripts/fetch-data.sh", file=sys.stderr)
+        print("check-real-data: no data in data/input; run scripts/fetch-data.sh", file=sys.stderr)
         return 1
     with tempfile.TemporaryDirectory() as tmp:
         ok = all([check(n, args, Path(tmp)) for n in names])
