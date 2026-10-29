@@ -4,6 +4,9 @@ Scripts that measure the cluster. Each one runs on the Compose cluster and
 writes its raw results to `bench/results/`, which git ignores. The numbers
 below are copied from a run, with the machine it ran on.
 
+The [proposed 10 GB paper comparison](10gb-paper-run.md) records the next
+run's scope, VM handover and storage prerequisites. It is not a result.
+
 ## Data generators (#57)
 
 Each generator writes reproducible input to stdout from a size in bytes and
