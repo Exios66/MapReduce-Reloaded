@@ -556,6 +556,8 @@ def e2_comparison(pairs, rows, results, out, t):
     straggler from rows (the rows of E2/runs.csv, three runs per setting,
     the only straggler data). Both are read from results, the task CSVs of
     each from its own directory, and the image says so in its subtitle.
+    Raises ValueError if the two ran different input sizes, M, R or worker
+    counts, since the chart would then compare unlike jobs.
 
     Drawn as e2 draws its chart, from the same settings and styles; only
     valid="1" runs count. Missing fields, invalid numbers, and file or
@@ -576,6 +578,11 @@ def e2_comparison(pairs, rows, results, out, t):
     mixed = [dict(r, _dir="E2-pairs") for r in pairs if r["setting"] in settings] + [
         dict(r, _dir="E2") for r in rows if r["setting"].startswith("straggler")
     ]
+    # The subtitle states one input size, M and R for both datasets, so they
+    # must have run the same job.
+    shapes = {(r["input_bytes"], r["m"], r["r"], r["workers"]) for r in mixed}
+    if len(shapes) > 1:
+        raise ValueError(f"E2 and E2-pairs ran different jobs: {sorted(shapes)}")
     fig = timeline_and_bars(
         mixed,
         results,

@@ -490,3 +490,11 @@ def test_e2_comparison_reads_each_setting_from_its_own_directory(plotter, tmp_pa
     assert left.step.call_count == 4
     subtitle = [c.args[2] for c in fig.text.call_args_list if "paired runs" in c.args[2]]
     assert subtitle
+
+
+def test_e2_comparison_refuses_datasets_of_different_jobs(plotter, tmp_path):
+    module, _ = plotter
+    pairs = [row("normal") | {"run": "1", "event_at": "", "job": "job-1"}]
+    main = [row("straggler-backups") | {"run": "1", "event_at": "", "job": "job-1", "m": "64"}]
+    with pytest.raises(ValueError, match="different jobs"):
+        module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
