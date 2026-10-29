@@ -11,6 +11,8 @@
 | [`fuzz.sh`](fuzz.sh) | Runs every Go fuzz target for `FUZZTIME` (default 20s) each; `make fuzz` (#152). |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |
 | [`fetch-corpus.sh`](fetch-corpus.sh) | Fetches the public-domain texts of the golden corpus into `testdata/corpus/`. |
+| [`fetch-data.sh`](fetch-data.sh) | Fetches real datasets for the example programs (War and Peace, NASA's 1995 web log, Google's 2002 web graph) into `data/input/`, each pinned by SHA-256. `make real-data`; see [Data](../docs/data.md). |
+| [`check-real-data.py`](check-real-data.py) | Runs word count, urlfreq and reverselinks over those datasets in Go and Python and compares both with an independent oracle. |
 | [`make-corpus-expected.py`](make-corpus-expected.py) | Regenerates the corpus's expected word count with an independent oracle. |
 | [`make-format-vectors.py`](make-format-vectors.py), [`mrkv_reference.py`](mrkv_reference.py) | Regenerate the MRKV golden vectors, with a small reference encoder written straight from the spec. |
 | [`make-hash-vectors.py`](make-hash-vectors.py) | Regenerates the partition-hash vectors. |
