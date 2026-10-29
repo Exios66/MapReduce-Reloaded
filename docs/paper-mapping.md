@@ -50,9 +50,11 @@ Status: `planned` → `in progress` → `done`.
 - **F8, F21.** Workers' heartbeats (§3.3) also carry each running attempt's
   `fraction_done`: bytes of the split read for a map task, bytes of the map
   outputs read for a reduce task. The coordinator shows it on the status
-  page (§4.8) and uses it for nothing else. The paper does not specify
-  per-task fractions; this is the input for LATE-style speculation (#45;
-  ADR 0009, 0010).
+  page (§4.8). The paper does not specify per-task fractions. The
+  coordinator also uses them for LATE speculation (Zaharia et al., OSDI
+  2008), an opt-in mode with `-speculation=late` that is not in the paper
+  and has no F row; F13 is the paper's rule, unchanged (#45; ADR 0009,
+  0010, 0019).
 - **F11.** The scheduler ranks tasks by host, then zone, and can wait for a
   local worker (`Config.Locate`, `LocalityWait`). Nothing in the shipped
   binaries labels splits yet: Compose workers share one volume, so there is

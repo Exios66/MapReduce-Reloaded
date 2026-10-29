@@ -170,6 +170,9 @@ SSH drops. The plots land in `bench/plots/E0.png` … `E6.png`, and the
 script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
+`bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not
+part of `all` and has not been run; see
+[bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run).
 
 ### 5.7 Monitoring (optional)
 

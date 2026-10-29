@@ -352,3 +352,47 @@ record the offset between those two clocks.
   downloads the ten pinned Common Crawl WET files; `bench/gen-crawl.py`
   writes their English pages or every page. The book is War and Peace's
   lines repeated (`bench/gen-book.py`).
+
+## E7: the paper's backups against LATE on mixed-speed workers (#59, not yet run)
+
+E2 slows one worker. E7 slows all four, each to a different speed, which is
+what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for. It
+is wired but has not been run: there are no results here, and nothing in
+this repository says which setting is faster.
+
+| Setting | Coordinator | Compose files |
+|---|---|---|
+| `mixed-paper` | `-speculation=paper` (the default): the oldest attempt, once nothing is idle (§3.6) | `compose.yaml` |
+| `mixed-late` | `-speculation=late` | `compose.yaml`, [`speculation-late.yaml`](../deploy/compose/speculation-late.yaml) |
+| `mixed-off` | `-backups=false` | `compose.yaml`, [`backups-off.yaml`](../deploy/compose/backups-off.yaml) |
+
+- **Workload.** `distsort` on 1 GiB with M = 32 and R = 4, as E2, on four
+  workers. After each setting's cluster starts, `docker update --cpus`
+  gives the workers `E7_CPUS`, one value for each in the order `docker
+  compose ps` lists them: `1 0.6 0.3 0.15` by default, 2.05 CPUs in all.
+  The limits go back to 1 after each run, and on any exit.
+- **Order.** The three settings take turns within each repeat, reversed on
+  even repeats, as in E2.
+- **Output.** `bench/results/E7/runs.csv`, in the format of the other
+  experiments, with `backups` and `backups_won` from the job's status;
+  `tasks-SETTING-N.csv` (the coordinator's task counts over time, as E2's);
+  and `machine.json`. Output is checksummed against the first run, and a
+  run that differs has `valid` 0.
+- **Not in `all`,** and `plot-experiments.py` does not draw it yet. For the
+  job time, backups started and backups won of each valid run:
+
+  ```sh
+  bench/experiments.sh E7
+  awk -F, 'NR > 1 && $16 == 1 { print $2, $11, $13, $14 }' bench/results/E7/runs.csv | sort
+  ```
+
+- **Knobs.** `E7_SETTINGS="mixed-late mixed-off"` runs some settings; an
+  unknown one stops the script before it starts the cluster. `E7_CPUS`
+  must hold four positive numbers. `SIZE`, `M`, `R` and `REPEAT` work as in
+  the other experiments.
+- **What it can show.** With four workers LATE allows one running backup at
+  a time and refuses the slowest worker, so this tests a small cluster; it
+  says nothing about 1,800 machines. The LATE settings are the defaults of
+  ADR 0019, not tuned.
+- `python/tests/test_bench_experiments.py` checks the settings, the
+  overrides and the CPU limits with the cluster and Docker stubbed out.

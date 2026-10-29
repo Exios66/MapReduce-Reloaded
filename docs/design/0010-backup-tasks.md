@@ -37,7 +37,8 @@ close "close" is.
    their file to the same `part-r-*`, and a rename is atomic. A losing map
    attempt's output stays on its worker, and no reducer is told about it.
 6. **Backups are a setting.** `cmd/coordinator` enables them by default and
-   `-backups=false` turns them off. `coordinator.Config` leaves them off,
+   `-backups=false` turns them off. `-speculation` chooses the policy
+   (ADR 0019); empty, it follows `-backups`, so this decision stands. `coordinator.Config` leaves them off,
    so tests can count attempts exactly.
 7. **Backups are counted.** The task table counts the backup attempts it
    starts and the tasks a backup completes first. `GetJobStatusResponse`
@@ -51,11 +52,11 @@ close "close" is.
   does not give and that depends on the job's size. "Nothing idle" needs no
   tuning, and by then the free workers have nothing better to do.
 - **Back up on measured slowness.** It needs a rule for what counts as
-  slow. Workers now report each attempt's `fraction_done` in their
-  heartbeats (ADR 0009) and the coordinator keeps the latest value and when
-  it arrived, but only for the status page: backups still follow the rule
-  above. How long an attempt has run is the measure the scheduler uses. The
-  reported fraction is the input a LATE-style rule would use (#45).
+  slow, and the paper's mode does not have one: how long an attempt has run
+  is the measure it uses. Workers report each attempt's `fraction_done` in
+  their heartbeats (ADR 0009), and a LATE-style rule built on it is
+  available as a separate opt-in mode, `-speculation=late` (ADR 0019, #45).
+  The rule above stays the default and is what `-backups` means.
 - **Back up the first task by index.** It was the rule until the start
   times were logged. It can back up a task that has just started while an
   older one waits.

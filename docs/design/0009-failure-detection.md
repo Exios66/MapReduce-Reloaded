@@ -47,8 +47,9 @@ no need to dial back into them.
    on the status page. It does not affect liveness: any heartbeat from a
    known worker counts, whatever it says. The paper's pings (§3.3) carry no
    such figure, and it does not specify per-task fractions; the status page
-   (§4.8) shows how much of the computation is done. This is the input a
-   LATE-style policy would use (#45); ADR 0010 says what it does not do yet.
+   (§4.8) shows how much of the computation is done. It is also the input
+   of the opt-in LATE policy (`-speculation=late`, ADR 0019, #45); the
+   paper's backup rule (ADR 0010) ignores it.
 
 ## Alternatives rejected
 

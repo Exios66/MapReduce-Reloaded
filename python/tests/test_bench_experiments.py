@@ -2,11 +2,13 @@
 
 import csv
 import io
+import re
 import subprocess
 import textwrap
 from pathlib import Path
 
 import pytest
+import yaml
 
 SCRIPT = Path(__file__).resolve().parents[2] / "bench" / "experiments.sh"
 
@@ -556,3 +558,186 @@ def test_e2_rejects_unknown_settings_before_starting(experiment, monkeypatch, se
     assert "E2_SETTINGS: unknown setting" in result.stderr
     assert "begun" not in result.stdout
     assert "configured" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "settings", ["mixed", "mixed-paper mixed-lates", "Mixed-late", "straggler-backups"]
+)
+def test_e7_rejects_unknown_settings_before_starting(experiment, monkeypatch, settings):
+    invoke, _ = experiment
+    monkeypatch.setenv("E7_SETTINGS", settings)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        argument="E7",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E7_SETTINGS: unknown setting" in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "cpus", ["1 0.5 0.25", "1 0.5 0.25 0.1 0.1", "1 0.5 0.25 slow", "1 0 1 1", "1 -1 1 1"]
+)
+def test_e7_rejects_cpu_limits_that_do_not_fit_four_workers(experiment, monkeypatch, cpus):
+    invoke, _ = experiment
+    monkeypatch.setenv("E7_CPUS", cpus)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        argument="E7",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E7_CPUS" in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e7_takes_settings_in_turn_with_their_overrides_and_throttles(
+    experiment, monkeypatch, repeat
+):
+    """Each setting gets its coordinator override and the same four CPU limits, restored after."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        configure() { note "configure|$1|${2:-}"; }
+        compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
+        compose=(compose_stub)
+        docker() { note "docker|$*"; }
+        start_sampler() { note "sample|$1|$2"; }
+        stop_sampler() { note stop; }
+        run() { note "run|$1|$2|$3|$4|$5|$slow"; }
+        """,
+        "E7",
+        after='note "defaults|$slow"',
+    )
+    assert result.stdout == ""
+    overrides = {
+        "mixed-paper": "",
+        "mixed-late": "speculation-late.yaml",
+        "mixed-off": "backups-off.yaml",
+    }
+    expected = ["begin|E7"]
+    orders = {1: list(overrides), 2: list(reversed(overrides))}
+    for n in range(1, int(repeat) + 1):
+        for setting in orders[n]:
+            expected.append(f"configure|4|{overrides[setting]}")
+            expected += [
+                f"docker|update --cpus {cpus} w{i}"
+                for i, cpus in enumerate(("1", "0.6", "0.3", "0.15"), 1)
+            ]
+            expected += [
+                f"sample|tasks|bench/results/E7/tasks-{setting}-{n}.csv",
+                f"run|E7|{setting}|distsort|{n}|4|w1 w2 w3 w4",
+                "stop",
+            ]
+            expected += [f"docker|update --cpus 1 w{i}" for i in range(1, 5)]
+    expected += ["configure|4|", "defaults|"]
+    assert log.read_text().splitlines() == expected
+
+
+def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", "1")
+    monkeypatch.setenv("E7_CPUS", "1 1 0.5 .2")
+    monkeypatch.setenv("E7_SETTINGS", "mixed-late")
+    invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { note "configure|$1|${2:-}"; }
+        compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
+        compose=(compose_stub)
+        docker() { note "docker|$*"; }
+        start_sampler() { :; }
+        stop_sampler() { :; }
+        run() { :; }
+        """,
+        "E7",
+    )
+    assert log.read_text().splitlines() == [
+        "configure|4|speculation-late.yaml",
+        "docker|update --cpus 1 w1",
+        "docker|update --cpus 1 w2",
+        "docker|update --cpus 0.5 w3",
+        "docker|update --cpus .2 w4",
+        *(f"docker|update --cpus 1 w{i}" for i in range(1, 5)),
+        "configure|4|",
+    ]
+
+
+def test_e7_stops_when_the_cluster_has_another_number_of_workers(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        begin() { :; }
+        configure() { :; }
+        compose_stub() { printf 'w1\nw2\nw3\n'; }
+        compose=(compose_stub)
+        docker() { echo "docker|$*" >> "$CALL_LOG"; }
+        run() { echo submitted >> "$CALL_LOG"; }
+        """,
+        "E7",
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "3 workers are running; expected 4 CPU limits" in result.stderr
+    assert log.read_text() == ""
+
+
+def test_cleanup_restores_every_throttled_worker(experiment):
+    """A script that exits mid-run (an error, Ctrl-C) leaves no worker throttled."""
+    invoke, log = experiment
+    invoke(
+        """
+        docker() { echo "docker|$*" >> "$CALL_LOG"; }
+        slow="w1 w2 w3 w4"
+        exit 0
+        """
+    )
+    assert log.read_text().splitlines() == [f"docker|update --cpus 1 w{i}" for i in range(1, 5)]
+
+
+def test_e7_is_run_by_name_and_left_out_of_all(experiment, tmp_path):
+    """E7 is groundwork for #59: `all` keeps running E0 to E6 only."""
+    invoke, _ = experiment
+    (tmp_path / "data/input/warpeace").mkdir(parents=True)
+    (tmp_path / "data/input/warpeace/warpeace.txt").write_text("text\n")
+    (tmp_path / "data/input/crawl").mkdir(parents=True)
+    (tmp_path / "data/input/crawl/a.warc.wet.gz").write_text("")
+    stubs = "".join(f"e{i}() {{ echo E{i}; }}\n" for i in range(8))
+    assert invoke(stubs, "E7").stdout.splitlines() == ["E7"]
+    assert invoke(stubs, "all").stdout.splitlines() == [f"E{i}" for i in range(7)]
+
+
+def test_usage_lists_e7(experiment):
+    invoke, _ = experiment
+    result = invoke("", "E9", check=False)
+    assert result.returncode == 2
+    assert "E0|E1|E2|E3|E4|E5|E6|E7|all" in result.stderr
+
+
+def test_every_compose_override_the_script_uses_exists_and_sets_the_speculation():
+    """E2 and E7 name an override in deploy/compose; it must be there and change the flag."""
+    text = SCRIPT.read_text()
+    root = SCRIPT.parents[1] / "deploy/compose"
+    used = set(re.findall(r"\bconfigure 4 ([\w.-]+\.yaml)", text))
+    assert used == {"backups-off.yaml", "speculation-late.yaml"}
+    flags = {"backups-off.yaml": "-backups=false", "speculation-late.yaml": "-speculation=late"}
+    for name in sorted(used):
+        override = yaml.safe_load((root / name).read_text())
+        command = override["services"]["coordinator"]["command"]
+        assert command[:5] == ["coordinator", "-addr", ":7070", "-http", ":8080"], name
+        assert command[command.index("-data-dir") + 1] == "/out/wal", name
+        assert command[-1] == flags[name], name

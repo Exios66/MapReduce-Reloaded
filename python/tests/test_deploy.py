@@ -157,6 +157,28 @@ def test_backups_override_keeps_recovery_enabled(docker_compose):
     assert command[command.index("-data-dir") + 1] == "/out/wal"
 
 
+def test_speculation_override_keeps_recovery_enabled(docker_compose):
+    result = subprocess.run(
+        [
+            *docker_compose,
+            "-f",
+            str(COMPOSE.with_name("speculation-late.yaml")),
+            "config",
+            "--format",
+            "json",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=os.environ | {"COMPOSE_PROFILES": ""},
+        timeout=30,
+    )
+    command = json.loads(result.stdout)["services"]["coordinator"]["command"]
+    assert "-speculation=late" in command
+    assert "-backups=false" not in command
+    assert command[command.index("-data-dir") + 1] == "/out/wal"
+
+
 def test_soak_override_lowers_the_worker_limit(docker_compose):
     result = subprocess.run(
         [
