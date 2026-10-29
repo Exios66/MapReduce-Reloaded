@@ -91,7 +91,7 @@ A bug fix needs a test that fails without the fix; say which one.
 
 - [ ] `make check PYTHON=python` passes (proto-check, lint, `go test -race`, Python tests, coverage floors)
 - [ ] New or changed behavior has a test, and it fails without the change: <!-- test name -->
-- [ ] Required CI checks are green on the latest commit, or `make ci-report` posted `local-ci/make-check`
+- [ ] All required CI checks are green on the latest commit; if using `make ci-report`, `local-ci/make-check` has state `success` on that commit
 - [ ] Run by hand where tests cannot reach: <!-- the command, or "not applicable" -->
 
 <!-- Output of the commands above, trimmed to the lines that show the result: -->
