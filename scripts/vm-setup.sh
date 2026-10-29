@@ -298,13 +298,17 @@ install_shellcheck() {
 }
 
 check_devtools() {
-    if golangci_ok; then
+    if command -v golangci-lint >/dev/null 2>&1; then
         report OK lint "golangci-lint"
+    elif golangci_ok; then
+        report WARN lint "golangci-lint is in $TOOLS_BIN, which is not on PATH; make go-lint needs it there"
     else
         report WARN lint "golangci-lint missing, needed by make check (run with --install)"
     fi
-    if shellcheck_ok; then
+    if command -v shellcheck >/dev/null 2>&1; then
         report OK shell "shellcheck"
+    elif shellcheck_ok; then
+        report WARN shell "shellcheck is in $TOOLS_BIN, which is not on PATH; make sh-lint skips until it is"
     else
         report WARN shell "shellcheck missing; make sh-lint skips without it (run with --install)"
     fi
