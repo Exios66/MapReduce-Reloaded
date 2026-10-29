@@ -22,11 +22,10 @@
 # The four original jobs keep their exact make targets. The `lint` job holds
 # `md-lint`, which used to run inside the Python jobs, and
 # `mapping-coverage` always runs and fails the pipeline if any changed file
-# matches no mapping pattern in the setup config.
+# matches no line of .circleci/mapping.txt.
 #
-# Required checks after this lands (see docs/ci.md, Transition): proto, go,
-# python-3.11, python-3.13, lint, mapping-coverage. Until protection is
-# updated, lint and mapping-coverage report but are not required.
+# Required checks (docs/ci.md): proto, go, python-3.11, python-3.13, lint,
+# mapping-coverage.
 version: 2.1
 
 parameters:
@@ -340,18 +339,21 @@ jobs:
                 name: make md-lint
                 command: make md-lint PYTHON=python
 
-  # Always runs, with no `when` gating: it fails the pipeline if any file the
-  # PR changes matches no mapping pattern in .circleci/config.yml, so an
-  # unmapped file can never silently skip every job. See that script.
+  # Always runs, with no `when` gating: it re-runs the selection and fails
+  # the pipeline if any file the PR changes matches no line of
+  # .circleci/mapping.txt, or if the parameters this pipeline received lack
+  # one the selection sets, so a job can never be skipped silently.
   mapping-coverage:
     executor:
       name: small
       python: "3.11"
+    environment:
+      MR_CI_PARAMS: '{"run-all": << pipeline.parameters.run-all >>, "run-go": << pipeline.parameters.run-go >>, "run-python": << pipeline.parameters.run-python >>, "run-proto": << pipeline.parameters.run-proto >>, "run-lint": << pipeline.parameters.run-lint >>}'
     steps:
       - checkout
       - run:
-          name: Check every changed file is CI-mapped
-          command: python3 scripts/check-ci-mapping.py
+          name: Check the job selection
+          command: python3 scripts/ci-params.py --check
 
 # Jobs run in parallel, each in its own checkout, so proto generation cannot
 # change files another job is testing. All six jobs always exist in the

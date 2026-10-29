@@ -72,15 +72,29 @@ def test_circleci_stays_on_the_free_plan():
         assert "machine:" not in text
 
 
-def test_setup_config_routes_through_path_filtering():
-    """The setup config only routes (ADR 0020): it holds no job definitions."""
+def test_setup_config_only_selects_and_continues():
+    """The setup config only routes (ADR 0020): one job, no test logic."""
     assert "setup: true" in CIRCLE
-    assert "circleci/path-filtering@" in CIRCLE
-    assert "config-path: .circleci/continue-config.yml" in CIRCLE
-    # Orb 1.1.0 defaults the filter image tag to 3.8, which the downloaded
-    # get-pip.py now rejects; the job is pinned to a 3.10+ tag.
-    assert 'tag: "3.12"' in CIRCLE
-    assert 'tag: "3.8"' not in CIRCLE
+    # The path-filtering orb lists a moved file only at its new path.
+    assert "path-filtering@" not in CIRCLE
+    assert re.search(r"^  continuation: circleci/continuation@\d+\.\d+\.\d+$", CIRCLE, re.M)
+    assert "command: python3 scripts/ci-params.py | tee /tmp/ci-params.json" in CIRCLE
+    assert "configuration_path: .circleci/continue-config.yml" in CIRCLE
+    assert "parameters: /tmp/ci-params.json" in CIRCLE
+    assert re.findall(
+        r"^  (\S+):$", CIRCLE.split("\njobs:\n", 1)[1].split("\nworkflows:", 1)[0], re.M
+    ) == ["select"]
+
+
+def test_mapping_coverage_checks_what_the_jobs_received():
+    job = CONT.split("\n  mapping-coverage:\n", 1)[1].split("\nworkflows:", 1)[0]
+    assert "python3 scripts/ci-params.py --check" in job
+    received = re.search(r"MR_CI_PARAMS: '(.+)'", job).group(1)
+    for name in ("run-all", "run-go", "run-python", "run-proto", "run-lint"):
+        assert f'"{name}": << pipeline.parameters.{name} >>' in received
+    # Rendered with booleans, it is the JSON the script reads.
+    assert json.loads(re.sub(r"<< pipeline\.parameters\.[a-z-]+ >>", "true", received))
+    assert "when:" not in job and "unless:" not in job
 
 
 def test_golangci_lint_has_one_pin():

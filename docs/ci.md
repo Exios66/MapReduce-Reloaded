@@ -11,8 +11,9 @@ repository's Actions settings (2026-10-27).
 **What is committed and what is not.** This repository holds the
 configuration: [`.circleci/config.yml`](../.circleci/config.yml) (the setup
 config), [`.circleci/continue-config.yml`](../.circleci/continue-config.yml)
-(the jobs), [`scripts/check-ci-mapping.py`](../scripts/check-ci-mapping.py)
-(the mapping guard) and [`scripts/ci-install-go.sh`](../scripts/ci-install-go.sh) and the tests that
+(the jobs), [`.circleci/mapping.txt`](../.circleci/mapping.txt) (which
+files run which jobs), [`scripts/ci-params.py`](../scripts/ci-params.py)
+(the job selection and its check) and [`scripts/ci-install-go.sh`](../scripts/ci-install-go.sh) and the tests that
 keep them consistent. The service itself is turned on by the owner, in
 CircleCI and in GitHub's settings (see [Setup](#setup-by-the-owner)). Until the
 owner has done that, no CircleCI check appears on a PR, and nothing here has
@@ -27,7 +28,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
 | `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
-| `mapping-coverage` | `scripts/check-ci-mapping.py` (every changed file matches a CI mapping) | `cimg/python:3.11`, small |
+| `mapping-coverage` | `scripts/ci-params.py --check` (every changed file is mapped, and the jobs received the selection) | `cimg/python:3.11`, small |
 
 The names are set in the workflow, so they do not change when the job
 definitions do. The jobs call make targets and hold no lint, test or coverage
@@ -38,40 +39,56 @@ code generation in `proto` cannot change files `go` is testing.
 ## Implicated-only CI
 
 CircleCI dynamic configuration (ADR 0020) runs only the jobs a PR's files
-implicate. `.circleci/config.yml` is the setup config: one setup workflow
-runs the `path-filtering` orb against `main`, sets five boolean pipeline
-parameters from the changed files, and continues with
-`.circleci/continue-config.yml`, which holds the jobs.
+implicate. `.circleci/config.yml` is the setup config: its one `select` job
+runs `scripts/ci-params.py`, which diffs the branch against `origin/main` at
+the merge base, turns the changed files into five boolean pipeline
+parameters, and continues with `.circleci/continue-config.yml`, which holds
+the jobs.
 
 Filtering applies to PR branches only. On `main` every job runs in full,
-whatever the push changed: each job's condition also holds when
-`pipeline.git.branch` is `main`, so `main` keeps the coverage it had before
-filtering, and the credits are saved on PR pushes, where most runs happen.
+whatever the push changed: the script selects `run-all` there, and each
+job's condition also holds when `pipeline.git.branch` is `main`, so `main`
+keeps the coverage it had before filtering, and the credits are saved on PR
+pushes, where most runs happen.
+
+[`.circleci/mapping.txt`](../.circleci/mapping.txt) is the mapping: each
+line is `<regex> <parameter>`, and a changed file sets every parameter whose
+regex matches it. Three rules keep the selection conservative:
+
+- **A deleted file runs everything.** Other directories may name it: the Go
+  paper-mapping test checks that every file `docs/paper-mapping.md` cites
+  exists, and the link check follows Markdown links. The diff runs with
+  `--no-renames`, so a moved file is a deletion and an addition, and the job
+  that lost the file runs too. (The path-filtering orb this replaced listed
+  a moved file only at its new path, so moving a file out of `go/` skipped
+  `go`.)
+- **An unmapped file runs everything**, and `mapping-coverage` fails until it
+  has a line.
+- **`mapping-coverage` checks what the jobs received.** It runs the
+  selection again and fails if the parameters the pipeline actually got
+  (passed to it as `MR_CI_PARAMS`) lack one the changes need, so a broken
+  setup step cannot skip a job silently.
 
 | Changed files | Jobs run |
 |---|---|
-| `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod` | all (run-all) |
-| `go/**` | go |
-| `python/**` | python-3.11, python-3.13, go (the go job runs py-e2e) |
-| `proto/**` | proto |
-| `*.sh` | go (sh-lint lives in the go job) |
+| `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod`, `.gitignore` | all (run-all) |
+| any deleted file, any unmapped file | all (run-all) |
+| `go/**`, `*.sh`, `.githooks/**` | go (sh-lint lives in the go job) |
+| `python/**` | python-3.11, python-3.13, go (the go job runs py-e2e, and its paper-mapping test reads the Python test names) |
+| `proto/**`, `buf.yaml`, `go/gen/**`, `python/mapreduce_reloaded/gen/**` | proto (it regenerates the code and fails if the committed copy differs) |
+| `testdata/**` | go, python-3.11, python-3.13 |
 | `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
-| docs files Python tests assert on (`docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `design.md`, `README.md`, `docs/design/0001-*`, `docs/design/0014-*`) | python-3.11, python-3.13, lint |
-| `docs/paper-mapping.md` additionally | go (the Go paper-mapping test reads it) |
-| `bench/README.md`, `bench/*.py` | python-3.11, python-3.13, lint (Python tests execute the generators and assert on the README) |
-| `deploy/compose/*.yaml`, `deploy/compose/README.md` | python-3.11, python-3.13, lint (deploy tests validate the compose files and the guide) |
-| `deploy/compose/monitoring/**` | go, python-3.11, python-3.13, lint (the Go dashboard test reads the Grafana dashboard; the Python deploy tests check the Prometheus config, the Grafana provisioning and the dashboard) |
-| `examples/README.md`, `go/examples/**` | python-3.11, python-3.13, lint (the Python examples-guide test reads both) |
-| anything else | the mapping-coverage job fails; the author adds a mapping |
+| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `docs/design/0001-*`, `docs/design/0014-*`, `bench/README.md`, `bench/*.py`, `bench/*.sh`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `go/examples/**`, `.github/workflows/**`, `.coderabbit.yaml`, `.codeant/**` | python-3.11, python-3.13, and lint where the file is docs |
+| files outside `go/` the Go tests read: `README.md`, `docs/paper-mapping.md`, `examples/**`, `bench/jobs/**`, `deploy/compose/monitoring/**` | go, and lint where the file is docs |
 
-Setup image pin: the filter job passes `tag: "3.12"`, not the orb default.
-Orb 1.1.0 defaults the tag to 3.8, and the get-pip.py bootstrap its
-Set-parameters step downloads now requires Python 3.10 or newer, so the
-first setup run failed on the default image (job #1111). The pin is a
-major.minor tag, not rolling `current`, so the image cannot silently
-regress; any 3.10+ tag works. (Bumping within 1.x would not fix it: even
-1.3.0 defaults to 3.9. If the orb is ever bumped to 2.x+, re-check its
-default tag against that floor before dropping the pin.)
+The cross-directory rows come from tracing every file the Go and Python test
+suites open. The Python side checks itself: `python/tests/conftest.py`
+records every tracked file outside `python/` that a test opens, and the
+test run fails, naming the file, if the mapping does not route it to the
+Python jobs. (The whole-repository link sweep is marked `lint_inputs`: it
+reads every Markdown file, which the lint job checks.) For the Go tests, a
+new read of a file outside `go/` needs its line added by hand, and
+`python/tests/test_ci_params.py` lists the known ones.
 
 Echo-skip semantics: every job always exists in the workflow, so every
 required check always reports. A job whose inputs did not change runs only
@@ -82,12 +99,9 @@ merge red. There is deliberately no aggregator/gate job: CircleCI
 `requires` is not satisfied by a job skipped with `when`, so a gate
 requiring skipped jobs would never run.
 
-The mapping-coverage job always runs and fails the pipeline if any changed
-file matches no mapping pattern, so an unmapped file can never silently
-skip every job. When adding a new top-level area to the repo, add its
-mapping in the same PR; the guard enforces it. The guard script parses the
-mapping block out of `.circleci/config.yml`, so each mapping line must stay
-in the form `<regex> <parameter> true`, with no comments inside the block.
+When adding a new top-level area to the repo, add its lines to
+`.circleci/mapping.txt` in the same PR; `mapping-coverage` enforces it, and
+`test_every_tracked_file_is_mapped` fails locally first.
 
 Transition: before this lands, branch protection requires the original four
 checks. This change itself touches `.circleci/**`, so it maps to run-all
