@@ -15,6 +15,12 @@ size=${SIZE:-1073741824}
 workers=${WORKERS:-2}
 job=/data/out/soak-$(date +%s)
 
+# A run at or under the limit would pass without spilling.
+if [ "$size" -le $((256 << 20)) ]; then
+    echo "soak: SIZE must be larger than the 256 MB worker limit" >&2
+    exit 2
+fi
+
 "${compose[@]}" up -d --build --scale worker="$workers" coordinator worker >/dev/null
 
 # The coordinator's /metrics counts registered workers; wait for all of them.
@@ -47,7 +53,9 @@ esac
 containers=$("${compose[@]}" ps -aq)
 [ -n "$containers" ] || { echo "soak: no cluster containers to inspect" >&2; exit 1; }
 # shellcheck disable=SC2086 # one ID per word
-oom=$(docker inspect -f '{{.Name}} {{.State.OOMKilled}}' $containers | grep ' true$' || true)
+inspection=$(docker inspect -f '{{.Name}} {{.State.OOMKilled}}' $containers) ||
+    { echo "soak: cannot inspect the containers" >&2; exit 1; }
+oom=$(printf '%s\n' "$inspection" | grep ' true$' || true)
 if [ -n "$oom" ]; then
     echo "soak: killed for exceeding the memory limit: $oom" >&2
     exit 1
@@ -60,3 +68,6 @@ esac
 printf '%s\n' "$result" | awk -F'\t' '$1 == "seconds" { printf "soak: job time %.1f s\n", $2 }
 $1 == "map.output.bytes" { printf "soak: map output %.2f GB\n", $2 / 1e9 }'
 echo "soak: $size bytes with the combiner off finished on $workers workers at 256 MB, no OOM kill"
+
+# Put the normal cluster back, so a later job does not silently run at 256 MB.
+docker compose -p mapreduce -f deploy/compose/compose.yaml up -d coordinator worker >/dev/null

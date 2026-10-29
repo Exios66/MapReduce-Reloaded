@@ -92,7 +92,7 @@ e2e: cluster-up mr
 # The soak run of #160: 1 GiB with the combiner off on two workers limited
 # to 256 MB, which must finish with no out-of-memory kill (the acceptance
 # criterion of #47). Needs the cluster and a few minutes; not in make check.
-soak:
+soak: data
 	scripts/soak.sh
 
 # Seeded chaos on the cluster (#29): worker kills and pauses and coordinator
