@@ -106,7 +106,7 @@ Add this to `~/.ssh/config` so every command below can say `mr-vm` instead of
 the full host name. Fill in your own values: the real host and user name stay
 out of this public repository.
 
-```
+```text
 Host mr-vm
     HostName <your-vm-hostname>
     User <your-username>
@@ -186,7 +186,6 @@ The status page and Prometheus metrics are at `127.0.0.1:18780` (`/` and
 `ssh -L 18780:127.0.0.1:18780 mr-vm`. After `make monitoring-up`, Grafana
 is at `127.0.0.1:13000` and Prometheus at `127.0.0.1:19090`:
 `ssh -L 13000:127.0.0.1:13000 mr-vm`.
-
 
 ## Living alongside other coursework
 
