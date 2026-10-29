@@ -1,7 +1,7 @@
 #!/bin/sh
 # Fetches real datasets for the paper's example programs (§2.3) into
 # data/input/, the shared storage every container sees at /data/input
-# (ADR 0016). None is committed: they are 3 MB to 205 MB, and two are not
+# (ADR 0016). None is committed: they are 3 MB to 1.08 GB, and two are not
 # ours to redistribute in the repository. See docs/data.md.
 #
 # Usage: scripts/fetch-data.sh [warpeace | nasa | webgoogle | commoncrawl | crawl | all]

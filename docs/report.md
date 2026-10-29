@@ -105,7 +105,7 @@ short: unit tests in both languages, golden vectors shared by Go and
 Python for the file format, the hash and the messages, in-process cluster
 tests, a seeded chaos test that kills workers and restarts the
 coordinator, fuzzing of the decoders, a model-based test of the
-coordinator's RPCs, coverage floors per package (Go 91.7%, Python 100%),
+coordinator's RPCs, coverage floors per package (Go 89.8%, Python 100%),
 and mutation testing of the core packages. `make check` runs the fast set
 locally and CircleCI runs it on every pull request.
 
