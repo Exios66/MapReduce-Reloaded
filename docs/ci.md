@@ -177,7 +177,7 @@ that does not depend on any hosted service.
 
 ## Rollback
 
-If CircleCI has to go: remove the four checks from branch protection, enable
+If CircleCI has to go: remove the four checks from branch protection, if a protection rule has been set by then, enable
 the workflow again (`gh workflow enable CI`), set the triggers of
 `.github/workflows/ci.yml` back to `pull_request`, `push` to `main` and
 `workflow_dispatch`, and (if the Actions account lock persists) use
