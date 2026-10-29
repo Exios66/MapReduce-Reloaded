@@ -79,6 +79,15 @@ does not see any. Whether CircleCI builds fork PRs at all is a project
 setting (Project Settings, Advanced, "Build fork pull requests"). Leave it on
 only while no secret is added to the project. The checks need none.
 
+"Auto-cancel redundant workflows" is on (Project Settings, Advanced): a new
+push to a PR branch cancels that branch's run still in progress, which saves
+Free-plan credits. CircleCI never auto-cancels on `main`.
+
+Branch protection requires a PR to be up to date with `main`. A PR that
+passed before another one merged must merge `main` in (a merge commit, not
+a rebase) and pass again, so two PRs that each pass alone, but break when
+combined, cannot both land.
+
 ## Free plan
 
 The setup uses only what the Free plan includes: Docker executors with the
@@ -131,6 +140,7 @@ these. Do them in order. Each step is safe to stop after.
 |---|---|
 | Pull request required, `main` | GitHub |
 | `proto`, `go`, `python-3.11`, `python-3.13` | CircleCI, as GitHub names them |
+| Branch up to date with `main` before merging | GitHub (strict status checks, on since 2026-10-28) |
 | `local-ci/make-check` | optional, from `make ci-report` |
 
 `make check`, the pre-push hook and `make ci-report` are unchanged. The hook
