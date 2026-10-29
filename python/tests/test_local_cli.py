@@ -14,6 +14,7 @@ pytestmark = pytest.mark.skipif(shutil.which("go") is None, reason="needs the Go
 
 
 def test_local_mode_go_and_python_agree(tmp_path):
+    """The README's local-mode quick start: Go and Python write the same files."""
     inputs = str(CORPUS / "*.txt")
     go, py = tmp_path / "go", tmp_path / "py"
     subprocess.run(

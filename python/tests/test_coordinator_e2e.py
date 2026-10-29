@@ -51,6 +51,7 @@ class Proc:
     """A running command whose output is kept for the test log."""
 
     def __init__(self, name, args, env=None, log_dir=None):
+        """Starts a command with its output in log_dir."""
         self.name = name
         self.log = open(log_dir / f"{name.replace(' ', '-')}.log", "w+b")
         self.p = subprocess.Popen(
@@ -66,11 +67,13 @@ class Proc:
             pytest.fail(f"{self.name} did not exit within {timeout}s of {sig!r}")
 
     def output(self):
+        """The command's output so far."""
         self.log.seek(0)
         return self.log.read().decode(errors="replace")
 
 
 def free_port():
+    """A free localhost port, as host:port."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return f"127.0.0.1:{s.getsockname()[1]}"
@@ -80,6 +83,7 @@ class Cluster:
     """A Python coordinator and Go workers on free localhost ports."""
 
     def __init__(self, bin_dir, tmp, workers, wal, procs):
+        """Starts the coordinator and workers on free localhost ports."""
         self.bin, self.procs = bin_dir, procs
         self.addr, self.tmp = free_port(), tmp / "workers"
         self.tmp.mkdir()
@@ -95,11 +99,13 @@ class Cluster:
             self.workers.append(self._start(f"worker {i}", args, {"TMPDIR": str(self.tmp)}))
 
     def _start(self, name, args, env=None):
+        """Starts one command and keeps it for teardown."""
         p = Proc(name, args, env, self.logs)
         self.procs.append(p)
         return p
 
     def start_coordinator(self):
+        """Starts the coordinator and waits for its port."""
         args = [sys.executable, "-m", "mapreduce_reloaded.coordinator", "-addr", self.addr]
         args += ["-http", ""]
         if self.data_dir:
@@ -120,6 +126,7 @@ class Cluster:
         return mr(self.bin, *args)
 
     def submit(self, *args):
+        """Submits a job and returns its id."""
         return self.mr("submit", "-coordinator", self.addr, *args).strip()
 
     def status(self, job):
@@ -142,6 +149,7 @@ class Cluster:
         return st
 
     def signal_workers(self, sig):
+        """Sends sig to every live worker."""
         for w in self.workers:
             if w.p.poll() is None:
                 w.p.send_signal(sig)
@@ -179,6 +187,7 @@ class Cluster:
 
 
 def mr(bin_dir, *args):
+    """Runs the mr client and returns its stdout."""
     try:
         r = subprocess.run([str(bin_dir / "mr"), *args], capture_output=True, text=True, timeout=60)
     except subprocess.TimeoutExpired:
@@ -205,6 +214,7 @@ def cluster(bin_dir, tmp_path):
 
 
 def parts(d):
+    """The files in d, by name."""
     return {p.name: p.read_bytes() for p in Path(d).iterdir()}
 
 
@@ -223,6 +233,7 @@ def big_input(tmp_path):
 
 
 def reference(bin_dir, tmp_path, input):
+    """Local-mode word count over input, as the expected parts."""
     out = tmp_path / "reference"
     mr(bin_dir, "run", "-local", "-m", "12", "-r", "4", "wordcount", str(out), input)
     return parts(out)
