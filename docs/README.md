@@ -105,5 +105,5 @@ at 03: there are no explainers 01 and 02, and the files were not renumbered.
   and [`deploy/compose/README.md`](../deploy/compose/README.md): each file in
   `deploy/compose/` and when to use it.
 - [`scripts/README.md`](../scripts/README.md): the helper scripts.
-- [`examples/README.md`](../examples/README.md): the job file and the notebook
-  that the quick start and the demo use.
+- [`examples/README.md`](../examples/README.md): the job file that the quick
+  start and the demo submit, and the demo notebook.

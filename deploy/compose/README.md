@@ -33,9 +33,15 @@ ports are bound to `127.0.0.1` only.
 - `monitoring/`: Prometheus configuration and the Grafana dashboard
   for the `monitoring` profile.
 
-The overrides are layered on `compose.yaml` with a second `-f`, for
-example `docker compose -p mapreduce -f compose.yaml -f speculation-late.yaml
-up -d`. `bench/experiments.sh` does this itself: for each setting it recreates the
+The overrides are layered on `compose.yaml` with a second `-f`. From the
+repository root, for example:
+
+```sh
+docker compose -p mapreduce -f deploy/compose/compose.yaml \
+    -f deploy/compose/speculation-late.yaml up -d
+```
+
+`bench/experiments.sh` does this itself: for each setting it recreates the
 coordinator with that setting's override, or with none.
 
 See [`deploy/README.md`](../README.md) for the wider deployment layout and
