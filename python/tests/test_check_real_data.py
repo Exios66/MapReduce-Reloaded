@@ -19,6 +19,7 @@ def golden(d: Path) -> list[bytes]:
 
 EX = ROOT / "testdata/examples"
 CORPUS = ROOT / "testdata/corpus"
+INDEX = EX / "invertedindex/expected/r4"
 
 
 @pytest.mark.parametrize(
@@ -27,7 +28,7 @@ CORPUS = ROOT / "testdata/corpus"
         ("wordcount", sorted(CORPUS.glob("*.txt")), CORPUS / "expected"),
         ("urlfreq", [EX / "urlfreq/input/access.log"], EX / "urlfreq/expected/r4"),
         ("reverselinks", [EX / "reverselinks/input/links.tsv"], EX / "reverselinks/expected/r4"),
-        ("invertedindex", [CORPUS / "raven.txt", EX / "edge.txt"], EX / "invertedindex/expected/r4"),
+        ("invertedindex", [CORPUS / "raven.txt", EX / "edge.txt"], INDEX),
         ("termvector", [EX / "termvector/input/docs.tsv"], EX / "termvector/expected/r4"),
     ],
 )  # fmt: skip
