@@ -23,7 +23,7 @@ def test_code_cells_compile():
 
 
 def test_the_notebook_runs_the_demo_pipeline():
-    """The notebook still runs the demo's steps."""
+    """Checks that the demo's steps appear in the notebook's code cells."""
     source = "\n".join(cell["source"] for cell in cells() if cell["cell_type"] == "code")
     for step in ('"upload"', '"submit"', '"cat"', "-local", "metrics_lines"):
         assert step in source, step

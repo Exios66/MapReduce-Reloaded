@@ -121,7 +121,7 @@ def test_page(get):
 
 
 def _fetch(url):
-    """GETs a path from a running server and returns its body."""
+    """GETs a URL and returns its HTTP status."""
     with urllib.request.urlopen(url) as r:
         return r.status
 
