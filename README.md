@@ -155,8 +155,12 @@ reduce  4/4
 counters at any time. While a job runs, the status page is at
 <http://127.0.0.1:18780/>.
 
-![The status page during a chaos run: a job completes with two backup
-attempts, the next is mapping, and the workers list their running tasks](docs/assets/status-chaos.gif)
+<picture>
+  <source srcset="docs/assets/status-chaos-dark.gif" media="(prefers-color-scheme: dark)">
+  <img src="docs/assets/status-chaos-light.gif" alt="The status page during a seeded chaos run: map progress with percentages, backup attempts, key counters, and the workers with their running map tasks.">
+</picture>
+
+<sub>The status page during a seeded chaos run, in the reader's light or dark color scheme. It refreshes every two seconds and shows each job's map and reduce progress with a percentage, backup attempts, key counters, and every worker's running tasks.</sub>
 
 ### 5. Read the output
 

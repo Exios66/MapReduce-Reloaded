@@ -3,54 +3,138 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2">
+<meta name="color-scheme" content="light dark">
 <title>MapReduce status</title>
 <style>
-body { font: 14px system-ui, sans-serif; margin: 2em; }
-table { border-collapse: collapse; margin-bottom: 2em; }
-th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
-progress { width: 8em; }
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f7; --panel: #fff; --text: #1c2128; --muted: #59636e;
+  --line: #d0d7de; --track: #e8ebef;
+  --blue: #0969da; --green: #1a7f37; --amber: #9a6700; --red: #cf222e; --purple: #8250df;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #9198a1;
+    --line: #30363d; --track: #21262d;
+    --blue: #4493f8; --green: #3fb950; --amber: #d29922; --red: #f85149; --purple: #ab7df8;
+  }
+}
+body.dark {
+  color-scheme: dark;
+  --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #9198a1;
+  --line: #30363d; --track: #21262d;
+  --blue: #4493f8; --green: #3fb950; --amber: #d29922; --red: #f85149; --purple: #ab7df8;
+}
+* { box-sizing: border-box; }
+body {
+  max-width: 1080px; margin: 0 auto; padding: 18px 20px 24px;
+  background: var(--bg); color: var(--text);
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 16px; }
+h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+h2 { margin: 20px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.summary { margin: 0; color: var(--muted); }
+.summary b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.jobs { display: grid; gap: 8px; }
+.job { padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.job-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.job-id { font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.spacer { flex: 1; }
+.duration { color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge { padding: 1px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.state-mapping { color: var(--blue); }
+.state-reducing { color: var(--purple); }
+.state-succeeded { color: var(--green); }
+.state-failed { color: var(--red); }
+.state-pending, .state-unspecified { color: var(--muted); }
+.phases { display: grid; grid-template-columns: 3.2em 1fr auto; gap: 4px 10px; align-items: center; margin-top: 8px; }
+.phase-label { color: var(--muted); }
+progress { width: 100%; height: 8px; border: 0; border-radius: 4px; background: var(--track); overflow: hidden; }
+progress::-webkit-progress-bar { background: var(--track); border-radius: 4px; }
+progress::-webkit-progress-value { background: var(--bar, var(--blue)); border-radius: 4px; }
+progress::-moz-progress-bar { background: var(--bar, var(--blue)); border-radius: 4px; }
+progress.map { --bar: var(--blue); }
+progress.reduce { --bar: var(--purple); }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meta { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.meta b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.error { color: var(--red); overflow-wrap: anywhere; }
+details { margin-top: 8px; font-size: 12px; color: var(--muted); }
+summary { cursor: pointer; }
+.counters { margin-top: 6px; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th { padding: 5px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: left; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.nowrap { white-space: nowrap; }
+.empty { margin: 0; padding: 8px 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 </style>
 </head>
-<body>
+<body{{if .Dark}} class="dark"{{end}}>
+<header>
 <h1>MapReduce status</h1>
+<p class="summary"><b>{{len .Jobs}}</b> jobs &middot; <b>{{len .Workers}}</b> workers &middot; <b>{{len .Lost}}</b> lost &middot; {{.At.Format "15:04:05"}}</p>
+</header>
 
 <h2>Jobs</h2>
-<table>
-<tr><th>Job</th><th>State</th><th>Duration</th><th>Map</th><th>Reduce</th><th>Backups</th><th>Counters</th><th>Error</th></tr>
+<section class="jobs">
 {{range .Jobs}}
-<tr>
-<td>{{.JobId}}</td>
-<td>{{.State}}</td>
-<td>{{duration . $.At}}</td>
-<td><progress max="{{.MapTasksTotal}}" value="{{.MapTasksCompleted}}"></progress> {{.MapTasksCompleted}}/{{.MapTasksTotal}}</td>
-<td><progress max="{{.ReduceTasksTotal}}" value="{{.ReduceTasksCompleted}}"></progress> {{.ReduceTasksCompleted}}/{{.ReduceTasksTotal}}</td>
-<td>{{.BackupAttempts}} started, {{.BackupWins}} won</td>
-<td>{{range $name, $n := .GetCounters.GetValues}}{{$name}}: {{$n}}<br>{{end}}</td>
-<td>{{.Error}}</td>
-</tr>
+<article class="job">
+<div class="job-head">
+<span class="job-id">{{.JobId}}</span>
+{{$state := state .State}}<span class="badge state-{{$state}}">{{$state}}</span>
+<span class="spacer"></span>
+<span class="duration">{{with duration . $.At}}{{.}}{{else}}&mdash;{{end}}</span>
+</div>
+<div class="phases">
+<span class="phase-label">map</span>
+<progress class="map" max="{{.MapTasksTotal}}" value="{{.MapTasksCompleted}}" aria-label="map tasks"></progress>
+<span class="count">{{.MapTasksCompleted}}/{{.MapTasksTotal}} &middot; {{percent .MapTasksCompleted .MapTasksTotal}}</span>
+<span class="phase-label">reduce</span>
+<progress class="reduce" max="{{.ReduceTasksTotal}}" value="{{.ReduceTasksCompleted}}" aria-label="reduce tasks"></progress>
+<span class="count">{{.ReduceTasksCompleted}}/{{.ReduceTasksTotal}} &middot; {{percent .ReduceTasksCompleted .ReduceTasksTotal}}</span>
+</div>
+<div class="meta">
+<span>backups: {{.BackupAttempts}} started, {{.BackupWins}} won</span>
+<span>map in <b>{{counter .GetCounters "map.input.records"}}</b></span>
+<span>map out <b>{{counter .GetCounters "map.output.records"}}</b></span>
+<span>reduce out <b>{{counter .GetCounters "reduce.output.records"}}</b></span>
+{{if .Error}}<span class="error">{{.Error}}</span>{{end}}
+</div>
+<details>
+<summary>all counters</summary>
+<div class="counters">{{range $name, $n := .GetCounters.GetValues}}{{$name}}: {{$n}}<br>{{end}}</div>
+</details>
+</article>
 {{else}}
-<tr><td colspan="8">No jobs yet.</td></tr>
+<p class="empty">No jobs yet.</p>
 {{end}}
-</table>
+</section>
 
 <h2>Workers</h2>
 <table>
-<tr><th>Worker</th><th>Host</th><th>Last seen</th><th>Running</th></tr>
+<thead><tr><th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Last seen</th><th scope="col">Running</th></tr></thead>
+<tbody>
 {{range .Workers}}
-<tr><td>{{.ID}}</td><td>{{.Info.GetHost}}</td><td>{{.LastSeen.Format "15:04:05"}}</td><td>{{range .Running}}{{.}}<br>{{end}}</td></tr>
+<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}}</td><td>{{range .Running}}<span class="mono">{{.}}</span><br>{{end}}</td></tr>
 {{else}}
 <tr><td colspan="4">No workers.</td></tr>
 {{end}}
+</tbody>
 </table>
 
 <h2>Lost workers</h2>
 <table>
-<tr><th>Worker</th><th>Lost at</th><th>Tasks run again</th></tr>
+<thead><tr><th scope="col">Worker</th><th scope="col">Lost at</th><th scope="col">Tasks run again</th></tr></thead>
+<tbody>
 {{range .Lost}}
-<tr><td>{{.ID}}</td><td>{{.At.Format "15:04:05"}}</td><td>{{range .Tasks}}{{.}}<br>{{end}}</td></tr>
+<tr><td class="mono">{{.ID}}</td><td class="nowrap">{{.At.Format "15:04:05"}}</td><td>{{range .Tasks}}<span class="mono">{{.}}</span><br>{{end}}</td></tr>
 {{else}}
 <tr><td colspan="3">None.</td></tr>
 {{end}}
+</tbody>
 </table>
 </body>
 </html>

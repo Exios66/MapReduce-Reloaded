@@ -11,7 +11,7 @@ them to predict how long a job would take and to find slow machines.
 
 | Path | What | Where |
 |------|------|-------|
-| `/` | Jobs with their duration, map and reduce progress, backup attempts, counters and errors; live workers and what each runs; lost workers and the tasks that had to run again. It refreshes every 2 seconds. | `statusweb/status.html` |
+| `/` | Jobs as compact cards: duration, state badge, map and reduce progress with a percentage, backup attempts, key counters, all counters in a `<details>`, and errors; live workers and what each runs; lost workers and the tasks that had to run again. It refreshes every 2 seconds and follows the reader's light or dark color scheme; `?theme=dark` forces dark. | `statusweb/status.html` |
 | `/metrics` | `mr_workers`, `mr_job_tasks{job,kind,state}`, `mr_job_duration_seconds{job}`, `mr_job_backups{job,state}`, `mr_job_map_tasks_local{job,level}` and `mr_job_counter{job,name}`, in the Prometheus text format | `statusweb/metrics.go` |
 
 Both read `coordinator.Server.Status`, a copy of the coordinator's state
