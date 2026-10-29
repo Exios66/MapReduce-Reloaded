@@ -5,8 +5,8 @@
 # killed for exceeding its memory limit.
 #
 # It uses deploy/compose/soak.yaml, which lowers the worker limit to 256 MB.
-# The input is cached in data/input/ between runs; make cluster-down removes
-# it. Size and workers can be overridden: SIZE=... WORKERS=... make soak.
+# The input is cached in data/input/ between runs; make cluster-down keeps
+# it, so delete data/input/ by hand to free the disk. Size and workers can be overridden: SIZE=... WORKERS=... make soak.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

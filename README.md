@@ -60,7 +60,7 @@ removes the containers and keeps `data/`.
 | Data | Text and key/value formats; zstd and Snappy for intermediate and output data |
 | Jobs | A job is one Go file the workers interpret; nothing to compile or upload |
 | Operations | Status page, Prometheus metrics, Grafana dashboard, chaos test with seeded worker kills and coordinator crashes |
-| Languages | Go cluster and Python reference implementation; the same bytes for the same uncompressed job |
+| Languages | Go cluster; Python reference implementation and a coordinator tested with Go workers; the same bytes for the same uncompressed job |
 
 Phases 0–4 and most of Phase 6 are done; Python workers and full Go↔Python
 interoperability (Phase 5) are stretch goals — the Python-coordinator/Go-worker
@@ -200,7 +200,7 @@ diff -r /tmp/wc /tmp/wc-py && echo identical
 ```text
 proto/     gRPC/protobuf contract shared by Go and Python
 go/        Go implementation: coordinator, worker, mr, example programs
-python/    Python reference implementation: API, file format, local mode
+python/    Python reference implementation: API, file format, local mode, coordinator
 deploy/    Dockerfile, Compose cluster, Prometheus and Grafana
 bench/     data generators, benchmark harness and the evaluation
 scripts/   code generation, the end-to-end test, test-data generators
