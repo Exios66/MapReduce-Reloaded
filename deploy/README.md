@@ -56,4 +56,4 @@ start containers or require a Docker daemon. When `promtool` is installed,
 its `check config` validates the Prometheus configuration too. Missing
 external tools produce explicit pytest skips; the static contract checks
 always run. Image builds, non-root runtime checks and a live query through
-Prometheus still require a container-based end-to-end run.
+Prometheus are part of `make e2e`.
