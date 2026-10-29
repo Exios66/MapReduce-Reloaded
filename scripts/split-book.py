@@ -53,7 +53,9 @@ def main(argv: list[str]) -> int:
     docs.mkdir(parents=True, exist_ok=True)
     tsv = bytearray()
     for part, chapter, lines in found:
-        (files / f"b{part:02d}-c{chapter:03d}.txt").write_bytes(b"\n".join(lines) + b"\n")
+        (files / f"b{part:02d}-c{chapter:03d}.txt").write_bytes(
+            b"\n".join(lines) + b"\n"
+        )
         text = b" ".join(line.strip() for line in lines).replace(b"\t", b" ")
         tsv += b"http://book-%02d.warpeace/chapter-%03d\t%s\n" % (part, chapter, text)
     (docs / "docs.tsv").write_bytes(tsv)

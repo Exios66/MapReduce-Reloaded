@@ -102,6 +102,7 @@ def termvector(files: list[Path], min_count: int = 2) -> dict[bytes, bytes]:
         host = re.split(rb"[/?#]", url.partition(b"://")[2], maxsplit=1)[0]
         if tab and host:
             vectors.setdefault(host, Counter()).update(text.split())
+
     def encode(v: Counter) -> bytes:
         terms = sorted(v.items(), key=lambda tn: (-tn[1], tn[0]))
         return b" ".join(b"%s:%d" % (t, n) for t, n in terms if n >= min_count)
@@ -137,7 +138,9 @@ def run(label: str, cmd: list[str], out: Path, want: list[bytes], r: int) -> boo
         print(f"{label}: exit {p.returncode}\n{p.stdout}{p.stderr}")
         return False
     ok = read_output(out, r) == want
-    print(f"{label}: {'same as the oracle' if ok else 'DIFFERS from the oracle'} ({took:.1f}s)")
+    print(
+        f"{label}: {'same as the oracle' if ok else 'DIFFERS from the oracle'} ({took:.1f}s)"
+    )
     return ok
 
 
@@ -165,18 +168,29 @@ def check(name: str, args, tmp: Path) -> bool:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="check-real-data.py")
-    parser.add_argument("--mr", default=str(ROOT / "bin" / "mr"), help="the Go mr command")
-    parser.add_argument("--python", default=sys.executable, help="a Python with mapreduce_reloaded")
+    parser.add_argument(
+        "--mr", default=str(ROOT / "bin" / "mr"), help="the Go mr command"
+    )
+    parser.add_argument(
+        "--python", default=sys.executable, help="a Python with mapreduce_reloaded"
+    )
     parser.add_argument("-m", type=int, default=16, help="map tasks (default 16)")
     parser.add_argument("-r", type=int, default=4, help="reduce tasks (default 4)")
-    parser.add_argument("--no-python", action="store_true", help="run only the Go program")
+    parser.add_argument(
+        "--no-python", action="store_true", help="run only the Go program"
+    )
     parser.add_argument("names", nargs="*", metavar="NAME")
     args = parser.parse_args(argv)
     if unknown := [n for n in args.names if n not in DATASETS]:
-        parser.error(f"unknown dataset {', '.join(unknown)}; want {', '.join(DATASETS)}")
+        parser.error(
+            f"unknown dataset {', '.join(unknown)}; want {', '.join(DATASETS)}"
+        )
     names = args.names or [n for n, (_, rel) in DATASETS.items() if any(DATA.glob(rel))]
     if not names:
-        print("check-real-data: no data in data/input; run scripts/fetch-data.sh", file=sys.stderr)
+        print(
+            "check-real-data: no data in data/input; run scripts/fetch-data.sh",
+            file=sys.stderr,
+        )
         return 1
     with tempfile.TemporaryDirectory() as tmp:
         ok = all([check(n, args, Path(tmp)) for n in names])
