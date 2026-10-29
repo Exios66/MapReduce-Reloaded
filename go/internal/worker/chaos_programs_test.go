@@ -123,9 +123,9 @@ func TestChaosPrograms(t *testing.T) {
 				t.Fatal(err)
 			}
 			if spec.GetProgram() == "test.bad-record" {
-				// One line skipped in each of the corpus's three files: each
+				// One line skipped in each of the corpus's four files: each
 				// is empty, so only this counter sees them.
-				want[task.SkippedRecords] = 3
+				want[task.SkippedRecords] = 4
 			}
 
 			sub, err := c.client.SubmitJob(c.ctx, &pb.SubmitJobRequest{Job: spec})
