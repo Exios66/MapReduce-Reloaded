@@ -169,7 +169,7 @@ python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 SSH drops. The command above draws a fresh run into `bench/plots/`
 (`E0.png` … `E6.png`, each with a `-dark` variant), so it does not touch the
 plots committed in `bench/evaluation/`, which come from the saved runs there:
-`python3 bench/plot-experiments.py bench/evaluation bench/evaluation` (see
+`python/.venv/bin/python bench/plot-experiments.py bench/evaluation bench/evaluation` (see
 [bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
