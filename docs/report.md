@@ -144,15 +144,15 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests, each reviewed.** 157 merged pull requests (as of October 2026),
-  each reviewed by an AI agent and CI before it merged; several real bugs
-  were found in review, not by tests.
+- **Small pull requests.** 157 merged pull requests (as of October 2026).
+  The documented process calls for AI review and CI before merging; several
+  real bugs were found in review, not by tests.
 
 ## Future work
 
 Kept open as `[stretch]` issues:
 
-- **Python parity (#35–#39):** a Python coordinator and worker, Python
+- **Python parity (#35, #37–#39):** a Python worker, Python
   map and reduce functions on Go workers, and a test matrix over every
   Go/Python combination.
 - **Modern extensions (#43–#55):** an external shuffle service,

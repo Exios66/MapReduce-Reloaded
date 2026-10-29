@@ -119,7 +119,7 @@ failing, and jobs still finish correctly.*
   ([design.md](../design.md)) and decision records. This makes the "faithful
   recreation" claim checkable.
 
-### Phase 5 — Python catches up (#35–#39) · *stretch*
+### Phase 5 — Python catches up (#35, #37–#39) · *stretch*
 
 - Full Python worker (coordinator done).
 - Python map and reduce functions running on Go workers.

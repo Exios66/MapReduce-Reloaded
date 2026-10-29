@@ -4,8 +4,9 @@ The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F24)
 are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
 
-**Status.** Phases 0–4 and Phase 7 are done: every paper feature F1–F24 runs in Go and
-has a test, and so are #41 and #42 (Phase 6 Tier A). Phase 7's benchmarks
+**Status.** Phases 0–4 and Phase 7 are done: F1–F23 run in Go and have
+tests; F24 is covered by the Phase 7 evaluation harness. #41 and #42
+(Phase 6 Tier A) are also done. Phase 7's benchmarks
 and evaluation (#57, #58) and the final report (#60) are done; the course deliverables below remain. Where the build departed
 from this plan, [design.md](../design.md) lists the differences from the paper
 and why.
@@ -92,7 +93,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #57 and #58: benchmarks and the paper's §5 experiments;
   - #60: the final report.
 - **Stretch** (issues kept open with a `[stretch]` prefix):
-  - #35–#39: Python distributed parity;
+  - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions.
 - **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
