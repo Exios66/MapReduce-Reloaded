@@ -15,8 +15,9 @@ Each term is defined here, where it is first used. A Go analogy follows
 where one helps; none is exact.
 
 - **Container.** A running process, or a few, that sees its own file
-  system, its own network and its own process list, and that has limits on
-  memory and CPU. It shares the host's kernel, so it is not a virtual
+  system, its own network and its own process list, and that can be given
+  limits on memory and CPU. Here every service has a memory limit and only
+  the workers have a CPU limit. It shares the host's kernel, so it is not a virtual
   machine. A Go analogy is a process started from a binary, with a private
   view of the machine.
 - **Image.** The read-only file system a container starts from, plus
@@ -34,9 +35,11 @@ where one helps; none is exact.
 - **Network.** A virtual network that Docker creates for the containers
   that share it. Each container gets an address, and Docker's built-in DNS
   resolves a service's name to it.
-- **Published port.** A port a container listens on, made reachable from
-  the host. A port that is not published is reachable only from containers
-  on the same network.
+- **Published port.** A port a container listens on, mapped to a port of
+  the host, so programs on the host reach it at `127.0.0.1`. An unpublished
+  port is reached by name from containers on the same network. On a Linux
+  host it can also be reached at the container's private address on the
+  Docker network, but nothing in this project does that.
 - **Compose.** A tool that reads one YAML file and starts a set of
   containers, a network and volumes together. The set is a **project**; ours
   is named `mapreduce`.
@@ -154,7 +157,7 @@ Notes on the table:
 
 | Service | Effect | How it comes back |
 |---|---|---|
-| `coordinator` | No new tasks and no status page. Workers keep trying and register again. Without `-data-dir` the job would be lost; with it, a restarted coordinator replays `/out/wal`, keeps finished tasks and resumes the job (`make e2e` kills and restarts it to check this). A clean `docker compose stop` also tells the workers to exit; a crash or `docker kill` does not | `docker restart`, or `docker start` after a kill |
+| `coordinator` | No new tasks and no status page. Workers keep trying and register again. Without `-data-dir` the job would be lost; with it, a restarted coordinator replays `/out/wal`, keeps finished tasks and resumes the job (`make e2e` kills and restarts it to check this). A clean `docker compose stop` also tells the workers to exit; a crash or `docker kill` does not | `docker start` after a crash or `docker kill`. A clean stop, `docker restart` included, also ends the workers, which have no restart policy, so run `make cluster-up` then |
 | `worker` | After 10 s without a heartbeat the coordinator declares it dead. Its running tasks, and its finished map tasks, whose output was on its disk, run again on the others. E3 measured the cost ([bench/README.md](../bench/README.md#e3-losing-a-worker)). The job finishes on three workers | Compose has no restart policy here, so it stays down until `make cluster-up` or `docker start` |
 | `mr` | Nothing: it is a short-lived command | `run --rm` starts a new one |
 | `s3` | Jobs that use `s3://` paths fail. Jobs on `/data` paths are not affected | `docker start`, or `make e2e-s3` |
