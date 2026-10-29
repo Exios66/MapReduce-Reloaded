@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint sh-lint
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -218,6 +218,13 @@ py-test:
 cover: test
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt --report
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt --report
+
+# The Python coordinator with the Go worker and mr commands (#36). py-test
+# runs these too, but skips them where Go is missing, as in CI's Python
+# jobs; CI's go job runs them here, and MR_REQUIRE_GO makes a skip a
+# failure, so the integration is checked on every pull request.
+py-e2e:
+	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
 py-lint:
 	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench

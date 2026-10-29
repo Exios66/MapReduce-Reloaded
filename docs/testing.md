@@ -16,6 +16,7 @@ rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 | Chaos, seeded | `go test ./internal/worker -run TestChaos -chaos.runs=50` | 3 seeds | `TestChaos`, `TestChaosPrograms` (#155) |
 | Coordinator model | `go test ./internal/coordinator -run TestModel -model.runs=300` | 15 seeds | `model_test.go` (#154) |
 | Processes on localhost | `go test ./internal/e2e` | yes | #151 |
+| Python coordinator, Go workers | `make py-e2e` | yes, but they skip if Go cannot build them; `make py-e2e`, run by CI's `go` job, sets `MR_REQUIRE_GO`, so a skip fails | `python/tests/test_coordinator_e2e.py`, #36 |
 | Storage contract | `go test ./internal/storage` | yes; `make e2e-s3` adds a real gateway | #156 |
 | Fuzz | `make fuzz` (`FUZZTIME`, default 20s a target) | stored seeds only | #152 |
 | Flaky tests | `make flaky` | no | #157 |

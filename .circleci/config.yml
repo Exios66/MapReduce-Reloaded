@@ -169,7 +169,9 @@ jobs:
 
   # Formatting, vet, golangci-lint, then the race-detector tests, the paper
   # mapping check and the coverage floors. python[dev] is installed here too:
-  # the Go golden tests run the Python reference implementation.
+  # the Go golden tests run the Python reference implementation, and
+  # py-e2e runs the Python coordinator with the Go commands, which the
+  # Python jobs, without Go, skip.
   go:
     executor:
       name: medium
@@ -190,8 +192,8 @@ jobs:
           name: make sh-lint
           command: MR_REQUIRE_SHELLCHECK=1 make sh-lint
       - run:
-          name: make go-lint go-test
-          command: make go-lint go-test PYTHON=python
+          name: make go-lint go-test py-e2e
+          command: make go-lint go-test py-e2e PYTHON=python
           no_output_timeout: 30m
       - store_artifacts:
           path: go/cover.out
