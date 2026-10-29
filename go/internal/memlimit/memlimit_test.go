@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestRead checks the finite, unlimited, empty and garbage cases.
 func TestRead(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -33,12 +34,14 @@ func TestRead(t *testing.T) {
 	}
 }
 
+// TestReadMissing reports no limit for a file that does not exist.
 func TestReadMissing(t *testing.T) {
 	if _, ok := read(filepath.Join(t.TempDir(), "missing")); ok {
 		t.Fatal("a missing file reported a limit")
 	}
 }
 
+// TestFromCgroupIsSane reads this machine's cgroup without panicking.
 func TestFromCgroupIsSane(t *testing.T) {
 	if limit := FromCgroup(); limit < 0 {
 		t.Fatalf("FromCgroup() = %d", limit)

@@ -146,6 +146,7 @@ def test_e1_sorts_exponents_numerically(plotter, tmp_path):
 
 
 def test_e6_groups_the_three_inputs_in_order(plotter, tmp_path):
+    """E6 draws the three inputs in order with their savings."""
     module, pyplot = plotter
     figure, shuffled, seconds = Mock(), Mock(), Mock()
     shuffled.get_legend_handles_labels.return_value = [], []

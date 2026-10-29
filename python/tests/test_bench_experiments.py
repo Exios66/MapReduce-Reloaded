@@ -83,6 +83,7 @@ def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(
 
 
 def test_e6_pairs_the_combiner_on_each_text_and_restores_defaults(experiment, tmp_path):
+    """E6 runs each input with the combiner on and off, alternating."""
     invoke, _ = experiment
     (tmp_path / "data/input/warpeace").mkdir(parents=True)
     (tmp_path / "data/input/warpeace/warpeace.txt").write_text("text\n")
@@ -107,6 +108,7 @@ def test_e6_pairs_the_combiner_on_each_text_and_restores_defaults(experiment, tm
 
 @pytest.mark.parametrize("have", ["", "book", "crawl"])
 def test_e6_needs_the_book_and_the_crawl(experiment, tmp_path, have):
+    """E6 refuses to start without its two inputs."""
     invoke, _ = experiment
     if have == "book":
         (tmp_path / "data/input/warpeace").mkdir(parents=True)
@@ -121,6 +123,7 @@ def test_e6_needs_the_book_and_the_crawl(experiment, tmp_path, have):
 
 
 def test_all_checks_e6_inputs_before_e0(experiment):
+    """`all` checks E6's inputs before it starts E0."""
     invoke, _ = experiment
     result = invoke("e0() { echo E0; }", "all", check=False)
     assert result.returncode == 1
