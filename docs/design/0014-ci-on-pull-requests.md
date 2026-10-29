@@ -38,9 +38,12 @@ playing that role on a solo project) cannot see that the checks passed.
 
 GitHub-hosted jobs fail on the account lock described below, and every failure
 notifies the owner. `.circleci/config.yml` therefore runs the same gate on
-CircleCI's Free plan, in four jobs named `proto`, `go`, `python-3.11` and
-`python-3.13`. Each job calls the same make targets as the Actions jobs, so the
-two providers cannot disagree about what a check means. [CI](../ci.md) has the
+CircleCI's Free plan, in six jobs named `proto`, `go`, `python-3.11`,
+`python-3.13`, `lint` and `mapping-coverage`. Each job calls make targets;
+the original four call the same ones as the Actions jobs, so the two
+providers cannot disagree about what a check means, and `lint` and
+`mapping-coverage` are CircleCI-only additions for dynamic config (ADR 0020).
+[CI](../ci.md) has the
 jobs, the caches, the Free-plan limits, the setup the owner completes, and
 rollback.
 
