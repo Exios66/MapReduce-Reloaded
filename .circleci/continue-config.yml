@@ -1,4 +1,4 @@
-# Continuation config for the CircleCI setup workflow (docs/ci.md, ADR 0019).
+# Continuation config for the CircleCI setup workflow (docs/ci.md, ADR 0020).
 # .circleci/config.yml (setup: true) decides which pipeline parameters are
 # true from the PR's changed files, then continues here.
 #

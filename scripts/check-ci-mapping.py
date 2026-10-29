@@ -6,7 +6,7 @@ under the path-filtering/filter job; each line's first token is a regex),
 diffs the branch against origin/main at the merge base, and exits 1 listing
 every changed file that no pattern matches. An unmapped file must get a
 mapping before the PR can merge: silently skipping it would drop CI
-coverage for whatever it affects (docs/ci.md, ADR 0019).
+coverage for whatever it affects (docs/ci.md, ADR 0020).
 
 Run from the repository root: ``python3 scripts/check-ci-mapping.py``.
 The mapping-coverage CI job runs it on every PR.

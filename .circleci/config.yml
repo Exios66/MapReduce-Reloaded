@@ -1,4 +1,4 @@
-# Hosted CI on CircleCI's Free plan (docs/ci.md, ADR 0014, ADR 0019).
+# Hosted CI on CircleCI's Free plan (docs/ci.md, ADR 0014, ADR 0020).
 # This file is the SETUP config only: it decides which jobs run, from the
 # files the PR changes, and then continues with .circleci/continue-config.yml.
 # It holds no job definitions and no test logic.
@@ -11,6 +11,13 @@
 # file matches no mapping pattern below. Keep this mapping and that script
 # in sync: the script parses this block, so each line must stay in the form
 # `<regex> <parameter> true`, with no comments inside the block.
+#
+# The filter job's image is pinned via its tag parameter below, not the
+# orb default: orb 1.1.0 defaults the tag to 3.8, and the get-pip.py
+# bootstrap its Set-parameters step downloads now requires Python 3.10 or
+# newer, so the first setup run failed on the default image (job #1111).
+# The pin is a major.minor tag, not rolling current, so the image cannot
+# silently regress; any 3.10+ tag works.
 version: 2.1
 setup: true
 orbs:
@@ -19,6 +26,7 @@ workflows:
   setup:
     jobs:
       - path-filtering/filter:
+          tag: "3.12"
           base-revision: main
           config-path: .circleci/continue-config.yml
           mapping: |
@@ -41,3 +49,21 @@ workflows:
             ^\.github/.* run-lint true
             ^LICENSE.* run-lint true
             ^\.[^/]*$ run-lint true
+            ^README\.md$ run-python true
+            ^design\.md$ run-python true
+            ^docs/design/0001-languages-and-shared-contract\.md$ run-python true
+            ^docs/roadmap\.md$ run-python true
+            ^docs/roadmap-explained\.md$ run-python true
+            ^docs/report\.md$ run-python true
+            ^docs/ci\.md$ run-python true
+            ^docs/design/0014-ci-on-pull-requests\.md$ run-python true
+            ^docs/paper-mapping\.md$ run-go true
+            ^docs/paper-mapping\.md$ run-python true
+            ^docs/cluster-vm\.md$ run-python true
+            ^bench/README\.md$ run-python true
+            ^bench/.*\.py$ run-python true
+            ^deploy/compose/README\.md$ run-python true
+            ^deploy/compose/.*\.yaml$ run-python true
+            ^deploy/compose/monitoring/.*$ run-go true
+            ^examples/README\.md$ run-python true
+            ^go/examples/.*$ run-python true
