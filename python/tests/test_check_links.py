@@ -1,6 +1,7 @@
 """Tests for scripts/check-links.py, the Markdown link checker (#159)."""
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,44 @@ def test_anchors_on_other_files_are_not_checked(repo):
     repo("go.mod", "module x\n")
     md = repo("a.md", "[line](go.mod#L1) [enc](a%20b.md)\n")
     assert check(md) == ["a.md:1: a%20b.md: no such file"]
+
+
+def test_a_fence_ends_only_at_a_long_enough_run_of_its_character(repo):
+    md = repo("a.md", "````\n```\n[a](nope.md)\n~~~~\n````\n[b](gone.md)\n")
+    assert check(md) == ["a.md:6: gone.md: no such file"]
+
+
+def test_a_query_is_not_part_of_the_path(repo):
+    repo("b.md", "# Part\n")
+    md = repo("a.md", "[x](b.md?raw=1#part) [y](b.md?plain=1)\n")
+    assert check(md) == []
+
+
+def test_explicit_ids_are_case_sensitive(repo):
+    repo("b.md", '<a id="MySection"></a>\n<p data-id="x">id="y"</p>\n`<a id="fake">`\n')
+    bad = "mysection x y fake".split()
+    md = repo("a.md", "[a](b.md#MySection) " + " ".join(f"[{a}](b.md#{a})" for a in bad))
+    assert check(md) == [
+        f"a.md:1: b.md#{a}: no such heading or anchor" for a in bad
+    ]
+
+
+def test_unquoted_html_attributes_are_checked(repo):
+    md = repo("a.md", "<a href=missing.md>x</a> <img src='gone.png'>\n")
+    assert check(md) == ["a.md:1: missing.md: no such file", "a.md:1: gone.png: no such file"]
+
+
+def test_links_out_of_the_repository_fail(repo):
+    (repo("a.md", "").parent.parent / "outside.md").touch()
+    md = repo("a.md", "[x](../outside.md)\n")
+    assert check(md) == ["a.md:1: ../outside.md: outside the repository"]
+
+
+def test_tracked_files_may_have_spaces(repo):
+    repo("a b.md", "# A\n")
+    subprocess.run(["git", "init", "-q"], cwd=links.ROOT, check=True)
+    subprocess.run(["git", "add", "a b.md"], cwd=links.ROOT, check=True)
+    assert links.tracked() == [links.ROOT / "a b.md"]
 
 
 @pytest.mark.parametrize(
