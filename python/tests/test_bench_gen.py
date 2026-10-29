@@ -145,10 +145,12 @@ def test_crawl(tmp_path):
         tmp_path / "a.warc.wet.gz",
         [(b"eng,fra", b"one  two\n"), (b"fra", b"un"), (None, b"none"), (b"eng", b" \n")],
     )
-    assert generate("crawl", 100, "all", tmp_path) == "one two\nun\nnone\nthree\n日本\n".encode()
-    assert generate("crawl", 100, "eng", tmp_path) == b"one two\nthree\n"
+    assert generate("crawl", 29, "all", tmp_path) == "one two\nun\nnone\nthree\n日本\n".encode()
+    assert generate("crawl", 14, "eng", tmp_path) == b"one two\nthree\n"
     assert generate("crawl", 8, "eng", tmp_path) == b"one two\n"
     assert generate("crawl", 9, "eng", tmp_path) == b"one two\nthree\n"
+    with pytest.raises(subprocess.CalledProcessError):
+        generate("crawl", 15, "eng", tmp_path)
 
 
 @pytest.mark.parametrize(
