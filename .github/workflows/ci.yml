@@ -67,4 +67,4 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e "python[dev]"
-      - run: make py-lint py-test PYTHON=python
+      - run: make py-lint md-lint py-test PYTHON=python
