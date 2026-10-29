@@ -42,7 +42,7 @@ def test_circleci_calls_the_make_targets():
     for command in (
         "make proto-check PYTHON=python PROTO_FETCH=false",
         "make go-lint go-test py-e2e PYTHON=python",
-        "make py-lint py-test PYTHON=python",
+        "make py-lint md-lint py-test PYTHON=python",
         "make tools",
     ):
         assert command in CIRCLE

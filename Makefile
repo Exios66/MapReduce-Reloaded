@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -112,7 +112,7 @@ perf:
 
 test: go-test py-test
 
-lint: go-lint py-lint sh-lint
+lint: go-lint py-lint sh-lint md-lint
 
 # shellcheck on every tracked shell script and the git hook (#159). Where it
 # is not installed, it says so and passes, unless MR_REQUIRE_SHELLCHECK is
@@ -127,6 +127,11 @@ sh-lint:
 	else \
 		echo "sh-lint: shellcheck is not installed; skipping (scripts/vm-setup.sh installs it)"; \
 	fi
+
+# Every relative link and anchor in the tracked Markdown files resolves
+# (scripts/check-links.py, #159). CI's Python jobs run it.
+md-lint:
+	$(PYTHON) scripts/check-links.py
 
 fmt:
 	cd go && gofmt -w .

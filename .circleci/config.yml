@@ -212,8 +212,8 @@ jobs:
       - python-deps:
           python: << parameters.version >>
       - run:
-          name: make py-lint py-test
-          command: make py-lint py-test PYTHON=python
+          name: make py-lint md-lint py-test
+          command: make py-lint md-lint py-test PYTHON=python
       - store_artifacts:
           path: python/cover.json
 
