@@ -3,32 +3,78 @@
 Every pull request is checked by CircleCI's Free plan, because GitHub-hosted
 Actions jobs on the owner's account fail within seconds on a billing lock
 ([ADR 0014](design/0014-ci-on-pull-requests.md)). CircleCI runs the same make
-targets as `make check`, in four jobs. CircleCI is the project's only CI: the
+targets as `make check`, in six jobs, but only the jobs a PR's files
+implicate (see [Implicated-only CI](#implicated-only-ci)). CircleCI is the project's only CI: the
 Actions workflow is kept for a run by hand, and is disabled in the
 repository's Actions settings (2026-10-27).
 
 **What is committed and what is not.** This repository holds the
-configuration: [`.circleci/config.yml`](../.circleci/config.yml),
-[`scripts/ci-install-go.sh`](../scripts/ci-install-go.sh) and the tests that
+configuration: [`.circleci/config.yml`](../.circleci/config.yml) (the setup
+config), [`.circleci/continue-config.yml`](../.circleci/continue-config.yml)
+(the jobs), [`scripts/check-ci-mapping.py`](../scripts/check-ci-mapping.py)
+(the mapping guard) and [`scripts/ci-install-go.sh`](../scripts/ci-install-go.sh) and the tests that
 keep them consistent. The service itself is turned on by the owner, in
 CircleCI and in GitHub's settings (see [Setup](#setup-by-the-owner)). Until the
 owner has done that, no CircleCI check appears on a PR, and nothing here has
 run on CircleCI. [Status](#status) says what has been confirmed.
 
-## The four jobs
+## The jobs
 
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
 | `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
-| `python-3.11` | `make py-lint md-lint py-test` (ruff, the Markdown link and style checks, the Python tests and coverage floors) | `cimg/python:3.11`, small |
-| `python-3.13` | `make py-lint md-lint py-test` | `cimg/python:3.13`, small |
+| `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
+| `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
+| `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
+| `mapping-coverage` | `scripts/check-ci-mapping.py` (every changed file matches a CI mapping) | `cimg/python:3.11`, small |
 
 The names are set in the workflow, so they do not change when the job
 definitions do. The jobs call make targets and hold no lint, test or coverage
 logic of their own, so a CircleCI run and `make check` cannot disagree about
 what a check means. Each job has its own checkout and runs in parallel, so
 code generation in `proto` cannot change files `go` is testing.
+
+## Implicated-only CI
+
+CircleCI dynamic configuration (ADR 0019) runs only the jobs a PR's files
+implicate. `.circleci/config.yml` is the setup config: one setup workflow
+runs the `path-filtering` orb against `main`, sets five boolean pipeline
+parameters from the changed files, and continues with
+`.circleci/continue-config.yml`, which holds the jobs.
+
+| Changed files | Jobs run |
+|---|---|
+| `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod` | all (run-all) |
+| `go/**` | go |
+| `python/**` | python-3.11, python-3.13, go (the go job runs py-e2e) |
+| `proto/**` | proto |
+| `*.sh` | go (sh-lint lives in the go job) |
+| `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
+| anything else | the mapping-coverage job fails; the author adds a mapping |
+
+Echo-skip semantics: every job always exists in the workflow, so every
+required check always reports. A job whose inputs did not change runs only
+its skip note and reports SUCCESS after seconds, without a checkout or any
+install. That is sound because a job's result is a function of its inputs:
+if none of them changed, the result from `main` stands, and `main` cannot
+merge red. There is deliberately no aggregator/gate job: CircleCI
+`requires` is not satisfied by a job skipped with `when`, so a gate
+requiring skipped jobs would never run.
+
+The mapping-coverage job always runs and fails the pipeline if any changed
+file matches no mapping pattern, so an unmapped file can never silently
+skip every job. When adding a new top-level area to the repo, add its
+mapping in the same PR; the guard enforces it. The guard script parses the
+mapping block out of `.circleci/config.yml`, so each mapping line must stay
+in the form `<regex> <parameter> true`, with no comments inside the block.
+
+Transition: before this lands, branch protection requires the original four
+checks. This change itself touches `.circleci/**`, so it maps to run-all
+and runs the full suite under the old protection, merging normally with no
+admin bypass. After merge, the owner adds `lint` and `mapping-coverage` to
+the required checks (a separate action, not part of the PR); until then
+those two report but are not required.
 
 How each job meets its requirements:
 
@@ -121,13 +167,13 @@ these. Do them in order. Each step is safe to stop after.
    this repository (Projects, Set Up Project, use the existing
    `.circleci/config.yml`).
 2. **Run the branch.** Push a branch with this configuration, or re-run
-   the PR's build. Confirm that all four checks (`proto`, `go`, `python-3.11`,
-   `python-3.13`) pass on the latest commit.
+   the PR's build. Confirm that all six checks (`proto`, `go`, `python-3.11`,
+   `python-3.13`, `lint`, `mapping-coverage`) pass on the latest commit.
 3. **Check that it can fail.** Open a throwaway PR with a deliberate
    failure (a badly formatted Python file, say) and confirm CircleCI reports
    it red. Close it without merging.
 4. **Require the checks.** In GitHub, Settings, Branches (or Rulesets), protect
-   `main`: require a pull request, and require the four CircleCI checks.
+   `main`: require a pull request, and require the six CircleCI checks.
    Pick them from the list GitHub offers after step 2, using the names it
    shows there (usually `ci/circleci: proto` and so on); do not type them in.
 5. **Retire the Actions workflow.** Done on 2026-10-27: the triggers of
@@ -144,7 +190,7 @@ these. Do them in order. Each step is safe to stop after.
 | Branch protection | Source |
 |---|---|
 | Pull request required, `main` | GitHub |
-| `proto`, `go`, `python-3.11`, `python-3.13` | CircleCI, as GitHub names them |
+| `proto`, `go`, `python-3.11`, `python-3.13`, `lint`, `mapping-coverage` | CircleCI, as GitHub names them |
 | Branch up to date with `main` before merging | GitHub (strict status checks, on since 2026-10-28) |
 | `local-ci/make-check` | optional, from `make ci-report` |
 
@@ -165,7 +211,7 @@ that does not depend on any hosted service.
   archive disagree. Re-run once; if it persists, do not work around the
   check, and open an issue.
 - **`go` fails with a Go version mismatch.** A cache or the image supplied a
-  different Go. Bump `go-toolchain-v1` in `.circleci/config.yml`.
+  different Go. Bump `go-toolchain-v1` in `.circleci/continue-config.yml`.
 - **`go` fails in `golangci-lint`.** Run `make go-lint` locally with
   golangci-lint built by the Go in `go/go.mod`. A linter built by an older Go
   cannot lint newer code.
@@ -174,10 +220,16 @@ that does not depend on any hosted service.
 - **A job fails to start with a credits message.** The monthly allowance is
   spent. Run `make ci-report` for the PR, or wait for the reset.
 - **A stale cache.** Bump the `-v1-` in its key.
+- **A job succeeds in seconds without running.** Expected when the PR touches
+  none of that job's inputs: the job ran only its skip note (see
+  [Implicated-only CI](#implicated-only-ci)). If the job should have run,
+  its inputs are mapped wrong — fix the mapping, not the job.
+- **`mapping-coverage` fails.** A changed file matches no mapping pattern;
+  the failure lists it. Add a mapping line for it in `.circleci/config.yml`.
 
 ## Rollback
 
-If CircleCI has to go: remove the four checks from branch protection, enable
+If CircleCI has to go: remove the six checks from branch protection, enable
 the workflow again (`gh workflow enable CI`), set the triggers of
 `.github/workflows/ci.yml` back to `pull_request`, `push` to `main` and
 `workflow_dispatch`, and (if the Actions account lock persists) use
@@ -189,7 +241,8 @@ needs it. Nothing else depends on it.
 Live since 2026-10-27. The project is connected through the CircleCI GitHub
 App, with triggers for pull requests (opened and pushed) and for pushes to
 `main`, and GitHub shows the checks as `ci/circleci: proto`,
-`ci/circleci: go`, `ci/circleci: python-3.11` and `ci/circleci: python-3.13`.
+`ci/circleci: go`, `ci/circleci: python-3.11`, `ci/circleci: python-3.13`,
+`ci/circleci: lint` and `ci/circleci: mapping-coverage`.
 The first runs found two problems, both fixed: buf v1.74.0 needs a newer Go
 than go.mod's (the generator install now allows `GOTOOLCHAIN=auto`), and buf
 breaking cannot clone a blobless checkout (`proto` checks out in full). The

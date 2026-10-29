@@ -56,6 +56,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0016](design/0016-shared-storage-and-host-client.md) | Shared storage is a host directory, and the client runs on the host |
 | [0017](design/0017-disk-and-memory-bounds.md) | Workers delete ended jobs' map output; disk, memory and logs are bounded |
 | [0018](design/0018-trust-model.md) | The cluster trusts its network; what that costs, and what is bounded |
+| [0019](design/0019-implicated-only-ci.md) | Implicated-only CI: dynamic config runs only the jobs a PR's files implicate |
 
 ## Explainers
 
