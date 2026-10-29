@@ -88,9 +88,12 @@ static binary makes a small distroless image. Job files are Go too, so users
 write the same API the built-in programs use.
 
 Python 3.11+ is a second, reference implementation of the API, the file
-format, the partition hash and local mode. It checks the shared contract
-byte for byte; it does not run on the cluster
-([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
+format, the partition hash and local mode, with a coordinator server. It
+checks the shared contract byte for byte. It does not run in the Compose
+cluster, whose image holds only Go binaries; its coordinator is tested with
+Go workers (`make py-e2e`). The
+[language choice](docs/language-choice.md) gives the argument, the evidence
+and the costs ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
 
 ### Communication
 
@@ -352,6 +355,10 @@ four engineering practices:
   [Python coordinator explainer](docs/explainers/25-python-coordinator.md)).
   There is no Python worker yet. It shares the proto contract and the MRKV
   format with Go ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
+- **Containers** (`deploy/`). One image holds the three Go programs, and
+  Compose runs the coordinator and four workers from it, with optional
+  `tools`, `s3` and `monitoring` profiles. What runs where, the ports, the
+  volumes and the reasons are in [Docker topology](docs/docker-topology.md).
 
 ## A job's lifecycle
 
