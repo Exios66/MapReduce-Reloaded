@@ -30,6 +30,7 @@ Usage: python3 bench/plot-rates.py SAMPLES.csv [OUT.png [TITLE]]
 
 import csv
 import sys
+import textwrap
 
 METRICS = {
     "input": "mr_worker_map_input_bytes_total",
@@ -83,9 +84,11 @@ def plot(seconds, series, path, title=None):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(
-        len(series), 1, sharex=True, figsize=(6, 6.6 if title else 6), facecolor=SURFACE
-    )
+    # A long title wraps instead of running past the figure's edge; each
+    # line adds height, so the panels keep their size.
+    lines = textwrap.wrap(title, 68) if title else []
+    height = 6 + (0.3 + 0.2 * len(lines) if lines else 0)
+    fig, axes = plt.subplots(len(series), 1, sharex=True, figsize=(6, height), facecolor=SURFACE)
     for ax, (rate, values) in zip(axes, series.items(), strict=True):
         ax.set_facecolor(SURFACE)
         # Each rate is an average over the interval between two rounds.
@@ -99,9 +102,19 @@ def plot(seconds, series, path, title=None):
             spine.set_visible(side in ("left", "bottom"))
             spine.set_color(AXIS)
     axes[-1].set_xlabel("Seconds", color=INK2)
-    if title:
-        fig.text(0.012, 0.985, title, ha="left", va="top", fontsize=10, weight="bold", color=INK)
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
+    if lines:
+        fig.text(
+            0.012,
+            1 - 0.1 / height,
+            "\n".join(lines),
+            ha="left",
+            va="top",
+            fontsize=10,
+            weight="bold",
+            color=INK,
+            linespacing=1.4,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 1 - (0.25 + 0.2 * len(lines)) / height))
     else:
         fig.tight_layout()
     fig.savefig(path, facecolor=SURFACE)

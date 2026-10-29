@@ -575,12 +575,17 @@ def e2_comparison(pairs, rows, results, out, t):
         "straggler-backups": (1, False),
         "straggler-no-backups": (1, True),
     }
-    mixed = [dict(r, _dir="E2-pairs") for r in pairs if r["setting"] in settings] + [
-        dict(r, _dir="E2") for r in rows if r["setting"].startswith("straggler")
+    # Each setting comes only from its stated source, as the subtitle says.
+    mixed = [
+        dict(r, _dir="E2-pairs") for r in pairs if r["setting"] in ("normal", "normal-no-backups")
+    ] + [
+        dict(r, _dir="E2")
+        for r in rows
+        if r["setting"] in ("straggler-backups", "straggler-no-backups")
     ]
-    # The subtitle states one input size, M and R for both datasets, so they
-    # must have run the same job.
-    shapes = {(r["input_bytes"], r["m"], r["r"], r["workers"]) for r in mixed}
+    # The subtitle states one input size, M and R for both datasets, so the
+    # plotted runs must have run the same job.
+    shapes = {(r["input_bytes"], r["m"], r["r"], r["workers"]) for r in valid(mixed)}
     if len(shapes) > 1:
         raise ValueError(f"E2 and E2-pairs ran different jobs: {sorted(shapes)}")
     fig = timeline_and_bars(

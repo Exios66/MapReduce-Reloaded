@@ -498,3 +498,20 @@ def test_e2_comparison_refuses_datasets_of_different_jobs(plotter, tmp_path):
     main = [row("straggler-backups") | {"run": "1", "event_at": "", "job": "job-1", "m": "64"}]
     with pytest.raises(ValueError, match="different jobs"):
         module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
+
+
+def test_e2_comparison_takes_each_setting_from_its_source_and_checks_valid_runs(plotter, tmp_path):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    right.barh.return_value = [Mock() for _ in range(4)]
+    pyplot.subplots.return_value = Mock(), (left, right)
+    base = {"run": "1", "event_at": "", "job": "job-1"}
+    pairs = [row("normal") | base, row("straggler-backups", seconds=99) | base]
+    # An invalid run of another job is never plotted, so it must not fail the check.
+    main = [
+        row("straggler-backups") | base,
+        row("straggler-no-backups", valid="0") | base | {"m": "64"},
+    ]
+    module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
+    times = right.barh.call_args.args[1]
+    assert 99 not in times
