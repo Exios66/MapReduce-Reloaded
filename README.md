@@ -155,6 +155,9 @@ reduce  4/4
 counters at any time. While a job runs, the status page is at
 <http://127.0.0.1:18780/>.
 
+![The status page during a chaos run: a job completes with two backup
+attempts, the next is mapping, and the workers list their running tasks](docs/assets/status-chaos.gif)
+
 ### 5. Read the output
 
 Reduce task r writes `part-r-0000r` in the output directory, one
