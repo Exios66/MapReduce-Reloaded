@@ -5,7 +5,8 @@
 # ours to redistribute in the repository. See docs/data.md.
 #
 # Usage: scripts/fetch-data.sh [warpeace | nasa | webgoogle | commoncrawl | crawl | all]
-#        (default all)
+#        (default all, which fetches every dataset but crawl: that one is
+#        E6's 1.08 GB download, so it is opt-in)
 #
 # - warpeace: War and Peace (Project Gutenberg #2600, via the GITenberg
 #   mirror), 3.2 MB, for word count. As in fetch-corpus.sh, only the text
@@ -29,7 +30,7 @@
 # - crawl: the first ten WET files of the same crawl segment, the first
 #   being commoncrawl's, 1.08 GB as downloaded, kept compressed as they
 #   are. bench/gen-crawl.py reads them for E6, word count over about 2.9 GB
-#   of crawled text, in every language or one.
+#   of crawled text, in every language or one. Not part of all: E6 only.
 #
 # Each download's SHA-256 sum is checked against the pin below, so a
 # changed file upstream fails here instead of changing results. A dataset
@@ -131,7 +132,7 @@ esac
 case $what in nasa | all) fetch nasa access.log "$NASA_URL" "$NASA_SHA256" nasa ;; esac
 case $what in webgoogle | all) fetch webgoogle links.tsv "$WEBGOOGLE_URL" "$WEBGOOGLE_SHA256" snap ;; esac
 case $what in commoncrawl | all) fetch commoncrawl pages.tsv "$COMMONCRAWL_URL" "$COMMONCRAWL_SHA256" wet ;; esac
-case $what in crawl | all)
+case $what in crawl)
     echo "$CRAWL_FILES" | while read -r name sum; do
         [ -z "$name" ] || fetch crawl "$name" "$CRAWL_BASE/$name" "$sum" cat
     done

@@ -7,7 +7,8 @@ below are copied from a run, with the machine it ran on.
 ## Data generators (#57)
 
 Each generator writes reproducible input to stdout from a size in bytes and
-an optional seed (42 by default). Measured on the machine below, each
+an optional seed (42 by default); `gen-crawl.py` takes `SIZE LANG [DIR]`
+instead, and no seed. Measured on the machine below, each
 writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 
 | Script | Records | For |
@@ -18,7 +19,7 @@ writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 | [`gen-zipf.py`](gen-zipf.py) | Lines of words from a vocabulary of 100,000, with Zipf-distributed frequencies (exponent S, 1 by default) | Word count with a skewed key |
 | [`gen-weblog.py`](gen-weblog.py) | Requests in the Common Log Format for 10,000 pages; the page is drawn with probability proportional to 1 / N | `urlfreq` |
 | [`gen-book.py`](gen-book.py) | Whole lines of War and Peace, every line once a pass in a new order, to any size; [`scripts/fetch-data.sh`](../scripts/fetch-data.sh) fetches the book. The vocabulary stops at the book's 41,631 words and lines repeat, so it is word count's best case, not real text at scale | Word count, the combiner's best case (E6 `book`) |
-| [`gen-crawl.py`](gen-crawl.py) | The text of Common Crawl's pages, one page a line, no page repeated, from ten pinned WET files (`scripts/fetch-data.sh crawl`, about 2.9 GB of text); `eng` keeps the pages Common Crawl identifies as English, `all` keeps every language | Word count on real text (E6 `crawl-eng`, and `crawl` in every language) |
+| [`gen-crawl.py`](gen-crawl.py) | `gen-crawl.py SIZE LANG [DIR]`. The text of Common Crawl's pages, one page a line, no page repeated, from ten pinned WET files (`scripts/fetch-data.sh crawl`, about 2.9 GB of text); `eng` keeps the pages Common Crawl identifies as English, `all` keeps every language | Word count on real text (E6 `crawl-eng`, and `crawl` in every language) |
 | [`gen-links.py`](gen-links.py) | A source page, a tab and a target page, over 100,000 pages; targets are drawn with probability proportional to 1 / N | `reverselinks` |
 
 - `gen-grep.py`: the rest of each record is lowercase letters and digits,

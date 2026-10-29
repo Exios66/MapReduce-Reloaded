@@ -2,7 +2,7 @@
 results of bench/experiments.sh, and prints a Markdown table of each
 experiment's job times for bench/README.md.
 
-For each of E0 to E5 whose bench/results/EXPERIMENT/runs.csv
+For each of E0 to E6 whose bench/results/EXPERIMENT/runs.csv
 exists, this writes OUT_DIR/EXPERIMENT.png on a light background and
 OUT_DIR/EXPERIMENT-dark.png on a dark one. Every point is the median of
 the valid runs, with the range as an error bar; runs whose output differed
@@ -20,10 +20,15 @@ from the normal run's (valid=0) are left out and counted in the table.
   Figure 3(c).
 - E4: tasks completed against time with the restart marked, and job-time
   bars with and without the restart.
+- E5: job time and map-phase time for the compiled program and the two job
+  files the workers interpret.
+- E6: bytes shuffled and job time per input (crawled English, crawled pages
+  in every language, and the book), combiner on and off, as E1 does.
 
-E0, E1 and E2 use the coordinator's job time (seconds); E3 and E4 use the time
-from submission until mr status saw the job finish (wall_seconds), since a
-restarted coordinator measures its jobs from when it replays them.
+E0, E1, E2 and E6 use the coordinator's job time (seconds); E3 and E4 use
+the time from submission until mr status saw the job finish
+(wall_seconds), since a restarted coordinator measures its jobs from when
+it replays them.
 
 Usage: python3 bench/plot-experiments.py [RESULTS_DIR [OUT_DIR]]
 (defaults: bench/results, and the same directory). Needs matplotlib.
@@ -266,7 +271,7 @@ def e0(rows, out, t):
     finish(fig, out, top=0.8)
 
 
-def grouped(ax, t, groups, stats_on, stats_off, scale):
+def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
     """Combiner-on and -off bars per group, with a 2px surface gap."""
     width = 0.32
     for offset, stats, color, label in (
@@ -286,20 +291,20 @@ def grouped(ax, t, groups, stats_on, stats_off, scale):
             zorder=2,
         )
         ranges(ax, t, xs, med, [st[1] / scale for _, st in kept], [st[2] / scale for _, st in kept])
-    ax.set_xticks(range(len(groups)), [f"S = {g[1:]}" for g in groups])
-    ax.set_xlabel("Zipf exponent of the word frequencies (higher: more skew)")
+    ax.set_xticks(range(len(groups)), ticks or [f"S = {g[1:]}" for g in groups])
+    if xlabel:
+        ax.set_xlabel(xlabel)
     ax.grid(axis="x", visible=False)
     ax.set_ylim(bottom=0)
 
 
-def e1(rows, out, t):
-    """Saves E1's combiner comparison to out, in theme t: bytes shuffled
-    and job time, combiner on and off, per Zipf exponent, each group labeled
-    with the saving. Only valid="1" runs count. Missing fields, invalid
-    numbers, and file errors propagate."""
-    exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
+def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
+    """Saves a combiner comparison to out, in theme t: bytes shuffled and
+    job time, combiner on and off, per group, each group labeled with the
+    saving. Only valid="1" runs count. Missing fields, invalid numbers, and
+    file errors propagate."""
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
-    for ax, field, scale, title, saving in (
+    for ax, field, scale, axis_title, saving in (
         (
             left,
             "map_output_bytes",
@@ -309,9 +314,9 @@ def e1(rows, out, t):
         ),
         (right, "seconds", 1, "Job time (s)", lambda on, off: f"{1 - on / off:.0%} faster"),
     ):
-        on = [spread(valid(rows, setting=f"{e}-on"), field) for e in exponents]
-        off = [spread(valid(rows, setting=f"{e}-off"), field) for e in exponents]
-        grouped(ax, t, exponents, on, off, scale)
+        on = [spread(valid(rows, setting=f"{g}-on"), field) for g in groups]
+        off = [spread(valid(rows, setting=f"{g}-off"), field) for g in groups]
+        grouped(ax, t, groups, on, off, scale, ticks=ticks, xlabel=xlabel)
         # With no valid run, or only zeros, the axis still needs a height.
         top = max((st[2] for st in on + off if st), default=0) / scale or 1
         for j, (a, b) in enumerate(zip(on, off, strict=True)):
@@ -330,13 +335,45 @@ def e1(rows, out, t):
                     fontsize=9,
                 )
         ax.set_ylim(0, top * 1.18)
-        ax.set_title(title)
+        ax.set_title(axis_title)
         ax.yaxis.set_major_formatter("{x:,.0f}")
     fig.legend(
         *left.get_legend_handles_labels(), loc="upper right", ncols=2, bbox_to_anchor=(0.99, 0.985)
     )
-    heading(fig, t, "E1: what the combiner saves in word count", label_note(rows) + ".")
+    heading(fig, t, title, label_note(rows) + ".")
     finish(fig, out)
+
+
+def e1(rows, out, t):
+    """Saves E1's combiner comparison to out, in theme t: bytes shuffled
+    and job time, combiner on and off, per Zipf exponent, each group labeled
+    with the saving."""
+    exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
+    combiner_bars(
+        rows,
+        out,
+        t,
+        exponents,
+        [f"S = {e[1:]}" for e in exponents],
+        "Zipf exponent of the word frequencies (higher: more skew)",
+        "E1: what the combiner saves in word count",
+    )
+
+
+def e6(rows, out, t):
+    """Saves E6's combiner comparison to out, in theme t: bytes shuffled
+    and job time, combiner on and off, per input: crawled English, crawled
+    pages in every language, and the book."""
+    inputs = ["crawl-eng", "crawl", "book"]
+    combiner_bars(
+        rows,
+        out,
+        t,
+        inputs,
+        ["crawled\nEnglish", "crawled, every\nlanguage", "book"],
+        "Word count's input",
+        "E6: what the combiner saves on real text",
+    )
 
 
 def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None, styles=None):
@@ -693,7 +730,7 @@ def main():
 
     Results default to bench/results; output defaults to the results path.
     Creates the output directory, writes EXPERIMENT.png and
-    EXPERIMENT-dark.png for each nonempty E0 to E5 runs.csv, replacing
+    EXPERIMENT-dark.png for each nonempty E0 to E6 runs.csv, replacing
     existing plots, and prints tables to stdout.
     Missing or empty CSVs are skipped. Filesystem, CSV parsing, plotting,
     and table errors propagate.
@@ -708,6 +745,7 @@ def main():
         "E3": lambda rows, png, t: e3(rows, results, png, t),
         "E4": lambda rows, png, t: e4(rows, results, png, t),
         "E5": lambda rows, png, t: e5(rows, results, png, t),
+        "E6": lambda rows, png, t: e6(rows, png, t),
     }
     for exp, fn in draw.items():
         rows = load(results, exp)

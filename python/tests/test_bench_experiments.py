@@ -43,8 +43,16 @@ def experiment(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("argument", ["E1", "all"])
-def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(experiment, argument):
+def test_e1_pairs_all_exponents_alternates_order_and_restores_defaults(
+    experiment, tmp_path, argument
+):
     invoke, _ = experiment
+    if argument == "all":
+        # `all` checks E6's inputs before it starts E0.
+        (tmp_path / "data/input/warpeace").mkdir(parents=True)
+        (tmp_path / "data/input/warpeace/warpeace.txt").write_text("text\n")
+        (tmp_path / "data/input/crawl").mkdir(parents=True)
+        (tmp_path / "data/input/crawl/a.warc.wet.gz").write_text("")
     result = invoke(
         """
         begin() { printf 'begin|%s\n' "$1"; }
@@ -109,6 +117,14 @@ def test_e6_needs_the_book_and_the_crawl(experiment, tmp_path, have):
     result = invoke("begin() { echo begun; }", "E6", check=False)
     assert result.returncode == 1
     assert "begun" not in result.stdout
+    assert "scripts/fetch-data.sh warpeace and scripts/fetch-data.sh crawl" in result.stderr
+
+
+def test_all_checks_e6_inputs_before_e0(experiment):
+    invoke, _ = experiment
+    result = invoke("e0() { echo E0; }", "all", check=False)
+    assert result.returncode == 1
+    assert "E0" not in result.stdout
     assert "scripts/fetch-data.sh warpeace and scripts/fetch-data.sh crawl" in result.stderr
 
 

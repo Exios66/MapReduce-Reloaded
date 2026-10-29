@@ -325,14 +325,20 @@ e1() {
     zipf=1.0 submit_flags=()
 }
 
-# E6 is E1 on real text: word count over crawled English pages, crawled
-# pages in every language and War and Peace's lines repeated, with the
-# combiner on and off, in the same alternating order.
-e6() {
+# need_e6: E6 needs its two inputs. `all` checks them first, so a missing
+# download does not surface after E0 to E5 have run.
+need_e6() {
     if [ ! -f data/input/warpeace/warpeace.txt ] || ! ls data/input/crawl/*.warc.wet.gz >/dev/null 2>&1; then
         echo "experiments: E6 needs War and Peace and Common Crawl's text; run scripts/fetch-data.sh warpeace and scripts/fetch-data.sh crawl" >&2
         exit 1
     fi
+}
+
+# E6 is E1 on real text: word count over crawled English pages, crawled
+# pages in every language and War and Peace's lines repeated, with the
+# combiner on and off, in the same alternating order.
+e6() {
+    need_e6
     begin E6
     configure 4
     local n combiner order
@@ -486,6 +492,7 @@ E4) e4 ;;
 E5) e5 ;;
 E6) e6 ;;
 all)
+    need_e6 # before E0, not after E5
     # Not an && list: set -e does not apply to a function called there.
     e0
     e1

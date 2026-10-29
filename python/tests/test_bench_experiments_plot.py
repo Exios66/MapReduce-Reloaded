@@ -145,6 +145,34 @@ def test_e1_sorts_exponents_numerically(plotter, tmp_path):
         assert axis.set_xticks.call_args.args[1] == ["S = 0.5", "S = 2.0", "S = 10.0"]
 
 
+def test_e6_groups_the_three_inputs_in_order(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, shuffled, seconds = Mock(), Mock(), Mock()
+    shuffled.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = figure, (shuffled, seconds)
+    rows = [
+        row("book-on", 1, 1_000_000),
+        row("book-off", 2, 10_000_000),
+        row("crawl-eng-on", 3, 3_000_000),
+        row("crawl-eng-off", 4, 12_000_000),
+        row("crawl-on", 5, 5_000_000),
+        row("crawl-off", 6, 14_000_000),
+    ]
+
+    module.e6(rows, tmp_path / "E6.png", light(module))
+
+    ticks, labels = shuffled.set_xticks.call_args.args
+    assert list(ticks) == [0, 1, 2]
+    assert labels == ["crawled\nEnglish", "crawled, every\nlanguage", "book"]
+    # Settings are matched by name, so the rows' order does not matter.
+    assert [bar.args[1] for bar in shuffled.bar.call_args_list] == pytest.approx(
+        ([3, 5, 1], [12, 14, 10])
+    )
+    assert [bar.args[1] for bar in seconds.bar.call_args_list] == pytest.approx(
+        ([3, 5, 1], [4, 6, 2])
+    )
+
+
 def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsys):
     module, _ = plotter
     module.table(
