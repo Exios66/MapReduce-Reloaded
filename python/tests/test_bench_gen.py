@@ -96,3 +96,27 @@ def test_zipf_skew():
     assert words[b"w1"] > 1.7 * words[b"w2"]
     flat = collections.Counter(generate("zipf", 200_000, 42, 0).split())
     assert flat[b"w1"] < 0.001 * total
+
+
+def test_book(tmp_path):
+    """gen-book.py writes whole non-blank lines of the book, every line once
+    a pass in a new order, and stops at the first line that reaches SIZE."""
+    book = tmp_path / "book.txt"
+    book.write_bytes(b"one two\r\n\nthree\n  \nfour five six\n")
+    want = sorted([b"one two", b"three", b"four five six"])
+    out = generate("book", 60, 1, book)
+    lines = out.split(b"\n")
+    assert lines.pop() == b""
+    assert len(out) >= 60 and len(out) - len(lines[-1]) - 1 < 60
+    passes = [lines[i : i + 3] for i in range(0, 6, 3)]
+    assert [sorted(p) for p in passes] == [want, want]
+    assert generate("book", 60, 1, book) == out
+    assert generate("book", 600, 1, book) != generate("book", 600, 7, book)
+
+
+def test_book_needs_the_book(tmp_path):
+    r = subprocess.run(
+        [sys.executable, BENCH / "gen-book.py", "10", "1", tmp_path / "none.txt"],
+        capture_output=True,
+    )
+    assert r.returncode != 0 and b"fetch-data.sh" in r.stderr

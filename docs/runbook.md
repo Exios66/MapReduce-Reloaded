@@ -163,7 +163,7 @@ tail -f bench/results/experiments.log        # about 90 minutes for all six
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E1|E2|E3|E4|E5` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6` runs one experiment of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
 SSH drops. The plots land in `bench/plots/E0.png` … `E5.png`, and the
 script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e5).

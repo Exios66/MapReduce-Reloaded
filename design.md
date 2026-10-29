@@ -258,7 +258,7 @@ whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|all`
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|E6|all`
 runs the experiments and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)

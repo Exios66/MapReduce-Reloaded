@@ -4,7 +4,7 @@
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
-# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|all
+# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
@@ -19,6 +19,9 @@
 #   as a job file that the workers interpret: examples/wordcount.go, which
 #   calls the compiled helpers api.Words and api.Sum, and
 #   bench/jobs/wordcount-naive.go, which does not.
+# - E6: word count over real English, bench/gen-book.py's lines of War and
+#   Peace, with the combiner and without it, as E1 does for Zipf words.
+#   It needs the book: scripts/fetch-data.sh warpeace.
 #
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
@@ -35,6 +38,7 @@ cd "$(dirname "$0")/.."
 
 repeat=${REPEAT:-3}
 zipf=1.0      # word count's Zipf exponent; E1 varies it
+text=zipf     # word count's input, zipf or book; E6 sets book
 submit_flags=() # extra mr submit flags; E1 sets -combiner=false
 jobfile=        # a job file to submit in place of the program; E5 sets it
 size=${SIZE:-1073741824}
@@ -100,6 +104,10 @@ input() {
     wordcount)
         gen=(bench/gen-zipf.py "$size" 42 "$zipf")
         path=/out/exp-input-$1-$size-$zipf.txt
+        if [ "$text" = book ]; then
+            gen=(bench/gen-book.py "$size" 42)
+            path=/out/exp-input-$1-$size-book.txt
+        fi
         ;;
     esac
     if ! in_volume test -f "$path"; then
@@ -309,6 +317,29 @@ e1() {
     zipf=1.0 submit_flags=()
 }
 
+# E6 is E1 on real text: word count over gen-book.py's lines of War and
+# Peace, with the combiner on and off, in the same alternating order.
+e6() {
+    if [ ! -f data/input/warpeace/warpeace.txt ]; then
+        echo "experiments: E6 needs War and Peace; run scripts/fetch-data.sh warpeace" >&2
+        exit 1
+    fi
+    begin E6
+    configure 4
+    local n combiner order
+    text=book
+    for n in $(seq "$repeat"); do
+        order="on off"
+        [ $((n % 2)) = 1 ] || order="off on"
+        for combiner in $order; do
+            submit_flags=()
+            [ "$combiner" = on ] || submit_flags=(-combiner=false)
+            run E6 "book-$combiner" wordcount "$n" 4 ""
+        done
+    done
+    text=zipf submit_flags=()
+}
+
 # E2_SETTINGS limits E2 to some of its settings. The settings take turns
 # within each repeat, in reverse order on even repeats, so drift in the
 # machine over the experiment does not fall on one setting.
@@ -443,6 +474,7 @@ E2) e2 ;;
 E3) e3 ;;
 E4) e4 ;;
 E5) e5 ;;
+E6) e6 ;;
 all)
     # Not an && list: set -e does not apply to a function called there.
     e0
@@ -451,9 +483,10 @@ all)
     e3
     e4
     e5
+    e6
     ;;
 *)
-    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|all" >&2
+    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|all" >&2
     exit 2
     ;;
 esac
