@@ -25,6 +25,19 @@ esac
 got=$(mktemp -d)
 trap 'rm -rf "$got"' EXIT
 
+# The image runs its binaries as a non-root user, and each answers --help
+# with its usage text (#158). cluster-up builds it.
+user=$(docker image inspect --format '{{.Config.User}}' mapreduce-reloaded)
+case "$user" in
+"" | 0 | 0:* | root | root:*) echo "e2e: the image runs as root (User=$user)" >&2; exit 1 ;;
+esac
+for binary in coordinator worker; do
+    help=$(docker run --rm --entrypoint "/usr/local/bin/$binary" mapreduce-reloaded --help 2>&1) || true
+    case "$help" in *Usage*) ;; *) echo "e2e: $binary --help printed no usage" >&2; exit 1 ;; esac
+done
+help=$(docker run --rm --entrypoint /usr/local/bin/mr mapreduce-reloaded status --help 2>&1) || true
+case "$help" in *Usage*) ;; *) echo "e2e: mr status --help printed no usage" >&2; exit 1 ;; esac
+
 # The job is bounded, since it never finishes if every worker is killed;
 # the memory check below then says why.
 submitted=0
@@ -67,6 +80,22 @@ if [ "${done_reduces##* }" != 4 ]; then
     echo "e2e: /metrics does not show the job's 4 reduce tasks completed" >&2
     exit 1
 fi
+
+# Prometheus keeps the coordinator's job label: without honor_labels it is
+# renamed to exported_job, and every MapReduce job merges into one series
+# (#144, #158). The scrape interval is 5 s, so give it a few.
+"${compose[@]}" --profile monitoring up -d --wait prometheus >/dev/null
+series=
+for _ in $(seq 30); do
+    series=$(curl -fsS --max-time 5 --get http://127.0.0.1:19090/api/v1/query \
+        --data-urlencode "query=mr_job_tasks{job=\"$id\"}" || true)
+    case "$series" in *"\"job\":\"$id\""*) break ;; esac
+    sleep 1
+done
+case "$series" in
+*"\"job\":\"$id\""*) ;;
+*) echo "e2e: Prometheus does not label mr_job_tasks with job $id" >&2; exit 1 ;;
+esac
 
 # A crash, not a clean stop: a stopping coordinator tells its workers to exit.
 coordinator=$("${compose[@]}" ps -q coordinator)
