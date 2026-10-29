@@ -1,8 +1,7 @@
 """The scenarios of go/internal/e2e/process_test.go, ported to pytest and run
 against the Python coordinator (#36): python -m mapreduce_reloaded.coordinator
 as a process, with the Go worker and mr commands, over localhost sockets.
-The tests are skipped if the Go commands cannot be built, or a recovery
-scenario finishes before it can be interrupted; they fail instead if
+The tests are skipped if the Go commands cannot be built, or fail if
 MR_REQUIRE_GO is set, as make py-e2e sets it for CI's go job."""
 
 import json
@@ -142,6 +141,28 @@ class Cluster:
         st["state"] = st.get(job, "")
         return st
 
+    def signal_workers(self, sig):
+        for w in self.workers:
+            if w.p.poll() is None:
+                w.p.send_signal(sig)
+
+    def mid_map(self, tmp_path, input, tries=3):
+        """Submits a word count over input and returns (job, output
+        directory) with every worker stopped (SIGSTOP) once at least one map
+        task is done and the job is not: the test interrupts it with nothing
+        moving, then sends SIGCONT. A job can only finish between a poll and
+        the SIGSTOP, 20ms; then it submits a new one, up to tries times."""
+        for n in range(tries):
+            out = tmp_path / f"out{n}"
+            job = self.submit("-m", "12", "-r", "4", "wordcount", str(out), input)
+            self.wait(job, 30, lambda st: not st.get("map", "0/").startswith("0/"))
+            self.signal_workers(signal.SIGSTOP)
+            st = self.status(job)
+            if st is not None and st["state"] not in ("SUCCEEDED", "FAILED"):
+                return job, out
+            self.signal_workers(signal.SIGCONT)
+        must_run()(f"{tries} jobs finished before they could be interrupted")
+
     def wait(self, job, timeout, stop=None):
         """Polls the job until it ends or stop returns true, and returns its
         last status."""
@@ -253,12 +274,9 @@ def test_worker_killed(cluster, bin_dir, tmp_path):
     input = big_input(tmp_path)
     want = reference(bin_dir, tmp_path, input)
     c = cluster(3)
-    out = tmp_path / "out"
-    job = c.submit("-m", "12", "-r", "4", "wordcount", str(out), input)
-    st = c.wait(job, 30, lambda st: not st.get("map", "0/").startswith("0/"))
-    if st["state"] == "SUCCEEDED":
-        must_run()("the job finished before a worker could be killed")
+    job, out = c.mid_map(tmp_path, input)
     c.workers[0].stop(signal.SIGKILL, 5)
+    c.signal_workers(signal.SIGCONT)
     st = c.wait(job, 45)
     assert st["state"] == "SUCCEEDED", st
     assert parts(out) == want
@@ -271,13 +289,10 @@ def test_coordinator_restart(cluster, bin_dir, tmp_path):
     input = big_input(tmp_path)
     want = reference(bin_dir, tmp_path, input)
     c = cluster(3, wal=True)
-    out = tmp_path / "out"
-    job = c.submit("-m", "12", "-r", "4", "wordcount", str(out), input)
-    st = c.wait(job, 30, lambda st: not st.get("map", "0/").startswith("0/"))
-    if st["state"] == "SUCCEEDED":
-        must_run()("the job finished before the coordinator could be killed")
+    job, out = c.mid_map(tmp_path, input)
     c.coord.stop(signal.SIGKILL, 5)
     c.start_coordinator()
+    c.signal_workers(signal.SIGCONT)
     st = c.wait(job, 45)
     assert st["state"] == "SUCCEEDED", st
     assert parts(out) == want
