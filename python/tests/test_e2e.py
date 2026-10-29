@@ -49,7 +49,9 @@ def repo(tmp_path):
     for name in ("scripts", "bin", "fakebin", "data/out", "testdata/corpus"):
         (tmp_path / name).mkdir(parents=True)
     shutil.copy(ROOT / "scripts/e2e.sh", tmp_path / "scripts" / "e2e.sh")
-    shutil.copytree(ROOT / "testdata" / "corpus" / "expected", tmp_path / "testdata/corpus/expected")
+    shutil.copytree(
+        ROOT / "testdata" / "corpus" / "expected", tmp_path / "testdata/corpus/expected"
+    )
     for name, body in (("docker", DOCKER), ("curl", CURL)):
         path = tmp_path / "fakebin" / name
         path.write_text(body)
