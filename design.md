@@ -27,7 +27,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e5) |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e6) |
 | Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -281,7 +281,7 @@ parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
-[`bench/README.md`](bench/README.md#evaluation-e0e5), with the commands that
+[`bench/README.md`](bench/README.md#evaluation-e0e6), with the commands that
 made them; the data is in `bench/evaluation/`. What they showed (course VM,
 2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
 workers for word count but only 2.3× for grep, whose one-second job is mostly

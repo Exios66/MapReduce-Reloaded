@@ -1,7 +1,7 @@
 # Superseded runs
 
 Kept so no measurement is lost; none of it is reported. The results in
-[`../`](../) and [`bench/README.md`](../../README.md#evaluation-e0e5) replace
+[`../`](../) and [`bench/README.md`](../../README.md#evaluation-e0e6) replace
 them.
 
 - [`4b5a235-E3/`](4b5a235-E3/): the first full E3 run, at commit
