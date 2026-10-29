@@ -8,12 +8,14 @@ NOTEBOOK = Path(__file__).resolve().parents[2] / "examples" / "demo.ipynb"
 
 
 def cells():
+    """The notebook's cells, after checking its nbformat version."""
     document = json.loads(NOTEBOOK.read_text())
     assert document["nbformat"] == 4
     return document["cells"]
 
 
 def test_code_cells_compile():
+    """Every code cell is valid Python."""
     code = [cell for cell in cells() if cell["cell_type"] == "code"]
     assert code, "the notebook has no code cells"
     for cell in code:
@@ -21,6 +23,7 @@ def test_code_cells_compile():
 
 
 def test_the_notebook_runs_the_demo_pipeline():
+    """The notebook still runs the demo's steps."""
     source = "\n".join(cell["source"] for cell in cells() if cell["cell_type"] == "code")
     for step in ('"upload"', '"submit"', '"cat"', "-local", "metrics_lines"):
         assert step in source, step

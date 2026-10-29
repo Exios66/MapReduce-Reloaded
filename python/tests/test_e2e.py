@@ -63,6 +63,7 @@ def repo(tmp_path):
 
 
 def run(repo, **env):
+    """Runs scripts/e2e.sh in repo with the fakes on PATH."""
     return subprocess.run(
         ["bash", "scripts/e2e.sh"],
         cwd=repo,
@@ -74,24 +75,28 @@ def run(repo, **env):
 
 
 def test_local_run_passes(repo):
+    """The normal local run passes and prints the success line."""
     result = run(repo, E2E_PROMETHEUS_TRIES="1")
     assert result.returncode == 0, result.stderr
     assert "output matches the golden output" in result.stdout
 
 
 def test_a_killed_container_fails_the_run(repo):
+    """An OOM-killed container fails the run."""
     result = run(repo, E2E_PROMETHEUS_TRIES="1", FAKE_OOM="true")
     assert result.returncode == 1
     assert "memory limit" in result.stderr
 
 
 def test_a_root_image_fails_the_run(repo):
+    """An image that runs as root fails the run."""
     result = run(repo, E2E_PROMETHEUS_TRIES="1", FAKE_USER="0")
     assert result.returncode == 1
     assert "runs as root" in result.stderr
 
 
 def test_prometheus_must_label_the_series_with_the_job(repo):
+    """A series without the job's label fails the run."""
     result = run(repo, E2E_PROMETHEUS_TRIES="1", FAKE_JOB="job-other")
     assert result.returncode == 1
     assert "does not label mr_job_tasks" in result.stderr

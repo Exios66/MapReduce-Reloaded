@@ -22,6 +22,7 @@ AT = 1_792_843_200.0  # 2026-10-24 12:00:00 UTC
 
 
 def _job(submitted=None, finished=None, **fields):
+    """A job status with the fields the page reads."""
     j = coordinator_pb2.GetJobStatusResponse(**fields)
     if submitted is not None:
         j.submitted_at.FromNanoseconds(round(submitted * 1e9))
@@ -77,6 +78,7 @@ def get():
     srv = statusweb.serve(("127.0.0.1", 0), lambda: STATUS)
 
     def fetch(path):
+        """GETs a path from the running server."""
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}{path}") as r:
                 return r.status, r.headers, r.read().decode()
@@ -89,6 +91,7 @@ def get():
 
 
 def test_page(get):
+    """The page shows the jobs, their progress, counters and the dark class."""
     code, headers, body = get("/")
     assert code == 200 and headers["Content-Type"] == "text/html; charset=utf-8"
     for want in [
@@ -118,6 +121,7 @@ def test_page(get):
 
 
 def _fetch(url):
+    """GETs a path from a running server and returns its body."""
     with urllib.request.urlopen(url) as r:
         return r.status
 
@@ -151,6 +155,7 @@ def test_serve_without_ipv6(monkeypatch):
     """Where the host has no IPv6, an empty host serves IPv4."""
 
     def no_ipv6(*args):
+        """Raises the error a host without IPv6 gives."""
         raise OSError("Address family not supported by protocol")
 
     monkeypatch.setattr(statusweb, "_Server6", no_ipv6)
@@ -178,12 +183,14 @@ def test_stalled_client_is_dropped(monkeypatch):
 
 
 def test_empty_page():
+    """The page says there are no jobs or workers."""
     body = statusweb.page(Status(AT, [], [], []))
     for want in ["No jobs yet.", "No workers.", "None."]:
         assert want in body
 
 
 def test_metrics(get):
+    """The metrics match the Go coordinator's names and labels."""
     code, headers, body = get("/metrics")
     assert code == 200 and headers["Content-Type"].startswith("text/plain; version=0.0.4")
     for want in [
@@ -204,6 +211,7 @@ def test_metrics(get):
 
 
 def test_label_escapes():
+    """A label value escapes quotes, backslashes and newlines."""
     assert statusweb.label('a\\b"c\nd') == '"a\\\\b\\"c\\nd"'
 
 
@@ -229,6 +237,7 @@ def test_duration_clock_set_back():
     ],
 )
 def test_go_duration(ns, want):
+    """A duration formats as Go's time.Duration does."""
     assert statusweb.go_duration(ns) == want
 
 
@@ -248,6 +257,7 @@ def test_go_duration(ns, want):
     ],
 )
 def test_go_float(x, want):
+    """A float formats as Go's %g does."""
     assert statusweb.go_float(x) == want
 
 
@@ -285,6 +295,7 @@ def test_server_status_while_the_log_fails(tmp_path):
 
     class Failing:
         def append(self, record):
+            """Fails every write, as a full disk does."""
             raise OSError("disk full")
 
     c = Coordinator(Server(Config(log=Failing())))
