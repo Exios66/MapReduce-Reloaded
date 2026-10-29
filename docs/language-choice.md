@@ -254,8 +254,8 @@ none exists.
 
 ## 6. Alternatives rejected
 
-The first four rows are the alternatives in ADR 0001. Go only is not listed
-there; its row follows from the ADR's decision.
+The rows are the alternatives in ADR 0001. Go only was added to the ADR
+later, with this report; the decision already implied it.
 
 | Alternative | Why not |
 |---|---|
