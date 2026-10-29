@@ -9,13 +9,13 @@ Dean & Ghemawat, [*MapReduce: Simplified Data Processing on Large Clusters*](htt
 (OSDI 2004), extended for modern infrastructure: object storage, compression,
 containers, gRPC, observability and user job files. Go runs the cluster;
 Python is the reference implementation of the API, the file format and local
-mode, and gives the same bytes for the same uncompressed job.
+mode and a coordinator server, and gives the same bytes for the same uncompressed job.
 
 ## Quick start
 
 Needs Docker with Compose, GNU `make`, and Python 3.11+ (for the example
 data). Go is optional: `make mr` builds the client in Docker without it.
-The cluster needs 4 CPUs, about 3.3 GB of memory and a few GB of disk;
+The cluster needs 4 vCPUs, about 3.3 GB of memory and a few GB of disk;
 [Cluster VM](docs/cluster-vm.md) has the budgets and the setup.
 
 ```sh
@@ -62,8 +62,9 @@ removes the containers and keeps `data/`.
 | Operations | Status page, Prometheus metrics, Grafana dashboard, chaos test with seeded worker kills and coordinator crashes |
 | Languages | Go cluster and Python reference implementation; the same bytes for the same uncompressed job |
 
-Phases 0–4 and most of Phase 6 are done; Python workers and Go↔Python
-interoperability (Phase 5) are stretch goals. See the [roadmap](docs/roadmap.md)
+Phases 0–4 and most of Phase 6 are done; Python workers and full Go↔Python
+interoperability (Phase 5) are stretch goals — the Python-coordinator/Go-worker
+combination is already tested (`make py-e2e`). See the [roadmap](docs/roadmap.md)
 and the [final report](docs/report.md).
 
 ## Results

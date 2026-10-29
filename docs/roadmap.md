@@ -4,10 +4,10 @@ The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F24)
 are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
 
-**Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
-has a test, and so are #41 and #42 (Phase 6 Tier A). Phase 7's benchmarks
-and evaluation (#57, #58) are done; the course deliverables below and the
-final report (#60) remain. Where the build departed
+**Status.** Phases 0–4 and Phase 7 are done: F1–F23 run in Go and have
+tests; F24 is covered by the Phase 7 evaluation harness. #41 and #42
+(Phase 6 Tier A) are also done. Phase 7's benchmarks
+and evaluation (#57, #58) and the final report (#60) are done; the course deliverables below remain. Where the build departed
 from this plan, [design.md](../design.md) lists the differences from the paper
 and why.
 
@@ -66,8 +66,8 @@ possible, then extend them for modern infrastructure and modern use cases.
   the network. The cluster runs locally with Docker Compose and can optionally
   be deployed to Kubernetes.
 - **Languages:** Go is the primary implementation. Python is the
-  reference implementation of the API, the file format and local mode; a
-  Python coordinator and worker are stretch work (#35–#39). The original system was C++; see
+  reference implementation of the API, the file format and local mode, and it
+  also has a coordinator server (done, #36); a Python worker is stretch work (#37). The original system was C++; see
   [ADR 0001](design/0001-languages-and-shared-contract.md) for why we use Go
   and Python instead.
 - **Key architectural idea:** both languages share one contract:
@@ -86,18 +86,18 @@ week-by-week schedule and a plain-language walkthrough, is in
 [roadmap-explained.md](roadmap-explained.md). In short:
 
 - **In scope:**
-  - Phases 0–4: every paper feature, F1–F23, in Go (done);
+  - Phases 0–4: every paper feature, F1–F23, in Go (done), plus F24 with Phase 7;
   - the Python halves of #5 and #8–#12: file format, hash, formats, sort,
     combiner and local mode;
   - #41 S3 storage and #42 compression;
   - #57 and #58: benchmarks and the paper's §5 experiments;
   - #60: the final report.
 - **Stretch** (issues kept open with a `[stretch]` prefix):
-  - #35–#39: Python distributed parity;
+  - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions. LATE (#45) is built; its experiment
     E7 is wired and has not been run.
-- **Cluster host:** the course VM (Ubuntu 24.04, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
+- **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
   [cluster-vm.md](cluster-vm.md).
@@ -243,7 +243,7 @@ MapReduce-Reloaded/
 └── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
 
-`tests/interop/` (Phase 5) does not exist yet; `bench/` came with #57.
+`tests/interop/` (Phase 5) does not exist yet; the Python-coordinator interop coverage that does exist lives in `python/tests/test_coordinator_e2e.py` (`make py-e2e`). `bench/` came with #57.
 
 ---
 
@@ -275,7 +275,7 @@ Each phase ends in a runnable, tested state.
 - `docs/paper-mapping.md` complete: every row F1–F24 linked to code and tests (F24 with Phase 7).
 
 **Phase 5 — Python parity & interop**
-- Finish the Python coordinator and worker.
+- Finish the Python worker (the coordinator is done, #36).
 - Python UDF host for Go workers (subprocess over stdio, using the proto framing).
 - Interop matrix in `tests/interop/`: {Go, Py} coordinator × {Go, Py} worker × {Go, Py} UDF, all byte-identical to local mode.
 

@@ -25,8 +25,8 @@ Where to start depends on the question.
   [final report](report.md): the summary of everything below, with the
   demo.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
-  The five-minute walkthrough for a review is [the demo](demo.md), and the
-  same sequence runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
+  The five-minute walkthrough for a review is [the demo](demo.md). A notebook
+  version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
 - **Why was it built this way?** The design records below.
@@ -97,3 +97,5 @@ likely to ask. The number is the issue that built it.
 - [`go/README.md`](../go/README.md) and [`python/README.md`](../python/README.md):
   each implementation's layout.
 - [`testdata/README.md`](../testdata/README.md): the golden files.
+- [`deploy/README.md`](../deploy/README.md): the Compose project and its profiles.
+- [`scripts/README.md`](../scripts/README.md): the helper scripts.

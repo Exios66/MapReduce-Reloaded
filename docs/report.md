@@ -10,10 +10,12 @@ Simplified Data Processing on Large Clusters* (OSDI 2004) and runs it on
 one VM with 4 vCPUs and 8 GB: a coordinator and four worker containers,
 each limited to one CPU, under Docker Compose. Go implements the
 coordinator, the workers and the `mr` client; Python implements the same
-API, file format, partition hash and local mode as a reference, and for
-the same uncompressed job both produce the same bytes. All 23 of the
-paper's features (F1–F23) are built and each is named with the test that
-proves it. The paper's §5 experiments and six more (E0–E5) ran on the VM.
+API, file format, partition hash and local mode as a reference, and also
+provides a coordinator server, and for
+the same uncompressed job both produce the same bytes. All 24 of the
+paper's features (F1–F24) are built and each is named with the test that
+proves it. The paper's §5 experiments (grep, sort, backups, failures) were reproduced
+on the VM, alongside further experiments E0, E1, and E4–E6.
 The mechanisms behave as the paper says: phases overlap, backups cut a
 straggler's tail (17.6 s without them, 11.2 s with), and a job survives a
 lost worker or a restarted coordinator with the same output. What changes
@@ -142,15 +144,15 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests, each reviewed.** About 120 merged pull requests,
-  each reviewed by an AI agent and CI before it merged; several real bugs
-  were found in review, not by tests.
+- **Small pull requests.** 157 merged pull requests (as of October 2026).
+  The documented process calls for AI review and CI before merging; several
+  real bugs were found in review, not by tests.
 
 ## Future work
 
 Kept open as `[stretch]` issues:
 
-- **Python parity (#35–#39):** a Python coordinator and worker, Python
+- **Python parity (#35, #37–#39):** a Python worker, Python
   map and reduce functions on Go workers, and a test matrix over every
   Go/Python combination.
 - **Modern extensions (#43–#55):** an external shuffle service,

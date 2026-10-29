@@ -22,7 +22,7 @@ identical bytes, which gives a second, independent correctness check.
 ## The phases
 
 Phases 0–4 are done, and so are #41 and #42 and Phase 7's benchmarks and
-evaluation (#57, #58); the final report (#60) remains. Where the build
+evaluation (#57, #58) and the final report (#60). Where the build
 differs from the plan, [design.md](../design.md) says how and why.
 
 ### Phase 0 — Foundations (#1–#5)
@@ -119,9 +119,9 @@ failing, and jobs still finish correctly.*
   ([design.md](../design.md)) and decision records. This makes the "faithful
   recreation" claim checkable.
 
-### Phase 5 — Python catches up (#35–#39) · *stretch*
+### Phase 5 — Python catches up (#35, #37–#39) · *stretch*
 
-- Full Python coordinator and worker.
+- Full Python worker (coordinator done).
 - Python map and reduce functions running on Go workers.
 - Every Go/Python combination tested against the oracle.
 
