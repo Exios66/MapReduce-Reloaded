@@ -29,6 +29,12 @@ Where to start depends on the question.
   version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
+- **Why Go and Python, not C++?** [Language choice](language-choice.md): the
+  constraints, the evidence that Go is enough, what it costs, and why Python
+  is a second implementation and not the only one.
+- **What does each container do, and where does the data live?**
+  [Docker topology](docker-topology.md): for a reader new to Docker, the
+  services, ports, volumes and the reasons for each choice.
 - **Why was it built this way?** The design records below.
 - **How does one component work?** The explainers below.
 
@@ -103,7 +109,8 @@ at 03: there are no explainers 01 and 02, and the files were not renumbered.
   corpus.
 - [`deploy/README.md`](../deploy/README.md): the Compose project and its profiles,
   and [`deploy/compose/README.md`](../deploy/compose/README.md): each file in
-  `deploy/compose/` and when to use it.
+  `deploy/compose/` and when to use it. [Docker topology](docker-topology.md)
+  explains the Compose setup for a reader new to Docker.
 - [`scripts/README.md`](../scripts/README.md): the helper scripts.
 - [`examples/README.md`](../examples/README.md): the job file and the notebook
   that the quick start and the demo use.

@@ -69,6 +69,9 @@ The full table, with the reason and the record for each, is in
 [design.md](../design.md#differences-from-the-2004-paper). The ones that
 change behavior:
 
+- **Go, with Python as a second implementation,** replace C++. The
+  argument, the evidence and the costs are in [language
+  choice](language-choice.md).
 - **gRPC and protobuf** replace Google's RPC, so Go and Python share one
   contract.
 - **A bind-mounted directory or S3** replaces GFS. An S3 commit is a copy
