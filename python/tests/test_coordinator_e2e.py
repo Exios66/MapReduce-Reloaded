@@ -358,7 +358,7 @@ def test_backups_finish_a_straggler(cluster, tmp_path):
     c = cluster(3)
     out = tmp_path / "out"
     report = c.mr(
-        "submit", "-coordinator", c.addr, "-m", "4", "-r", "2", "-wait",
+        "submit", "-coordinator", c.addr, "-m", "4", "-r", "4", "-wait",
         str(job_file), str(out), str(ROOT / "testdata/corpus") + "/*.txt",
     )  # fmt: skip
     status = dict(line.split("\t", 1) for line in report.splitlines() if "\t" in line)
