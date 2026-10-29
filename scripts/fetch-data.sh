@@ -53,7 +53,7 @@ sha256() {
 }
 
 tmp=$(mktemp)
-trap 'rm -f "$tmp" "$tmp.out"' EXIT
+trap 'rm -f "$tmp"' EXIT
 
 # download URL SHA256: fetches URL into $tmp and checks its sum.
 download() {
@@ -76,10 +76,11 @@ fetch() {
     fi
     download "$3" "$4"
     mkdir -p "$dest/$1"
-    # Filter to a temporary file first: in a pipeline, sh would only see the
-    # last command's exit status, and a half-written file would look done.
-    $5 <"$tmp" >"$tmp.out"
-    mv "$tmp.out" "$out"
+    # Filter to a temporary file next to the output first: in a pipeline, sh
+    # would only see the last command's exit status, and a half-written file
+    # would look done. In the same directory, mv is an atomic rename.
+    $5 <"$tmp" >"$out.part"
+    mv "$out.part" "$out"
     echo "fetch-data: wrote $out ($(wc -c <"$out" | tr -d ' ') bytes)"
 }
 

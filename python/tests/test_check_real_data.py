@@ -72,11 +72,6 @@ def test_main_without_data(tmp_path, monkeypatch, capsys):
     assert "run scripts/fetch-data.sh" in capsys.readouterr().err
 
 
-def test_main_rejects_an_unknown_dataset():
-    with pytest.raises(SystemExit):
-        real.main(["nope"])
-
-
 def warc(kind, body, url=b"http://h.example/p"):
     head = b"WARC/1.0\r\nWARC-Type: %s\r\n" % kind
     if url:
@@ -101,3 +96,12 @@ def test_wet_to_tsv(compress):
     )
     assert r.stdout == "http://h.example/p\tGrüße aus Berlin\nhttps://g.example/\t\n".encode()
     assert b"2 pages" in r.stderr
+
+
+@pytest.mark.parametrize("argv", [["nope"], ["warpeace"], ["-r", "0"], ["-m", "0"]])
+def test_main_rejects_bad_arguments(tmp_path, monkeypatch, argv):
+    """An unknown or unfetched dataset, or no tasks, stops with a usage error."""
+    monkeypatch.setattr(real, "DATA", tmp_path)
+    with pytest.raises(SystemExit) as e:
+        real.main(argv)
+    assert e.value.code == 2

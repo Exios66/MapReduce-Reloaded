@@ -173,9 +173,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--no-python", action="store_true", help="run only the Go program")
     parser.add_argument("names", nargs="*", metavar="NAME")
     args = parser.parse_args(argv)
+    if args.m < 1 or args.r < 1:
+        parser.error("-m and -r must be at least 1")
     if unknown := [n for n in args.names if n not in DATASETS]:
         parser.error(f"unknown dataset {', '.join(unknown)}; want {', '.join(DATASETS)}")
-    names = args.names or [n for n, (_, rel) in DATASETS.items() if any(DATA.glob(rel))]
+    fetched = [n for n, (_, rel) in DATASETS.items() if any(DATA.glob(rel))]
+    if missing := [n for n in args.names if n not in fetched]:
+        parser.error(f"{', '.join(missing)} not in data/input; run scripts/fetch-data.sh")
+    names = args.names or fetched
     if not names:
         print(
             "check-real-data: no data in data/input; run scripts/fetch-data.sh",
