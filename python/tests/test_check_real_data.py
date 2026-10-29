@@ -18,12 +18,13 @@ def golden(d: Path) -> list[bytes]:
 
 
 EX = ROOT / "testdata/examples"
+CORPUS = ROOT / "testdata/corpus"
 
 
 @pytest.mark.parametrize(
     "program, inputs, expected",
     [
-        ("wordcount", sorted((ROOT / "testdata/corpus").glob("*.txt")), ROOT / "testdata/corpus/expected"),
+        ("wordcount", sorted(CORPUS.glob("*.txt")), CORPUS / "expected"),
         ("urlfreq", [EX / "urlfreq/input/access.log"], EX / "urlfreq/expected/r4"),
         ("reverselinks", [EX / "reverselinks/input/links.tsv"], EX / "reverselinks/expected/r4"),
     ],
