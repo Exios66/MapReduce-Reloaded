@@ -311,7 +311,7 @@ import (
 
 // Map sleeps in map task 0, so the coordinator sees a straggler.
 func Map(ctx api.Context, key, value []byte, out api.Emitter) error {
-	if ctx.Task().Index == 0 && string(key) == "0" {
+	if ctx.Task().Index == 0 {
 		time.Sleep(3 * time.Second)
 	}
 	for _, w := range api.Words(value) {
