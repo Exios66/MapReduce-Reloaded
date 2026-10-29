@@ -166,8 +166,11 @@ python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 
 `bench/experiments.sh E0|E1|E2|E3|E4|E5|E6` runs one experiment of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
-SSH drops. The plots land in `bench/plots/E0.png` … `E6.png`, and the
-script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
+SSH drops. The command above draws a fresh run into `bench/plots/`
+(`E0.png` … `E6.png`, each with a `-dark` variant), so it does not touch the
+plots committed in `bench/evaluation/`, which come from the saved runs there:
+`python3 bench/plot-experiments.py bench/evaluation bench/evaluation` (see
+[bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 `bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not

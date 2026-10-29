@@ -402,7 +402,7 @@ def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
     module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
 
     assert jobs.bar.call_args.args[0] == [0, 1]
-    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words, api.Sum)"]
+    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words,\napi.Sum)"]
     assert [c.args[0] for c in jobs.annotate.call_args_list] == ["10.0 s", "105.0 s (10.5×)"]
 
 
@@ -465,3 +465,28 @@ def test_e0_title_places_caption_on_a_second_line(plotter, tmp_path):
     assert first.startswith("Speed-up = job time on 1 worker")
     assert "M = 32, R = 4" in second
     figure.savefig.assert_called_once_with(tmp_path / "E0.png")
+
+
+def test_e2_comparison_reads_each_setting_from_its_own_directory(plotter, tmp_path):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    right.barh.return_value = [Mock() for _ in range(4)]
+    fig = Mock()
+    pyplot.subplots.return_value = fig, (left, right)
+    kinds = {"normal": "E2-pairs", "normal-no-backups": "E2-pairs"}
+    pairs = [row(s) | {"run": "1", "event_at": "", "job": "job-1"} for s in kinds]
+    main = [
+        row(s) | {"run": "1", "event_at": "", "job": "job-1"}
+        for s in ("normal", "straggler-backups", "straggler-no-backups")
+    ]
+    for exp in ("E2", "E2-pairs"):
+        (tmp_path / exp).mkdir()
+    for setting in kinds:
+        tasks_file(tmp_path / "E2-pairs" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
+    for setting in ("straggler-backups", "straggler-no-backups"):
+        tasks_file(tmp_path / "E2" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
+    module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
+    # Four curves: the main run's own no-straggler row is not used.
+    assert left.step.call_count == 4
+    subtitle = [c.args[2] for c in fig.text.call_args_list if "paired runs" in c.args[2]]
+    assert subtitle

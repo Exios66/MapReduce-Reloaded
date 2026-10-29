@@ -14,6 +14,12 @@ from the normal run's (valid=0) are left out and counted in the table.
   as grouped bars labeled with the saving.
 - E2: tasks completed against time for the median run of each setting, as
   in the paper's Figure 3, and job-time bars in the same colors.
+- E2-comparison: the same two panels, but of two datasets: the two
+  no-straggler settings come from the ten paired runs in
+  RESULTS_DIR/E2-pairs (the drift-controlled comparison), the two straggler
+  settings from the main runs in RESULTS_DIR/E2 (the only straggler data).
+  The image says so in its subtitle. It is drawn, as E2-comparison.png and
+  E2-comparison-dark.png, only when both directories have a runs.csv.
 - E3: job time against kill time, with the no-failure time as a line and
   each point labeled with its cost; and input, shuffle and output rates
   against time for the median run killed at 50%, with the loss marked, as
@@ -400,7 +406,9 @@ def e6(rows, out, t):
     )
 
 
-def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None, styles=None):
+def timeline_and_bars(
+    rows, results, exp, settings, field, t, title, event=None, styles=None, note=None
+):
     """Tasks completed against time for each setting's median run, ending
     at its first maximum completed-task count, and its median job time as
     a horizontal bar in the same color, with minimum-to-maximum range bars.
@@ -418,6 +426,10 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
     drawn with a dashed line and a hatched bar. The palette has three
     validated slots; omitting styles when settings outnumber the colors
     raises ValueError. Each slot indexes t["series"].
+
+    A row with a "_dir" key has its task CSVs in results/_dir instead of
+    results/exp, so one chart can draw runs from two result directories.
+    note, if given, is a second line of the subtitle.
 
     Returns the unsaved, open figure. Missing data or style keys, invalid
     numbers or color slots, and file or plotting errors propagate.
@@ -437,7 +449,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
         if not runs:
             continue
         run = median_run(runs, field)
-        path = results / exp / f"tasks-{setting}-{run['run']}.csv"
+        path = results / run.get("_dir", exp) / f"tasks-{setting}-{run['run']}.csv"
         if path.exists():
             t0 = first_seen(path, run["job"])
             times, done = completed(path, run["job"])
@@ -496,7 +508,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
     right.grid(axis="y", visible=False)
     right.tick_params(axis="y", length=0)
     right.set_title("Job time")
-    heading(fig, t, title, label_note(rows) + ".")
+    heading(fig, t, title, label_note(rows) + "." + (f"\n{note}" if note else ""))
     return fig
 
 
@@ -535,6 +547,47 @@ def e2(rows, results, out, t):
         styles=styles,
     )
     finish(fig, out)
+
+
+def e2_comparison(pairs, rows, results, out, t):
+    """Saves the E2 chart that mixes two datasets to out, in theme t, and
+    closes it: no straggler from pairs (the rows of E2-pairs/runs.csv, ten
+    runs taken in turn per setting, so drift hits both settings alike), a
+    straggler from rows (the rows of E2/runs.csv, three runs per setting,
+    the only straggler data). Both are read from results, the task CSVs of
+    each from its own directory, and the image says so in its subtitle.
+
+    Drawn as e2 draws its chart, from the same settings and styles; only
+    valid="1" runs count. Missing fields, invalid numbers, and file or
+    plotting errors propagate.
+    """
+    settings = {
+        "normal": "no straggler, backups on",
+        "normal-no-backups": "no straggler, backups off",
+        "straggler-backups": "straggler, backups on",
+        "straggler-no-backups": "straggler, backups off",
+    }
+    styles = {
+        "normal": (0, False),
+        "normal-no-backups": (0, True),
+        "straggler-backups": (1, False),
+        "straggler-no-backups": (1, True),
+    }
+    mixed = [dict(r, _dir="E2-pairs") for r in pairs if r["setting"] in settings] + [
+        dict(r, _dir="E2") for r in rows if r["setting"].startswith("straggler")
+    ]
+    fig = timeline_and_bars(
+        mixed,
+        results,
+        "E2",
+        settings,
+        "seconds",
+        t,
+        "E2: backup tasks against a worker throttled to 0.2 CPU",
+        styles=styles,
+        note="No-straggler rows: paired runs (E2-pairs); straggler rows: main E2 runs.",
+    )
+    finish(fig, out, top=0.8)
 
 
 def e3(rows, results, out, t):
@@ -665,8 +718,8 @@ def e5(rows, results, out, t):
     time. Missing fields, invalid numbers, and file errors propagate."""
     settings = {
         "compiled": "compiled",
-        "interpreted": "job file\n(api.Words, api.Sum)",
-        "naive": "job file\n(own word test)",
+        "interpreted": "job file\n(api.Words,\napi.Sum)",
+        "naive": "job file\n(own word\ntest)",
     }
     present = [k for k in settings if valid(rows, setting=k)]
     phases = {}
@@ -778,6 +831,13 @@ def main():
                 with plt.rc_context(rc(t)):
                     fn(rows, out / (f"{exp}.png" if name == "light" else f"{exp}-{name}.png"), t)
             table(exp, rows)
+    pairs = load(results, "E2-pairs")
+    rows = load(results, "E2")
+    if pairs and rows:
+        for name, t in THEMES.items():
+            with plt.rc_context(rc(t)):
+                png = "E2-comparison.png" if name == "light" else f"E2-comparison-{name}.png"
+                e2_comparison(pairs, rows, results, out / png, t)
 
 
 main()
