@@ -40,7 +40,14 @@ STATUS = Status(
             map_tasks_total=7,
             map_tasks_completed=3,
             reduce_tasks_total=4,
-            counters=types_pb2.Counters(values={"map.input_records": 12, 'odd"name': 1}),
+            counters=types_pb2.Counters(
+                values={
+                    "map.input_records": 12,
+                    "map.input.records": 20,
+                    "map.output.records": 8,
+                    'odd"name': 1,
+                }
+            ),
             error="<script>",
         ),
         _job(
@@ -86,20 +93,26 @@ def test_page(get):
     assert code == 200 and headers["Content-Type"] == "text/html; charset=utf-8"
     for want in [
         "job-1",
-        "JOB_STATE_MAPPING",
-        "<td>2.5s</td>",
-        "<td>1m30s</td>",
+        "badge state-mapping",
+        ">mapping<",
+        ">2.5s<",
+        ">1m30s<",
         "3 started, 1 won",
-        "3/7",
+        "3/7 &middot; 43%",
+        'max="7" value="3"',
+        "map in <b>20</b>",
         "map.input_records: 12",
         "host-b",
         "w3",
         "w1",
         str(M0),
         "&lt;script&gt;",
+        "prefers-color-scheme: dark",
     ]:
         assert want in body, want
     assert "<script>" not in body
+    assert "<body>" in body
+    assert '<body class="dark">' in get("/?theme=dark")[2]
     assert get("/?refresh=1")[0] == 200
     assert get("/nope")[0] == 404
 
