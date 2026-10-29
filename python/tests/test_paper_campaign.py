@@ -1,6 +1,8 @@
 """Campaign preflight must fail before touching Docker or publishing bad input."""
 
 import os
+import json
+import importlib.util
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +10,38 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("state,expected", [("MAPPING", 0), ("REDUCING", 0), ("SUCCEEDED", 1), ("FAILED", 1), ("RUNNING", 1)])
+def test_failure_injection_accepts_only_coordinator_active_states(state, expected):
+    script = (ROOT / "bench/paper.sh").read_text()
+    body = script.split("\nactive_state() {\n", 1)[1].split("\n}\n", 1)[0]
+    result = subprocess.run(["bash", "-c", "active_state() {\n" + body + '\n}\nactive_state "$1"', "test", state])
+    assert result.returncode == expected
+
+
+def test_terminal_evidence_rejects_stale_or_missing_collectors(tmp_path):
+    spec = importlib.util.spec_from_file_location("evidence", ROOT / "bench/check-paper-evidence.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    (tmp_path / "clock.json").write_text(json.dumps({"monotonic": 100}))
+    (tmp_path / "workers.json").write_text(json.dumps([{"Name": f"/w{i}"} for i in range(4)]))
+    samples = "seconds,url,metric,value\n" + "".join(
+        f"{second},u{i},{metric},0\n"
+        for second in (0, 11) for i in range(4) for metric in module.COUNTERS
+    )
+    tasks = "seconds,job,kind,state,value\n11,job-1,map,completed,16\n11,job-1,reduce,completed,8\n"
+    resources = "".join(json.dumps({"epoch": 1011, "name": f"w{i}", "memory": "1MiB", "cpu": "0%"}) + "\n" for i in range(4))
+    for filename, text in (("samples.csv", samples), ("tasks.csv", tasks), ("resources.jsonl", resources)):
+        (tmp_path / filename).write_text(text)
+    assert module.check(tmp_path, "job-1", 16, 8, 110, 1010)["verified"]
+    for filename, bad in (("samples.csv", samples.replace("11,", "9,")), ("tasks.csv", tasks.replace("job-1", "job-2")), ("resources.jsonl", resources.replace("1011", "1009"))):
+        path = tmp_path / filename
+        original = path.read_text()
+        path.write_text(bad)
+        with pytest.raises(AssertionError):
+            module.check(tmp_path, "job-1", 16, 8, 110, 1010)
+        path.write_text(original)
 
 
 @pytest.fixture

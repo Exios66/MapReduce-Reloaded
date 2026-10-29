@@ -7,6 +7,10 @@ cd "$(dirname "$0")/.."
 exec 9> "$HOME/.mapreduce-paper.lock"
 flock -n 9 || { echo "paper: another campaign command owns the VM" >&2; exit 1; }
 
+active_state() {
+    case "$1" in MAPPING|REDUCING) return 0 ;; *) return 1 ;; esac
+}
+
 action=${1:-} scenario=${2:-} variant=${3:-} setting=${4:-normal}
 size=${SIZE:-10000000000} m=${M:-160} interval=${INTERVAL:-0.5}
 deadline=${JOB_TIMEOUT_SECONDS:-3600}
@@ -174,7 +178,7 @@ if [ "$setting" = restart ]; then
     (
         sleep "$EVENT_AFTER"
         timeout 5 "$mr" status "$job" > "$dir/event-status.txt"
-        [ "$(awk 'NR == 1 { print $2 }' "$dir/event-status.txt")" = RUNNING ] || exit 1
+        active_state "$(awk 'NR == 1 { print $2 }' "$dir/event-status.txt")" || exit 1
         printf 'kill_requested,%s,0\n' "$(date +%s.%N)" >> "$dir/events.csv"
         timeout 5 docker kill "${ids[0]}" >> "$dir/event.log" 2>&1 || exit 1
         printf 'killed,%s,0\n' "$(date +%s.%N)" >> "$dir/events.csv"
@@ -227,18 +231,23 @@ assert events['killed'] < float(sys.argv[3]) + float(status['seconds']), 'worker
 PY
 fi
 sleep "$(awk -v i="$interval" 'BEGIN { print 2*i }')"
+# Require actual terminal measurements, not merely living collector processes.
+evidence=0
+for _ in $(seq 40); do
+    for pid in "${samplers[@]}"; do kill -0 "$pid" || { echo "paper: sampler died" >&2; exit 1; }; done
+    if python3 bench/check-paper-evidence.py "$dir" "$job" "$m" "$r" "$end_mono" "$end" > "$dir/evidence.pending" 2> "$dir/evidence-errors.log"; then
+        evidence=1
+        break
+    fi
+    sleep 0.25
+done
+[ "$evidence" = 1 ] || { echo "paper: missing terminal telemetry; invalid trial" >&2; exit 1; }
 # Finalize samples before plotting; failed collectors invalidate the trial.
 for pid in "${samplers[@]}"; do kill -0 "$pid" || { echo "paper: sampler died" >&2; exit 1; }; done
 for pid in "${samplers[@]}"; do kill "$pid"; done
 for pid in "${samplers[@]}"; do wait "$pid" 2>/dev/null || true; done
 samplers=()
-python3 - "$dir/samples.csv" <<'PY'
-import csv, sys
-rows = list(csv.DictReader(open(sys.argv[1])))
-by = {}
-for r in rows: by.setdefault(r['url'], set()).add(r['seconds'])
-assert len(by) == 4 and all(len(times) >= 2 for times in by.values()), 'incomplete rate coverage'
-PY
+python3 bench/check-paper-evidence.py "$dir" "$job" "$m" "$r" "$end_mono" "$end" > "$dir/evidence.json"
 # Stop/join every attempt, including speculative losers, before validation/deletion.
 "${compose[@]}" logs --no-color coordinator worker > "$dir/cluster.log" 2>&1
 "${compose[@]}" stop worker coordinator > "$dir/stop.log" 2>&1
@@ -257,6 +266,8 @@ status = dict(line.split(None, 1) for line in (p/'status.txt').read_text().split
 assert status['map'] == f'{sys.argv[6]}/{sys.argv[6]}'
 assert status['reduce'] == f'{sys.argv[7]}/{sys.argv[7]}'
 record = dict(scenario=sys.argv[2], variant=sys.argv[3], setting=sys.argv[4], logical_bytes=int(sys.argv[5]), m=int(sys.argv[6]), r=int(sys.argv[7]), start_epoch=float(sys.argv[8]), submitted_epoch=float(sys.argv[9]), end_epoch=float(sys.argv[10]), wall_seconds=float(sys.argv[15])-float(sys.argv[14]), space_budget_bytes=int(sys.argv[11]), commit=sys.argv[12], dirty=int(sys.argv[13]) != 0, status=status, validation=json.load(open(p/'validation.json')), cpus=os.cpu_count(), kernel=platform.release())
+record['memory_bytes'] = int(next(line.split()[1] for line in open('/proc/meminfo') if line.startswith('MemTotal:'))) * 1024
+record['cpu'] = next(line.split(':', 1)[1].strip() for line in open('/proc/cpuinfo') if line.startswith('model name'))
 json.dump(record, open(p/'result.json', 'w'), indent=2)
 PY
 # Only this unique, stopped and independently verified run's output is removed.
