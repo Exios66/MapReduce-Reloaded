@@ -25,6 +25,8 @@ Where to start depends on the question.
   [final report](report.md): the summary of everything below, with the
   demo.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
+  The five-minute walkthrough for a review is [the demo](demo.md), and the
+  same sequence runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
 - **Why was it built this way?** The design records below.
