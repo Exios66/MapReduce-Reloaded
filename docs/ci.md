@@ -21,7 +21,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
 | `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
-| `python-3.11` | `make py-lint md-lint py-test` (ruff, the Markdown link check, the Python tests and coverage floors) | `cimg/python:3.11`, small |
+| `python-3.11` | `make py-lint md-lint py-test` (ruff, the Markdown link and style checks, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint md-lint py-test` | `cimg/python:3.13`, small |
 
 The names are set in the workflow, so they do not change when the job
