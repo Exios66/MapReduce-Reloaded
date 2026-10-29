@@ -1,13 +1,16 @@
 # Deployment
 
 How the cluster is built and run. See [cluster VM](../docs/cluster-vm.md) for
-the CPU and memory budgets and the setup of the course VM.
+the CPU and memory budgets and the setup of the course VM, and [Docker
+topology](../docs/docker-topology.md) for what each container does, the ports
+and volumes, and the reasons, written for a reader new to Docker.
 
 | Path | Contents |
 |---|---|
 | [`docker/Dockerfile`](docker/Dockerfile) | A multi-stage build of one small, static, distroless image with the `coordinator`, `worker` and `mr` binaries |
-| [`compose/compose.yaml`](compose/compose.yaml) | The Compose project `mapreduce` |
+| [`compose/compose.yaml`](compose/compose.yaml) | The Compose project `mapreduce`; [`compose/README.md`](compose/README.md) says what each file in `compose/` is for |
 | [`compose/backups-off.yaml`](compose/backups-off.yaml), [`compose/speculation-late.yaml`](compose/speculation-late.yaml) | Overrides of the coordinator's backup policy for the experiments in [`bench/experiments.sh`](../bench/experiments.sh): no backups (E2, E7), and LATE (E7, [ADR 0019](../docs/design/0019-late-speculation.md)) |
+| [`compose/soak.yaml`](compose/soak.yaml) | An override for `make soak`: each worker limited to 256 MB, to check that a job larger than that spills to disk and is not killed (#160) |
 | [`compose/monitoring/`](compose/monitoring/) | Prometheus's scrape config, and the Grafana provisioning and dashboard |
 
 ## Services

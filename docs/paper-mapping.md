@@ -2,12 +2,16 @@
 
 Traceability from each feature of Dean & Ghemawat, *MapReduce: Simplified Data
 Processing on Large Clusters* (OSDI 2004), to where it lives in this repo and
-the test that proves it. Rows are filled in as phases land. A dash in the
-Python column marks a feature that only the Go cluster has: Python is the
-reference implementation and local mode (ADR 0001), and a Python cluster is
-stretch work (#35). `TestPaperMapping` checks that every path and test named
-here exists. Where we chose differently from the paper, the notes below the
-table say how.
+the test that proves it. Rows are filled in as phases land. The Python
+column lists the reference implementation and local mode. Python also has a
+coordinator server that `make py-e2e` runs with Go workers (ADR 0001,
+[explainer 25](explainers/25-python-coordinator.md)); it implements the
+master's side of several coordinator rows, the F21 status page among them,
+but no Python worker runs tasks, so a dash marks a feature with no Python
+implementation outside that coordinator. A Python worker and a Python
+user-function host are stretch work (#37, #38). `TestPaperMapping` checks
+that every path and test named here exists. Where we chose differently from
+the paper, the notes below the table say how.
 
 Status: `planned` → `in progress` → `done`.
 

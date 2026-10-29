@@ -29,6 +29,12 @@ Where to start depends on the question.
   version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
+- **Why Go and Python, not C++?** [Language choice](language-choice.md): the
+  constraints, the evidence that Go is enough, what it costs, and why Python
+  is a second implementation and not the only one.
+- **What does each container do, and where does the data live?**
+  [Docker topology](docker-topology.md): for a reader new to Docker, the
+  services, ports, volumes and the reasons for each choice.
 - **Why was it built this way?** The design records below.
 - **How does one component work?** The explainers below.
 
@@ -63,7 +69,8 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 
 One page for each component, in the order they were built. Each says what it
 is, how it works, how we know it works, and answers the questions a reviewer is
-likely to ask. The number is the issue that built it.
+likely to ask. The number is the issue that built it. File numbering starts
+at 03: there are no explainers 01 and 02, and the files were not renumbered.
 
 | Component | Issue |
 |---|---|
@@ -89,6 +96,7 @@ likely to ask. The number is the issue that built it.
 | [Chaos Testing](explainers/22-chaos.md) | #29 |
 | [Locality](explainers/23-locality.md) | #31 |
 | [Status Page and Metrics](explainers/24-status.md) | #32 |
+| [The Python Coordinator](explainers/25-python-coordinator.md) | #36 |
 
 ## Other documentation
 
@@ -97,6 +105,13 @@ likely to ask. The number is the issue that built it.
 - [`proto/README.md`](../proto/README.md): the RPC contract.
 - [`go/README.md`](../go/README.md) and [`python/README.md`](../python/README.md):
   each implementation's layout.
-- [`testdata/README.md`](../testdata/README.md): the golden files.
-- [`deploy/README.md`](../deploy/README.md): the Compose project and its profiles.
+- [`testdata/README.md`](../testdata/README.md): the golden files, and
+  [`testdata/corpus/README.md`](../testdata/corpus/README.md): the word-count
+  corpus.
+- [`deploy/README.md`](../deploy/README.md): the Compose project and its profiles,
+  and [`deploy/compose/README.md`](../deploy/compose/README.md): each file in
+  `deploy/compose/` and when to use it. [Docker topology](docker-topology.md)
+  explains the Compose setup for a reader new to Docker.
 - [`scripts/README.md`](../scripts/README.md): the helper scripts.
+- [`examples/README.md`](../examples/README.md): the job file that the quick
+  start and the demo submit, and the demo notebook.

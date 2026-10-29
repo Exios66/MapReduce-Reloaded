@@ -10,6 +10,12 @@ This page covers the VM's specifications, the CPU, memory and disk budgets,
 one-time setup, and daily use. The [runbook](runbook.md) is the short
 version: from SSH to a full demo, in order.
 
+This page is the single source of truth for the VM's specification. Other
+pages that state it for planning ([design](../design.md), the
+[roadmap](roadmap.md), the [report](report.md), the
+[evaluation](evaluation.md)) link here; when a figure differs, this page is
+right.
+
 ## The VM
 
 Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
@@ -28,6 +34,10 @@ Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
 The budgets below are planned against these totals. The VM is shared with
 other coursework, so what is free at any moment is less;
 `scripts/vm-setup.sh` reports it at the start of each session.
+
+Re-verify at freeze: before the project is submitted, run the commands above
+again on the course VM and update this table and its date. The other pages
+link here and need no change.
 
 ## CPU budget
 

@@ -28,7 +28,8 @@ Work still due by Nov 16, each a small pull request reviewed by an AI agent
 before it merges ([design.md](../design.md#process)):
 
 1. **Deployment:** four workers limited to one CPU each; the VM described
-   as 4 vCPUs, 8 GB and a 35 GB disk ([cluster VM](cluster-vm.md)).
+   as 4 vCPUs, 8 GB and a 35 GB disk (33 GB root, shared;
+   [cluster VM](cluster-vm.md), the source of truth).
 2. **CI on pull requests** ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 3. **Shared storage:** `data/` bind-mounted at `/data`; `make data`,
    `make upload-example`
@@ -97,10 +98,11 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions. LATE (#45) is built; its experiment
     E7 is wired and has not been run.
-- **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
+- **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk with a 33 GB root, shared). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
-  [cluster-vm.md](cluster-vm.md).
+  [cluster-vm.md](cluster-vm.md), the single source of truth for the VM's
+  specification.
 
 ## Development process
 

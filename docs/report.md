@@ -7,7 +7,7 @@ summary; each section links to the page that has the detail.
 
 This repository rebuilds the system in Dean and Ghemawat's *MapReduce:
 Simplified Data Processing on Large Clusters* (OSDI 2004) and runs it on
-one VM with 4 vCPUs and 8 GB: a coordinator and four worker containers,
+one VM with 4 vCPUs and 8 GB ([cluster VM](cluster-vm.md)): a coordinator and four worker containers,
 each limited to one CPU, under Docker Compose. Go implements the
 coordinator, the workers and the `mr` client; Python implements the same
 API, file format, partition hash and local mode as a reference, and also
@@ -40,7 +40,7 @@ and the job continues.
 - [Design](../design.md): the assignment's design questions, one job from
   submission to completion, and sequence diagrams for scheduling, the
   shuffle, failure recovery and the commit.
-- [Design records](README.md#design-records): eighteen ADRs, one per
+- [Design records](README.md#design-records): nineteen ADRs, one per
   decision.
 - [Explainers](README.md#explainers): one page per component.
 
@@ -69,6 +69,9 @@ The full table, with the reason and the record for each, is in
 [design.md](../design.md#differences-from-the-2004-paper). The ones that
 change behavior:
 
+- **Go, with Python as a second implementation,** replace C++. The
+  argument, the evidence and the costs are in [language
+  choice](language-choice.md).
 - **gRPC and protobuf** replace Google's RPC, so Go and Python share one
   contract.
 - **A bind-mounted directory or S3** replaces GFS. An S3 commit is a copy

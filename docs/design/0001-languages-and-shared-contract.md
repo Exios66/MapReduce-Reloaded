@@ -36,6 +36,11 @@ run on a laptop (Docker Compose) or a cluster (Kubernetes).
 - **Two independent implementations with no shared contract:** simpler at
   first, but loses the strongest correctness check we have — running the same
   job through Go and Python and comparing outputs byte-for-byte.
+- **Go only:** cheaper to maintain, with no second codebase and no Python CI
+  jobs, but nothing independent would check the file format, the partition
+  hash or the wire messages; one implementation's behaviour would define
+  them. (Added 2026-10-29 to record an alternative the decision already
+  implied; see [language choice](../language-choice.md).)
 
 ## Consequences
 
