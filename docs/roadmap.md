@@ -53,7 +53,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#45) is built, and E7, its evaluation, is wired but not run.
 
 ## Context
 
@@ -95,7 +95,8 @@ week-by-week schedule and a plain-language walkthrough, is in
 - **Stretch** (issues kept open with a `[stretch]` prefix):
   - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
-  - #59: evaluation of the extensions.
+  - #59: evaluation of the extensions. LATE (#45) is built; its experiment
+    E7 is wired and has not been run.
 - **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
@@ -165,7 +166,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 **Tier B — robustness and operations**
 
 - **Coordinator high availability**: leader election via an etcd lease, or embedded Raft (`hashicorp/raft`). This builds on the F9 WAL.
-- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold.
+- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); its evaluation is pending in #59 (experiment E7, not yet run).
 - **Skew handling**: sample-based range partitioner (TeraSort-style) and hot-key salting.
 - **Memory-aware spilling**: a bounded sort buffer that spills to disk under memory pressure.
 - **Observability**: Prometheus metrics, OpenTelemetry traces, structured JSON logs. A React or HTMX UI replaces the static status page.
@@ -289,7 +290,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
 
-- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
+- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #45; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
 

@@ -169,7 +169,9 @@ names four examples: combiners, extra tasks for stragglers, handling worker
 failures, and scheduling tasks where their data is. We do the first three,
 plus a fourth of our own, coordinator recovery. All four are built in code.
 Compose runs the coordinator with `-data-dir` by default, and with backups
-off through the override [`backups-off.yaml`](deploy/compose/backups-off.yaml); the
+off through the override [`backups-off.yaml`](deploy/compose/backups-off.yaml), or
+with LATE speculation through
+[`speculation-late.yaml`](deploy/compose/speculation-late.yaml); the
 combiner's switch is `mr submit -combiner=false`. Each feature has an
 experiment and a plot below.
 
@@ -183,6 +185,10 @@ are not a special feature: the assignment requires them.
 2. **Backup tasks for stragglers** (§3.6). When no task of the current phase
    is idle, an idle worker gets a second attempt of the oldest running task;
    the first to finish wins ([ADR 0010](docs/design/0010-backup-tasks.md)).
+   Beyond the paper, `-speculation=late` picks the task by estimated time
+   left (LATE, Zaharia et al., OSDI 2008) instead of by age
+   ([ADR 0019](docs/design/0019-late-speculation.md)); it is opt-in, and
+   not yet evaluated (#59).
 3. **Worker failure handling** (§3.3). Heartbeats detect a dead worker; its
    running tasks and its completed map tasks (whose output was on its disk)
    run again elsewhere ([ADR 0009](docs/design/0009-failure-detection.md)).
@@ -246,6 +252,7 @@ M, R and the commit.
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
 | E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
 | E6 | How much does the combiner save on real text? | Word count, 1 GiB each, combiner on and off, on three inputs: `crawl-eng`, Common Crawl's English pages (the real-text result); `crawl`, its pages in every language, where scripts without spaces make runs of text one word; `book`, War and Peace's lines repeated, a fixed vocabulary and so a best case | Bytes shuffled and job time, grouped bars per input |
+| E7 | Does LATE beat the paper's rule on workers of different speeds? (#59, not yet run) | sort, 1 GiB, M = 32; the four workers throttled to 1, 0.6, 0.3 and 0.15 CPU; coordinator `-speculation` `paper`, `late` and `off` | Job time and backups started and won, per setting; no plot yet |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled
@@ -259,8 +266,8 @@ whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|E6|all`
-runs the experiments and writes one CSV row per run, plus the
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|E6|E7|all`
+runs the experiments (`all` leaves out E7, which is groundwork for #59) and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
 draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
@@ -275,7 +282,8 @@ disk, about 3 GiB, within the disk budget in
 [cluster VM](docs/cluster-vm.md#disk-budget). E0 runs on 1 and 2 workers with
 `docker compose up --scale worker=N`, which keeps the one-CPU limit. E2
 changes a coordinator flag, so it uses the Compose override
-`backups-off.yaml` (`-backups=false`); E4 starts from an empty log. E1's "bytes shuffled" is the map output bytes after the
+`backups-off.yaml` (`-backups=false`); E7 also uses `speculation-late.yaml`
+(`-speculation=late`) and throttles all four workers; E4 starts from an empty log. E1's "bytes shuffled" is the map output bytes after the
 combiner, an existing counter. The Zipf generator takes its exponent as a
 parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
@@ -442,7 +450,7 @@ sequenceDiagram
     W1->>C: RequestTask
     C-->>W1: MapTask(attempt 0, split)
     W2->>C: RequestTask
-    Note over C: nothing idle, Config.Backups is on, TaskTable.Backup
+    Note over C: nothing idle, speculation is paper, TaskTable.Backup
     C-->>W2: MapTask(attempt 1, same split)
 ```
 
@@ -461,12 +469,21 @@ wait, for at most `LocalityWait` since the job first held a task back. The
 hold ends sooner if a worker on a host that holds a split asks first. A
 reply of `wait` carries `retry_after`.
 
-When no task of the current phase is idle and backups are on, the
-coordinator calls `TaskTable.Backup`. It offers the in-progress task whose
-attempt started first, of those with one running attempt on another worker.
-The backup is an ordinary attempt with the next number, and the log records
-it as an ordinary assignment. The job's status counts the backups started
-and the tasks a backup won.
+When no task of the current phase is idle, the coordinator starts a backup
+by the policy that `-speculation` names (`paper`, `late` or `off`; empty
+follows `-backups`, so `-backups=false` is `off`). With `paper` it calls
+`TaskTable.Backup`, which offers the in-progress task whose attempt started
+first, of those with one running attempt on another worker. With `late` it
+calls `TaskTable.LateBackup`, which uses the progress that workers report in
+their heartbeats ([ADR 0019](docs/design/0019-late-speculation.md)): it
+refuses a worker whose speed is below the 25th percentile of the workers',
+allows running backups for at most 10% of the workers (at least one), and
+offers the task with the longest estimated time left among those whose
+progress rate is in the slowest quarter, once an attempt has run twice the
+heartbeat interval and reported. Either way the backup is an ordinary
+attempt with the next number, and the log records it as an ordinary
+assignment; LATE adds no record. The job's status counts the backups
+started and the tasks a backup won.
 
 ### Shuffle
 
@@ -599,6 +616,7 @@ no reducer is told about them.
 | Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](docs/design/0007-write-ahead-log.md), [explainer](docs/explainers/18-coordinator-recovery.md) |
 | Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/16-worker-failure.md), [ADR 0009](docs/design/0009-failure-detection.md) |
 | Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle, oldest attempt first. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](docs/explainers/20-backup-tasks.md), [ADR 0010](docs/design/0010-backup-tasks.md) |
+| The paper's backups do not use how far a task has got (§3.6) | `-speculation=late`, opt-in: LATE (Zaharia et al., OSDI 2008) backs up the slow task with the most estimated time left, from the progress workers report in heartbeats, and not on slow workers. The default is the paper's rule. | Age says little on workers of different speeds. Not evaluated yet (#59). | [ADR 0019](docs/design/0019-late-speculation.md) |
 | A signal handler sends the bad record's number by UDP (§4.6) | The worker recovers the panic and reports the record in `ReportTask`. The coordinator skips it after two crashes. | Go can recover a panic, and the report already reaches the coordinator. | [explainer](docs/explainers/19-bad-records.md), [ADR 0011](docs/design/0011-bad-records.md) |
 | Master sums counters from task reports and ignores duplicates (§4.9) | Only the accepted attempt's counters are kept. A re-run map replaces its earlier counts. | A task may run more than once, and adding every attempt would over-count. | [explainer](docs/explainers/21-counters.md) |
 | Master serves HTTP status pages (§4.8) | A status page and Prometheus `/metrics` on the coordinator, `/metrics` on workers, JSON logs, and a Grafana dashboard in the Compose monitoring profile. | These are standard tools, and per-attempt logs stay on each worker. | [explainer](docs/explainers/24-status.md), [ADR 0012](docs/design/0012-observability.md) |
@@ -614,7 +632,7 @@ no reducer is told about them.
 
 - [Paper mapping](docs/paper-mapping.md): each paper feature, its code and the
   test that proves it.
-- [Design records](docs/design/): ADRs 0001 to 0018, one per decision that
+- [Design records](docs/design/): ADRs 0001 to 0019, one per decision that
   shaped the code.
 - [Explainers](docs/explainers/): one plain-language page per feature, from the
   RPC contract (03) to the status page (24).

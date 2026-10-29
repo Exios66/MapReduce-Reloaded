@@ -184,6 +184,31 @@ are not drift-controlled.
   map tasks, and their output is on its disk, so they all run again before
   the reduce phase can finish.
 
+## Paper vs LATE on mixed-speed workers (#59) — not yet run
+
+E2 makes one worker slow. [ADR 0019](design/0019-late-speculation.md) adds
+LATE, which picks the task to back up by its estimated time left and keeps
+backups off slow workers, and it is meant for workers of different speeds.
+E7 compares the paper's rule, LATE and no backups with all four workers
+throttled to different CPU limits (1, 0.6, 0.3 and 0.15 by default). It has
+not been run, so there is no result here: no claim that LATE is faster, or
+that it is not.
+
+To run it on the VM (needs Docker; about 3 GiB of disk, as E2):
+
+```sh
+bench/experiments.sh E7                      # three settings, REPEAT times each
+E7_SETTINGS="mixed-paper mixed-late" bench/experiments.sh E7   # some of them
+awk -F, 'NR > 1 && $16 == 1 { print $2, $11, $13, $14 }' bench/results/E7/runs.csv | sort
+```
+
+The last command prints each valid run's setting, job time, backups started
+and backups won. [bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run)
+has the settings, the output files and the knobs. As with E2, the
+settings alternate within each repeat, so drift on the VM does not fall on
+one of them. With four workers LATE allows one backup at a time, so a
+result here is for a small cluster only.
+
 ## What scale changes
 
 - **Fixed costs dominate a small job.** The paper's startup, about a

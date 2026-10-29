@@ -38,6 +38,7 @@ import (
 // options are the coordinator's flags.
 type options struct {
 	addr, httpAddr, dataDir, logFormat string
+	speculation                        string
 	backups                            bool
 	keepJobs, maxTaskFailures          int
 }
@@ -81,12 +82,19 @@ func parse(args []string, stderr io.Writer) (options, error) {
 	fs.StringVar(&o.httpAddr, "http", ":8080", "address of the status page and /metrics (empty: none)")
 	fs.StringVar(&o.dataDir, "data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
 	fs.BoolVar(&o.backups, "backups", true, "run backup attempts of the last tasks of each phase")
+	fs.StringVar(&o.speculation, "speculation", "", "how backup attempts start: paper (the paper's rule, §3.6), late (LATE, Zaharia et al. 2008) or off (default: paper, or off with -backups=false)")
 	fs.IntVar(&o.keepJobs, "keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
 	fs.IntVar(&o.maxTaskFailures, "max-task-failures", 8, "fail the job once one task has failed this many times (0: retry for ever)")
 	fs.StringVar(&o.logFormat, "log-format", "text", "log format: text or json")
 	err := fs.Parse(args)
 	if err == nil && fs.NArg() > 0 {
 		err = fmt.Errorf("unexpected arguments %q", fs.Args())
+	}
+	if err == nil && !coordinator.ValidSpeculation(o.speculation) {
+		err = fmt.Errorf("-speculation is %q; it must be paper, late or off", o.speculation)
+	}
+	if err == nil && !o.backups && (o.speculation == coordinator.SpeculationPaper || o.speculation == coordinator.SpeculationLate) {
+		err = fmt.Errorf("-backups=false conflicts with -speculation=%s; use -speculation=off", o.speculation)
 	}
 	if err == nil && o.keepJobs < 0 {
 		err = fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", o.keepJobs)
@@ -105,6 +113,7 @@ func config(o options) coordinator.Config {
 		WorkerTimeout:     10 * time.Second, // three missed heartbeats
 		RetryAfter:        time.Second,
 		Backups:           o.backups,
+		Speculation:       o.speculation,
 		KeepJobs:          o.keepJobs,
 		MaxTaskFailures:   o.maxTaskFailures,
 	}

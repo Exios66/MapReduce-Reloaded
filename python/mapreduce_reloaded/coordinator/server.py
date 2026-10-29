@@ -21,7 +21,7 @@ from typing import NamedTuple, Protocol
 import grpc
 
 from mapreduce_reloaded.coordinator.registry import Registry, Worker
-from mapreduce_reloaded.coordinator.tasktable import COMPLETED, MAP, Task, TaskTable
+from mapreduce_reloaded.coordinator.tasktable import COMPLETED, MAP, LateParams, Task, TaskTable
 from mapreduce_reloaded.coordinator.wire import PROGRAMS, input_split, path, validate
 from mapreduce_reloaded.formats import input_format
 from mapreduce_reloaded.gen.mapreduce.v1 import (
@@ -54,6 +54,18 @@ class Log(Protocol):
     def append(self, record: bytes) -> None:
         """Appends a serialized LogRecord, raising an exception on failure."""
         ...
+
+
+# The values of Config.speculation.
+SPECULATION_PAPER = "paper"
+SPECULATION_LATE = "late"
+SPECULATION_OFF = "off"
+
+
+def valid_speculation(s: str) -> bool:
+    """Reports whether s is a value of Config.speculation: "", paper, late or
+    off."""
+    return s in ("", SPECULATION_PAPER, SPECULATION_LATE, SPECULATION_OFF)
 
 
 @dataclass
@@ -104,6 +116,34 @@ class Config:
     # it, as the log keeps IDs unique. Last, so positional arguments keep
     # the meaning they had before it was added.
     id_prefix: str = ""
+    # How backup attempts start once no task of the current phase is idle:
+    # SPECULATION_PAPER (the paper's rule, §3.6), SPECULATION_LATE (LATE,
+    # Zaharia et al., OSDI 2008) or SPECULATION_OFF. Empty means backups
+    # decides: paper if it is set, off if not.
+    speculation: str = ""
+    # The LATE settings (see LateParams). A zero field means its default: 0.1
+    # of the workers, the 25th percentile for tasks and for workers, and twice
+    # heartbeat_interval.
+    speculative_cap: float = 0.0
+    slow_task_percentile: float = 0.0
+    slow_node_percentile: float = 0.0
+    min_runtime: float = 0.0
+
+    def effective_speculation(self) -> str:
+        """Returns how the server starts backup attempts."""
+        if self.speculation:
+            return self.speculation
+        return SPECULATION_PAPER if self.backups else SPECULATION_OFF
+
+    def late_params(self) -> LateParams:
+        """Returns the LATE settings, with the defaults of Zaharia et al.
+        (OSDI 2008) for the zero fields."""
+        return LateParams(
+            self.speculative_cap or 0.1,
+            self.slow_task_percentile or 25.0,
+            self.slow_node_percentile or 25.0,
+            self.min_runtime or 2 * self.heartbeat_interval,
+        )
 
 
 class RpcError(Exception):
@@ -124,10 +164,12 @@ class LostWorker(NamedTuple):
 
 class WorkerStatus(NamedTuple):
     """A live worker, last seen by the coordinator's clock (now), and the
-    tasks of the active job it is running."""
+    tasks of the active job it is running, with the fraction of each one's
+    input the worker last reported processed."""
 
     worker: Worker
     running: list[Task]
+    progress: dict[Task, float]
 
 
 class Status(NamedTuple):
@@ -355,7 +397,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             workers = []
             for w in self._workers.all():
                 w.last_seen = at - (tick - w.last_seen)  # heartbeats are timed by _clock
-                workers.append(WorkerStatus(w, running.get(w.id, [])))
+                tasks = running.get(w.id, [])
+                progress = {t: self._active.tasks.fraction(t, w.id) for t in tasks}
+                workers.append(WorkerStatus(w, tasks, progress))
             return Status(at, [j.status() for j in self._order], workers, list(self._lost))
 
     def now(self) -> float:
@@ -436,6 +480,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             for p in request.running:
                 if not self._runs(p.attempt, worker):
                     resp.cancel.append(p.attempt)
+                    continue
+                a = p.attempt
+                self._active.tasks.set_fraction(
+                    Task(a.task.kind, a.task.index), a.attempt, worker, p.fraction_done, self.now()
+                )
             return resp
 
     def _runs(self, attempt: types_pb2.TaskAttemptId, worker: str) -> bool:
@@ -612,7 +661,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def RequestTask(self, request, context):
         """Hands an idle worker its next task: map tasks first, the nearest
         to their input (§3.4), reduce tasks once every map task has completed
-        (§3.1), then backup attempts if enabled (§3.6). It returns a wait
+        (§3.1), then backup attempts if enabled (§3.6, or LATE). It returns a wait
         instruction when no task is ready, or a shutdown instruction after
         shutdown. A paused worker receives only wait or shutdown instructions.
         Errors are NotFound for an unknown worker, Internal if
@@ -633,8 +682,12 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 t = j.tasks.next(lambda i: locality(j.splits[i], info))
                 if t is not None and self._hold_back(t, info, tick):
                     t = None
-                elif t is None and self._cfg.backups:
+                elif t is None and self._cfg.effective_speculation() == SPECULATION_PAPER:
                     t = j.tasks.backup(worker)
+                elif t is None and self._cfg.effective_speculation() == SPECULATION_LATE:
+                    t = j.tasks.late_backup(
+                        worker, now, self._cfg.late_params(), len(self._workers)
+                    )
                 if t is not None:
                     return self._assign(t, worker, now)
             resp = coordinator_pb2.RequestTaskResponse(wait=coordinator_pb2.WaitInstruction())
@@ -753,7 +806,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             elif limit is not None and j.tasks.skipped() > limit:
                 self._end(j, f"more than {limit} bad records to skip", at)
             return False, self._active is not j
-        accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs)
+        accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs, at)
         if accepted:
             # A map task run again after its worker died replaces its counts.
             j.counts[t] = dict(req.success.counters.values)

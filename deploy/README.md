@@ -7,6 +7,7 @@ the CPU and memory budgets and the setup of the course VM.
 |---|---|
 | [`docker/Dockerfile`](docker/Dockerfile) | A multi-stage build of one small, static, distroless image with the `coordinator`, `worker` and `mr` binaries |
 | [`compose/compose.yaml`](compose/compose.yaml) | The Compose project `mapreduce` |
+| [`compose/backups-off.yaml`](compose/backups-off.yaml), [`compose/speculation-late.yaml`](compose/speculation-late.yaml) | Overrides of the coordinator's backup policy for the experiments in [`bench/experiments.sh`](../bench/experiments.sh): no backups (E2, E7), and LATE (E7, [ADR 0019](../docs/design/0019-late-speculation.md)) |
 | [`compose/monitoring/`](compose/monitoring/) | Prometheus's scrape config, and the Grafana provisioning and dashboard |
 
 ## Services
@@ -51,7 +52,7 @@ Python's development dependencies include PyYAML for these checks. To run
 just the deployment checks, use `cd python && python3 -m pytest -q -rs
 tests/test_deploy.py`. When Docker Compose is installed, the tests also run
 `docker compose config` for the default, `s3`, `monitoring`, `tools` and all
-profiles together, plus the backups-off override. These commands do not
+profiles together, plus the backups-off and speculation-late overrides. These commands do not
 start containers or require a Docker daemon. When `promtool` is installed,
 its `check config` validates the Prometheus configuration too. Missing
 external tools produce explicit pytest skips; the static contract checks

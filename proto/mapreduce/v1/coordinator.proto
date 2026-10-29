@@ -169,9 +169,12 @@ message HeartbeatRequest {
 message TaskProgress {
   // The running attempt.
   TaskAttemptId attempt = 1;
-  // Fraction of the task's input processed so far, from 0.0 to 1.0. Not
-  // used yet: workers leave it 0, and backups go to the attempt that started
-  // first (§3.6, ADR 0010).
+  // Fraction of the attempt's input processed so far, from 0.0 to 1.0: for
+  // a map task, the bytes of its split read; for a reduce task, the bytes of
+  // its map outputs read. It never decreases within an attempt. The
+  // coordinator shows it on the status page. The paper's backup rule (§3.6,
+  // ADR 0010) ignores it; LATE mode uses it to estimate each task's time
+  // left (ADR 0019). The paper does not specify it.
   float fraction_done = 2;
 }
 

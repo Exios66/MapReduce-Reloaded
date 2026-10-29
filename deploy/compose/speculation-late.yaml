@@ -1,0 +1,7 @@
+# Override for experiment E7 (bench/experiments.sh): the coordinator starts
+# backup attempts by LATE (Zaharia et al., OSDI 2008) instead of the paper's
+# rule (§3.6; ADR 0019).
+# docker compose -p mapreduce -f compose.yaml -f speculation-late.yaml up -d
+services:
+  coordinator:
+    command: [coordinator, -addr, ":7070", -http, ":8080", -data-dir, /out/wal, -speculation=late]
