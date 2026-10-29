@@ -2,6 +2,9 @@
 # fields a person or an agent needs to pick it up cold.
 blank_issues_enabled: false
 contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Exios66/MapReduce-Reloaded/security/advisories/new
+    about: Report it privately, not as an issue. SECURITY.md says what is in scope.
   - name: Design and decisions
     url: https://github.com/Exios66/MapReduce-Reloaded/blob/main/design.md
     about: Read design.md and the ADRs in docs/design before proposing a change to how the system works.
