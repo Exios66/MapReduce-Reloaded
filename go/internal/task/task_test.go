@@ -148,6 +148,17 @@ func TestMapProgress(t *testing.T) {
 		t.Fatalf("second half: reported %v, want %v", got, want)
 	}
 
+	// A split whose last line ends beyond it reports at most 1.
+	got = nil
+	split.Start, split.End = 0, 7
+	if _, _, err := Map(ctx, spec, api.TaskID{Kind: api.MapTask, Attempt: 3}, split, t.TempDir(), nil, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if want := []float64{6.0 / 7, 1}; !slices.Equal(got, want) {
+		t.Fatalf("line past the end: reported %v, want %v", got, want)
+	}
+	split.End = 12
+
 	if WithProgress(t.Context(), nil) != t.Context() {
 		t.Error("a nil report changed the context")
 	}

@@ -236,9 +236,10 @@ func TestByteSplitsLimit(t *testing.T) {
 	}
 }
 
-// A reader says how many bytes of its split it has read, from 0 up to the
-// split's length: a text split counts the partial line it skips and the
-// lines it reads, and a kv file the bytes read from the file.
+// A reader says how many bytes of its split it has read, from 0, past the
+// split's length if its last line ends beyond it: a text split counts the
+// partial line it skips and the lines it reads, and a kv file the bytes read
+// from the file.
 func TestOffset(t *testing.T) {
 	text := "aa\nbbbb\ncc\ndddddd\n" // lines at offsets 0, 3, 8 and 11
 	t.Run("text", func(t *testing.T) {

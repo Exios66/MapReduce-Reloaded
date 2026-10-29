@@ -127,7 +127,8 @@ func Map(ctx context.Context, spec api.JobSpec, id api.TaskID, split formats.Spl
 			return nil, nil, err
 		}
 		if report != nil && positioned && total > 0 {
-			report(float64(pos.Offset()) / total)
+			// The last line may end past the split, so Offset can exceed it.
+			report(min(float64(pos.Offset())/total, 1))
 		}
 	}
 	if err := records.Err(); err != nil {
