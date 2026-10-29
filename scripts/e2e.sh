@@ -26,14 +26,17 @@ got=$(mktemp -d)
 trap 'rm -rf "$got"' EXIT
 
 # The image runs its binaries as a non-root user, and each answers --help
-# (#158). cluster-up builds it.
+# with its usage text (#158). cluster-up builds it.
 user=$(docker image inspect --format '{{.Config.User}}' mapreduce-reloaded)
 case "$user" in
 "" | 0 | 0:* | root | root:*) echo "e2e: the image runs as root (User=$user)" >&2; exit 1 ;;
 esac
-docker run --rm --entrypoint /usr/local/bin/coordinator mapreduce-reloaded --help >/dev/null
-docker run --rm --entrypoint /usr/local/bin/worker mapreduce-reloaded --help >/dev/null
-docker run --rm --entrypoint /usr/local/bin/mr mapreduce-reloaded status --help >/dev/null
+for binary in coordinator worker; do
+    help=$(docker run --rm --entrypoint "/usr/local/bin/$binary" mapreduce-reloaded --help 2>&1) || true
+    case "$help" in *Usage*) ;; *) echo "e2e: $binary --help printed no usage" >&2; exit 1 ;; esac
+done
+help=$(docker run --rm --entrypoint /usr/local/bin/mr mapreduce-reloaded status --help 2>&1) || true
+case "$help" in *Usage*) ;; *) echo "e2e: mr status --help printed no usage" >&2; exit 1 ;; esac
 
 # The job is bounded, since it never finishes if every worker is killed;
 # the memory check below then says why.
@@ -84,7 +87,7 @@ fi
 "${compose[@]}" --profile monitoring up -d --wait prometheus >/dev/null
 series=
 for _ in $(seq 30); do
-    series=$(curl -fsS --get http://127.0.0.1:19090/api/v1/query \
+    series=$(curl -fsS --max-time 5 --get http://127.0.0.1:19090/api/v1/query \
         --data-urlencode "query=mr_job_tasks{job=\"$id\"}" || true)
     case "$series" in *"\"job\":\"$id\""*) break ;; esac
     sleep 1
