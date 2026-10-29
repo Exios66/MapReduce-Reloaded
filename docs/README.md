@@ -18,6 +18,9 @@ Where to start depends on the question.
   completes, and troubleshooting.
 - **How do the results compare with the paper's?** [Evaluation](evaluation.md):
   §5's grep, sort, backup tasks and machine failures, run again on the VM.
+- **What data does it run on, and how does it match the paper's?** [Data](data.md):
+  the generators for §5, the golden corpus, and real datasets for the §2.3
+  programs, checked against an oracle (`make real-data`).
 - **What was built, how does it compare, and what was learned?** The
   [final report](report.md): the summary of everything below, with the
   demo.

@@ -13,3 +13,4 @@ implementation that breaks a file here is a change in behavior.
 
 `format/go/` holds the same records as the Go writer compresses them, which
 the Python reader must read. See [the file format](../docs/file-format.md).
+Larger, real inputs are fetched rather than committed: see [Data](../docs/data.md).

@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -38,6 +38,13 @@ COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
 data:
 	mkdir -p data/input data/out
 	chmod a+rwx data/out
+
+# Real datasets for the example programs, fetched into data/input/ and
+# checked in Go and Python against an independent oracle (docs/data.md).
+# Not in make check: they are 300 MB and take minutes.
+real-data: mr
+	scripts/fetch-data.sh
+	$(PYTHON) scripts/check-real-data.py
 
 # The host client, bin/mr (ADR 0016), built with the host's Go if it has
 # one, otherwise in the same golang image the cluster's image is built from.
