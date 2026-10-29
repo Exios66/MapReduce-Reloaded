@@ -2,8 +2,10 @@
 
 The Go coordinator is the one the Compose cluster runs. Python has a second
 one, `python -m mapreduce_reloaded.coordinator`, written from the same
-contract. It speaks the same protocol, so the Go workers and the `mr`
-command cannot tell the two apart. It exists to check that the contract in
+contract. It speaks the same protocol, so for jobs on local storage the Go
+workers and the `mr` command cannot tell the two apart. It stores only local
+files: it rejects `s3://` inputs and outputs, which the Go coordinator
+accepts. It exists to check that the contract in
 `proto/` is enough to build a coordinator from, without reading the Go one
 ([ADR 0001](../design/0001-languages-and-shared-contract.md)).
 
@@ -48,8 +50,9 @@ then logs a `Restarted` record, which stops the attempts that were running.
 Workers register again under IDs of the form `rN-wM`. If the log fails to
 accept a record, for example on a full disk, every RPC answers `UNAVAILABLE`
 and the server rebuilds itself from the log once it takes records again
-(`Server._heal`). `-keep-jobs` bounds both the jobs in memory and, through
-`Server._compact`, the size of the log.
+(`Server._heal`). A positive `-keep-jobs` bounds both the jobs in memory and,
+through `Server._compact`, the size of the log; `-keep-jobs 0` keeps every
+ended job, so neither is bounded.
 
 ## Status page
 
