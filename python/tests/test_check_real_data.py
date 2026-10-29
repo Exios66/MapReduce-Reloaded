@@ -17,13 +17,15 @@ def golden(d: Path) -> list[bytes]:
     return [p.read_bytes() for p in sorted(d.glob("part-r-*"))]
 
 
+EX = ROOT / "testdata/examples"
+
+
 @pytest.mark.parametrize(
     "program, inputs, expected",
     [
-        ("wordcount", sorted((ROOT / "testdata/corpus").glob("*.txt")), "testdata/corpus/expected"),
-        ("urlfreq", [ROOT / "testdata/examples/urlfreq/input/access.log"], "testdata/examples/urlfreq/expected/r4"),
-        ("reverselinks", [ROOT / "testdata/examples/reverselinks/input/links.tsv"],
-         "testdata/examples/reverselinks/expected/r4"),
+        ("wordcount", sorted((ROOT / "testdata/corpus").glob("*.txt")), ROOT / "testdata/corpus/expected"),
+        ("urlfreq", [EX / "urlfreq/input/access.log"], EX / "urlfreq/expected/r4"),
+        ("reverselinks", [EX / "reverselinks/input/links.tsv"], EX / "reverselinks/expected/r4"),
     ],
 )  # fmt: skip
 def test_oracle_gives_the_golden_output(program, inputs, expected):
@@ -31,7 +33,7 @@ def test_oracle_gives_the_golden_output(program, inputs, expected):
     implementations are tested against, so a dataset that differs points at
     the programs, not at the oracle."""
     data = b"".join(p.read_bytes() for p in inputs)
-    assert real.partitions(real.ORACLES[program](data), 4) == golden(ROOT / expected)
+    assert real.partitions(real.ORACLES[program](data), 4) == golden(expected)
 
 
 def test_lines():
