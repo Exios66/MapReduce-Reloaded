@@ -319,7 +319,6 @@ four engineering practices:
 
 ## Components
 
-
 - **Coordinator** (`go/cmd/coordinator`, `go/internal/coordinator`). The
   paper's master (§3.2). It holds the task table, the worker registry and the
   job. One mutex guards all state ([ADR 0006](docs/design/0006-coordinator-concurrency.md)).
