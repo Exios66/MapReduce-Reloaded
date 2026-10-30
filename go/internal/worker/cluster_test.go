@@ -625,7 +625,9 @@ func TestClusterSurvivesReportForUnknownJob(t *testing.T) {
 }
 
 func TestClusterReregistersAfterInternal(t *testing.T) {
-	c := newCluster(t)
+	// A 5 s timeout, so that a heartbeat delayed on a loaded runner does not
+	// make the coordinator forget the worker and cost it a third registration.
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second })
 	job := c.submit("wordcount")
 	c.addWorker()
 	c.gates[0].fail.Store(1)
