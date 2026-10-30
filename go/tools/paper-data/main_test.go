@@ -130,9 +130,12 @@ func TestPrepareRoundTrip(t *testing.T) {
 			if m.PhysicalBytes != physical {
 				t.Fatalf("physical bytes = %d, want %d", m.PhysicalBytes, physical)
 			}
-			for _, kind := range []string{"sort", "grep"} {
+			for _, kind := range []string{"sort", "distsort", "grep"} {
 				out := t.TempDir()
 				selected := sortedLines(lines)
+				if kind == "distsort" {
+					sort.Slice(selected, func(i, j int) bool { return bytes.Compare(selected[i], selected[j]) < 0 })
+				}
 				if kind == "grep" {
 					selected = [][]byte{lines[3], lines[1]} // Grep has no global order requirement.
 				}
@@ -286,6 +289,37 @@ func TestFingerprint(t *testing.T) {
 	hash := fmt.Sprintf("%064x", want)
 	if !f.matches(257, hash) || f.matches(256, hash) || f.matches(257, strings.Repeat("0", 64)) {
 		t.Fatalf("fingerprint = %s / %d, want %s / 257", hex.EncodeToString(f.sum[:]), f.count, hash)
+	}
+}
+
+func TestWholeLineSortRejectsDisorderAndValues(t *testing.T) {
+	lines := fixtureLines()
+	m, err := prepare(bytes.NewReader(inputBytes(lines)), filepath.Join(t.TempDir(), "in"), 4, 2, "text")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []string{"text", "kv"} {
+		out := t.TempDir()
+		writeOutputs(t, out, "distsort", format, 2, lines)
+		if _, err := verify(out, "distsort", format, 2, m); err == nil {
+			t.Fatal("accepted unordered whole-line output")
+		}
+		if err := os.Remove(filepath.Join(out, "part-r-00000")); err != nil {
+			t.Fatal(err)
+		}
+		w, err := newRecordWriter(filepath.Join(out, "part-r-00000"), format)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.write(lines[0], []byte("unexpected")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := verify(out, "distsort", format, 2, m); err == nil {
+			t.Fatal("accepted nonempty whole-line sort value")
+		}
 	}
 }
 

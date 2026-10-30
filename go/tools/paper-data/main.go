@@ -91,7 +91,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		}
 		return json.NewEncoder(out).Encode(m)
 	case "verify":
-		kind := flags.String("kind", "", "grep or sort")
+		kind := flags.String("kind", "", "grep, sort (10-byte key) or distsort (whole-line key)")
 		parts := flags.Int("parts", 1, "expected reduce parts")
 		path := flags.String("manifest", "", "input manifest.json")
 		if err := flags.Parse(args[1:]); err != nil {
@@ -286,8 +286,8 @@ type verification struct {
 }
 
 func verify(dir, kind, format string, parts int, m manifest) (summary verification, err error) {
-	if (kind != "sort" && kind != "grep") || !validFormat(format) || parts <= 0 {
-		return summary, errors.New("require kind grep|sort, format text|kv, and positive parts")
+	if (kind != "sort" && kind != "distsort" && kind != "grep") || !validFormat(format) || parts <= 0 {
+		return summary, errors.New("require kind grep|sort|distsort, format text|kv, and positive parts")
 	}
 	if err = checkParts(dir, parts); err != nil {
 		return summary, err
@@ -297,7 +297,7 @@ func verify(dir, kind, format string, parts int, m manifest) (summary verificati
 		wantCount, wantHash = m.GrepRecords, m.GrepFingerprint
 	}
 	var got fingerprint
-	var previous [10]byte
+	var previous [99]byte
 	visit := func(key, value []byte) error {
 		line := key
 		if kind == "sort" {
@@ -305,12 +305,18 @@ func verify(dir, kind, format string, parts int, m manifest) (summary verificati
 			if len(key) != 10 || !validLine(line) || !bytes.Equal(key, line[:10]) {
 				return errors.New("invalid sort key/value")
 			}
-			if got.count > 0 && bytes.Compare(previous[:], key) > 0 {
+		} else if kind == "distsort" {
+			if len(value) != 0 || !validLine(line) {
+				return errors.New("invalid whole-line sort key/value")
+			}
+		} else if len(value) != 0 || !validLine(line) || !bytes.Contains(line, []byte("XYZ")) {
+			return errors.New("invalid grep key/value or missing XYZ")
+		}
+		if kind != "grep" {
+			if got.count > 0 && bytes.Compare(previous[:len(key)], key) > 0 {
 				return errors.New("sort output is not globally nondecreasing")
 			}
 			copy(previous[:], key)
-		} else if len(value) != 0 || !validLine(line) || !bytes.Contains(line, []byte("XYZ")) {
-			return errors.New("invalid grep key/value or missing XYZ")
 		}
 		got.add(line)
 		if got.count > wantCount {

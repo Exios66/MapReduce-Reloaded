@@ -7,7 +7,7 @@ below are copied from a run, with the machine it ran on.
 The [proposed 10 GB paper comparison](10gb-paper-run.md) records the next
 run's scope, VM handover and storage prerequisites. It is not a result.
 
-### Fixed-VM campaign commands
+## Fixed-VM campaign commands
 
 After explicit handover, `make paper-tools` builds the host tools and labeled
 worker image from the same clean revision, including an untracked-file check;
@@ -50,8 +50,23 @@ observed counter drop. Memory and free-space extrema are **sampled**, not
 guaranteed instantaneous peaks.
 
 See the [full-size resume checklist](10gb-paper-run.md#full-size-resume-checklist)
-before admitting 10 GB runs. The current VM hold still requires explicit
-exclusive-access confirmation; a prepared plan is not permission to run it.
+before admitting 10 GB runs. The owner confirmed exclusive VM access and
+authorized execution. Quality and capacity gates still apply.
+
+The [expanded E0–E5 suite](10gb-paper-run.md#expanded-e0e5-campaign-owner-clarification-2026-10-30)
+keeps the original formats, seeds, skew and controls at approximately 10 GB:
+84 trials plus nine paper-format supplements, three per setting. Run
+`python3 bench/large-suite.py plan` to list them without changing services.
+Input groups run sequentially; the scheduler stops on any failed validation.
+`WORKERS=1|2|4` controls scaling, and `SORT_PROGRAM=papersort|distsort`
+distinguishes the paper-key and whole-line sort representations. Word count
+uses native text input/output and the named `zstd` intermediate variant;
+`TEXT_SOURCE` selects its seeded input. Independent expected counts come
+from `text-data.py`, not the first distributed output.
+
+War and Peace, NASA-HTTP, SNAP web-Google and pinned Common Crawl remain
+separate real-data extensions for their matching programs. They do not
+replace the generated paper-format records or delay the primary campaign.
 
 ## Data generators (#57)
 

@@ -156,10 +156,107 @@ has passed validation. Archive the measured evidence before making that claim.
 
 ## Full-size resume checklist
 
-**Hold:** other VM work was still active at the last handover check. The
-commands below are prepared instructions, not executed results. Do not SSH,
-clean, build, run tests or change services until the owner confirms exclusive
-access. Keep the prepared native grep input and all rejected-trial evidence.
+### Expanded E0–E5 campaign (owner clarification, 2026-10-30)
+
+The execution scope is now the complete E0–E5 suite, not only the §5
+grep/sort rows above. Keep the earlier 1 GiB artifacts unchanged. Target
+decimal 10 GB, about 9.31 times 1 GiB; this is linear scale growth, not
+exponential growth. M160 gives roughly 62.5 MB splits; grep uses R1 and
+sort/word count R8. Report that R differs from the historical suite's R4.
+
+| Experiment | Controls at the larger scale | Timed trials |
+|---|---|---:|
+| E0 | Grep, whole-line distsort, Zipf word count; 1/2/4 workers | 27 |
+| E1 | Zipf 0.5/1.0/1.5, combiner on/off | 18 |
+| E2 | Normal/0.2-CPU straggler, each with backups on/off | 12 |
+| E3 | Baseline and permanent worker kill at 25/50/75% of calibration | 12 |
+| E4 | Baseline and coordinator kill/restart at 50%, same fresh per-trial WAL | 6 |
+| E5 | Compiled, helper-based interpreted, naive interpreted word count | 9 |
+| Paper-format supplement | 10-byte-key papersort, normal/off/immediate worker restart | 9 |
+| Optional real-corpus supplement | English crawl: E0 scaling, combiner on/off, E5 modes | 24 |
+
+The primary campaign is 84 E0–E5 trials plus nine paper-format supplements.
+The 24 real-corpus trials are optional follow-up, not a prerequisite or a
+substitute. Each setting repeats three times. Calibration is additional and labeled, never
+counted as one of the three repeats. Rotate/interleave settings, freeze the
+full-size baseline before fault comparisons, and record the actual fault
+phase/time. E3 deliberately retains permanent loss for comparison with old
+E3; the paper supplement restarts the worker immediately. Neither is the
+other's substitute. Paper-mode backups remain the default; LATE is not used.
+
+`large-suite.py plan` prints the complete plan without touching services.
+Execute one input group at a time, with a measured **remaining-free-space**
+budget and a new ledger path. It stops on any failed run, records accepted
+artifact directories durably, and deletes no input or earlier evidence:
+
+```sh
+python3 bench/large-suite.py plan
+python3 bench/large-suite.py run --group grep \
+    --space-budget-bytes "$measured_budget" --ledger "$new_ledger"
+python3 bench/large-suite.py run --group sort \
+    --space-budget-bytes "$measured_budget" \
+    --baseline-seconds "$full_size_distsort_baseline" --ledger "$new_ledger"
+```
+
+Groups are `grep`, `sort`, `zipf-0.5`, `zipf-1.0`, `zipf-1.5`, `paper-sort`
+and `crawl-eng`. `sort` retains whole-line distsort, while `paper-sort` uses
+the paper-key representation and its own baseline. Compressed-KV sort input,
+intermediate and output are the `zstdkv` storage variant, not native results.
+Word count's `zstd` variant keeps native text input/output but compresses
+intermediate data. Do not compare its times as an unchanged native rerun.
+The maximum per-job deadline is three hours to allow full-size naive E5;
+deadline and capacity failure still invalidate a trial.
+
+`TEXT_SOURCE=zipf-0.5|zipf-1.0|zipf-1.5|crawl-eng` selects word-count input:
+
+```sh
+TEXT_SOURCE=zipf-1.0 SIZE=10000000000 M=160 \
+    bench/paper.sh prepare wordcount zstd
+```
+
+`text-data.py` streams whole lines into M shards and independently counts
+ASCII-whitespace words in bounded batches using scratch SQLite. It records
+input SHA-256s and expected output-part SHA-256s, derived from that oracle,
+not the first distributed run. Hash agreement is probabilistic. Generators
+finish a whole line/chunk, so word-count targets are **at least** 10 GB with
+the actual byte/record count reported; paper grep/sort remain exactly 10 GB.
+
+The originally identified real-data targets are War and Peace (word count
+and the labeled repeated-book E6 input), NASA-HTTP's July 1995 request log
+(`urlfreq`), SNAP web-Google's 2002 graph (`reverselinks`), and Common Crawl
+WET (one file for `termvector`, ten pinned files for English/all-language
+E6 word count). `scripts/fetch-data.sh` and `scripts/check-real-data.py`
+already fetch and independently check these. Their original source sizes
+are not 10 GB. Larger suitable public datasets are allowed as explicitly
+identified extensions; repeated logs, books or graph edges must not be
+described as new unique requests, documents or graph structure. None replaces
+the primary paper record formats or E1/E5 Zipf controls.
+
+The existing ten WET files contain only about 2.9 GB of all-language text,
+not a 10 GB English corpus. `gen-crawl-stream.py` downloads successive files
+from the fixed public CC-MAIN-2024-10 segment, one compressed file at a time,
+and never cycles sources to fill the target. Only the prepared text shards
+and source manifest remain. Source hashes are observed through HTTPS, not
+publisher-pinned checksums. Record files, URLs, observed hashes, emitted
+pages and actual bytes; do not publish page text or raw URLs from pages.
+The shared WET reader caps headers/body size and rejects truncation. If the
+source or disk reserve runs out, preparation fails; no smaller corpus is
+silently accepted. `book` remains available only as a labeled repeated-book
+best case, not as the large-corpus supplement.
+
+Host snapshots record cache policy/totals before and after every trial.
+No cache dropping is performed; totals do not establish file residency, so
+label these runs uncontrolled-cache, not cold-cache. `disk.csv` also samples
+root-device read/write sectors (512 bytes each): derived throughput is
+host-wide physical I/O, not the worker counters' logical rates. Resource
+extrema remain sampled, not guaranteed instantaneous peaks. The evidence
+checker exempts only the specifically recorded fault's endpoint/window;
+an unrelated missing worker or sampler still invalidates the trial.
+
+**Authorized:** the owner confirmed exclusive VM access on 2026-10-30 and
+requested the full E0–E5 suite at roughly ten times the earlier 1 GiB scale,
+with larger-corpus text runs. Commands below are instructions, not results.
+Keep the prepared native grep input and all rejected-trial evidence.
 
 ### 1. Establish and test the exact revision
 

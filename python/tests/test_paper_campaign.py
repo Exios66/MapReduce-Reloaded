@@ -17,6 +17,32 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize(
+    "variant,expected",
+    [("native", "text none none"), ("zstd", "text zstd none"), ("zstdkv", "kv zstd zstd")],
+)
+def test_intermediate_compression_does_not_set_a_text_output_codec(variant, expected):
+    script = (ROOT / "bench/paper.sh").read_text()
+    settings = (
+        "format=text codec=none\n"
+        + script.split("format=text codec=none\n", 1)[1].split("tool=", 1)[0]
+    )
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"variant={variant}\nscenario=grep\n"
+            + settings
+            + '\nprintf "%s %s %s" "$format" "$codec" "$output_codec"',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout == expected
+    assert '-output-codec "$output_codec"' in script
+
+
+@pytest.mark.parametrize(
     "state,expected",
     [("MAPPING", 0), ("REDUCING", 0), ("SUCCEEDED", 1), ("FAILED", 1), ("RUNNING", 1)],
 )
@@ -51,8 +77,7 @@ def test_terminal_evidence_rejects_stale_or_missing_collectors(tmp_path):
         for second in range(1, 12)
     )
     resources = "".join(
-        json.dumps({"epoch": 1000 + second, "name": f"w{i}", "memory": "1MiB", "cpu": "0%"})
-        + "\n"
+        json.dumps({"epoch": 1000 + second, "name": f"w{i}", "memory": "1MiB", "cpu": "0%"}) + "\n"
         for second in range(12)
         for i in range(4)
     )
@@ -66,29 +91,31 @@ def test_terminal_evidence_rejects_stale_or_missing_collectors(tmp_path):
     for filename, bad in (
         (
             "samples.csv",
-            "\n".join(r for r in samples.splitlines() if not r.startswith(("10,", "11,")))
-            + "\n",
+            "\n".join(r for r in samples.splitlines() if not r.startswith(("10,", "11,"))) + "\n",
         ),
         ("tasks.csv", tasks.replace("job-1", "job-2")),
         ("resources.jsonl", resources.replace("1010", "1009").replace("1011", "1009")),
         (
             "samples.csv",
             "\n".join(
-                r for r in samples.splitlines()
+                r
+                for r in samples.splitlines()
                 if not any(r.startswith(f"{t},u0,") for t in range(2, 9))
-            ) + "\n",
+            )
+            + "\n",
         ),
         (
             "tasks.csv",
             "\n".join(
-                r for r in tasks.splitlines()
-                if not any(r.startswith(f"{t},") for t in range(2, 9))
-            ) + "\n",
+                r for r in tasks.splitlines() if not any(r.startswith(f"{t},") for t in range(2, 9))
+            )
+            + "\n",
         ),
         (
             "resources.jsonl",
             "".join(
-                line + "\n" for line in resources.splitlines()
+                line + "\n"
+                for line in resources.splitlines()
                 if not 1001 < json.loads(line)["epoch"] < 1009
             ),
         ),
@@ -104,10 +131,14 @@ def test_terminal_evidence_rejects_stale_or_missing_collectors(tmp_path):
     (tmp_path / "events.csv").write_text(
         "event,epoch,exit_code\nkill_requested,1002,0\nregistered,1008,0\n"
     )
-    gap = "\n".join(
-        r for r in samples.splitlines()
-        if not any(r.startswith(f"{t},u0,") for t in range(4, 8))
-    ) + "\n"
+    gap = (
+        "\n".join(
+            r
+            for r in samples.splitlines()
+            if not any(r.startswith(f"{t},u0,") for t in range(4, 8))
+        )
+        + "\n"
+    )
     (tmp_path / "samples.csv").write_text(gap)
     assert module.check(tmp_path, "job-1", 16, 8, 110, 1010)["verified"]
     (tmp_path / "samples.csv").write_text(
@@ -115,8 +146,14 @@ def test_terminal_evidence_rejects_stale_or_missing_collectors(tmp_path):
     )
     result = subprocess.run(
         [
-            sys.executable, ROOT / "bench/check-paper-evidence.py", str(tmp_path),
-            "job-1", "16", "8", "110", "1010",
+            sys.executable,
+            ROOT / "bench/check-paper-evidence.py",
+            str(tmp_path),
+            "job-1",
+            "16",
+            "8",
+            "110",
+            "1010",
         ],
         env=dict(os.environ, PYTHONOPTIMIZE="1"),
         capture_output=True,
@@ -146,7 +183,10 @@ def campaign(tmp_path):
 
     def run(*args, **overrides):
         env = dict(
-            os.environ, HOME=str(tmp_path), SIZE="200", M="2",
+            os.environ,
+            HOME=str(tmp_path),
+            SIZE="200",
+            M="2",
             PATH=f"{fake}:{os.environ['PATH']}",
         )
         env.update(overrides)
@@ -188,9 +228,7 @@ def test_paper_preparation_gates_disk_before_generating(campaign):
 def test_failed_generator_does_not_publish_prepared_input(campaign):
     root, run = campaign
     (root / "bench/gen-grep.py").write_text(
-        "from pathlib import Path\n"
-        "Path('generator-ran').touch()\n"
-        "raise SystemExit(1)\n"
+        "from pathlib import Path\nPath('generator-ran').touch()\nraise SystemExit(1)\n"
     )
     result = run("prepare", "grep", "native")
     assert result.returncode != 0
@@ -212,20 +250,31 @@ def prepared_campaign(campaign):
     data.mkdir(parents=True)
     for i in range(2):
         (data / f"part-m-{i:05d}.txt").write_bytes(b"a" * 99 + b"\n")
-    (data / "manifest.json").write_text(json.dumps({
-        "records": 2, "logical_bytes": 200, "physical_bytes": 200,
-        "shards": 2, "format": "text",
-    }))
+    (data / "manifest.json").write_text(
+        json.dumps(
+            {
+                "records": 2,
+                "logical_bytes": 200,
+                "physical_bytes": 200,
+                "shards": 2,
+                "format": "text",
+            }
+        )
+    )
     commit = "a" * 40
     image = "sha256:" + "b" * 64
-    stamp = {"commit": commit, "image": image, "tools": {
-        name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-        for name in ("bin/mr", "bin/paper-data")
-    }}
+    stamp = {
+        "commit": commit,
+        "image": image,
+        "tools": {
+            name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+            for name in ("bin/mr", "bin/paper-data")
+        },
+    }
     (root / "bin/paper-build.json").write_text(json.dumps(stamp))
     git = root / "fake/git"
     git.write_text(
-        "#!/bin/sh\ncase \"$1\" in\n"
+        '#!/bin/sh\ncase "$1" in\n'
         f"rev-parse) printf '%s\\n' '{commit}' ;;\n"
         "status) printf '%s' \"${DIRTY_SOURCE:-}\" ;;\n*) exit 1 ;;\nesac\n"
     )
@@ -308,8 +357,21 @@ def test_result_rejects_incomplete_executed_input(tmp_path, records, physical):
     )
     (tmp_path / "input-manifest.json").write_text(json.dumps({"records": 2, "physical_bytes": 200}))
     args = [
-        str(tmp_path), "grep", "native", "normal", "200", "2", "1",
-        "0", "0", "1", "100", "head", "0", "0", "1",
+        str(tmp_path),
+        "grep",
+        "native",
+        "normal",
+        "200",
+        "2",
+        "1",
+        "0",
+        "0",
+        "1",
+        "100",
+        "head",
+        "0",
+        "0",
+        "1",
     ]
     result = subprocess.run([sys.executable, "-c", body, *args], capture_output=True, text=True)
     assert result.returncode != 0
@@ -329,8 +391,15 @@ def test_paper_build_checks_untracked_source_and_uses_build_iid(tmp_path, untrac
         ("init",),
         ("add", "."),
         (
-            "-c", "user.name=Test", "-c", "user.email=test@example.org",
-            "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.org",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-m",
+            "fixture",
         ),
     ):
         subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
@@ -353,9 +422,11 @@ def test_paper_build_checks_untracked_source_and_uses_build_iid(tmp_path, untrac
     if untracked:
         (repo / "go/extra.go").write_text("package extra\n")
     result = subprocess.run(
-        ["make", "paper-tools", f"PYTHON={sys.executable}"], cwd=repo,
+        ["make", "paper-tools", f"PYTHON={sys.executable}"],
+        cwd=repo,
         env=dict(os.environ, PATH=f"{fake}:{os.environ['PATH']}"),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if untracked:
         assert result.returncode != 0
@@ -384,8 +455,11 @@ def test_resource_sampler_joins_its_active_child(tmp_path):
     docker.chmod(0o755)
     process = subprocess.Popen(
         ["bash", "-c", "ids=(worker)\ninterval=0.05\n" + body],
-        cwd=tmp_path, env=dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}"),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+        cwd=tmp_path,
+        env=dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
     )
     try:
         limit = time.monotonic() + 3
@@ -399,3 +473,73 @@ def test_resource_sampler_joins_its_active_child(tmp_path):
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
+
+
+@pytest.mark.parametrize("workers", [1, 2, 4])
+def test_scaled_and_faulted_campaign_evidence(tmp_path, workers):
+    spec = importlib.util.spec_from_file_location(
+        "evidence", ROOT / "bench/check-paper-evidence.py"
+    )
+    evidence = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(evidence)
+    (tmp_path / "clock.json").write_text(json.dumps({"epoch": 1000, "monotonic": 100}))
+    (tmp_path / "submission-clock.json").write_text(
+        json.dumps({"epoch": 1001, "monotonic": 101, "interval": 1})
+    )
+    (tmp_path / "workers.json").write_text(json.dumps([{"Name": f"/w{i}"} for i in range(workers)]))
+    samples = "seconds,url,metric,value\n" + "".join(
+        f"{t},u{i},{metric},0\n"
+        for t in range(12)
+        for i in range(workers)
+        for metric in evidence.COUNTERS
+    )
+    tasks = "seconds,job,kind,state,value\n" + "".join(
+        f"{t},job-1,{kind},completed,1\n" for t in range(1, 12) for kind in ("map", "reduce")
+    )
+    resources = "".join(
+        json.dumps({"epoch": 1000 + t, "name": f"w{i}", "memory": "1MiB", "cpu": "0%"}) + "\n"
+        for t in range(12)
+        for i in range(workers)
+    )
+    for name, content in (
+        ("samples.csv", samples),
+        ("tasks.csv", tasks),
+        ("resources.jsonl", resources),
+    ):
+        (tmp_path / name).write_text(content)
+    assert evidence.check(tmp_path, "job-1", 1, 1, 110, 1010)["workers"] == workers
+    lost = (
+        "\n".join(
+            row
+            for row in samples.splitlines()
+            if not any(row.startswith(f"{t},u0,") for t in range(3, 12))
+        )
+        + "\n"
+    )
+    (tmp_path / "samples.csv").write_text(lost)
+    with pytest.raises(ValueError, match="coverage"):
+        evidence.check(tmp_path, "job-1", 1, 1, 110, 1010)
+    (tmp_path / "fault.json").write_text(
+        json.dumps({"setting": "kill", "url": "u0", "name": "/w0"})
+    )
+    (tmp_path / "events.csv").write_text(
+        "event,epoch,exit_code\nkill_requested,1002,0\nkilled,1002.1,0\n"
+    )
+    assert evidence.check(tmp_path, "job-1", 1, 1, 110, 1010)["verified"]
+    (tmp_path / "samples.csv").write_text(samples)
+    (tmp_path / "fault.json").write_text(json.dumps({"setting": "coordinator-restart"}))
+    (tmp_path / "events.csv").write_text(
+        "event,epoch,exit_code\nkill_requested,1002,0\nkilled,1002.1,0\nrecovered,1008,0\n"
+    )
+    (tmp_path / "tasks.csv").write_text(
+        "\n".join(
+            row
+            for row in tasks.splitlines()
+            if not any(row.startswith(f"{t},") for t in range(3, 8))
+        )
+        + "\n"
+    )
+    assert evidence.check(tmp_path, "job-1", 1, 1, 110, 1010)["verified"]
+    (tmp_path / "fault.json").unlink()
+    with pytest.raises(ValueError, match="gap"):
+        evidence.check(tmp_path, "job-1", 1, 1, 110, 1010)

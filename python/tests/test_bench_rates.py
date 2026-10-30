@@ -93,7 +93,9 @@ def test_samplers_can_outlive_the_job_deadline_until_joined(script):
     process = subprocess.Popen(
         [sys.executable, BENCH / script, "0.05", "0", f"http://127.0.0.1:{server.server_port}"],
         env=dict(os.environ, MR_BENCH_START_MONOTONIC=str(time.monotonic() - 10)),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
     try:
         with pytest.raises(subprocess.TimeoutExpired):
@@ -117,7 +119,9 @@ def test_rates_use_recorded_restart_even_when_counter_did_not_drop(tmp_path):
     (tmp_path / "restart.json").write_text(json.dumps({"url": "a"}))
     (tmp_path / "clock.json").write_text(json.dumps({"epoch": 100}))
     (tmp_path / "events.csv").write_text("event,epoch,exit_code\nkilled,101.5,0\n")
-    rows = list(csv.DictReader(io.StringIO(run("plot-rates.py", samples, "--restart-dir", tmp_path))))
+    rows = list(
+        csv.DictReader(io.StringIO(run("plot-rates.py", samples, "--restart-dir", tmp_path)))
+    )
     assert [float(r["input"]) for r in rows] == [1.0, 1.5, 0.5]
 
 
