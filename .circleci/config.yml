@@ -20,7 +20,8 @@
 # A push to main runs no CI jobs (ADR 0021): branch protection merges only
 # a PR whose six checks passed on a branch up to date with main, so main's
 # new commit was already tested. On main the select job only finishes the
-# pipeline, with the orb's finish command, and continues with nothing.
+# pipeline, continuing with an empty config (the orb's finish command sends
+# "version: 2", which CircleCI now rejects).
 version: 2.1
 setup: true
 orbs:
@@ -46,7 +47,9 @@ jobs:
           condition:
             equal: [main, << pipeline.git.branch >>]
           steps:
-            - continuation/finish
+            - checkout
+            - continuation/continue:
+                configuration_path: .circleci/empty-continue-config.yml
 workflows:
   setup:
     jobs:
