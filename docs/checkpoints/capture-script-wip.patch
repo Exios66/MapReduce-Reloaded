@@ -1,0 +1,116 @@
+--- a/scripts/capture-status-gifs.py
++++ b/scripts/capture-status-gifs.py
+@@ -32,14 +32,12 @@
+ import json
+ import os
+ import platform
+-import re
+ import shlex
+ import shutil
+ import subprocess
+ import sys
+ import time
+-import urllib.request
+-from datetime import datetime, timezone
++from datetime import UTC, datetime
+ 
+ CHROME_DEFAULTS = [
+     os.environ.get("CHROME", ""),
+@@ -57,9 +55,7 @@
+     sys.exit("no Chrome found: set CHROME=/path/to/chrome")
+ 
+ 
+-def shot(
+-    chrome: str, url: str, theme: str, path: str, profile: str, window: str
+-) -> None:
++def shot(chrome: str, url: str, theme: str, path: str, profile: str, window: str) -> None:
+     subprocess.run(
+         [
+             chrome,
+@@ -82,9 +78,7 @@
+ def _local(spec: str) -> str:
+     """The host path of a shared-storage spec: /data/... under MR_DATA_DIR."""
+     if spec.startswith("/data"):
+-        return os.path.join(
+-            os.environ.get("MR_DATA_DIR", "data"), spec[len("/data") :].lstrip("/")
+-        )
++        return os.path.join(os.environ.get("MR_DATA_DIR", "data"), spec[len("/data") :].lstrip("/"))
+     return spec
+ 
+ 
+@@ -120,9 +114,7 @@
+     proc = None
+     if submit:
+         print("submit:", shlex.join(submit), flush=True)
+-        proc = subprocess.Popen(
+-            submit, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+-        )
++        proc = subprocess.Popen(submit, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+ 
+     n = 0
+     hold = 0
+@@ -140,14 +132,7 @@
+             os.path.join(work, "d"),
+             args.window,
+         )
+-        shot(
+-            chrome,
+-            args.status_url,
+-            "",
+-            base + "-light.png",
+-            os.path.join(work, "l"),
+-            args.window,
+-        )
++        shot(chrome, args.status_url, "", base + "-light.png", os.path.join(work, "l"), args.window)
+         frames[n] = (base + "-dark.png", base + "-light.png")
+         if proc is None:
+             if n >= 3:
+@@ -254,9 +239,7 @@
+     )
+     ap.add_argument("--status-url", default="http://127.0.0.1:18780/")
+     ap.add_argument(
+-        "--submit",
+-        default="",
+-        help="'bin/mr submit -wait' style prefix; empty needs --watch",
++        "--submit", default="", help="'bin/mr submit -wait' style prefix; empty needs --watch"
+     )
+     ap.add_argument("--program", default="")
+     ap.add_argument("--inputs", nargs="+", default=[])
+@@ -264,9 +247,7 @@
+     ap.add_argument("-m", type=int, default=0)
+     ap.add_argument("-r", type=int, default=0)
+     ap.add_argument("--interval", type=float, default=5.0)
+-    ap.add_argument(
+-        "--gif-delay", type=int, default=12, help="GIF frame delay, 1/100 s"
+-    )
++    ap.add_argument("--gif-delay", type=int, default=12, help="GIF frame delay, 1/100 s")
+     ap.add_argument("--hold", type=int, default=4)
+     ap.add_argument("--max-frames", type=int, default=200)
+     ap.add_argument("--watch", action="store_true")
+@@ -289,15 +270,11 @@
+         report[theme] = assemble(fs, args.gif_delay / 100, out, work)
+ 
+     prov = {
+-        "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
+         "commit": subprocess.run(
+             ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+         ).stdout.strip(),
+-        "machine": {
+-            "host": platform.node(),
+-            "arch": platform.machine(),
+-            "os": platform.platform(),
+-        },
++        "machine": {"host": platform.node(), "arch": platform.machine(), "os": platform.platform()},
+         "status_url": args.status_url,
+         "submit": shlex.join(submit) if submit else "watched a running job",
+         "program": args.program,
+@@ -326,7 +303,7 @@
+             f"{r['duration_s']} s, {r['bytes']:,} bytes"
+         )
+     print("provenance:", prov_json)
+-    shutil.rmtree(frames_dir, ignore_errors=True)
++    shutil.rmtree(work + "-frames", ignore_errors=True)
+     shutil.rmtree(work, ignore_errors=True)
+ 
+ 
