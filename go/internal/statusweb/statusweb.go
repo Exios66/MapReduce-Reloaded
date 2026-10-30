@@ -48,6 +48,14 @@ var tmpl = template.Must(template.New("status").Funcs(template.FuncMap{
 	"state": func(s pb.JobState) string {
 		return strings.ToLower(strings.TrimPrefix(s.String(), "JOB_STATE_"))
 	},
+	// heartbeat is how long before now the worker was last seen, "3s ago",
+	// or "" if it never was.
+	"heartbeat": func(now, seen time.Time) string {
+		if seen.IsZero() {
+			return ""
+		}
+		return max(now.Sub(seen), 0).Round(time.Second).String() + " ago"
+	},
 	// counter is one job counter, or 0 if the job has none by that name.
 	"counter": func(c *pb.Counters, name string) int64 { return c.GetValues()[name] },
 }).Parse(page))

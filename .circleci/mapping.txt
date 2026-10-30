@@ -39,6 +39,9 @@
 ^go/gen/ run-proto
 ^python/mapreduce_reloaded/gen/ run-proto
 
+# The Go status page's stylesheet: a Python test checks the Python page matches it.
+^go/internal/statusweb/status\.html$ run-python
+
 # Shared test data: the Go and Python tests both read it.
 ^testdata/ run-go
 ^testdata/ run-python

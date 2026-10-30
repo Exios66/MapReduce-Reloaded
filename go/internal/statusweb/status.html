@@ -70,6 +70,22 @@ tbody tr:last-child td { border-bottom: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .nowrap { white-space: nowrap; }
 .empty { margin: 0; padding: 8px 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.job:target { border-color: var(--blue); }
+.job-id a { color: inherit; text-decoration: none; }
+.job-id a:hover { text-decoration: underline; }
+.badge::before { content: "\25CF\00a0"; }
+.state-succeeded::before { content: "\2713\00a0"; }
+.state-failed::before { content: "\2715\00a0"; }
+.state-pending::before, .state-unspecified::before { content: "\25CB\00a0"; }
+.age { color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.table-wrap table { border: 0; border-radius: 0; min-width: 480px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 640px) {
+  body { padding: 12px; }
+  .phases { grid-template-columns: 3em 1fr; }
+  .phases .count { grid-column: 2; }
+}
 </style>
 </head>
 <body{{if .Dark}} class="dark"{{end}}>
@@ -81,9 +97,9 @@ tbody tr:last-child td { border-bottom: 0; }
 <h2>Jobs</h2>
 <section class="jobs">
 {{range .Jobs}}
-<article class="job">
+<article class="job" id="job-{{.JobId}}">
 <div class="job-head">
-<span class="job-id">{{.JobId}}</span>
+<span class="job-id"><a href="#job-{{.JobId}}">{{.JobId}}</a></span>
 {{$state := state .State}}<span class="badge state-{{$state}}">{{$state}}</span>
 <span class="spacer"></span>
 <span class="duration">{{with duration . $.At}}{{.}}{{else}}&mdash;{{end}}</span>
@@ -98,6 +114,7 @@ tbody tr:last-child td { border-bottom: 0; }
 </div>
 <div class="meta">
 <span>backups: {{.BackupAttempts}} started, {{.BackupWins}} won</span>
+<span>local maps: host <b>{{.MapTasksHostLocal}}</b>, zone <b>{{.MapTasksZoneLocal}}</b></span>
 <span>map in <b>{{counter .GetCounters "map.input.records"}}</b></span>
 <span>map out <b>{{counter .GetCounters "map.output.records"}}</b></span>
 <span>reduce out <b>{{counter .GetCounters "reduce.output.records"}}</b></span>
@@ -114,18 +131,21 @@ tbody tr:last-child td { border-bottom: 0; }
 </section>
 
 <h2>Workers</h2>
+<div class="table-wrap">
 <table>
-<thead><tr><th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Last seen</th><th scope="col">Running</th></tr></thead>
+<thead><tr><th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Zone</th><th scope="col">Slots</th><th scope="col">Last seen</th><th scope="col">Running</th></tr></thead>
 <tbody>
 {{range .Workers}}
-<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}}</td><td>{{$p := .Progress}}{{range .Running}}<span class="mono">{{.}}</span> {{fraction (index $p .)}}<br>{{end}}</td></tr>
+<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td>{{with .Info.GetZone}}{{.}}{{else}}&mdash;{{end}}</td><td class="nowrap">{{len .Running}}/{{.Info.GetSlots}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}} <span class="age">{{heartbeat $.At .LastSeen}}</span></td><td>{{$p := .Progress}}{{range .Running}}<span class="mono">{{.}}</span> {{fraction (index $p .)}}<br>{{end}}</td></tr>
 {{else}}
-<tr><td colspan="4">No workers.</td></tr>
+<tr><td colspan="6">No workers.</td></tr>
 {{end}}
 </tbody>
 </table>
+</div>
 
 <h2>Lost workers</h2>
+<div class="table-wrap">
 <table>
 <thead><tr><th scope="col">Worker</th><th scope="col">Lost at</th><th scope="col">Tasks run again</th></tr></thead>
 <tbody>
@@ -136,5 +156,6 @@ tbody tr:last-child td { border-bottom: 0; }
 {{end}}
 </tbody>
 </table>
+</div>
 </body>
 </html>
