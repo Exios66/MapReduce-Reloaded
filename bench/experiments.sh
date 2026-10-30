@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The performance evaluation (design.md, "Performance evaluation") on
-# the Compose cluster: experiments E0 to E5, each run REPEAT times
+# the Compose cluster: experiments E0 to E7 (E7 is not part of `all`), each run REPEAT times
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
