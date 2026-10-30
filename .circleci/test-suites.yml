@@ -1,0 +1,22 @@
+# CircleCI Smarter Testing suite definitions.
+#
+# Free features only: static test splitting, rerun-failed-tests and test
+# uploads. No credit-charged feature (test impact analysis, dynamic splitting,
+# dynamic parallelism, auto-rerun) is enabled.
+#
+# The run command keeps the same test invocation as `make py-test`
+# (coverage-wrapped pytest) and still writes the JUnit file with a `file`
+# attribute per test case, as Smarter Testing requires. The coverage *floors*
+# are checked by a separate CI step, because a split or partial run cannot
+# satisfy suite-wide floors; with parallelism 1 (today's configuration) the
+# full set runs exactly as before.
+name: python tests
+discover: cd python && find tests -type f -name 'test*.py'
+run: |
+  cd python
+  python3 -m coverage run -m pytest -q \
+    --override-ini=junit_family=xunit1 \
+    --junit-xml=<< outputs.junit >> << test.atoms >>
+  python3 -m coverage json -q -o cover.json
+options:
+  store-test-results: true
