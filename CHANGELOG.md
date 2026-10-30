@@ -21,6 +21,11 @@ cut a release.
   heartbeats (#284).
 - Job and task event logging in the coordinator and worker, with a
   `-log-level` flag (#302).
+- Bench: `bench/experiments.sh` saves the cluster's logs, one file per
+  setting, program and run, as `bench/results/EXPERIMENT/logs-SETTING-PROGRAM-N.log`,
+  and a registration timeout saves `logs-registration-timeout.log` (#301).
+- Bench: `bench/run.sh` saves what the coordinator and workers logged during
+  the run as `cluster.log` in its results directory (#301).
 - The demo notebook, `examples/demo.ipynb`, and a test that every cell
   compiles (#252); the five-minute demo script and README badges (#255).
 - The soak run, `make soak`: 1 GiB with the combiner off at a 256 MB worker

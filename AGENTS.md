@@ -6,7 +6,17 @@ Rules for any coding agent working in this repository.
 
 Every commit is authored and committed as the repository owner,
 `Jack J Burleson // LJM <exios4@protonmail.com>`. Never commit under an
-agent's or a tool's identity.
+agent's or a tool's identity, except for the accepted contributor below.
+
+### Accepted contributor: CodeRabbit
+
+CodeRabbit (`coderabbitai[bot]`) is a listed contributor. The commits it
+pushes to a PR branch under its own identity, such as its docstring and
+autofix commits, are accepted and are not reverted for their author. Its
+commits are held to the same bar as any other: they must pass `make check`
+and the full CI run on the PR's final head, and they carry no
+`Co-Authored-By` or `Generated with` lines. No other agent or tool is
+accepted this way.
 
 - No `Co-Authored-By` lines, `Generated with` lines, or other agent or tool
   footers in commit messages, PR titles, or PR descriptions.

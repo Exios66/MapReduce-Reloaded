@@ -177,6 +177,18 @@ E5 is the slowest: its three runs of the naive job file take about 7 minutes eac
 part of `all` and has not been run; see
 [bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run).
 
+Each run also saves what the cluster logged, to
+`bench/results/EXPERIMENT/logs-SETTING-PROGRAM-RUN.log`: the coordinator's and every
+worker's lines from before the run's workers restarted until it ended, each
+with its container's name and a timestamp. (`make bench` saves
+`cluster.log` in the run's directory.) Containers are recreated between
+experiments, and Docker keeps only 3 × 10 MB per container, so these files
+are the only record of a run after that. When a run is `valid=0`, `FAILED`
+or slow, read its log first: `grep -E 'level=(WARN|ERROR)'` finds the
+failures, and the `job` column of `runs.csv` names the job to search for.
+`bench/results/` is ignored; copy the logs of runs worth keeping into
+`bench/evaluation/` with their CSVs.
+
 ### 5.7 Monitoring (optional)
 
 ```sh
