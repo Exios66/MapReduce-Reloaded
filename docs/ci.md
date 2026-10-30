@@ -251,13 +251,18 @@ that does not depend on any hosted service.
 
 ## Rollback
 
-If CircleCI has to go: remove the six checks from branch protection, restore
-`.github/workflows/ci.yml` from git history (`git show
-1717257:.github/workflows/ci.yml`), set its triggers back to
-`pull_request`, `push` to `main` and `workflow_dispatch`, enable it
-(`gh workflow enable CI`), and (if the Actions account lock persists) use
-`CI_RUNNER` or `make ci-report` as in ADR 0014. Delete `.circleci/` when no PR
-needs it. Nothing else depends on it.
+If CircleCI has to go, remove the six checks from branch protection, then
+restore `.github/workflows/ci.yml` from git history:
+
+```sh
+mkdir -p .github/workflows
+git show 1717257:.github/workflows/ci.yml > .github/workflows/ci.yml
+```
+
+Set its triggers back to `pull_request`, `push` to `main` and
+`workflow_dispatch`, enable it (`gh workflow enable CI`), and (if the Actions
+account lock persists) use `CI_RUNNER` or `make ci-report` as in ADR 0014.
+Delete `.circleci/` when no PR needs it. Nothing else depends on it.
 
 ## Status
 
