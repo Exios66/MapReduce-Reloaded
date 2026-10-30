@@ -59,9 +59,9 @@ input=/data/bench-input-$scenario-$stamp.txt
 dir=bench/results/$scenario-$stamp
 out=/out/bench-$scenario-$stamp
 scraper=
-# shellcheck disable=SC2317 # called by cleanup, from the EXIT trap
+# shellcheck disable=SC2317,SC2329 # called by cleanup, from the EXIT trap
 rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$@"; }
-# shellcheck disable=SC2317 # called by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # called by the EXIT trap
 cleanup() {
     [ -z "$scraper" ] || kill "$scraper" 2>/dev/null || true
     rm -f "$host_input"
