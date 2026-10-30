@@ -1,9 +1,7 @@
 # ADR 0023 — A showcase service that observes the cluster
 
-**Status:** proposed. The architecture below is agreed. What the page shows,
-its presentation modes and its test plan are still being designed, and this
-ADR is finished before the work merges. The rest of
-[ADR 0022](0022-status-page-updates-itself.md) stands.
+**Status:** proposed, and accepted once the written design is reviewed.
+[ADR 0022](0022-status-page-updates-itself.md) stands for the status page.
 
 ## Context
 
@@ -47,6 +45,90 @@ coordinators, and without changing how the cluster runs.
 8. **Short polling.** The page asks every 500 ms for the frames after the last
    one it has, with one request in flight at a time. The server keeps a bounded
    number of recent frames in memory.
+
+## The page
+
+One screen, meant to read from across a room:
+
+- **Header:** the running job, or the latest if none runs, with its state,
+  elapsed time, ETA and health lights for the sampler, coordinator and workers.
+- **Progress:** map and reduce bars combine finished tasks with the reported
+  fraction of running tasks. A task with a backup counts once, at its furthest
+  attempt.
+- **Throughput:** input, map output, shuffle and output rates, with failures
+  marked on the chart, in the shape of the paper's Figures 2 and 3.
+- **Workers:** one row per worker, with its running tasks and backups and a
+  state: healthy, unreachable, lost or joined. An unreachable worker counts up
+  in seconds until the coordinator declares it lost.
+- **Timeline:** a plain-language feed of changes between frames. Each entry's
+  time comes from the first frame that showed it.
+
+The ETA appears once a job has about 10% progress and steady throughput, says
+"estimating" before that, and is always marked approximate. Finished jobs sit in
+a small strip, and clicking one switches the view. Charts break during an
+outage. The page follows the system's light or dark setting.
+
+## Modes
+
+- **Live** is the default.
+- **Stage** (`?stage=1`) uses larger type and hides the finished-job strip and
+  the event detail.
+- **Replay** adds play and pause, 1x, 2x and 4x speed, a scrubber and failure
+  markers. It uses the recording's timestamps and is labeled "Replay".
+- **Captures** use `?t=<seconds>&autoplay=1`, which opens a replay at a fixed
+  moment so that takes repeat.
+
+## Failure handling
+
+| What happens | What the page does |
+|---|---|
+| Coordinator stops answering | Red light, an outage timer, and the last job state, labeled stale |
+| Coordinator returns | The timeline gives the outage's length and says the job resumed; if the job is gone or differs, it says so |
+| Worker scrape fails | The worker shows unreachable with a timer; the coordinator still decides whether it is lost |
+| Worker returns before it is lost | The worker is healthy again, and the timeline records a brief outage |
+| Sampler falls behind | It skips rounds, and the header shows the actual sample rate |
+| Showcase service restarts | A new recording starts, and the page says it reconnected and history starts over |
+| Browser cannot reach the service | A banner says "No answer from showcase; check the SSH tunnel" and the last frame stays |
+| Recording reaches its cap, or a write fails | The live view continues, and the header says recording stopped |
+| A recording line is corrupt or cut off | Replay skips it and reports how many lines it skipped |
+
+The service has no write endpoint, and replay opens only the file named on the
+command line. Recordings hold job IDs, hosts, counters and error text. They
+stay out of git under `data/`, and a recording is checked before it is
+published.
+
+## Testing
+
+- **Sampler:** fake HTTP sources and a fake clock check gaps, skipped rounds and
+  workers coming and going.
+- **Derived state:** table tests over short frame sequences check progress,
+  rates, ETA, backups, counter resets and timeline events.
+- **Recording and replay:** temporary files check the round trip, the cap, and
+  cut-off lines.
+- **HTTP server:** `httptest` checks frame requests, the memory bound, and that
+  no write endpoint exists.
+- **Page:** the `statusweb` style of test checks that it loads nothing external
+  and meets the status page's contrast rules.
+- **Compatibility:** tests run the sampler against real output from the Go
+  coordinator and workers, and the Python coordinator's against the shared key
+  list, so a renamed field fails a test.
+- **Deployment:** `python/tests/test_deploy.py` checks that the profile
+  validates, publishes only on loopback, is off by default and has its memory
+  limit documented.
+- **Real runs:** `make showcase-e2e` is manual, like `make chaos`. It runs a job,
+  kills a worker, replays the recording and compares its final state with the
+  live one. A rehearsal on the VM through the SSH forward covers a worker kill, a
+  coordinator crash, a capture from replay, the 128 MB limit, and sampling's cost
+  to a benchmark.
+
+The first test in S1 settles a risk: `/status.json` names workers by ID and
+host, and metrics are found by IP address. If the two cannot be matched
+reliably, throughput stays cluster-wide and per-worker scrape status needs
+another approach.
+
+The new package gets a coverage floor in `go/cover-floors.txt`. The work is done
+when the replayed final state matches the live one, the rehearsal passes, and
+the six required checks are green on the final head.
 
 ## Alternatives rejected
 
