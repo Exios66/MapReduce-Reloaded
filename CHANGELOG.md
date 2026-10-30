@@ -15,6 +15,13 @@ cut a release.
 
 ### Added
 
+- Status page (Go and Python): each job card shows a task timeline, one
+  row per attempt the coordinator saw, to scale over the job's run, with
+  a bar for map (blue) and reduce (purple), a marker for backup
+  attempts, a red outline for attempts that failed and an outline for
+  the ones still running; `/status.json` carries the same data as each
+  job's `attempts`. The history lives in memory: a coordinator restart
+  does not rebuild it from the write-ahead log. (#NNN)
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without

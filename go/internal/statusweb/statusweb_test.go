@@ -144,6 +144,34 @@ func TestPageIsSelfContained(t *testing.T) {
 	}
 }
 
+// Timeline is a job's attempts as bars from the submission time to now or
+// the finish time, in the job's window proportions.
+func TestTimeline(t *testing.T) {
+	defer func() { status.Attempts = nil }()
+	status.Attempts = map[string][]coordinator.AttemptRange{"job-1": {
+		{Kind: pb.TaskKind_TASK_KIND_MAP, Index: 0, Attempt: 0, Worker: "w1",
+			Started: at.Add(-2500 * time.Millisecond), Ended: at.Add(-1000 * time.Millisecond), Ok: true},
+		{Kind: pb.TaskKind_TASK_KIND_MAP, Index: 1, Attempt: 0, Worker: "w2",
+			Started: at.Add(-2000 * time.Millisecond)},
+		{Kind: pb.TaskKind_TASK_KIND_REDUCE, Index: 0, Attempt: 0, Worker: "w1",
+			Started: at.Add(-1500 * time.Millisecond), Ended: at.Add(-1200 * time.Millisecond)},
+	}}
+	_, body := get(t, "/")
+	for _, want := range []string{
+		"task timeline",
+		"map 0 #0 w1", "map 1 #0 w2", "reduce 0 #0 w1",
+		"trace map", "trace map open", "trace reduce failed",
+		`style="left:0.00%;width:60.00%"`,
+		`style="left:20.00%;width:80.00%"`,
+		`style="left:40.00%;width:12.00%"`,
+		">1.5 s<", ">2.0 s<", ">0.3 s<",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("timeline lacks %q", want)
+		}
+	}
+}
+
 func TestStatusJSON(t *testing.T) {
 	resp, body := get(t, "/status.json")
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
@@ -167,7 +195,7 @@ func TestStatusJSON(t *testing.T) {
 		return strings.Join(ks, " ")
 	}
 	// The Python server's test lists the same keys.
-	if got, want := keys(doc.Jobs[0]), "backup_attempts backup_wins counters duration_seconds error finished_at id map_completed map_host_local map_total map_zone_local reduce_completed reduce_total state submitted_at"; got != want {
+	if got, want := keys(doc.Jobs[0]), "attempts backup_attempts backup_wins counters duration_seconds error finished_at id map_completed map_host_local map_total map_zone_local reduce_completed reduce_total state submitted_at"; got != want {
 		t.Errorf("job keys\n got %s\nwant %s", got, want)
 	}
 	if got, want := keys(doc.Workers[0]), "host id last_seen running slots zone"; got != want {
