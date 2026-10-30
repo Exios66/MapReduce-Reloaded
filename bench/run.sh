@@ -23,6 +23,7 @@
 # - rates.csv: the input, shuffle and output rates, from plot-rates.py;
 # - rates.png: the same in three panels, if matplotlib is installed;
 # - status.txt: what mr submit -wait printed;
+# - cluster.log: what the coordinator and workers logged during the run;
 # - result.json: the run's settings, the job's counters and the machine.
 #
 # The input is written once, to the host's data/ directory, which every
@@ -70,6 +71,7 @@ trap cleanup EXIT
 
 mkdir -p data
 chmod a+x data
+since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
 "${compose[@]}" up -d --build --scale worker="$workers"
 mkdir -p "$dir"
 
@@ -96,6 +98,9 @@ status=0
 end=$(date +%s.%N)
 # Two more rounds, so the samples hold the counters of the last tasks.
 sleep "$(awk -v i="$interval" 'BEGIN { print 2 * i }')"
+# What the coordinator and workers logged, to diagnose a failed or slow run.
+"${compose[@]}" logs --no-color --timestamps --since "$since" > "$dir/cluster.log" 2>&1 ||
+    echo "run.sh: could not save the cluster's logs to $dir/cluster.log" >&2
 kill "$scraper"
 wait "$scraper" 2>/dev/null || true
 scraper=

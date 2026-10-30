@@ -33,7 +33,9 @@
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
 # time, tasks-LABEL.csv (scrape-tasks.py) or samples-LABEL.csv
-# (scrape-metrics.py) per run. bench/plot-experiments.py draws the plots.
+# (scrape-metrics.py) per run; and logs-LABEL.log per run, what the
+# coordinator and workers logged from before the run's workers restarted
+# until it ended, one line per event with its container's name and time. bench/plot-experiments.py draws the plots.
 #
 # Every run's output is checksummed and compared with the first normal run
 # on the same input; a run that differs has valid=0 and is not plotted.
@@ -76,6 +78,16 @@ mr=$tmp/mr
 
 in_volume() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine "$@"; }
 log() { echo "[$(date +%T)] $*" >&2; }
+
+# save_logs FILE SINCE: saves what the cluster's containers logged since
+# SINCE (an RFC 3339 time) to FILE, each line stamped and named for its
+# container. A run's logs are all that explains a failed, slow or invalid
+# run once the next run recreates the containers. A failure to save is
+# reported and does not stop the experiment.
+save_logs() {
+    "${compose[@]}" logs --no-color --timestamps --since "$2" > "$1" 2>&1 ||
+        echo "experiments: could not save the cluster's logs to $1" >&2
+}
 
 # configure WORKERS [OVERRIDE.yaml]: restarts the cluster with WORKERS
 # workers and a new coordinator, which reopens its log (E4 deletes the old
@@ -204,7 +216,9 @@ stop_sampler() {
 # before and after the run.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
-    local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
+    local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
+    # Before the workers restart, so the log holds their registrations too.
+    since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
     in=$(input "$program")
     in_volume rm -rf "$out"
     [ -n "$ready" ] || fresh "$workers"
@@ -215,9 +229,11 @@ run() {
     # A job file is read from the repository's examples/ or bench/jobs/,
     # mounted read-only.
     job=$("${compose[@]}" run --rm -q -v "$PWD/examples:/examples:ro" -v "$PWD/bench/jobs:/jobs:ro" mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>/dev/null | tail -1)
+        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>"$tmp/submit.err" | tail -1) || job= # not to stop silently under set -e
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
+        cat "$tmp/submit.err" >&2
+        save_logs "$dir/logs-$setting-$n.log" "$since"
         exit 1
     fi
     start=$(date +%s.%N)
@@ -247,6 +263,7 @@ run() {
         log "$exp $setting run $n finished before its event at ${at}s; marked invalid"
     fi
     [ -z "$pid" ] || wait "$pid" 2>/dev/null || true
+    save_logs "$dir/logs-$setting-$n.log" "$since"
     echo "$exp,$setting,$program,$workers,$n,$size,$m,$r,$at,$state,$(counter seconds)," \
         "$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }'),$(counter backups),$(counter backups_won)," \
         "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$in" "$out"; else echo 0; fi),$job" |

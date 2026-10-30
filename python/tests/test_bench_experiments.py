@@ -285,7 +285,10 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
         """,
         check=False,
     )
-    calls = log.read_text().splitlines()
+    # The time a run's logs start from varies; the rest of the call does not.
+    calls = [
+        c.split(" 20")[0] if c.startswith("logs ") else c for c in log.read_text().splitlines()
+    ]
     if free_kib < 5 << 20:
         assert result.returncode == 1
         assert "under 5 GB free on /; stopping" in result.stderr
@@ -306,6 +309,7 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
                 "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"{flag}wordcount /out/exp-E1-s{exponent}-{combiner}-1 "
                 f"/out/exp-input-wordcount-100-{exponent}.txt",
+                "logs --no-color --timestamps --since",
             ]
         )
     assert calls == expected
@@ -328,6 +332,89 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
         ]
         assert float(row[11]) >= 0
         assert row[12:] == ["0", "0", "123", "1", "job-1"]
+
+
+def test_run_saves_the_clusters_logs_from_before_the_run(experiment, tmp_path):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        compose_stub() {
+            printf '%s\n' "$*" >> "$CALL_LOG"
+            case $1 in
+            logs) echo "coordinator-1  | 2026-10-30T00:00:00Z msg=hello" ;;
+            restart) ;;
+            *) echo job-1 ;;
+            esac
+        }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+            printf 'disk 10000000 0 9000000 0%% /\n'
+        }
+        status_stub() { printf 'job-1\tSUCCEEDED\nseconds\t2\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E1
+        run E1 base wordcount 2 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    saved = (tmp_path / "bench/results/E1/logs-base-2.log").read_text()
+    assert saved == "coordinator-1  | 2026-10-30T00:00:00Z msg=hello\n"
+    # Taken before the workers restart, so their registrations are in it.
+    calls = log.read_text().splitlines()
+    (logs,) = (i for i, c in enumerate(calls) if c.startswith("logs "))
+    assert calls[0] == "restart worker" and logs > 0
+    assert re.fullmatch(
+        r"logs --no-color --timestamps --since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", calls[logs]
+    )
+
+
+def test_run_reports_why_submit_failed_and_still_saves_the_logs(experiment, tmp_path):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        fresh() { :; }
+        compose_stub() {
+            case $1 in
+            logs) echo "coordinator-1  | msg=refused" ;;
+            *)
+                echo "rpc error: code = FailedPrecondition desc = job-3 is still running" >&2
+                return 1 ;;
+            esac
+        }
+        compose=(compose_stub)
+        mkdir -p bench/results/E1
+        run E1 base wordcount 1 4 ""
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "mr submit failed for E1 base run 1" in result.stderr
+    assert "job-3 is still running" in result.stderr
+    assert "msg=refused" in (tmp_path / "bench/results/E1/logs-base-1.log").read_text()
+
+
+def test_save_logs_reports_a_failure_without_stopping(experiment, tmp_path):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        compose_stub() { echo "no such service" >&2; return 1; }
+        compose=(compose_stub)
+        save_logs out.log 2026-10-30T00:00:00Z
+        echo continued
+        """
+    )
+    assert result.stdout == "continued\n"
+    assert "could not save the cluster's logs to out.log" in result.stderr
 
 
 @pytest.mark.parametrize("failure", ["restart", "registration"])
@@ -534,9 +621,14 @@ def test_each_sampled_run_refreshes_workers_before_discovery_and_sampling(
                 f"-v {tmp_path}/bench/jobs:/jobs:ro "
                 "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"distsort /out/exp-E3-normal-{n} /out/input.txt",
+                "compose:logs --no-color --timestamps --since",
             ]
         )
-    assert log.read_text().splitlines() == expected
+    calls = [
+        c.split(" 20")[0] if c.startswith("compose:logs ") else c
+        for c in log.read_text().splitlines()
+    ]
+    assert calls == expected
     rows = list(csv.reader(io.StringIO(result.stdout)))
     assert [row[4] for row in rows] == ["1", "2"]
     assert all(row[15] == "1" for row in rows)
