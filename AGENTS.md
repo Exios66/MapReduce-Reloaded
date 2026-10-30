@@ -2,6 +2,18 @@
 
 Rules for any coding agent working in this repository.
 
+## Commits and PRs: the owner's name only
+
+Every commit is authored and committed as the repository owner,
+`Jack J Burleson // LJM <exios4@protonmail.com>`. Never commit under an
+agent's or a tool's identity.
+
+- No `Co-Authored-By` lines, `Generated with` lines, or other agent or tool
+  footers in commit messages, PR titles, or PR descriptions.
+- No agent attribution or signatures in code, comments, or docs.
+- Avoid posting GitHub comments. Fix review findings in code, and resolve
+  threads without replying unless a reply is needed.
+
 ## CI: one full run per PR, at the end
 
 CircleCI's Free plan is the only CI (docs/ci.md, ADR 0014), and its credits
