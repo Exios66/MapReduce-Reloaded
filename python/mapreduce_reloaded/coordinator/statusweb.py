@@ -5,6 +5,7 @@ the Go coordinator, so one dashboard reads either."""
 
 import contextlib
 import html
+import json
 import socket
 import threading
 import time
@@ -132,7 +133,7 @@ _HEAD = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="2">
+<noscript><meta http-equiv="refresh" content="2"></noscript>
 <meta name="color-scheme" content="light dark">
 <title>MapReduce status</title>
 <style>
@@ -250,8 +251,63 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
   .phases { grid-template-columns: 3em 1fr; }
   .phases .count { grid-column: 2; }
 }
+.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar[hidden], .stale[hidden] { display: none; }
+.bar button {
+  padding: 2px 10px; font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.stale { color: var(--red); font-weight: 600; }
 </style>
 </head>
+"""
+
+
+_BAR = """<div class="bar" id="bar" hidden>
+<button type="button" id="pause" aria-pressed="false">Pause</button>
+<span class="stale" id="stale" role="status" hidden>
+No answer from the coordinator. Showing the last update.
+</span>
+</div>
+<div id="live">
+"""
+
+_SCRIPT = """<script>
+(function () {
+  var live = document.getElementById("live"), bar = document.getElementById("bar");
+  var btn = document.getElementById("pause"), stale = document.getElementById("stale");
+  var paused = false;
+  if (!window.fetch || !window.DOMParser) return;
+  bar.hidden = false;
+  function refresh() {
+    if (paused) return;
+    fetch(location.pathname + location.search, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    }).then(function (text) {
+      var next = new DOMParser().parseFromString(text, "text/html").getElementById("live");
+      if (!next) throw new Error("not a status page");
+      var open = [].map.call(live.querySelectorAll("details[open]"), function (d) {
+        return d.closest("article").id;
+      });
+      live.innerHTML = next.innerHTML;
+      open.forEach(function (id) {
+        var a = document.getElementById(id), d = a && a.querySelector("details");
+        if (d) d.open = true;
+      });
+      stale.hidden = true;
+    }).catch(function () { stale.hidden = false; });
+  }
+  btn.addEventListener("click", function () {
+    paused = !paused;
+    btn.textContent = paused ? "Resume" : "Pause";
+    btn.setAttribute("aria-pressed", String(paused));
+    if (!paused) refresh();
+  });
+  setInterval(refresh, 2000);
+})();
+</script>
 """
 
 
@@ -288,7 +344,7 @@ def page(st: Status, dark: bool = False) -> str:
     escaping every value; dark adds the explicit dark-mode class."""
     e = html.escape
     body_class = ' class="dark"' if dark else ""
-    out = [_HEAD, f"<body{body_class}>\n", "<header>\n"]
+    out = [_HEAD, f"<body{body_class}>\n", _BAR, "<header>\n"]
     out.append("<h1>MapReduce status</h1>\n")
     out.append(
         f'<p class="summary"><b>{len(st.jobs)}</b> jobs &middot; <b>{len(st.workers)}</b> workers'
@@ -371,8 +427,52 @@ def page(st: Status, dark: bool = False) -> str:
         )
     if not st.lost:
         out.append('<tr><td colspan="3">None.</td></tr>\n')
-    out.append("</tbody>\n</table>\n</div>\n</body>\n</html>\n")
+    out.append("</tbody>\n</table>\n</div>\n</div>\n" + _SCRIPT + "</body>\n</html>\n")
     return "".join(out)
+
+
+def status_json(st: Status) -> bytes:
+    """Renders st as /status.json, with the keys of go/internal/statusweb/json.go."""
+    jobs = []
+    for j in st.jobs:
+        d = duration(j, st.at)
+        jobs.append(
+            {
+                "id": j.job_id,
+                "state": _state(j.state),
+                "error": j.error,
+                "map_completed": j.map_tasks_completed,
+                "map_total": j.map_tasks_total,
+                "reduce_completed": j.reduce_tasks_completed,
+                "reduce_total": j.reduce_tasks_total,
+                "backup_attempts": j.backup_attempts,
+                "backup_wins": j.backup_wins,
+                "map_host_local": j.map_tasks_host_local,
+                "map_zone_local": j.map_tasks_zone_local,
+                "counters": dict(j.counters.values),
+                "submitted_at": j.submitted_at.ToNanoseconds() / 1e9
+                if j.HasField("submitted_at")
+                else None,
+                "finished_at": j.finished_at.ToNanoseconds() / 1e9
+                if j.HasField("finished_at")
+                else None,
+                "duration_seconds": None if d is None else d / 1e9,
+            }
+        )
+    workers = [
+        {
+            "id": w.worker.id,
+            "host": w.worker.info.host,
+            "zone": w.worker.info.zone,
+            "slots": w.worker.info.slots,
+            "last_seen": w.worker.last_seen or None,
+            "running": [{"task": str(t), "progress": w.progress.get(t, 0.0)} for t in w.running],
+        }
+        for w in st.workers
+    ]
+    lost = [{"id": lw.id, "at": lw.at, "tasks": [str(t) for t in lw.tasks]} for lw in st.lost]
+    doc = {"at": st.at, "jobs": jobs, "workers": workers, "lost": lost}
+    return (json.dumps(doc) + "\n").encode()
 
 
 def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
@@ -390,6 +490,8 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
             if parts.path == "/":
                 dark = parse_qs(parts.query).get("theme") == ["dark"]
                 body, ctype = page(source(), dark).encode(), "text/html; charset=utf-8"
+            elif parts.path == "/status.json":
+                body, ctype = status_json(source()), "application/json"
             elif parts.path == "/metrics":
                 body, ctype = metrics(source()), CONTENT_TYPE
             else:
@@ -398,6 +500,7 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
             self.send_response(200)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 

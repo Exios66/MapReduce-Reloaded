@@ -15,8 +15,12 @@ system can scrape, and logs it can parse.
 1. **The coordinator serves an HTML status page.** `coordinator -http`
    (default `:8080`) serves `/` from `statusweb/status.html`: jobs with
    progress and counters, live workers and their tasks, and lost workers.
-   The page refreshes with `<meta http-equiv="refresh">`, so it has no
-   JavaScript and no CDN. It reads `Server.Status`, a copy taken under the
+   The page is complete HTML. One small inline script (revised in #312)
+   fetches the page again every two seconds and swaps in the new content,
+   with a pause button and a notice when the coordinator stops answering;
+   without it, `<meta http-equiv="refresh">` inside `<noscript>` reloads the
+   page. There is no CDN and no external file. `/status.json` serves the
+   same status as data. The page reads `Server.Status`, a copy taken under the
    coordinator's lock (ADR 0006).
 2. **Metrics are written by hand in the Prometheus text format.**
    `go/internal/promtext` writes the `HELP` and `TYPE` lines and quotes
@@ -56,8 +60,12 @@ system can scrape, and logs it can parse.
   to replace a writer of about ten lines.
 - **Counters for job counters.** A Prometheus counter that falls looks like
   a reset, and breaks `rate()`.
-- **A page that updates with JavaScript.** It would need a script, an
-  endpoint for the data, and possibly a CDN, to replace a two-second reload.
+- **A page built in the browser from `/status.json`.** It would need a
+  second renderer, kept in step with the Go and Python ones. The script
+  instead fetches the server-rendered page, so there is one renderer per
+  language and no template in JavaScript. (The first version of this ADR
+  rejected scripting altogether; reloads lost scroll position, open
+  counters and the reader's pause.)
 
 ## Consequences
 
