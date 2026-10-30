@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="2">
+<noscript><meta http-equiv="refresh" content="2"></noscript>
 <meta name="color-scheme" content="light dark">
 <title>MapReduce status</title>
 <style>
@@ -86,9 +86,24 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
   .phases { grid-template-columns: 3em 1fr; }
   .phases .count { grid-column: 2; }
 }
+.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar[hidden], .stale[hidden] { display: none; }
+.bar button {
+  padding: 2px 10px; font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.stale { color: var(--red); font-weight: 600; }
 </style>
 </head>
 <body{{if .Dark}} class="dark"{{end}}>
+<div class="bar" id="bar" hidden>
+<button type="button" id="pause" aria-pressed="false">Pause</button>
+<span class="stale" id="stale" role="status" hidden>
+No answer from the coordinator. Showing the last update.
+</span>
+</div>
+<div id="live">
 <header>
 <h1>MapReduce status</h1>
 <p class="summary"><b>{{len .Jobs}}</b> jobs &middot; <b>{{len .Workers}}</b> workers &middot; <b>{{len .Lost}}</b> lost &middot; {{.At.Format "15:04:05"}}</p>
@@ -157,5 +172,41 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
 </tbody>
 </table>
 </div>
+</div>
+<script>
+(function () {
+  var live = document.getElementById("live"), bar = document.getElementById("bar");
+  var btn = document.getElementById("pause"), stale = document.getElementById("stale");
+  var paused = false;
+  if (!window.fetch || !window.DOMParser) return;
+  bar.hidden = false;
+  function refresh() {
+    if (paused) return;
+    fetch(location.pathname + location.search, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    }).then(function (text) {
+      var next = new DOMParser().parseFromString(text, "text/html").getElementById("live");
+      if (!next) throw new Error("not a status page");
+      var open = [].map.call(live.querySelectorAll("details[open]"), function (d) {
+        return d.closest("article").id;
+      });
+      live.innerHTML = next.innerHTML;
+      open.forEach(function (id) {
+        var a = document.getElementById(id), d = a && a.querySelector("details");
+        if (d) d.open = true;
+      });
+      stale.hidden = true;
+    }).catch(function () { stale.hidden = false; });
+  }
+  btn.addEventListener("click", function () {
+    paused = !paused;
+    btn.textContent = paused ? "Resume" : "Pause";
+    btn.setAttribute("aria-pressed", String(paused));
+    if (!paused) refresh();
+  });
+  setInterval(refresh, 2000);
+})();
+</script>
 </body>
 </html>
