@@ -172,6 +172,79 @@ func TestTimeline(t *testing.T) {
 	}
 }
 
+// A job's attempts are in /status.json: an attempt still running has no end.
+func TestStatusJSONAttempts(t *testing.T) {
+	defer func() { status.Attempts = nil }()
+	status.Attempts = map[string][]coordinator.AttemptRange{"job-1": {
+		{Kind: pb.TaskKind_TASK_KIND_MAP, Index: 2, Attempt: 1, Worker: "w1",
+			Started: at.Add(-2 * time.Second), Ended: at.Add(-time.Second), Backup: true, Ok: true},
+		{Kind: pb.TaskKind_TASK_KIND_REDUCE, Index: 0, Attempt: 0, Worker: "w2",
+			Started: at.Add(-time.Second)},
+	}}
+	_, body := get(t, "/status.json")
+	var doc struct {
+		Jobs []struct {
+			ID       string
+			Attempts []struct {
+				Kind    string
+				Index   uint32
+				Attempt uint32
+				Worker  string
+				Started float64
+				Ended   *float64
+				Backup  bool
+				Ok      bool
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(body), &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := doc.Jobs[0].Attempts
+	if len(got) != 2 {
+		t.Fatalf("job-1 has %d attempts, want 2", len(got))
+	}
+	a, b := got[0], got[1]
+	start := float64(at.Add(-2*time.Second).UnixNano()) / 1e9
+	if a.Kind != "map" || a.Index != 2 || a.Attempt != 1 || a.Worker != "w1" || a.Started != start ||
+		a.Ended == nil || *a.Ended != start+1 || !a.Backup || !a.Ok {
+		t.Errorf("first attempt = %+v", a)
+	}
+	if b.Kind != "reduce" || b.Worker != "w2" || b.Ended != nil || b.Backup || b.Ok {
+		t.Errorf("second attempt = %+v", b)
+	}
+	if n := len(doc.Jobs[1].Attempts); n != 0 {
+		t.Errorf("job-2 has %d attempts, want none", n)
+	}
+}
+
+// The timeline has no bars for a job without attempts, starts at the first
+// attempt when it began before the submission, and has a window even when
+// the job's times give none.
+func TestTimelineWindow(t *testing.T) {
+	job := &pb.GetJobStatusResponse{JobId: "j", SubmittedAt: timestamppb.New(at)}
+	if bars := timeline(job, at, nil); bars != nil {
+		t.Errorf("no attempts: %v, want no bars", bars)
+	}
+	early := map[string][]coordinator.AttemptRange{"j": {
+		{Kind: pb.TaskKind_TASK_KIND_MAP, Worker: "w", Started: at.Add(-time.Second), Ended: at.Add(time.Second), Ok: true},
+	}}
+	job.FinishedAt = timestamppb.New(at.Add(time.Second))
+	bars := timeline(job, at, early)
+	if len(bars) != 1 || bars[0].Left != 0 || bars[0].Width != 100 {
+		t.Errorf("attempt before the submission: %+v, want one bar over the whole window", bars)
+	}
+	// No finish time and a status taken before the attempt: one second.
+	job.FinishedAt = nil
+	open := map[string][]coordinator.AttemptRange{"j": {
+		{Kind: pb.TaskKind_TASK_KIND_MAP, Worker: "w", Started: at},
+	}}
+	bars = timeline(job, at.Add(-time.Hour), open)
+	if len(bars) != 1 || bars[0].Trace != "map open" || bars[0].Width != 100 {
+		t.Errorf("job with no window: %+v, want one open bar over one second", bars)
+	}
+}
+
 func TestStatusJSON(t *testing.T) {
 	resp, body := get(t, "/status.json")
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
