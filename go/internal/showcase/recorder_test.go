@@ -58,8 +58,8 @@ func TestRecorderStopsOnAFrameThatWillNotMarshal(t *testing.T) {
 	}
 	r.Write(seqFrame(1))
 	bad := seqFrame(2)
-	bad.Status = json.RawMessage(`{not json`)
-	r.Write(bad) // must not panic
+	bad.At = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC) // time.Time cannot marshal past year 9999
+	r.Write(bad)                                          // must not panic
 	st := r.State()
 	if !st.Stopped || !strings.HasPrefix(st.Reason, "marshal") {
 		t.Errorf("State = %+v, want Stopped with a marshal reason", st)
@@ -92,6 +92,8 @@ func TestReadRecordingRoundTrip(t *testing.T) {
 		t.Fatalf("NewRecorder (missing parents): %v", err)
 	}
 	want := []showcase.Frame{seqFrame(1), seqFrame(2), seqFrame(3)}
+	want[0].Workers = []showcase.WorkerSample{} // a frame with no workers reads back as an empty list
+	want[2].Workers = []showcase.WorkerSample{}
 	want[1].Workers = []showcase.WorkerSample{{Address: "w1:9000", Host: "abc", OK: true, Bytes: map[string]int64{"mr_worker_map_input_bytes_total": 42}}}
 	want[2].StatusOK = false
 	want[2].SampleInterval = 1500 * time.Millisecond
