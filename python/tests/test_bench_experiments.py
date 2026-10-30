@@ -943,8 +943,9 @@ def test_cache_prepare_records_the_page_cache_state_without_dropping_it(
     assert log.read_text() == ""  # nothing was dropped
 
 
-def test_cache_row_reports_null_for_what_the_host_cannot_say(experiment, tmp_path):
+def test_cache_row_reports_null_for_what_the_host_cannot_say(experiment, tmp_path, monkeypatch):
     invoke, _ = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
     invoke(
         """
         awk() { return 1; }
