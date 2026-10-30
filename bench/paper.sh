@@ -266,7 +266,8 @@ PY
     sleep 0.25
 done
 [ "$baseline" = 1 ] || { echo "paper: missing worker sample baselines" >&2; exit 1; }
-params=() r=8 program=$sort_program
+# PARTITIONS overrides the reduce fan-in for extension legs; default stays 8.
+params=() r=${REDUCES:-8} program=$sort_program
 if [ "$scenario" = grep ]; then params=(-param pattern=XYZ); r=1; program='grep'; fi
 if [ "$scenario" = wordcount ]; then
     program=wordcount

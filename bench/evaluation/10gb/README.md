@@ -106,7 +106,7 @@ workload; its nine trials remain a consistent cohort.
 The matrix has 33 of 39 rows landed so far. Walls per trial, in run order;
 medians are provisional until all 39 rows and their independent audit land.
 Wording follows the audit state in
-[`docs/evaluation.md`](../../docs/evaluation.md#decimal-10-10-campaign);
+[`docs/evaluation.md`](../../../docs/evaluation.md);
 this is a live table, not the final cohort result.
 
 | Trial | Walls r1, r2, r3 | Provisional median |
@@ -168,7 +168,6 @@ cold/warm page-cache state is claimed, and each accepted run keeps the
 provenance (`image`, build commit, memory limits) printed in its
 `build.json` and `workers.json`.
 
-[REPORT-DRAFT.md](REPORT-DRAFT.md) in the private evidence directory contains
-the fuller pruning plan: the paper comparison limitations, the capacity
-blockers, and the real-corpus extensions that remain separate from the
-primary campaign.
+The fuller plan lives in the private evidence directory (the paper
+comparison limitations, capacity blockers, real-corpus extensions kept
+separate from the primary campaign).
