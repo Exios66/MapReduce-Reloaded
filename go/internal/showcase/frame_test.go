@@ -120,3 +120,82 @@ func TestFrameJSONRoundTrips(t *testing.T) {
 		t.Errorf("round trip = %+v, want %+v", back, f)
 	}
 }
+
+func TestFrameWithoutValidStatusIsKept(t *testing.T) {
+	f := showcase.Frame{Seq: 5, StatusOK: true, Status: json.RawMessage("<html>502</html>")}
+	raw, err := json.Marshal(f)
+	if err != nil {
+		t.Fatalf("frame with a non-JSON status did not marshal: %v", err)
+	}
+	for _, key := range []string{`"status":null`, `"status_ok":false`} {
+		if !strings.Contains(string(raw), key) {
+			t.Errorf("frame JSON lacks %s: %s", key, raw)
+		}
+	}
+}
+
+func TestNilWorkersMarshalAsAnEmptyList(t *testing.T) {
+	raw, err := json.Marshal(showcase.Frame{Seq: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"workers":[]`) {
+		t.Errorf("frame JSON lacks an empty workers list: %s", raw)
+	}
+}
+
+func TestZeroFrameRoundTrips(t *testing.T) {
+	raw, err := json.Marshal(showcase.Frame{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back showcase.Frame
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	// Workers decode as an empty list, and an empty status as nil.
+	want := showcase.Frame{Workers: []showcase.WorkerSample{}}
+	if !reflect.DeepEqual(back, want) {
+		t.Errorf("zero frame round trip = %+v, want %+v", back, want)
+	}
+}
+
+func TestNullStatusDecodesAsNil(t *testing.T) {
+	var f showcase.Frame
+	if err := json.Unmarshal([]byte(`{"seq":1,"status":null,"status_ok":false}`), &f); err != nil {
+		t.Fatal(err)
+	}
+	if f.Status != nil {
+		t.Errorf("Status = %q, want nil", f.Status)
+	}
+}
+
+func TestNullFrameIsANoOp(t *testing.T) {
+	f := showcase.Frame{Seq: 7}
+	if err := json.Unmarshal([]byte("null"), &f); err != nil {
+		t.Fatal(err)
+	}
+	if f.Seq != 7 {
+		t.Errorf("null changed the frame: %+v", f)
+	}
+}
+
+func TestSampleIntervalSecondsRoundToTheNanosecond(t *testing.T) {
+	// 1.001 * 1e9 is 1000999999.9999999 in float64; truncating loses a nanosecond.
+	var f showcase.Frame
+	if err := json.Unmarshal([]byte(`{"sample_interval_seconds":1.001}`), &f); err != nil {
+		t.Fatal(err)
+	}
+	if f.SampleInterval != 1001*time.Millisecond {
+		t.Errorf("SampleInterval = %v, want 1.001s", f.SampleInterval)
+	}
+}
+
+func TestParseMetricsWithoutCountersHasNilBytes(t *testing.T) {
+	for _, text := range []string{"", "<html>502</html>", "mr_worker_info{host=\"abc\"} 1\n"} {
+		bytes, _ := showcase.ParseMetrics(text)
+		if bytes != nil {
+			t.Errorf("ParseMetrics(%q) bytes = %v, want nil", text, bytes)
+		}
+	}
+}

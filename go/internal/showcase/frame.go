@@ -4,6 +4,7 @@ package showcase
 
 import (
 	"encoding/json"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -44,29 +45,47 @@ type frameJSON struct {
 
 // MarshalJSON writes f in the recording's form.
 func (f Frame) MarshalJSON() ([]byte, error) {
-	return json.Marshal(frameJSON{
+	w := frameJSON{
 		Seq:                   f.Seq,
 		At:                    f.At,
 		Status:                f.Status,
 		StatusOK:              f.StatusOK,
 		Workers:               f.Workers,
 		SampleIntervalSeconds: f.SampleInterval.Seconds(),
-	})
+	}
+	// A status that is empty or not JSON is recorded as null, so the frame
+	// is kept.
+	if !json.Valid(f.Status) {
+		w.Status, w.StatusOK = nil, false
+	}
+	// The page reads frame.workers, so nil is an empty list, not null.
+	if w.Workers == nil {
+		w.Workers = []WorkerSample{}
+	}
+	return json.Marshal(w)
 }
 
-// UnmarshalJSON reads a frame written by MarshalJSON.
+// UnmarshalJSON reads a frame written by MarshalJSON. A null input leaves f
+// unchanged, as encoding/json expects of an Unmarshaler.
 func (f *Frame) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
 	var w frameJSON
 	if err := json.Unmarshal(b, &w); err != nil {
 		return err
 	}
+	status := w.Status
+	if string(status) == "null" {
+		status = nil
+	}
 	*f = Frame{
 		Seq:            w.Seq,
 		At:             w.At,
-		Status:         w.Status,
+		Status:         status,
 		StatusOK:       w.StatusOK,
 		Workers:        w.Workers,
-		SampleInterval: time.Duration(w.SampleIntervalSeconds * float64(time.Second)),
+		SampleInterval: time.Duration(math.Round(w.SampleIntervalSeconds * float64(time.Second))),
 	}
 	return nil
 }
@@ -81,10 +100,11 @@ var counters = map[string]bool{
 }
 
 // ParseMetrics reads a worker's /metrics text. bytes holds the four byte
-// counters it finds; a counter it does not find is absent, not zero. host is
-// the mr_worker_info host label, unescaped, or empty if there is none.
+// counters it finds; a counter it does not find is absent, not zero, and
+// bytes is nil when it finds none, so a body without metrics does not look
+// like an answering worker. host is the mr_worker_info host label, unescaped,
+// or empty if there is none.
 func ParseMetrics(text string) (bytes map[string]int64, host string) {
-	bytes = make(map[string]int64)
 	for _, line := range strings.Split(text, "\n") {
 		if line == "" || line[0] == '#' {
 			continue
@@ -115,6 +135,9 @@ func ParseMetrics(text string) (bytes map[string]int64, host string) {
 				host = h
 			}
 		case counters[name]:
+			if bytes == nil {
+				bytes = make(map[string]int64)
+			}
 			bytes[name] = v
 		}
 	}
