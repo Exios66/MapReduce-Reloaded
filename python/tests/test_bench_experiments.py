@@ -1131,7 +1131,7 @@ def test_cache_rows_measure_whole_disks_and_append_each_trial(experiment, tmp_pa
         ("start", "alternate", "distsort", 2),
         ("end", "alternate", "distsort", 2),
     ]
-    assert [row["disk_read_sectors"] for row in rows] == [148, 200, 200, 0]
+    assert [row["disk_read_sectors"] for row in rows] == [148, 200, 200, None]
     assert [row["dropped"] for row in rows] == [False, None, False, None]
     for row in rows:
         assert row["experiment"] == "E1"
