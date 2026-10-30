@@ -6,7 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +25,11 @@ const (
 	workerMetrics = "mr_worker_info{host=\"w-a\"} 1\nmr_worker_map_input_bytes_total 1000\n"
 )
 
+// metricsFor is a worker's /metrics for a worker on host.
+func metricsFor(host string) string {
+	return "mr_worker_info{host=\"" + host + "\"} 1\nmr_worker_map_input_bytes_total 1000\n"
+}
+
 // serve starts a server that answers every request with body and a 200.
 func serve(t *testing.T, body string) *httptest.Server {
 	t.Helper()
@@ -32,15 +40,85 @@ func serve(t *testing.T, body string) *httptest.Server {
 	return srv
 }
 
+// server answers every request with its body, which a test may change.
+type server struct {
+	*httptest.Server
+	mu   sync.Mutex
+	body string
+}
+
+func newServer(t *testing.T, body string) *server {
+	t.Helper()
+	s := &server{body: body}
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		s.mu.Lock()
+		b := s.body
+		s.mu.Unlock()
+		_, _ = io.WriteString(w, b)
+	}))
+	t.Cleanup(s.Close)
+	return s
+}
+
+func (s *server) set(body string) {
+	s.mu.Lock()
+	s.body = body
+	s.mu.Unlock()
+}
+
+func (s *server) addr() string { return addrOf(s.Server) }
+
 // addrOf is a server's host:port, as Discover returns worker addresses.
 func addrOf(srv *httptest.Server) string { return strings.TrimPrefix(srv.URL, "http://") }
 
+// fixed is a Discover that always returns addrs.
+func fixed(addrs ...string) func(context.Context) ([]string, error) {
+	return func(context.Context) ([]string, error) { return addrs, nil }
+}
+
+// fakeDNS is a Discover whose answer a test changes between rounds. The
+// lookups run in the sampler's background goroutine, so a test must wait
+// for one to be stored before the next round reads it: see setAndWait.
+type fakeDNS struct {
+	mu    sync.Mutex
+	addrs []string
+	calls int
+}
+
+func (d *fakeDNS) discover(context.Context) ([]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.calls++
+	return slices.Clone(d.addrs), nil
+}
+
+// setAndWait changes the answer, then returns once two lookups have started
+// after the change. The first of them has read the new answer, and the
+// sampler stores its result before it starts the second, so any round that
+// starts after setAndWait sees the new answer.
+func (d *fakeDNS) setAndWait(addrs []string) {
+	d.mu.Lock()
+	d.addrs = addrs
+	want := d.calls + 2
+	d.mu.Unlock()
+	for {
+		d.mu.Lock()
+		n := d.calls
+		d.mu.Unlock()
+		if n >= want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // sample runs Sample until stop reports true, and returns the frames it
 // emitted. stop is called after each frame, in the sampler's goroutine, so
-// it may change what Discover and Now return.
+// it may change what Discover and Now return. A test that never stops
+// returns after 10 s with the frames it has.
 func sample(t *testing.T, c showcase.Config, stop func(frames []showcase.Frame) bool) []showcase.Frame {
 	t.Helper()
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	var frames []showcase.Frame
 	err := showcase.Sample(ctx, c, func(f showcase.Frame) {
@@ -55,6 +133,12 @@ func sample(t *testing.T, c showcase.Config, stop func(frames []showcase.Frame) 
 	return frames
 }
 
+// haveWorkers stops a sample once its latest frame lists n workers.
+// Discovery runs in the background, so the first frames may list none.
+func haveWorkers(n int) func([]showcase.Frame) bool {
+	return func(fs []showcase.Frame) bool { return len(fs[len(fs)-1].Workers) == n }
+}
+
 // sampleOf returns the sample of addr in f, and whether f has one.
 func sampleOf(f showcase.Frame, addr string) (showcase.WorkerSample, bool) {
 	for _, w := range f.Workers {
@@ -63,6 +147,17 @@ func sampleOf(f showcase.Frame, addr string) (showcase.WorkerSample, bool) {
 		}
 	}
 	return showcase.WorkerSample{}, false
+}
+
+// entriesAt returns every sample of addr in f: a recycled address has two.
+func entriesAt(f showcase.Frame, addr string) []showcase.WorkerSample {
+	var ws []showcase.WorkerSample
+	for _, w := range f.Workers {
+		if w.Address == addr {
+			ws = append(ws, w)
+		}
+	}
+	return ws
 }
 
 func TestSampleRecordsAStatusOutageAsAGap(t *testing.T) {
@@ -98,14 +193,15 @@ func TestSampleRecordsAnUnansweredWorker(t *testing.T) {
 	gone.Close()
 	c := showcase.Config{
 		StatusURL: status.URL + "/status.json",
-		Discover:  func(context.Context) ([]string, error) { return []string{addrOf(answering), addrOf(gone)}, nil },
+		Discover:  fixed(addrOf(answering), addrOf(gone)),
 		Interval:  time.Millisecond,
+		Timeout:   time.Second,
 	}
-	frames := sample(t, c, func(fs []showcase.Frame) bool { return len(fs) == 1 })
-	f := frames[0]
-	if len(f.Workers) != 2 {
-		t.Fatalf("frame has %d workers, want 2", len(f.Workers))
+	frames := sample(t, c, haveWorkers(2))
+	if len(frames) == 0 {
+		t.Fatal("no frames")
 	}
+	f := frames[len(frames)-1]
 	up, ok := sampleOf(f, addrOf(answering))
 	if !ok || !up.OK || up.Host != "w-a" || up.Bytes["mr_worker_map_input_bytes_total"] != 1000 {
 		t.Errorf("answering worker = %+v", up)
@@ -121,11 +217,15 @@ func TestSampleTreatsAMetricsAnswerWithNoCountersAsAGap(t *testing.T) {
 	silent := serve(t, "# nothing here\n")
 	c := showcase.Config{
 		StatusURL: status.URL + "/status.json",
-		Discover:  func(context.Context) ([]string, error) { return []string{addrOf(silent)}, nil },
+		Discover:  fixed(addrOf(silent)),
 		Interval:  time.Millisecond,
+		Timeout:   time.Second,
 	}
-	frames := sample(t, c, func(fs []showcase.Frame) bool { return len(fs) == 1 })
-	if w, ok := sampleOf(frames[0], addrOf(silent)); !ok || w.OK {
+	frames := sample(t, c, haveWorkers(1))
+	if len(frames) == 0 {
+		t.Fatal("no frames")
+	}
+	if w, ok := sampleOf(frames[len(frames)-1], addrOf(silent)); !ok || w.OK {
 		t.Errorf("worker with no counters = %+v, want OK false", w)
 	}
 }
@@ -135,23 +235,30 @@ func TestSampleTreatsAMetricsAnswerWithNoCountersAsAGap(t *testing.T) {
 func TestSampleKeepsWorkersDiscoveryLost(t *testing.T) {
 	start := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
 	now := start
-	gone := serve(t, workerMetrics)
-	alive := serve(t, workerMetrics)
-	dns := []string{addrOf(gone), addrOf(alive)}
+	gone := newServer(t, workerMetrics)
+	alive := newServer(t, workerMetrics)
+	dns := &fakeDNS{addrs: []string{gone.addr(), alive.addr()}}
 	c := showcase.Config{
 		StatusURL: serve(t, statusJSON).URL + "/status.json",
-		Discover:  func(context.Context) ([]string, error) { return dns, nil },
+		Discover:  dns.discover,
 		Interval:  time.Millisecond,
+		Timeout:   time.Second,
 		Now:       func() time.Time { return now },
 	}
+	k := -1 // the index of the first frame that lists both workers
 	frames := sample(t, c, func(fs []showcase.Frame) bool {
-		switch len(fs) {
-		case 1:
-			// gone is removed from DNS and stops answering; alive is removed
-			// from DNS but keeps answering, so it must stay.
-			gone.Close()
-			dns = []string{addrOf(alive)}
-			now = start.Add(10 * time.Second)
+		if k < 0 {
+			if len(fs[len(fs)-1].Workers) == 2 {
+				k = len(fs) - 1
+				// gone is removed from DNS and stops answering; alive is
+				// removed from DNS but keeps answering, so it must stay.
+				gone.Close()
+				dns.setAndWait([]string{alive.addr()})
+				now = start.Add(10 * time.Second)
+			}
+			return false
+		}
+		switch len(fs) - k {
 		case 2:
 			now = start.Add(59 * time.Second)
 		case 3:
@@ -161,46 +268,66 @@ func TestSampleKeepsWorkersDiscoveryLost(t *testing.T) {
 		}
 		return false
 	})
-	if len(frames) != 4 {
-		t.Fatalf("got %d frames, want 4", len(frames))
+	if k < 0 || len(frames) < k+4 {
+		t.Fatalf("got %d frames, with both workers from frame %d; want 4 after that", len(frames), k)
 	}
-	for i, f := range frames {
-		if w, ok := sampleOf(f, addrOf(alive)); !ok || !w.OK {
+	f := frames[k:]
+	if w, ok := sampleOf(f[0], gone.addr()); !ok || !w.OK {
+		t.Errorf("frame 1: worker before it left DNS = %+v, %v", w, ok)
+	}
+	for i := range f {
+		if w, ok := sampleOf(f[i], alive.addr()); !ok || !w.OK {
 			t.Errorf("frame %d: answering worker = %+v, %v; want OK", i+1, w, ok)
 		}
 	}
-	if w, ok := sampleOf(frames[0], addrOf(gone)); !ok || !w.OK {
-		t.Errorf("frame 1: worker before it left DNS = %+v, %v", w, ok)
-	}
 	for i := 1; i < 3; i++ {
-		if w, ok := sampleOf(frames[i], addrOf(gone)); !ok || w.OK {
+		if w, ok := sampleOf(f[i], gone.addr()); !ok || w.OK {
 			t.Errorf("frame %d: worker gone from DNS = %+v, %v; want present with OK false", i+1, w, ok)
 		}
 	}
-	if w, ok := sampleOf(frames[3], addrOf(gone)); ok {
+	if w, ok := sampleOf(f[3], gone.addr()); ok {
 		t.Errorf("frame 4: worker kept after 60 s: %+v", w)
 	}
 }
 
 // A source slower than Interval delays the next round. Frames are not
-// queued, and SampleInterval shows the real gap.
+// queued: after the source is fast again, every frame is at least Interval
+// after the one before it.
 func TestSampleSkipsRoundsWhenSlow(t *testing.T) {
-	const slow = 60 * time.Millisecond
-	slowSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case <-time.After(slow):
-		case <-r.Context().Done():
-			return
+	const (
+		slow     = 60 * time.Millisecond
+		interval = 10 * time.Millisecond
+	)
+	var isSlow atomic.Bool
+	isSlow.Store(true)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isSlow.Load() {
+			select {
+			case <-time.After(slow):
+			case <-r.Context().Done():
+				return
+			}
 		}
 		_, _ = io.WriteString(w, statusJSON)
 	}))
-	t.Cleanup(slowSrv.Close)
+	t.Cleanup(srv.Close)
 	c := showcase.Config{
-		StatusURL: slowSrv.URL + "/status.json",
-		Interval:  10 * time.Millisecond,
+		StatusURL: srv.URL + "/status.json",
+		Interval:  interval,
 		Timeout:   time.Second,
 	}
-	frames := sample(t, c, func(fs []showcase.Frame) bool { return len(fs) == 4 })
+	frames := sample(t, c, func(fs []showcase.Frame) bool {
+		switch len(fs) {
+		case 3:
+			isSlow.Store(false)
+		case 7:
+			return true
+		}
+		return false
+	})
+	if len(frames) != 7 {
+		t.Fatalf("got %d frames, want 7", len(frames))
+	}
 	if frames[0].SampleInterval != 0 {
 		t.Errorf("first frame SampleInterval = %v, want 0", frames[0].SampleInterval)
 	}
@@ -211,8 +338,11 @@ func TestSampleSkipsRoundsWhenSlow(t *testing.T) {
 		if !f.StatusOK {
 			t.Errorf("frame %d: status not answered within Timeout", i)
 		}
-		if i > 0 && f.SampleInterval < slow {
-			t.Errorf("frame %d SampleInterval = %v, want at least %v", i, f.SampleInterval, slow)
+		switch {
+		case i >= 1 && i <= 3 && f.SampleInterval < slow:
+			t.Errorf("frame %d SampleInterval = %v, want at least %v for a slow round", i, f.SampleInterval, slow)
+		case i >= 4 && f.SampleInterval < interval:
+			t.Errorf("frame %d SampleInterval = %v, want at least %v: rounds were queued", i, f.SampleInterval, interval)
 		}
 	}
 }
@@ -225,11 +355,15 @@ func TestSampleReadsARealCoordinatorAndWorker(t *testing.T) {
 	t.Cleanup(wk.Close)
 	c := showcase.Config{
 		StatusURL: coord.URL + "/status.json",
-		Discover:  func(context.Context) ([]string, error) { return []string{addrOf(wk)}, nil },
+		Discover:  fixed(addrOf(wk)),
 		Interval:  time.Millisecond,
+		Timeout:   time.Second,
 	}
-	frames := sample(t, c, func(fs []showcase.Frame) bool { return len(fs) == 1 })
-	f := frames[0]
+	frames := sample(t, c, haveWorkers(1))
+	if len(frames) == 0 {
+		t.Fatal("no frames")
+	}
+	f := frames[len(frames)-1]
 	if !f.StatusOK {
 		t.Fatal("the real coordinator's status was not answered")
 	}
@@ -248,6 +382,191 @@ func TestSampleReadsARealCoordinatorAndWorker(t *testing.T) {
 		if _, ok := got.Bytes[name]; !ok {
 			t.Errorf("real worker lacks %s", name)
 		}
+	}
+}
+
+// A lookup that never returns must not stall sampling. The Discover here
+// ignores its context, as a stuck resolver can.
+func TestSampleKeepsSamplingWhileDiscoveryBlocks(t *testing.T) {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	c := showcase.Config{
+		StatusURL: serve(t, statusJSON).URL + "/status.json",
+		Discover: func(context.Context) ([]string, error) {
+			<-release
+			return nil, nil
+		},
+		Interval: time.Millisecond,
+		Timeout:  time.Second,
+	}
+	frames := sample(t, c, func(fs []showcase.Frame) bool { return len(fs) == 3 })
+	if len(frames) != 3 {
+		t.Fatalf("got %d frames while discovery was blocked, want 3", len(frames))
+	}
+	for i, f := range frames {
+		if !f.StatusOK {
+			t.Errorf("frame %d: status not answered while discovery was blocked", i)
+		}
+	}
+}
+
+// Cancelling ctx while a source hangs ends Sample at once, and no frame is
+// emitted for the cut-short round.
+func TestSampleReturnsPromptlyWhenCancelledDuringAHang(t *testing.T) {
+	release := make(chan struct{})
+	hang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(hang.Close)
+	t.Cleanup(func() { close(release) })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	time.AfterFunc(50*time.Millisecond, cancel)
+	var emitted atomic.Int32
+	done := make(chan error, 1)
+	go func() {
+		done <- showcase.Sample(ctx, showcase.Config{
+			StatusURL: hang.URL + "/status.json",
+			Interval:  time.Millisecond,
+			Timeout:   time.Minute,
+		}, func(showcase.Frame) { emitted.Add(1) })
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Sample did not return after its context was cancelled")
+	}
+	if n := emitted.Load(); n != 0 {
+		t.Errorf("%d frames emitted for a round a hang cut short", n)
+	}
+}
+
+// A worker that stops answering keeps its host, so the page can say which
+// worker is down.
+func TestSampleKeepsTheHostOfAnUnansweredWorker(t *testing.T) {
+	wk := newServer(t, metricsFor("h1"))
+	c := showcase.Config{
+		StatusURL: serve(t, statusJSON).URL + "/status.json",
+		Discover:  fixed(wk.addr()),
+		Interval:  time.Millisecond,
+		Timeout:   time.Second,
+	}
+	closed := false
+	frames := sample(t, c, func(fs []showcase.Frame) bool {
+		w, ok := sampleOf(fs[len(fs)-1], wk.addr())
+		if !closed {
+			if ok && w.OK {
+				wk.Close()
+				closed = true
+			}
+			return false
+		}
+		return ok && !w.OK
+	})
+	if len(frames) == 0 {
+		t.Fatal("no frames")
+	}
+	if w, ok := sampleOf(frames[len(frames)-1], wk.addr()); !ok || w.OK || w.Host != "h1" {
+		t.Errorf("unanswered worker = %+v, %v; want OK false with host h1", w, ok)
+	}
+}
+
+// When an address that answered as one worker answers as another, the old
+// worker stays listed, unreachable, for 60 s after it last answered; the new
+// one is live at the same address.
+func TestSampleRetainsAWorkerWhoseAddressWasRecycled(t *testing.T) {
+	start := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	now := start
+	wk := newServer(t, metricsFor("old"))
+	c := showcase.Config{
+		StatusURL: serve(t, statusJSON).URL + "/status.json",
+		Discover:  fixed(wk.addr()),
+		Interval:  time.Millisecond,
+		Timeout:   time.Second,
+		Now:       func() time.Time { return now },
+	}
+	k := -1 // the index of the first frame, where the old worker answers
+	frames := sample(t, c, func(fs []showcase.Frame) bool {
+		if k < 0 {
+			if w, ok := sampleOf(fs[len(fs)-1], wk.addr()); ok && w.OK && w.Host == "old" {
+				k = len(fs) - 1
+				wk.set(metricsFor("new"))
+				now = start.Add(10 * time.Second)
+			}
+			return false
+		}
+		switch len(fs) - k {
+		case 2:
+			now = start.Add(59 * time.Second)
+		case 3:
+			now = start.Add(60 * time.Second)
+		case 4:
+			return true
+		}
+		return false
+	})
+	if k < 0 || len(frames) < k+4 {
+		t.Fatalf("got %d frames, with the old worker from frame %d; want 4 after that", len(frames), k)
+	}
+	f := frames[k:]
+	if ws := entriesAt(f[1], wk.addr()); len(ws) != 2 {
+		t.Fatalf("frame 2 has %d samples at the address, want the new worker and the old one: %+v", len(ws), ws)
+	}
+	for i := 1; i < 4; i++ {
+		live, ok := sampleOf(f[i], wk.addr())
+		if !ok || !live.OK || live.Host != "new" {
+			t.Errorf("frame %d: live worker = %+v, %v; want OK with host new", i+1, live, ok)
+		}
+	}
+	for _, i := range []int{1, 2} {
+		old := false
+		for _, w := range entriesAt(f[i], wk.addr()) {
+			if w.Host == "old" {
+				old = true
+				if w.OK {
+					t.Errorf("frame %d: old worker OK, want unreachable: %+v", i+1, w)
+				}
+			}
+		}
+		if !old {
+			t.Errorf("frame %d: old worker not listed for its 60 s", i+1)
+		}
+	}
+	for _, w := range entriesAt(f[3], wk.addr()) {
+		if w.Host == "old" {
+			t.Errorf("frame 4: old worker kept after 60 s: %+v", w)
+		}
+	}
+}
+
+// An answer over the size cap is a gap, for the coordinator and for workers.
+func TestSampleTreatsAnOversizedAnswerAsAGap(t *testing.T) {
+	big := strings.Repeat("x", 256<<10)
+	status := serve(t, `{"pad":"`+big+`"}`)
+	wk := serve(t, "# "+big+"\n"+metricsFor("w"))
+	c := showcase.Config{
+		StatusURL: status.URL + "/status.json",
+		Discover:  fixed(addrOf(wk)),
+		Interval:  time.Millisecond,
+		Timeout:   time.Second,
+	}
+	frames := sample(t, c, haveWorkers(1))
+	if len(frames) == 0 {
+		t.Fatal("no frames")
+	}
+	f := frames[len(frames)-1]
+	if f.StatusOK {
+		t.Error("an oversized status was answered, want a gap")
+	}
+	if w, _ := sampleOf(f, addrOf(wk)); w.OK {
+		t.Errorf("an oversized worker answer was accepted: %+v", w)
 	}
 }
 

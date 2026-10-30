@@ -15,7 +15,8 @@ import (
 )
 
 // Config says what a sampler polls and how often. Interval and Timeout
-// default to 250 ms and 200 ms (ADR 0023).
+// default to 250 ms and 200 ms (ADR 0023). Discover runs in the background,
+// at most once per Interval, so a slow lookup never holds up a round.
 type Config struct {
 	StatusURL string                                  // the coordinator's /status.json
 	Discover  func(context.Context) ([]string, error) // worker addresses as host:port; nil means none
@@ -28,19 +29,33 @@ type Config struct {
 const (
 	defaultInterval = 250 * time.Millisecond
 	defaultTimeout  = 200 * time.Millisecond
-	// retainFor is how long a worker that has left DNS stays in frames,
-	// unreachable, so the page can show it: Docker removes a killed
-	// container's name at once, and the page must still show it.
+	// retainFor is how long a worker stays in frames after it was last seen
+	// in DNS or answering, so the page can show it as unreachable. Docker
+	// removes a killed container's name at once.
 	retainFor = 60 * time.Second
-	// maxBody bounds what one source may send, so that a runaway answer
-	// cannot use up the showcase's memory limit.
-	maxBody = 4 << 20
+	// maxBody bounds what one source may send. An answer over the cap is a
+	// gap, so a runaway source cannot use up the showcase's memory limit.
+	maxBody = 256 << 10
 )
+
+// entry is one worker the sampler tracks. A live entry is keyed by its
+// address and is scraped each round. A retained entry is keyed by its
+// address and last host, and is not scraped: its address now answers as
+// another worker, so the old one stays listed as unreachable until retainFor
+// has passed since it last answered.
+type entry struct {
+	addr     string
+	host     string    // the host it last answered with, "" if none
+	answered time.Time // when it last answered
+	lastSeen time.Time // when it was last in DNS or answered; for a retained entry, when it last answered
+	retained bool
+}
 
 // Sample polls the coordinator and every worker found, once per round, and
 // calls out with each round's frame. A round that overruns Interval delays
 // the next one; rounds are never queued. Sample returns nil when ctx ends,
-// and an error only if the Config is unusable.
+// and an error only if the Config is unusable. The discovery goroutine ends
+// when ctx ends, as soon as its lookup returns.
 func Sample(ctx context.Context, c Config, out func(Frame)) error {
 	if c.StatusURL == "" {
 		return errors.New("showcase: no status URL to sample")
@@ -60,37 +75,47 @@ func Sample(ctx context.Context, c Config, out func(Frame)) error {
 		client = http.DefaultClient
 	}
 
-	var discovered []string                // the addresses DNS last gave
-	lastSeen := make(map[string]time.Time) // when each address was last in DNS or answered
+	var mu sync.Mutex
+	var discovered []string // the set the latest completed lookup returned
+	if c.Discover != nil {
+		go watch(ctx, c.Discover, interval, func(addrs []string) {
+			mu.Lock()
+			discovered = addrs
+			mu.Unlock()
+		})
+	}
+
+	entries := make(map[string]*entry)
 	var prev time.Time
-	discoverDown := false
 	for seq := uint64(1); ctx.Err() == nil; seq++ {
 		start := now()
-		found, err := discover(ctx, c.Discover)
-		if err != nil {
-			if !discoverDown {
-				slog.Warn("showcase: discovery failed; keeping the last workers it found", "err", err)
+		mu.Lock()
+		found := discovered
+		mu.Unlock()
+		for _, a := range found {
+			e := entries[a]
+			if e == nil {
+				e = &entry{addr: a}
+				entries[a] = e
 			}
-			discoverDown = true
-		} else {
-			discovered = found
-			discoverDown = false
+			e.lastSeen = start
 		}
-		for _, a := range discovered {
-			lastSeen[a] = start
-		}
-		for a, t := range lastSeen {
-			if start.Sub(t) >= retainFor {
-				delete(lastSeen, a)
+		for k, e := range entries {
+			if start.Sub(e.lastSeen) >= retainFor {
+				delete(entries, k)
 			}
 		}
-		addrs := make([]string, 0, len(lastSeen))
-		for a := range lastSeen {
-			addrs = append(addrs, a)
-		}
-		slices.Sort(addrs)
 
-		frame := Frame{Seq: seq, At: start, Workers: make([]WorkerSample, len(addrs))}
+		var liveKeys []string
+		for k, e := range entries {
+			if !e.retained {
+				liveKeys = append(liveKeys, k)
+			}
+		}
+		slices.Sort(liveKeys)
+		results := make([]WorkerSample, len(liveKeys))
+
+		frame := Frame{Seq: seq, At: start}
 		if seq > 1 {
 			frame.SampleInterval = start.Sub(prev)
 		}
@@ -100,22 +125,58 @@ func Sample(ctx context.Context, c Config, out func(Frame)) error {
 			defer wg.Done()
 			frame.Status, frame.StatusOK = status(ctx, client, timeout, c.StatusURL)
 		}()
-		for i, a := range addrs {
+		for i, k := range liveKeys {
+			addr := entries[k].addr
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				frame.Workers[i] = scrape(ctx, client, timeout, a)
+				results[i] = scrape(ctx, client, timeout, addr)
 			}()
 		}
 		wg.Wait()
 		if ctx.Err() != nil {
 			return nil // the round was cut short by the stop, not by a source
 		}
-		for _, w := range frame.Workers {
-			if w.OK {
-				lastSeen[w.Address] = start
+
+		for i, k := range liveKeys {
+			e := entries[k]
+			ws := results[i]
+			if !ws.OK {
+				ws.Host = e.host // a gap still says which worker it is
+				results[i] = ws
+				continue
+			}
+			if ws.Host == "" {
+				ws.Host = e.host
+			} else if e.host != "" && ws.Host != e.host {
+				// The address now answers as another worker. The old one
+				// stays listed, unreachable, for the rest of its retainFor.
+				if start.Sub(e.answered) < retainFor {
+					entries[e.addr+"\x00"+e.host] = &entry{addr: e.addr, host: e.host, answered: e.answered, lastSeen: e.answered, retained: true}
+				}
+			}
+			e.host, e.answered, e.lastSeen = ws.Host, start, start
+			results[i] = ws
+		}
+
+		res := make(map[string]WorkerSample, len(liveKeys))
+		for i, k := range liveKeys {
+			res[k] = results[i]
+		}
+		keys := make([]string, 0, len(entries))
+		for k := range entries {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		frame.Workers = make([]WorkerSample, 0, len(keys))
+		for _, k := range keys {
+			if e := entries[k]; e.retained {
+				frame.Workers = append(frame.Workers, WorkerSample{Address: e.addr, Host: e.host})
+			} else {
+				frame.Workers = append(frame.Workers, res[k])
 			}
 		}
+
 		out(frame)
 		prev = start
 
@@ -131,13 +192,33 @@ func Sample(ctx context.Context, c Config, out func(Frame)) error {
 	return nil
 }
 
-// discover asks the Config's Discover for the worker addresses, or returns
-// none if there is no Discover.
-func discover(ctx context.Context, f func(context.Context) ([]string, error)) ([]string, error) {
-	if f == nil {
-		return nil, nil
+// watch looks workers up with discover, then waits interval, until ctx
+// ends. A failed lookup keeps the set the last good one returned, and is
+// logged once, unless ctx has already ended.
+func watch(ctx context.Context, discover func(context.Context) ([]string, error), interval time.Duration, set func([]string)) {
+	failing := false
+	for {
+		addrs, err := discover(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			if !failing {
+				slog.Warn("showcase: discovery failed; keeping the last workers it found", "err", err)
+			}
+			failing = true
+		} else {
+			failing = false
+			set(addrs)
+		}
+		t := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-t.C:
+		}
 	}
-	return f(ctx)
 }
 
 // status returns the coordinator's /status.json as it came, and whether it
@@ -150,8 +231,8 @@ func status(ctx context.Context, client *http.Client, timeout time.Duration, url
 	return body, true
 }
 
-// scrape reads one worker's /metrics. A worker whose answer has no byte
-// counters is a gap, as is one that did not answer.
+// scrape reads one worker's /metrics. An answer with no byte counters is a
+// gap, as is one that did not answer.
 func scrape(ctx context.Context, client *http.Client, timeout time.Duration, addr string) WorkerSample {
 	ws := WorkerSample{Address: addr}
 	body, ok := get(ctx, client, timeout, "http://"+addr+"/metrics")

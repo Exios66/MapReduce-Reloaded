@@ -24,7 +24,11 @@ type Frame struct {
 	SampleInterval time.Duration
 }
 
-// WorkerSample is one worker's /metrics as one frame saw it.
+// WorkerSample is one worker's /metrics as one frame saw it. An address that
+// did not answer has OK false and no counters, and Host is the host it last
+// answered with, so the page can say which worker is down; Host is empty if
+// it never answered with one. When an address answers as a different host,
+// the old worker is listed too, with OK false, for 60 s after it last answered.
 type WorkerSample struct {
 	Address string           `json:"address"` // the address the sampler scraped
 	Host    string           `json:"host"`    // from mr_worker_info, if it answered
