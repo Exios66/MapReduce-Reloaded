@@ -199,8 +199,10 @@ Open <http://127.0.0.1:13000/> on your laptop for the Grafana dashboard.
 This adds 512 MB of memory limits.
 
 The same demo is in [`examples/demo.ipynb`](../examples/demo.ipynb), which
-runs it cell by cell in Jupyter: upload, submit, read, plot, a second
-program, the metrics, and a local-mode check.
+runs it cell by cell in Jupyter: upload, submit, read, plot, the job file,
+a second program, a worker killed mid-job, the metrics, and a local-mode
+check. Install its dependencies with
+`python/.venv/bin/pip install -e 'python[notebook]'`.
 
 ### 5.8 The soak run (#160)
 
