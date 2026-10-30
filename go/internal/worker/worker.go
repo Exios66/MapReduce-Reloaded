@@ -114,6 +114,7 @@ func (w *Worker) session(parent context.Context) error {
 	w.stats.registrations.Add(1)
 	w.id = reg.GetWorkerId()
 	w.logger = slog.Default().With("worker", w.id)
+	w.logger.Info("registered", "heartbeat_interval", reg.GetHeartbeatInterval().AsDuration())
 	ctx, end := context.WithCancelCause(parent)
 	defer end(nil)
 	cur := new(current)
@@ -147,17 +148,23 @@ func (w *Worker) serve(ctx context.Context, cur *current) error {
 		switch a := resp.GetAssignment().(type) {
 		case *pb.RequestTaskResponse_MapTask:
 			log, done := w.attemptLogger(a.MapTask.GetAttempt()), w.stats.start(mapKind)
+			log.Info("task started", "input", a.MapTask.GetSplit().GetUri(), "offset", a.MapTask.GetSplit().GetOffset(), "length", a.MapTask.GetSplit().GetLength(), "skip_records", len(a.MapTask.GetSkipRecords()))
+			began := time.Now()
 			actx, stop := cur.start(ctx, a.MapTask.GetAttempt())
 			outputs, counts, err := w.runMap(actx, a.MapTask, log, cur.advance)
 			stop()
 			done(err)
+			logEnd(log, began, err)
 			report = w.finish(cur, a.MapTask.GetAttempt(), log, outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
 			log, done := w.attemptLogger(a.ReduceTask.GetAttempt()), w.stats.start(reduceKind)
+			log.Info("task started", "sources", len(a.ReduceTask.GetSources()), "skip_records", len(a.ReduceTask.GetSkipRecords()))
+			began := time.Now()
 			actx, stop := cur.start(ctx, a.ReduceTask.GetAttempt())
 			counts, err := w.runReduce(actx, a.ReduceTask, log, cur.advance)
 			stop()
 			done(err)
+			logEnd(log, began, err)
 			report = w.finish(cur, a.ReduceTask.GetAttempt(), log, nil, counts, err)
 		case *pb.RequestTaskResponse_Shutdown:
 			return nil
@@ -191,6 +198,12 @@ func (w *Worker) serve(ctx context.Context, cur *current) error {
 			return fmt.Errorf("report task: %w", err)
 		}
 	}
+}
+
+// logEnd logs that an attempt that began at began has ended with err. A
+// failure is logged again, with its kind, when it is reported.
+func logEnd(log *slog.Logger, began time.Time, err error) {
+	log.Info("task ended", "seconds", time.Since(began).Seconds(), "ok", err == nil)
 }
 
 func (w *Worker) requestTask(ctx context.Context, paused bool) (*pb.RequestTaskResponse, error) {

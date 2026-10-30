@@ -38,6 +38,12 @@ system can scrape, and logs it can parse.
    worker writes one JSON object per line; the default is text. The worker
    logs every message about an attempt, and its user code through
    `Context.Logger`, with `worker`, `job` and `task` (kind, index, attempt).
+   `-log-level debug|info|warn|error` (default `info`) sets the lowest level.
+   The coordinator logs each worker registered, job submitted, task
+   assigned (with `backup` and `locality`), attempt reported and job ended,
+   and the worker each attempt's start and end with its duration, so a
+   run's log tells its story without the write-ahead log. Recovery replays
+   the write-ahead log silently.
 5. **Monitoring is opt-in.** `deploy/compose/monitoring` holds Prometheus
    and Grafana in the Compose `monitoring` profile, which `cluster-up` and
    `e2e` do not start. Their ports are bound to `127.0.0.1`, and Grafana
