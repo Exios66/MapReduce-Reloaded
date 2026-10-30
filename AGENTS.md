@@ -29,9 +29,10 @@ into `main`.
    `make hooks` once per clone so the pre-push hook runs it for you. A push
    should confirm a change that already passes, not find out whether it does.
 2. Put `[skip ci]` in the commit message of every push made while work or
-   review is still going on: the first push that opens the PR, fixes for
-   review comments, and work-in-progress commits. CircleCI skips the
-   pipeline when the pushed head commit's message contains `[skip ci]`.
+   review is still going on: fixes for review comments and work-in-progress
+   commits. CircleCI skips a push's pipeline when the pushed head commit's
+   message contains `[skip ci]`, but opening a PR always runs one pipeline,
+   so open the PR only when its work is ready for review.
 3. Batch commits. Commit locally as you go, and push once per review round,
    not once per fix.
 4. Do not merge `main` into the branch while work is in progress. Branch
