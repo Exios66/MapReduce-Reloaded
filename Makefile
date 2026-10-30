@@ -270,22 +270,8 @@ mutate-py:
 go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
 
-# CI runs the suite through Smarter Testing (test-suites.yml); local runs keep
-# the plain pytest command. Both write python/cover.json for the floors below.
-ifeq ($(CIRCLECI),true)
-PY_TEST_CMD = circleci testsuite run "python tests"
-else
-PY_TEST_CMD = cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
-endif
-
 py-test:
-	$(PY_TEST_CMD)
-	$(MAKE) py-cover-check PYTHON=$(PYTHON)
-
-# The Python coverage gate on its own, for CI where Smarter Testing owns the
-# pytest invocation and this step checks the floors afterwards. Test scope
-# stays in the pytest suite; this target holds no lint or test logic.
-py-cover-check:
+	cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
 
 # The tests, then each package's coverage against its floor.
