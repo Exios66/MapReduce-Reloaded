@@ -14,7 +14,7 @@ Where to start depends on the question.
 - **How is it tested, and how do I run each kind of test?** [Testing](testing.md),
   with the coverage floors.
 - **What checks run on a pull request, and how is CI set up?** [CI](ci.md):
-  the four CircleCI jobs, caching, the Free-plan limits, the steps the owner
+  the six CircleCI jobs, caching, the Free-plan limits, the steps the owner
   completes, and troubleshooting.
 - **How do the results compare with the paper's?** [Evaluation](evaluation.md):
   §5's grep, sort, backup tasks and machine failures, run again on the VM.

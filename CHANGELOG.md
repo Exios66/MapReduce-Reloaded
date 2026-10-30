@@ -68,6 +68,9 @@ cut a release.
   kill step (#303).
 - Docs: the chaos explainer says what `make chaos` covers and that dropped
   packets are out of scope (#287).
+- Docs: a stale-claim sweep. CI is described as six jobs with no run on
+  pushes to `main`, the pull-request count and coverage floors are current,
+  LATE speculation cites #284, and E0 to E7 ranges are corrected.
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed
@@ -77,7 +80,14 @@ cut a release.
 
 ### Fixed
 
+- CI: a push to `main` no longer ends in a config error. The continuation
+  orb's `finish` command sends `version: 2`, which CircleCI no longer
+  accepts, so `.circleci/config.yml` continues with the empty 2.1
+  `.circleci/empty-continue-config.yml` instead (#313).
 - The CircleCI badge URL (#261).
+- Worker: a starting worker's sweep could delete a new worker's temporary
+  directory, which made it fail with "already locked" (and flaked
+  `internal/e2e`); the lock is now on the directory itself.
 - Bench: `wait_workers` retries when the coordinator is unreachable, instead of
   exiting silently, and saves the logs on a registration timeout (#307).
 
