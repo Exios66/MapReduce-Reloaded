@@ -33,7 +33,7 @@
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
 # time, tasks-LABEL.csv (scrape-tasks.py) or samples-LABEL.csv
-# (scrape-metrics.py) per run; and logs-LABEL.log per run, what the
+# (scrape-metrics.py) per run; and logs-SETTING-PROGRAM-RUN.log per run, what the
 # coordinator and workers logged from before the run's workers restarted
 # until it ended, one line per event with its container's name and time. bench/plot-experiments.py draws the plots.
 #
@@ -61,6 +61,7 @@ metrics=http://127.0.0.1:18780/metrics
 tmp=$(mktemp -d)
 sampler=
 ready=
+fresh_at= # when fresh last began, for the logs of the run that follows it
 slow= # the workers E2 and E7 throttle (container IDs), restored however the script exits
 cleanup() {
     local c
@@ -164,6 +165,7 @@ counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 # waits for WORKERS registrations before sampling. Exits if / has less
 # than 5 GiB free; marks the workers ready for the next run.
 fresh() {
+    fresh_at=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
     if ! "${compose[@]}" restart worker >/dev/null; then
         echo "experiments: worker restart failed; stopping" >&2
         exit 1
@@ -217,8 +219,10 @@ stop_sampler() {
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
-    # Before the workers restart, so the log holds their registrations too.
+    # Before the workers restart, so the log holds their registrations too:
+    # a sampled run's workers restarted in start_sampler, before run.
     since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
+    [ -z "$ready" ] || since=${fresh_at:-$since}
     in=$(input "$program")
     in_volume rm -rf "$out"
     [ -n "$ready" ] || fresh "$workers"
@@ -233,7 +237,7 @@ run() {
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
         cat "$tmp/submit.err" >&2
-        save_logs "$dir/logs-$setting-$n.log" "$since"
+        save_logs "$dir/logs-$setting-$program-$n.log" "$since"
         exit 1
     fi
     start=$(date +%s.%N)
@@ -263,7 +267,7 @@ run() {
         log "$exp $setting run $n finished before its event at ${at}s; marked invalid"
     fi
     [ -z "$pid" ] || wait "$pid" 2>/dev/null || true
-    save_logs "$dir/logs-$setting-$n.log" "$since"
+    save_logs "$dir/logs-$setting-$program-$n.log" "$since"
     echo "$exp,$setting,$program,$workers,$n,$size,$m,$r,$at,$state,$(counter seconds)," \
         "$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }'),$(counter backups),$(counter backups_won)," \
         "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$in" "$out"; else echo 0; fi),$job" |

@@ -99,12 +99,13 @@ status=0
 end=$(date +%s.%N)
 # Two more rounds, so the samples hold the counters of the last tasks.
 sleep "$(awk -v i="$interval" 'BEGIN { print 2 * i }')"
-# What the coordinator and workers logged, to diagnose a failed or slow run.
-"${compose[@]}" logs --no-color --timestamps --since "$since" > "$dir/cluster.log" 2>&1 ||
-    echo "run.sh: could not save the cluster's logs to $dir/cluster.log" >&2
 kill "$scraper"
 wait "$scraper" 2>/dev/null || true
 scraper=
+# After the scraper stops, so a slow `logs` adds no samples.
+# What the coordinator and workers logged, to diagnose a failed or slow run.
+"${compose[@]}" logs --no-color --timestamps --since "$since" > "$dir/cluster.log" 2>&1 ||
+    echo "run.sh: could not save the cluster's logs to $dir/cluster.log" >&2
 
 python3 bench/plot-rates.py "$dir/samples.csv" > "$dir/rates.csv"
 if python3 -c "import matplotlib" 2>/dev/null; then

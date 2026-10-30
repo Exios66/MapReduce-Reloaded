@@ -364,7 +364,7 @@ def test_run_saves_the_clusters_logs_from_before_the_run(experiment, tmp_path):
         """
     )
     assert result.returncode == 0, result.stderr
-    saved = (tmp_path / "bench/results/E1/logs-base-2.log").read_text()
+    saved = (tmp_path / "bench/results/E1/logs-base-wordcount-2.log").read_text()
     assert saved == "coordinator-1  | 2026-10-30T00:00:00Z msg=hello\n"
     # Taken before the workers restart, so their registrations are in it.
     calls = log.read_text().splitlines()
@@ -373,6 +373,40 @@ def test_run_saves_the_clusters_logs_from_before_the_run(experiment, tmp_path):
     assert re.fullmatch(
         r"logs --no-color --timestamps --since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", calls[logs]
     )
+
+
+def test_sampled_run_saves_logs_from_before_its_workers_restarted(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/input.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        save_logs() { printf 'save|%s|%s\\n' "$1" "$2" >> "$CALL_LOG"; }
+        python3() { :; }
+        compose_stub() { [ "$1" = restart ] || echo job-1; }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\\n'
+            printf 'disk 10000000 0 9000000 0%% /\\n'
+        }
+        status_stub() { printf 'job-1\\tSUCCEEDED\\nseconds\\t2\\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E3
+        start_sampler tasks bench/sample.csv
+        wait "$sampler"; sampler=
+        run E3 normal distsort 1 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    (saved,) = (c for c in log.read_text().splitlines() if c.startswith("save|"))
+    _, path, since = saved.split("|")
+    assert path == "bench/results/E3/logs-normal-distsort-1.log"
+    # The time start_sampler's restart began, not the time run began.
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", since)
 
 
 def test_run_reports_why_submit_failed_and_still_saves_the_logs(experiment, tmp_path):
@@ -400,7 +434,7 @@ def test_run_reports_why_submit_failed_and_still_saves_the_logs(experiment, tmp_
     assert result.returncode == 1
     assert "mr submit failed for E1 base run 1" in result.stderr
     assert "job-3 is still running" in result.stderr
-    assert "msg=refused" in (tmp_path / "bench/results/E1/logs-base-1.log").read_text()
+    assert "msg=refused" in (tmp_path / "bench/results/E1/logs-base-wordcount-1.log").read_text()
 
 
 def test_save_logs_reports_a_failure_without_stopping(experiment, tmp_path):
