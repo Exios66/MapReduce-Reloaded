@@ -16,6 +16,11 @@
 # job's directory skipped that job, and it cannot see deletions. The
 # script needs only the image's python3 and git; the continuation orb
 # posts its output to CircleCI.
+#
+# A push to main runs no CI jobs (ADR 0021): branch protection merges only
+# a PR whose six checks passed on a branch up to date with main, so main's
+# new commit was already tested. On main the select job only finishes the
+# pipeline, with the orb's finish command, and continues with nothing.
 version: 2.1
 setup: true
 orbs:
@@ -26,13 +31,22 @@ jobs:
       - image: cimg/python:3.12
     resource_class: small
     steps:
-      - checkout
-      - run:
-          name: Select the implicated jobs
-          command: python3 scripts/ci-params.py | tee /tmp/ci-params.json
-      - continuation/continue:
-          configuration_path: .circleci/continue-config.yml
-          parameters: /tmp/ci-params.json
+      - unless:
+          condition:
+            equal: [main, << pipeline.git.branch >>]
+          steps:
+            - checkout
+            - run:
+                name: Select the implicated jobs
+                command: python3 scripts/ci-params.py | tee /tmp/ci-params.json
+            - continuation/continue:
+                configuration_path: .circleci/continue-config.yml
+                parameters: /tmp/ci-params.json
+      - when:
+          condition:
+            equal: [main, << pipeline.git.branch >>]
+          steps:
+            - continuation/finish
 workflows:
   setup:
     jobs:

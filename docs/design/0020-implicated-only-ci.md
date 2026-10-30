@@ -1,7 +1,9 @@
 # ADR 0020: Implicated-only CI on pull requests
 
 Date: 2026-10-29. Status: accepted; amended the same day (see
-[Amendment: our own selection](#amendment-our-own-selection)).
+[Amendment: our own selection](#amendment-our-own-selection)). Pushes to
+`main` no longer run the jobs: see
+[ADR 0021](0021-no-ci-on-main-pushes.md).
 
 ## Context
 
