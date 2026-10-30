@@ -5,6 +5,7 @@ the Go coordinator, so one dashboard reads either."""
 
 import contextlib
 import html
+import json
 import socket
 import threading
 import time
@@ -132,7 +133,7 @@ _HEAD = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="2">
+<noscript><meta http-equiv="refresh" content="2"></noscript>
 <meta name="color-scheme" content="light dark">
 <title>MapReduce status</title>
 <style>
@@ -231,8 +232,82 @@ tbody tr:last-child td { border-bottom: 0; }
   margin: 0; padding: 8px 12px; color: var(--muted);
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
+.job:target { border-color: var(--blue); }
+.job-id a { color: inherit; text-decoration: none; }
+.job-id a:hover { text-decoration: underline; }
+.badge::before { content: "\\25CF\\00a0"; }
+.state-succeeded::before { content: "\\2713\\00a0"; }
+.state-failed::before { content: "\\2715\\00a0"; }
+.state-pending::before, .state-unspecified::before { content: "\\25CB\\00a0"; }
+.age { color: var(--muted); }
+.table-wrap {
+  overflow-x: auto; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel);
+}
+.table-wrap table { border: 0; border-radius: 0; min-width: 480px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 640px) {
+  body { padding: 12px; }
+  .phases { grid-template-columns: 3em 1fr; }
+  .phases .count { grid-column: 2; }
+}
+.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar[hidden], .stale[hidden] { display: none; }
+.bar button {
+  padding: 2px 10px; font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.stale { color: var(--red); font-weight: 600; }
 </style>
 </head>
+"""
+
+
+_BAR = """<div class="bar" id="bar" hidden>
+<button type="button" id="pause" aria-pressed="false">Pause</button>
+<span class="stale" id="stale" role="status" hidden>
+No answer from the coordinator. Showing the last update.
+</span>
+</div>
+<div id="live">
+"""
+
+_SCRIPT = """<script>
+(function () {
+  var live = document.getElementById("live"), bar = document.getElementById("bar");
+  var btn = document.getElementById("pause"), stale = document.getElementById("stale");
+  var paused = false;
+  if (!window.fetch || !window.DOMParser) return;
+  bar.hidden = false;
+  function refresh() {
+    if (paused) return;
+    fetch(location.pathname + location.search, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    }).then(function (text) {
+      var next = new DOMParser().parseFromString(text, "text/html").getElementById("live");
+      if (!next) throw new Error("not a status page");
+      var open = [].map.call(live.querySelectorAll("details[open]"), function (d) {
+        return d.closest("article").id;
+      });
+      live.innerHTML = next.innerHTML;
+      open.forEach(function (id) {
+        var a = document.getElementById(id), d = a && a.querySelector("details");
+        if (d) d.open = true;
+      });
+      stale.hidden = true;
+    }).catch(function () { stale.hidden = false; });
+  }
+  btn.addEventListener("click", function () {
+    paused = !paused;
+    btn.textContent = paused ? "Resume" : "Pause";
+    btn.setAttribute("aria-pressed", String(paused));
+    if (!paused) refresh();
+  });
+  setInterval(refresh, 2000);
+})();
+</script>
 """
 
 
@@ -252,6 +327,13 @@ def _percent(done: int, total: int) -> str:
     return "0%" if total == 0 else f"{(done * 100 + total // 2) // total}%"
 
 
+def _heartbeat(at: float, last_seen: float) -> str:
+    """How long before at the worker was last seen, "3s ago", or "" if it never was."""
+    if last_seen <= 0:
+        return ""
+    return f"{go_duration(max(0, round(at - last_seen)) * 1_000_000_000)} ago"
+
+
 def _counter(j: coordinator_pb2.GetJobStatusResponse, name: str) -> int:
     """One job counter, or 0 if the job has none by that name."""
     return j.counters.values.get(name, 0)
@@ -262,7 +344,7 @@ def page(st: Status, dark: bool = False) -> str:
     escaping every value; dark adds the explicit dark-mode class."""
     e = html.escape
     body_class = ' class="dark"' if dark else ""
-    out = [_HEAD, f"<body{body_class}>\n", "<header>\n"]
+    out = [_HEAD, f"<body{body_class}>\n", _BAR, "<header>\n"]
     out.append("<h1>MapReduce status</h1>\n")
     out.append(
         f'<p class="summary"><b>{len(st.jobs)}</b> jobs &middot; <b>{len(st.workers)}</b> workers'
@@ -273,8 +355,8 @@ def page(st: Status, dark: bool = False) -> str:
         d = duration(j, st.at)
         state = _state(j.state)
         counters = "".join(f"{e(k)}: {v}<br>" for k, v in sorted(j.counters.values.items()))
-        out.append('<article class="job">\n<div class="job-head">\n')
-        out.append(f'<span class="job-id">{e(j.job_id)}</span>\n')
+        out.append(f'<article class="job" id="job-{e(j.job_id)}">\n<div class="job-head">\n')
+        out.append(f'<span class="job-id"><a href="#job-{e(j.job_id)}">{e(j.job_id)}</a></span>\n')
         out.append(f'<span class="badge state-{state}">{state}</span>\n')
         out.append('<span class="spacer"></span>\n')
         shown = "&mdash;" if d is None else e(go_duration(d))
@@ -295,6 +377,10 @@ def page(st: Status, dark: bool = False) -> str:
         )
         out.append('</div>\n<div class="meta">\n')
         out.append(f"<span>backups: {j.backup_attempts} started, {j.backup_wins} won</span>\n")
+        out.append(
+            f"<span>local maps: host <b>{j.map_tasks_host_local}</b>,"
+            f" zone <b>{j.map_tasks_zone_local}</b></span>\n"
+        )
         out.append(f"<span>map in <b>{_counter(j, 'map.input.records')}</b></span>\n")
         out.append(f"<span>map out <b>{_counter(j, 'map.output.records')}</b></span>\n")
         out.append(f"<span>reduce out <b>{_counter(j, 'reduce.output.records')}</b></span>\n")
@@ -304,9 +390,10 @@ def page(st: Status, dark: bool = False) -> str:
         out.append(f'<div class="counters">{counters}</div>\n</details>\n</article>\n')
     if not st.jobs:
         out.append('<p class="empty">No jobs yet.</p>\n')
-    out.append("</section>\n\n<h2>Workers</h2>\n<table>\n<thead><tr>")
+    out.append('</section>\n\n<h2>Workers</h2>\n<div class="table-wrap">\n<table>\n<thead><tr>')
     out.append(
-        '<th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Last seen</th>'
+        '<th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Zone</th>'
+        '<th scope="col">Slots</th><th scope="col">Last seen</th>'
         '<th scope="col">Running</th></tr></thead>\n<tbody>\n'
     )
     for w in st.workers:
@@ -316,11 +403,18 @@ def page(st: Status, dark: bool = False) -> str:
         )
         out.append(
             f'<tr><td class="mono">{e(w.worker.id)}</td><td>{e(w.worker.info.host)}</td>'
-            f'<td class="nowrap">{_clock(w.worker.last_seen)}</td><td>{running}</td></tr>\n'
+            f"<td>{e(w.worker.info.zone) or '&mdash;'}</td>"
+            f'<td class="nowrap">{len(w.running)}/{w.worker.info.slots}</td>'
+            f'<td class="nowrap">{_clock(w.worker.last_seen)}'
+            f' <span class="age">{_heartbeat(st.at, w.worker.last_seen)}</span></td>'
+            f"<td>{running}</td></tr>\n"
         )
     if not st.workers:
-        out.append('<tr><td colspan="4">No workers.</td></tr>\n')
-    out.append("</tbody>\n</table>\n\n<h2>Lost workers</h2>\n<table>\n<thead><tr>")
+        out.append('<tr><td colspan="6">No workers.</td></tr>\n')
+    out.append(
+        '</tbody>\n</table>\n</div>\n\n<h2>Lost workers</h2>\n<div class="table-wrap">\n'
+        "<table>\n<thead><tr>"
+    )
     out.append(
         '<th scope="col">Worker</th><th scope="col">Lost at</th>'
         '<th scope="col">Tasks run again</th></tr></thead>\n<tbody>\n'
@@ -333,8 +427,52 @@ def page(st: Status, dark: bool = False) -> str:
         )
     if not st.lost:
         out.append('<tr><td colspan="3">None.</td></tr>\n')
-    out.append("</tbody>\n</table>\n</body>\n</html>\n")
+    out.append("</tbody>\n</table>\n</div>\n</div>\n" + _SCRIPT + "</body>\n</html>\n")
     return "".join(out)
+
+
+def status_json(st: Status) -> bytes:
+    """Renders st as /status.json, with the keys of go/internal/statusweb/json.go."""
+    jobs = []
+    for j in st.jobs:
+        d = duration(j, st.at)
+        jobs.append(
+            {
+                "id": j.job_id,
+                "state": _state(j.state),
+                "error": j.error,
+                "map_completed": j.map_tasks_completed,
+                "map_total": j.map_tasks_total,
+                "reduce_completed": j.reduce_tasks_completed,
+                "reduce_total": j.reduce_tasks_total,
+                "backup_attempts": j.backup_attempts,
+                "backup_wins": j.backup_wins,
+                "map_host_local": j.map_tasks_host_local,
+                "map_zone_local": j.map_tasks_zone_local,
+                "counters": dict(j.counters.values),
+                "submitted_at": j.submitted_at.ToNanoseconds() / 1e9
+                if j.HasField("submitted_at")
+                else None,
+                "finished_at": j.finished_at.ToNanoseconds() / 1e9
+                if j.HasField("finished_at")
+                else None,
+                "duration_seconds": None if d is None else d / 1e9,
+            }
+        )
+    workers = [
+        {
+            "id": w.worker.id,
+            "host": w.worker.info.host,
+            "zone": w.worker.info.zone,
+            "slots": w.worker.info.slots,
+            "last_seen": w.worker.last_seen or None,
+            "running": [{"task": str(t), "progress": w.progress.get(t, 0.0)} for t in w.running],
+        }
+        for w in st.workers
+    ]
+    lost = [{"id": lw.id, "at": lw.at, "tasks": [str(t) for t in lw.tasks]} for lw in st.lost]
+    doc = {"at": st.at, "jobs": jobs, "workers": workers, "lost": lost}
+    return (json.dumps(doc) + "\n").encode()
 
 
 def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
@@ -352,6 +490,8 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
             if parts.path == "/":
                 dark = parse_qs(parts.query).get("theme") == ["dark"]
                 body, ctype = page(source(), dark).encode(), "text/html; charset=utf-8"
+            elif parts.path == "/status.json":
+                body, ctype = status_json(source()), "application/json"
             elif parts.path == "/metrics":
                 body, ctype = metrics(source()), CONTENT_TYPE
             else:
@@ -360,6 +500,7 @@ def handler(source: Callable[[], Status]) -> type[BaseHTTPRequestHandler]:
             self.send_response(200)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 

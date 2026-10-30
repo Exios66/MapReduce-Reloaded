@@ -24,6 +24,7 @@
 # - rates.png: the same in three panels, titled with the run's program, size,
 #   M, R and commit, if matplotlib is installed;
 # - status.txt: what mr submit -wait printed;
+# - cluster.log: what the coordinator and workers logged during the run;
 # - result.json: the run's settings, the job's counters and the machine.
 #
 # The input is written once, to the host's data/ directory, which every
@@ -59,9 +60,9 @@ input=/data/bench-input-$scenario-$stamp.txt
 dir=bench/results/$scenario-$stamp
 out=/out/bench-$scenario-$stamp
 scraper=
-# shellcheck disable=SC2317 # called by cleanup, from the EXIT trap
+# shellcheck disable=SC2317,SC2329 # called by cleanup, from the EXIT trap
 rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$@"; }
-# shellcheck disable=SC2317 # called by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # called by the EXIT trap
 cleanup() {
     [ -z "$scraper" ] || kill "$scraper" 2>/dev/null || true
     rm -f "$host_input"
@@ -71,6 +72,7 @@ trap cleanup EXIT
 
 mkdir -p data
 chmod a+x data
+since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
 "${compose[@]}" up -d --build --scale worker="$workers"
 mkdir -p "$dir"
 
@@ -100,6 +102,10 @@ sleep "$(awk -v i="$interval" 'BEGIN { print 2 * i }')"
 kill "$scraper"
 wait "$scraper" 2>/dev/null || true
 scraper=
+# After the scraper stops, so a slow `logs` adds no samples.
+# What the coordinator and workers logged, to diagnose a failed or slow run.
+"${compose[@]}" logs --no-color --timestamps --since "$since" > "$dir/cluster.log" 2>&1 ||
+    echo "run.sh: could not save the cluster's logs to $dir/cluster.log" >&2
 
 python3 bench/plot-rates.py "$dir/samples.csv" > "$dir/rates.csv"
 if python3 -c "import matplotlib" 2>/dev/null; then

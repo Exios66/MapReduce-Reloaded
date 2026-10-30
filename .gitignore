@@ -6,6 +6,10 @@
 /go/mr
 *.test
 *.out
+/go/.cover/
+*.prof
+/go/vendor/
+go.work.sum
 
 # Python
 __pycache__/
@@ -18,6 +22,18 @@ __pycache__/
 .coverage
 /python/cover.json
 /python/mutants/
+.mypy_cache/
+.pytype/
+.tox/
+.nox/
+.coverage.*
+htmlcov/
+coverage.xml
+build/
+dist/
+*.egg
+pip-wheel-metadata/
+.ipynb_checkpoints/
 
 # Job data, the host client and benchmark output
 /data/
@@ -25,7 +41,27 @@ __pycache__/
 /bench/results/
 /tmp/
 
+# Local secrets and scratch files
+.env
+.env.*
+!.env.example
+*.pid
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.rej
+*.tmp
+
+# Agent and tool local state
+/.claude/settings.local.json
+/.claude/worktrees/
+/.circleci/*.local
+
 # Editors / OS
 .idea/
 .vscode/
+*.iml
 .DS_Store
+Thumbs.db

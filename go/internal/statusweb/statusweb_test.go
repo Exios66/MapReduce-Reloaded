@@ -1,10 +1,12 @@
 package statusweb
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +42,7 @@ var status = source{
 		JobId: "job-3", State: pb.JobState_JOB_STATE_SUCCEEDED,
 	}},
 	Workers: []coordinator.WorkerStatus{
-		{Worker: coordinator.Worker{ID: "w2", Info: &pb.WorkerInfo{Host: "host-b"}}, Running: []coordinator.Task{m0}, Progress: map[coordinator.Task]float32{m0: 0.426}},
+		{Worker: coordinator.Worker{ID: "w2", LastSeen: at.Add(-3 * time.Second), Info: &pb.WorkerInfo{Host: "host-b", Zone: "zone-x", Slots: 4}}, Running: []coordinator.Task{m0}, Progress: map[coordinator.Task]float32{m0: 0.426}},
 		{Worker: coordinator.Worker{ID: "w3"}},
 	},
 	Lost: []coordinator.LostWorker{{ID: "w1", At: time.Now(), Tasks: []coordinator.Task{m0}}},
@@ -66,13 +68,13 @@ func TestPage(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %s", resp.Status)
 	}
-	for _, want := range []string{"job-1", "badge state-mapping", ">mapping<", ">2.5s<", ">1m30s<", "3 started, 1 won", "3/7 &middot; 43%", `max="7" value="3"`, "map in <b>20</b>", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), m0.String() + "</span> 43%<br>", "&lt;script&gt;", "prefers-color-scheme: dark"} {
+	for _, want := range []string{"job-1", "badge state-mapping", ">mapping<", ">2.5s<", ">1m30s<", "3 started, 1 won", "3/7 &middot; 43%", `max="7" value="3"`, "map in <b>20</b>", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), m0.String() + "</span> 43%<br>", "&lt;script&gt;", "prefers-color-scheme: dark", `id="job-job-1"`, `href="#job-job-1"`, "local maps: host <b>5</b>, zone <b>2</b>", "zone-x", "1/4", "3s ago"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	if strings.Contains(body, "<script>") {
-		t.Error("page did not escape the job's error")
+	if strings.Count(body, "<script") != 1 {
+		t.Error("page has a script besides its own: the job's error was not escaped")
 	}
 	if !strings.Contains(body, "<body>") {
 		t.Error("page is dark by default")
@@ -122,5 +124,73 @@ func TestDurationClockSetBack(t *testing.T) {
 	j.FinishedAt = timestamppb.New(at.Add(-time.Second))
 	if d, ok := duration(j, at); d != 0 || !ok {
 		t.Errorf("finished: duration = %v, %v; want 0, true", d, ok)
+	}
+}
+
+// The page works offline: its one script is inline, and it loads nothing.
+func TestPageIsSelfContained(t *testing.T) {
+	_, body := get(t, "/")
+	body = strings.ReplaceAll(body, "&lt;script&gt;", "")
+	for _, bad := range []string{"http://", "https://", "@import", "<link", "<img", "src="} {
+		if strings.Contains(body, bad) {
+			t.Errorf("page contains %q", bad)
+		}
+	}
+	if strings.Count(body, "<script>") != 1 || strings.Count(body, "<script") != 1 {
+		t.Error("page does not have exactly one inline script")
+	}
+	if !strings.Contains(body, `<noscript><meta http-equiv="refresh"`) {
+		t.Error("page does not refresh without its script")
+	}
+}
+
+func TestStatusJSON(t *testing.T) {
+	resp, body := get(t, "/status.json")
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("content type %q", ct)
+	}
+	var doc struct {
+		At      float64
+		Jobs    []map[string]any
+		Workers []map[string]any
+		Lost    []map[string]any
+	}
+	if err := json.Unmarshal([]byte(body), &doc); err != nil {
+		t.Fatal(err)
+	}
+	keys := func(m map[string]any) string {
+		var ks []string
+		for k := range m {
+			ks = append(ks, k)
+		}
+		slices.Sort(ks)
+		return strings.Join(ks, " ")
+	}
+	// The Python server's test lists the same keys.
+	if got, want := keys(doc.Jobs[0]), "backup_attempts backup_wins counters duration_seconds error finished_at id map_completed map_host_local map_total map_zone_local reduce_completed reduce_total state submitted_at"; got != want {
+		t.Errorf("job keys\n got %s\nwant %s", got, want)
+	}
+	if got, want := keys(doc.Workers[0]), "host id last_seen running slots zone"; got != want {
+		t.Errorf("worker keys %s, want %s", got, want)
+	}
+	if got, want := keys(doc.Lost[0]), "at id tasks"; got != want {
+		t.Errorf("lost keys %s, want %s", got, want)
+	}
+	j1, j2, j3 := doc.Jobs[0], doc.Jobs[1], doc.Jobs[2]
+	if j1["id"] != "job-1" || j1["state"] != "mapping" || j1["map_completed"] != 3.0 || j1["duration_seconds"] != 2.5 {
+		t.Errorf("job-1 = %v", j1)
+	}
+	if j2["duration_seconds"] != 90.0 || j2["backup_wins"] != 1.0 || j2["map_zone_local"] != 2.0 {
+		t.Errorf("job-2 = %v", j2)
+	}
+	if j3["duration_seconds"] != nil || j3["submitted_at"] != nil {
+		t.Errorf("job-3 = %v", j3)
+	}
+	run := doc.Workers[0]["running"].([]any)[0].(map[string]any)
+	if run["task"] != m0.String() {
+		t.Errorf("running task %v, want %v", run["task"], m0)
+	}
+	if doc.Workers[1]["last_seen"] != nil {
+		t.Errorf("a worker never seen has last_seen %v", doc.Workers[1]["last_seen"])
 	}
 }
