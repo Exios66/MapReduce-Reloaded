@@ -20,6 +20,8 @@ agent's or a tool's identity.
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format, with
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for releases.
 `python/tests/test_changelog.py` checks its layout in `make check`.
+The file turns off pymarkdown's duplicate-heading rule (MD024) for itself
+only, because every release repeats the same categories; keep that pragma.
 
 ### In every PR
 
