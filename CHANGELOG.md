@@ -65,6 +65,9 @@ cut a release.
 - Go coverage: each package's coverage counts every test in the module
   and the runs of the commands that `internal/e2e` builds, through
   `-coverpkg` and `GOCOVERDIR` in `make go-test` (#245).
+- Docs: a stale-claim sweep. CI is described as six jobs with no run on
+  pushes to `main`, the pull-request count and coverage floors are current,
+  LATE speculation cites #284, and E0 to E7 ranges are corrected.
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed
@@ -75,6 +78,9 @@ cut a release.
 ### Fixed
 
 - The CircleCI badge URL (#261).
+- Worker: a starting worker's sweep could delete a new worker's temporary
+  directory, which made it fail with "already locked" (and flaked
+  `internal/e2e`); the lock is now on the directory itself.
 - Bench: `wait_workers` retries when the coordinator is unreachable, instead of
   exiting silently, and saves the logs on a registration timeout (#307).
 
