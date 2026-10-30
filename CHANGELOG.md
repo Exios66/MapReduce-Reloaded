@@ -15,6 +15,8 @@ cut a release.
 
 ### Added
 
+- Docs: ADR 0023 proposes a read-only showcase service that samples, records
+  and replays a run, and `docs/roadmap.md` lays out its phases (#333).
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without
