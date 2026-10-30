@@ -62,6 +62,9 @@ cut a release.
   kill step (#303).
 - Docs: the chaos explainer says what `make chaos` covers and that dropped
   packets are out of scope (#287).
+- Docs: a stale-claim sweep. CI is described as six jobs with no run on
+  pushes to `main`, the pull-request count and coverage floors are current,
+  LATE speculation cites #284, and E0 to E7 ranges are corrected.
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed

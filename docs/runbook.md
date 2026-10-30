@@ -164,7 +164,7 @@ tail -f bench/results/experiments.log        # about 2 hours for all seven
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7` runs one experiment (E7, #59, is not part of `all`) of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
 SSH drops. The command above draws a fresh run into `bench/plots/`
 (`E0.png` … `E6.png`, each with a `-dark` variant), so it does not touch the

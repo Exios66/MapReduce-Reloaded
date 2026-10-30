@@ -155,7 +155,7 @@ these saved straggler rows.
   slow worker's last tasks and takes 56% longer, close to the paper's 44%,
   subject to the run-order limitation above.
 - **With no straggler, no statistically significant cost was found.** Backups still run,
-  5 or 6 a job, and none win: with as many reduce tasks as workers, a
+  4 to 6 a job, and none win: with as many reduce tasks as workers, a
   worker that finishes its reduce task has nothing left to do, so it backs
   up another. Over ten pairs the mean difference is -0.11 s, with a 95%
   interval of -0.38 to +0.16 s, allowing a mean cost of up to 0.16 s.

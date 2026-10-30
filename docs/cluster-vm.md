@@ -99,7 +99,7 @@ of job data while a 1 GiB experiment runs. `scripts/vm-setup.sh` warns
 when less than 5 GB is free in `$HOME`. A job's data exists several times at
 once: input, intermediate files (about the input's size; the `distsort`
 benchmark shuffled 68 MB for a 64 MB input) and output. The experiments
-(E0–E5) use 1 GiB inputs; keep any larger input to a few GB at most, and
+(E0–E7) use 1 GiB inputs; keep any larger input to a few GB at most, and
 delete old output and `bench/results/` files as you go.
 
 Workers delete a job's map output once it ends and stop taking tasks under
