@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 import re
 import subprocess
 import textwrap
@@ -898,3 +899,56 @@ def test_registration_timeout_saves_the_logs_since_the_restart(
         "compose:logs --no-color --timestamps --since 2026-10-30T00:00:00.000000000Z"
     ]
     assert (tmp_path / "bench/results/E1/logs-registration-timeout.log").exists()
+
+
+def test_cache_prepare_records_the_page_cache_state_without_dropping_it(experiment, tmp_path):
+    invoke, log = experiment
+    invoke(
+        """
+        sudo() { echo "sudo:$*" >> "$CALL_LOG"; }
+        cache_prepare bench/results/E1 E1 s1.0-on wordcount 2
+        """
+    )
+    row = json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())
+    assert row["dropped"] is False
+    assert (row["experiment"], row["setting"], row["program"], row["run"]) == (
+        "E1",
+        "s1.0-on",
+        "wordcount",
+        2,
+    )
+    for field in ("mem_free_kib", "cached_kib"):
+        assert row[field] is None or isinstance(row[field], int)
+    assert log.read_text() == ""  # nothing was dropped
+
+
+def test_cache_prepare_drops_the_caches_when_asked(experiment, tmp_path, monkeypatch):
+    invoke, log = experiment
+    monkeypatch.setenv("DROP_CACHES", "1")
+    invoke(
+        """
+        sync() { echo sync >> "$CALL_LOG"; }
+        sudo() { echo "sudo:$*" >> "$CALL_LOG"; cat > /dev/null; }
+        cache_prepare bench/results/E1 E1 s1.0-on wordcount 1
+        """
+    )
+    assert json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())["dropped"] is True
+    assert log.read_text().splitlines() == ["sync", "sudo:-n tee /proc/sys/vm/drop_caches"]
+
+
+def test_cache_prepare_stops_rather_than_record_a_cold_run_it_could_not_make(
+    experiment, tmp_path, monkeypatch
+):
+    invoke, _ = experiment
+    monkeypatch.setenv("DROP_CACHES", "1")
+    result = invoke(
+        """
+        sync() { :; }
+        sudo() { return 1; }
+        cache_prepare bench/results/E1 E1 s1.0-on wordcount 1
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "page cache cannot be dropped" in result.stderr
+    assert not (tmp_path / "bench/results/E1/cache.jsonl").exists()

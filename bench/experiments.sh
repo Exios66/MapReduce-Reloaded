@@ -121,6 +121,31 @@ wait_workers() {
     exit 1
 }
 
+# cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: just before a job is
+# submitted, appends to DIR/cache.jsonl the state of the kernel's page cache
+# that the job starts with, so a result is never read as cold when it was
+# warm. The input is written shortly before the first trial, and the next
+# trials read it from memory when it fits, so trials are warm unless
+# DROP_CACHES=1, which flushes and drops the page, dentry and inode caches
+# first. Dropping needs root, so it uses passwordless sudo and stops the
+# experiment if it cannot: a run asked to be cold must not be recorded as
+# one. Only the course VM's own runs should set it.
+cache_prepare() {
+    local dropped=false mem_free cached
+    mkdir -p "$1"
+    if [ "${DROP_CACHES:-}" = 1 ]; then
+        sync
+        if ! echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1; then
+            echo "experiments: DROP_CACHES=1, but the page cache cannot be dropped (needs passwordless sudo on Linux); stopping" >&2
+            exit 1
+        fi
+        dropped=true
+    fi
+    read -r mem_free cached < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } END { print f + 0, c + 0 }' /proc/meminfo 2>/dev/null) || true
+    printf '{"experiment":"%s","setting":"%s","program":"%s","run":%s,"at":"%s","dropped":%s,"mem_free_kib":%s,"cached_kib":%s}\n' \
+        "$2" "$3" "$4" "$5" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$dropped" "${mem_free:-null}" "${cached:-null}" >> "$1/cache.jsonl"
+}
+
 # input PROGRAM: generates PROGRAM's input once and prints its path.
 # Cached paths include size in bytes and, for word count, the current zipf
 # exponent used to generate the input.
@@ -239,6 +264,7 @@ run() {
     [ -n "$ready" ] || fresh "$workers"
     ready=
     log "$exp $setting $program run $n"
+    cache_prepare "$dir" "$exp" "$setting" "$program" "$n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
     # A job file is read from the repository's examples/ or bench/jobs/,
@@ -311,6 +337,7 @@ begin() { # EXPERIMENT
         mv "$dir" "bench/results/previous/$1-$(date +%Y%m%d-%H%M%S)"
         old=("bench/results/previous/$1-"*) # oldest first: the names sort by time
         while [ "${#old[@]}" -gt 3 ]; do
+            echo "experiments: deleting ${old[0]}: only the last three runs of $1 are kept; results worth keeping go in bench/evaluation/" >&2
             rm -rf "${old[0]}"
             old=("${old[@]:1}")
         done

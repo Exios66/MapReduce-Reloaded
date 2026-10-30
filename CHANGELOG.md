@@ -65,6 +65,9 @@ cut a release.
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
   LATE speculation cites #284, and E0 to E7 ranges are corrected.
+- Bench: each trial records the page cache's state in `cache.jsonl`, an
+  optional `DROP_CACHES=1` makes trials cold, and `begin` says which older
+  results it deletes (#310).
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed

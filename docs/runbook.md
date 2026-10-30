@@ -172,6 +172,15 @@ plots committed in `bench/evaluation/`, which come from the saved runs there:
 `python/.venv/bin/python bench/plot-experiments.py bench/evaluation bench/evaluation` (see
 [bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
+
+Every trial appends the kernel page cache's state at submission to
+`bench/results/EXPERIMENT/cache.jsonl` (`MemFree` and `Cached` in KiB, and
+whether the cache was dropped). The input is written just before the first
+trial and later trials read it from memory when it fits, so trials are warm
+by default and a result is not a cold-cache measurement. `DROP_CACHES=1`
+flushes and drops the page, dentry and inode caches before each trial, using
+`sudo -n tee /proc/sys/vm/drop_caches`; it stops the experiment if that
+fails, so it is for the course VM, which has passwordless sudo.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 `bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not
 part of `all` and has not been run; see
