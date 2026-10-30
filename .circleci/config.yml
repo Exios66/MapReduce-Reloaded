@@ -29,27 +29,13 @@ orbs:
 jobs:
   select:
     docker:
-      - image: cimg/python:3.12
+      - image: cimg/base:stable
     resource_class: small
     steps:
-      - unless:
-          condition:
-            equal: [main, << pipeline.git.branch >>]
-          steps:
-            - checkout
-            - run:
-                name: Select the implicated jobs
-                command: python3 scripts/ci-params.py | tee /tmp/ci-params.json
-            - continuation/continue:
-                configuration_path: .circleci/continue-config.yml
-                parameters: /tmp/ci-params.json
-      - when:
-          condition:
-            equal: [main, << pipeline.git.branch >>]
-          steps:
-            - checkout
-            - continuation/continue:
-                configuration_path: .circleci/empty-continue-config.yml
+      - checkout
+      - run: 'echo "PROBE project.type=<< pipeline.project.type >> trigger=<< pipeline.trigger_source >> id=<< pipeline.id >>"'
+      - continuation/continue:
+          configuration_path: .circleci/empty-continue-config.yml
 workflows:
   setup:
     jobs:
