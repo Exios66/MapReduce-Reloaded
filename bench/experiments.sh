@@ -107,7 +107,9 @@ configure() {
 wait_workers() {
     local n
     for _ in $(seq 120); do
-        n=$(curl -fsS "$metrics" 2>/dev/null | awk '$1 == "mr_workers" { print $2 }')
+        # An unreachable coordinator is the likeliest failure: it must count as
+        # no workers and be retried, not stop the script under `set -e`.
+        n=$(curl -fsS "$metrics" 2>/dev/null | awk '$1 == "mr_workers" { print $2 }') || n=
         [ "$n" = "$1" ] && return 0
         sleep 0.5
     done
