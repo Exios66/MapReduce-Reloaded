@@ -252,8 +252,11 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 	if err := s.failed(); err != nil {
 		return nil, err
 	}
+	id := s.workers.Register(req.GetWorker(), s.now())
+	slog.Info("worker registered", "worker", id, "host", req.GetWorker().GetHost(),
+		"shuffle_address", req.GetWorker().GetShuffleAddress(), "workers", s.workers.Len())
 	return &pb.RegisterWorkerResponse{
-		WorkerId:          s.workers.Register(req.GetWorker(), s.now()),
+		WorkerId:          id,
 		HeartbeatInterval: durationpb.New(s.cfg.HeartbeatInterval),
 	}, nil
 }
@@ -272,6 +275,7 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 	}
 	worker := req.GetWorkerId()
 	if !s.workers.Heartbeat(worker, s.now()) {
+		slog.Info("heartbeat from an unknown worker; told to register again", "worker", worker)
 		return &pb.HeartbeatResponse{Reregister: true}, nil
 	}
 	resp := &pb.HeartbeatResponse{ActiveJobs: &pb.ActiveJobs{}}
@@ -281,6 +285,8 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 	for _, p := range req.GetRunning() {
 		id := p.GetAttempt()
 		if !s.runs(id, worker) {
+			slog.Debug("attempt told to stop", "worker", worker, "job", id.GetTask().GetJobId(),
+				"kind", kindName(id.GetTask().GetKind()), "index", id.GetTask().GetIndex(), "attempt", id.GetAttempt())
 			resp.Cancel = append(resp.Cancel, id)
 			continue
 		}
@@ -366,6 +372,9 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 		return nil, err
 	}
 	s.submit(rec, now)
+	slog.Info("job submitted", "job", rec.GetJobId(), "program", m.GetProgram(), "inputs", len(m.GetInputs()),
+		"output", m.GetOutput(), "map_tasks", len(splits), "reduce_tasks", m.GetNumReduceTasks(),
+		"combiner", m.GetUseCombiner(), "workers", s.workers.Len())
 	return &pb.SubmitJobResponse{JobId: rec.GetJobId()}, nil
 }
 
@@ -480,16 +489,19 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	if s.active != nil && !req.GetPaused() {
 		info := s.workerInfo(worker)
 		t, ok := s.active.tasks.Next(func(i uint32) int { return int(locality(s.active.splits[i], info)) })
+		backup := false
 		switch {
 		case ok && s.holdBack(t, info, now):
 			ok = false
 		case !ok && s.cfg.speculation() == SpeculationPaper:
 			t, ok = s.active.tasks.Backup(worker)
+			backup = ok
 		case !ok && s.cfg.speculation() == SpeculationLate:
 			t, ok = s.active.tasks.LateBackup(worker, now, s.cfg.lateParams(), s.workers.Len())
+			backup = ok
 		}
 		if ok {
-			return s.assign(t, worker, now)
+			return s.assign(t, worker, now, backup)
 		}
 	}
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Wait{
@@ -497,10 +509,10 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	}}, nil
 }
 
-// assign starts an attempt at t, a task of the active job, on worker at now.
-// It returns the map or reduce assignment, or Internal for task table errors
+// assign starts an attempt at t, a task of the active job, on worker at now;
+// backup says it duplicates an attempt still running. It returns the map or reduce assignment, or Internal for task table errors
 // and Unavailable for log errors. An error does not roll back the attempt.
-func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskResponse, error) {
+func (s *Server) assign(t Task, worker string, now time.Time, backup bool) (*pb.RequestTaskResponse, error) {
 	j := s.active
 	attempt, err := j.tasks.Assign(t, worker, now)
 	if err != nil {
@@ -519,6 +531,8 @@ func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskRe
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}, now); err != nil {
 		return nil, err
 	}
+	slog.Info("task assigned", "job", j.id, "kind", kindName(t.Kind), "index", t.Index, "attempt", attempt,
+		"worker", worker, "backup", backup, "locality", rec.GetLocality())
 	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_MapTask{
 			MapTask: &pb.MapTask{Attempt: id, Job: j.spec, Split: j.splits[t.Index], SkipRecords: skip},
@@ -605,10 +619,41 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskReported{TaskReported: req}}, now); err != nil {
 		return nil, err
 	}
+	logReport(j, req, accepted, ended)
 	if ended {
 		j.cleanup()
 	}
 	return &pb.ReportTaskResponse{Accepted: accepted}, nil
+}
+
+// kindName is a task kind's name as the logs show it: map or reduce.
+func kindName(k pb.TaskKind) string {
+	return strings.ToLower(strings.TrimPrefix(k.String(), "TASK_KIND_"))
+}
+
+// logReport logs req, a worker's report on an attempt of j, and, if it ended
+// j, how j ended. accepted says the report completed its task, which a
+// failure or a slower twin of a finished task does not. ReportTask calls it
+// and Recover does not, so replaying the log repeats no event.
+func logReport(j *job, req *pb.ReportTaskRequest, accepted, ended bool) {
+	id := req.GetAttempt()
+	attrs := []any{"job", j.id, "kind", kindName(id.GetTask().GetKind()), "index", id.GetTask().GetIndex(),
+		"attempt", id.GetAttempt(), "worker", req.GetWorkerId()}
+	if f := req.GetFailure(); f != nil {
+		slog.Warn("task attempt failed", append(attrs, "err", f.GetMessage(), "fatal", f.GetFatal(),
+			"lost_output", f.GetLostOutput() != nil, "bad_record", f.FailedRecord != nil)...)
+	} else {
+		slog.Info("task attempt finished", append(attrs, "accepted", accepted)...)
+	}
+	if !ended {
+		return
+	}
+	secs := j.finished.Sub(j.submitted).Seconds()
+	if j.err != "" {
+		slog.Error("job failed", "job", j.id, "err", j.err, "seconds", secs)
+		return
+	}
+	slog.Info("job succeeded", "job", j.id, "seconds", secs)
 }
 
 // report applies req, received at at, to j, and says whether it completed

@@ -92,9 +92,20 @@ def test_main_pushes_run_no_ci_jobs():
     unless, when = steps.split("\n      - when:\n", 1)
     on_main = "equal: [main, << pipeline.git.branch >>]"
     assert unless.startswith("      - unless:\n") and on_main in unless and on_main in when
-    for step in ("- checkout", "scripts/ci-params.py", "- continuation/continue:"):
+    # The repository's second CircleCI project, made by the GitHub App
+    # (project.type "circleci"), builds every push too; only the OAuth
+    # project gh/Exios66/MapReduce-Reloaded does the work.
+    legacy = "equal: [circleci, << pipeline.project.type >>]"
+    assert legacy in unless and legacy in when
+    for step in ("scripts/ci-params.py", "configuration_path: .circleci/continue-config.yml"):
         assert step in unless and step not in when
-    assert "- continuation/finish" in when and "continuation/finish" not in unless
+    assert "- checkout" in unless and "- checkout" in when
+    # The orb's finish command continues with "version: 2", which CircleCI
+    # rejects, so main continues with an empty 2.1 config.
+    assert "continuation/finish" not in CIRCLE
+    assert "configuration_path: .circleci/empty-continue-config.yml" in when
+    empty = (Path(__file__).parents[2] / ".circleci/empty-continue-config.yml").read_text()
+    assert re.search(r"^version: 2\.1$", empty, re.M) and "jobs: {}" in empty
 
 
 def test_mapping_coverage_checks_what_the_jobs_received():

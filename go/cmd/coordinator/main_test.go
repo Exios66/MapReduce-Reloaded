@@ -21,7 +21,7 @@ import (
 
 func TestParseDefaults(t *testing.T) {
 	o, err := parse(nil, io.Discard)
-	want := options{addr: ":7070", httpAddr: ":8080", logFormat: "text", backups: true, keepJobs: 100, maxTaskFailures: 8}
+	want := options{addr: ":7070", httpAddr: ":8080", logFormat: "text", logLevel: "info", backups: true, keepJobs: 100, maxTaskFailures: 8}
 	if err != nil || o != want {
 		t.Fatalf("parse() = %+v, %v; want %+v", o, err, want)
 	}
@@ -32,8 +32,8 @@ func TestParseDefaults(t *testing.T) {
 }
 
 func TestParseFlags(t *testing.T) {
-	o, err := parse([]string{"-addr", ":1", "-http", "", "-data-dir", "d", "-backups=false", "-keep-jobs", "0", "-max-task-failures", "0", "-log-format", "json"}, io.Discard)
-	want := options{addr: ":1", dataDir: "d", logFormat: "json", keepJobs: 0}
+	o, err := parse([]string{"-addr", ":1", "-http", "", "-data-dir", "d", "-backups=false", "-keep-jobs", "0", "-max-task-failures", "0", "-log-format", "json", "-log-level", "debug"}, io.Discard)
+	want := options{addr: ":1", dataDir: "d", logFormat: "json", logLevel: "debug", keepJobs: 0}
 	if err != nil || o != want {
 		t.Fatalf("parse = %+v, %v; want %+v", o, err, want)
 	}
@@ -89,6 +89,7 @@ func TestStartErrors(t *testing.T) {
 		{[]string{"-backups=false", "-speculation=late"}, 2, "-backups=false conflicts with -speculation=late"},
 		{[]string{"-backups=false", "-speculation=paper"}, 2, "-backups=false conflicts with -speculation=paper"},
 		{[]string{"-log-format", "xml"}, 1, `log format "xml"`},
+		{[]string{"-log-level", "loud"}, 1, `log level "loud"`},
 		{[]string{"-addr", "nowhere:-1", "-http", ""}, 1, "coordinator: listen tcp"},
 		{[]string{"-h"}, 0, "Usage of coordinator"},
 	} {
