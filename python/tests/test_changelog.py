@@ -49,11 +49,11 @@ def test_releases_are_newest_first():
 
 
 def test_subsections_are_keep_a_changelog_categories():
-    """Entries sit under the six categories, each at most once per release."""
+    """Entries sit under the six categories, each at most once per release, in order."""
     for section in re.split(r"^## ", CHANGELOG, flags=re.M)[1:]:
         names = re.findall(r"^### (.+)$", section, flags=re.M)
         assert set(names) <= set(CATEGORIES), names
-        assert len(names) == len(set(names)), names
+        assert names == sorted(set(names), key=CATEGORIES.index), names
 
 
 def test_every_version_has_a_compare_link():

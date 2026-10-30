@@ -174,6 +174,10 @@ files, the evaluation against §5, and the final report.
 - The roadmap, proto comments and docs describe what was built (#120, #124,
   #136, #138, #223).
 
+### Removed
+
+- The `mr` binary is no longer tracked in git (#119).
+
 ### Fixed
 
 - Lost and forgotten attempts stopped through the heartbeat reply (#123).
@@ -185,10 +189,6 @@ files, the evaluation against §5, and the final report.
 - Examples: a host ends at `?` or `#`, files in a set are deduped, and
   non-UTF-8 names are accepted (#145).
 - Review findings applied (#84, #100, #195).
-
-### Removed
-
-- The `mr` binary is no longer tracked in git (#119).
 
 ### Security
 
