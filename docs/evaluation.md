@@ -25,6 +25,20 @@ E2, E3 and E6 are the course evaluation in
 [bench/README.md](../bench/README.md#evaluation-e0e6), each the median of
 three runs.
 
+A separate [decimal-10-GB campaign](../bench/evaluation/10gb/README.md)
+started on 2026-10-30: the E0–E5 controls at approximately ten times the
+1 GiB evaluation, each setting repeated three times on the same generated
+formats and Zipf skew. It is not yet complete. Completed and accepted so
+far: nine grep trials at exactly 100M records/10,000,000,000 bytes (median
+16.016 s on four workers). A full-size compressed-KV sort pilot calibrated at
+262.453 s (160/160 maps, 8/8 reduces, 100M verified output records), but a
+later sort job OOM-killed a worker at 765 MiB of the 768 MiB cap. That pilot
+is therefore excluded from final evidence; the final sort cohort uses
+1,024 MiB per worker and is being recalibrated and rerun. Native uncompressed
+sort is capacity-blocked on the VM's one 35 GB disk; admitted sort is the
+explicitly labeled zstd-KV input/intermediate/output variant. A later
+campaign table replaces none of the historical rows above.
+
 E6 repeats §4.3's combiner measurement on real text at 1 GiB. On crawled
 English the combiner cut the bytes shuffled 5.2× and the job time 14%; on
 crawled pages in every language, 3.2× and 7%; on the book, 33× and 22%.

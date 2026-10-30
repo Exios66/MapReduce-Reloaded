@@ -1,0 +1,15 @@
+job-1	SUCCEEDED
+map	160/160
+reduce	1/1
+backups	0
+backups_won	0
+map_host_local	0
+map_zone_local	0
+seconds	50.366
+map.input.bytes	10000000000
+map.input.records	100000000
+map.output.bytes	100263
+map.output.records	923
+reduce.input.records	923
+reduce.output.bytes	91377
+reduce.output.records	923

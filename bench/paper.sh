@@ -168,7 +168,7 @@ coordinator = ['coordinator', '-addr', ':7070', '-http', ':8080', '-data-dir', '
 if sys.argv[3] in ('no-backups', 'straggler-no-backups'): coordinator += ['-backups=false']
 worker = ['worker', '-coordinator', 'coordinator:7070', '-http', ':8081', '-min-free-mib', '4096']
 node = {'image': sys.argv[4], 'pull_policy': 'never'}
-json.dump({'services': {'coordinator': {**node, 'command': coordinator}, 'worker': {**node, 'command': worker, 'mem_limit': '768m', 'cpus': 1}}}, open(sys.argv[1], 'w'))
+json.dump({'services': {'coordinator': {**node, 'command': coordinator}, 'worker': {**node, 'command': worker, 'mem_limit': '1024m', 'cpus': 1}}}, open(sys.argv[1], 'w'))
 PY
 # Every trial has a fresh WAL: never replay a timed-out campaign accidentally.
 mkdir "data/paper-wal-$stamp"
@@ -200,7 +200,7 @@ workers = json.load(open(p/'workers.json'))
 coordinator = json.load(open(p/'coordinator.json'))
 if len(workers) != int(sys.argv[2]) or len(coordinator) != 1 or any(w['Image'] != stamp['image'] for w in workers + coordinator):
     raise ValueError('running services do not match the pinned image')
-if any(w['HostConfig']['NanoCpus'] != 1000000000 or w['HostConfig']['Memory'] != 768*1024**2 for w in workers):
+if any(w['HostConfig']['NanoCpus'] != 1000000000 or w['HostConfig']['Memory'] != 1024*1024**2 for w in workers):
     raise ValueError('unexpected worker resource limits')
 PY
 if [[ "$setting" = straggler || "$setting" = straggler-no-backups ]]; then

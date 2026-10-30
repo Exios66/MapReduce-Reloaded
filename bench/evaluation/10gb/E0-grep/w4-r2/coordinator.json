@@ -1,0 +1,9 @@
+[
+  {
+    "Name": "/coordinator",
+    "Image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+    "HostConfig": {
+      "Memory": 268435456
+    }
+  }
+]

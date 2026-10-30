@@ -4,8 +4,10 @@ Scripts that measure the cluster. Each one runs on the Compose cluster and
 writes its raw results to `bench/results/`, which git ignores. The numbers
 below are copied from a run, with the machine it ran on.
 
-The [proposed 10 GB paper comparison](10gb-paper-run.md) records the next
-run's scope, VM handover and storage prerequisites. It is not a result.
+The [10 GB campaign plan](10gb-paper-run.md) records scope, VM handover and
+storage prerequisites. Its [evidence](evaluation/10gb/README.md) is published
+separately from the historical 1 GiB evaluation and grows as each cohort
+passes independent validation.
 
 ## Fixed-VM campaign commands
 
@@ -214,6 +216,27 @@ The cluster runs above need Docker and a person to read them. These run in
   intermediate data against the measured ratios plus 0.05: word-count
   records 0.368 with zstd and 0.532 with Snappy, line records 0.446 and
   0.673.
+
+## Decimal-10-GB campaign
+
+The current campaign reruns the E0–E5 controls at approximately ten times
+the 1 GiB evaluation, preserving generated formats, seeds, Zipf skew and
+paired settings. Each setting has three trials. These are new, separately
+labeled results; they do not replace the historical runs below.
+
+The first completed cohort is **E0 grep** at exactly 100,000,000 records and
+10,000,000,000 bytes, M = 160, R = 1. Every trial reproduced all 923 matches.
+Median job time was **50.366 s** on one worker, **23.537 s** on two and
+**16.016 s** on four, a 3.15× scaling from one to four. The earlier same-size
+grep took 18.3 s on four workers; the current-runtime median is 16.0 s, but
+the revisions and uncontrolled cache state differ, so this is not a
+controlled speedup claim.
+
+[The evidence directory](evaluation/10gb/README.md) has the raw trials,
+sanitized per-run status, event, sample, rate and resource data, and
+validation summaries. Private absolute paths and raw host identifiers stay
+out of the repository. Sort, backups, failure/recovery and word-count cohorts
+are added only after their own validation gates pass.
 
 ## Evaluation (E0–E6)
 

@@ -177,12 +177,25 @@ sort/word count R8. Report that R differs from the historical suite's R4.
 
 The primary campaign is 84 E0–E5 trials plus nine paper-format supplements.
 The 24 real-corpus trials are optional follow-up, not a prerequisite or a
-substitute. Each setting repeats three times. Calibration is additional and labeled, never
-counted as one of the three repeats. Rotate/interleave settings, freeze the
-full-size baseline before fault comparisons, and record the actual fault
-phase/time. E3 deliberately retains permanent loss for comparison with old
-E3; the paper supplement restarts the worker immediately. Neither is the
-other's substitute. Paper-mode backups remain the default; LATE is not used.
+substitute. Each setting repeats three times. Calibration is additional and
+labeled, never counted as one of the three repeats. Rotate/interleave
+settings, freeze the full-size baseline before fault comparisons, and record
+the actual fault phase/time. E3 deliberately retains permanent loss for
+comparison with old E3; the paper supplement restarts the worker immediately.
+Neither is the other's substitute. Paper-mode backups remain the default;
+LATE is not used.
+
+**Worker memory at this scale.** The historical worker cap is 768 MiB. Three
+sort trials and a full-size calibration passed under it, but ten-GB sort
+peaked at 744–765 MiB and the next job OOM-killed a worker (Docker
+`OOMKilled=true`, exit 137). That trial was rejected even though its output
+revalidated all 100M records; its raw output was removed after retaining its
+status, metrics, logs and validation. Those 768 MiB sort runs are a labeled
+pilot. The final sort cohort uses **1,024 MiB per worker**, checked by
+container inspection before each trial, leaving enough headroom for the
+observed peak. Grep ran under 768 MiB but its workers peaked near 10 MiB, so
+that memory cap did not influence its results; its nine trials remain one
+cohort.
 
 `large-suite.py plan` prints the complete plan without touching services.
 Execute one input group at a time, with a measured **remaining-free-space**
@@ -254,9 +267,11 @@ checker exempts only the specifically recorded fault's endpoint/window;
 an unrelated missing worker or sampler still invalidates the trial.
 
 **Authorized:** the owner confirmed exclusive VM access on 2026-10-30 and
-requested the full E0–E5 suite at roughly ten times the earlier 1 GiB scale,
-with larger-corpus text runs. Commands below are instructions, not results.
-Keep the prepared native grep input and all rejected-trial evidence.
+requested the full E0–E5 suite at roughly ten times the earlier 1 GiB scale.
+The exact grep cohort and sort calibration have completed; the sort matrix is
+running. Commands below are the reproducible protocol, not claims that every
+later cohort has finished. Completed synthetic inputs may be regenerated;
+their manifests, shard hashes, results and rejected-trial diagnostics remain.
 
 ### 1. Establish and test the exact revision
 

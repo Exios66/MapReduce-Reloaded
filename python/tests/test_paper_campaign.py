@@ -295,10 +295,12 @@ def prepared_campaign(campaign):
         "elif args[0] == 'inspect':\n"
         "    if '-f' in args: print('172.20.0.' + args[-1][-1])\n"
         "    else:\n"
-        "        coordinator_is_bad = os.environ.get('BAD_SERVICE') == 'coordinator'\n"
+        "        bad_service = os.environ.get('BAD_SERVICE')\n"
+        "        bad_name = {'coordinator': 'c1', 'worker': 'w1'}.get(bad_service, '')\n"
+        "        memory = 768 * 1024**2 if os.environ.get('BAD_MEMORY') else 1024 * 1024**2\n"
         "        records = [{'Name': '/' + name,\n"
-        "                    'Image': 'wrong-image'\n"
-        "                    if (name == 'c1') == coordinator_is_bad else image}\n"
+        "                    'Image': 'wrong-image' if name == bad_name else image,\n"
+        "                    'HostConfig': {'NanoCpus': 1000000000, 'Memory': memory}}\n"
         "                   for name in args[1:]]\n"
         "        print(json.dumps(records))\n"
         "else: raise SystemExit(1)\n"
@@ -344,6 +346,13 @@ def test_services_are_pinned_and_wrong_running_image_is_rejected(prepared_campai
     services = json.loads(override.read_text())["services"]
     assert all(s["image"] == image and s["pull_policy"] == "never" for s in services.values())
     assert ["inspect", "c1"] in calls
+
+
+def test_wrong_worker_memory_cap_is_rejected(prepared_campaign):
+    root, run, _ = prepared_campaign
+    result = run("run", "grep", "native", BAD_MEMORY="1")
+    assert result.returncode != 0
+    assert "unexpected worker resource limits" in result.stderr
 
 
 @pytest.mark.parametrize("records,physical", [(1, 200), (2, 100)])
