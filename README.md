@@ -211,7 +211,7 @@ docs/      design, roadmap, paper mapping, file format, ADRs, explainers
 ## Development
 
 ```sh
-pip install -e "python[dev]"   # the Python package and dev tools
+make venv                      # python/.venv with the package and dev tools; make uses it automatically
 make tools                     # pinned code generators into .tools/bin
 make hooks                     # once per clone: run `make check` before every push
 make check                     # all linters and tests (the quality gate)
