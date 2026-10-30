@@ -63,6 +63,21 @@ its own and those of the attempt's user code (`Context.Logger`), with
 {"level":"WARN","msg":"task failed","worker":"…","job":"job-1","task":{"kind":"map","index":4,"attempt":1},"err":"..."}
 ```
 
+`-log-level debug|info|warn|error` sets the lowest level logged; the default
+is `info`. The events, at `info` unless noted:
+
+| From | Message | Fields |
+|---|---|---|
+| Coordinator | `worker registered` | `worker`, `host`, `shuffle_address`, `workers` |
+| Coordinator | `job submitted` | `job`, `program`, `inputs`, `output`, `map_tasks`, `reduce_tasks`, `combiner`, `workers` |
+| Coordinator | `task assigned` | `job`, `kind`, `index`, `attempt`, `worker`, `backup`, `locality` |
+| Coordinator | `task attempt finished` | the same, and `accepted` (false: a twin finished first) |
+| Coordinator | `task attempt failed` (`warn`) | the same, and `err`, `fatal`, `lost_output`, `bad_record` |
+| Coordinator | `job succeeded`, `job failed` (`error`) | `job`, `seconds`, and `err` for a failure |
+| Coordinator | `worker lost` (`warn`), `heartbeat from an unknown worker; told to register again` | `worker` |
+| Coordinator | `attempt told to stop` (`debug`) | `worker`, `job`, `kind`, `index`, `attempt` |
+| Worker | `registered`, `task started`, `task ended` | `worker`, `job`, `task`; `task ended` has `seconds` and `ok` |
+
 ## Choices
 
 - **No dependencies.** The metrics are a few gauges and counters, and the text format
