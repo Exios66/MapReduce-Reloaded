@@ -32,14 +32,12 @@ import glob
 import json
 import os
 import platform
-import re
 import shlex
 import shutil
 import subprocess
 import sys
 import time
-import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 CHROME_DEFAULTS = [
     os.environ.get("CHROME", ""),
@@ -57,9 +55,7 @@ def chrome_bin() -> str:
     sys.exit("no Chrome found: set CHROME=/path/to/chrome")
 
 
-def shot(
-    chrome: str, url: str, theme: str, path: str, profile: str, window: str
-) -> None:
+def shot(chrome: str, url: str, theme: str, path: str, profile: str, window: str) -> None:
     subprocess.run(
         [
             chrome,
@@ -82,9 +78,7 @@ def shot(
 def _local(spec: str) -> str:
     """The host path of a shared-storage spec: /data/... under MR_DATA_DIR."""
     if spec.startswith("/data"):
-        return os.path.join(
-            os.environ.get("MR_DATA_DIR", "data"), spec[len("/data") :].lstrip("/")
-        )
+        return os.path.join(os.environ.get("MR_DATA_DIR", "data"), spec[len("/data") :].lstrip("/"))
     return spec
 
 
@@ -120,9 +114,7 @@ def capture(args, work: str, submit: list[str] | None) -> list[tuple[str, str]]:
     proc = None
     if submit:
         print("submit:", shlex.join(submit), flush=True)
-        proc = subprocess.Popen(
-            submit, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-        )
+        proc = subprocess.Popen(submit, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     n = 0
     hold = 0
@@ -264,9 +256,7 @@ def main() -> None:
     ap.add_argument("-m", type=int, default=0)
     ap.add_argument("-r", type=int, default=0)
     ap.add_argument("--interval", type=float, default=5.0)
-    ap.add_argument(
-        "--gif-delay", type=int, default=12, help="GIF frame delay, 1/100 s"
-    )
+    ap.add_argument("--gif-delay", type=int, default=12, help="GIF frame delay, 1/100 s")
     ap.add_argument("--hold", type=int, default=4)
     ap.add_argument("--max-frames", type=int, default=200)
     ap.add_argument("--watch", action="store_true")
@@ -289,7 +279,7 @@ def main() -> None:
         report[theme] = assemble(fs, args.gif_delay / 100, out, work)
 
     prov = {
-        "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "commit": subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True
         ).stdout.strip(),
@@ -326,7 +316,7 @@ def main() -> None:
             f"{r['duration_s']} s, {r['bytes']:,} bytes"
         )
     print("provenance:", prov_json)
-    shutil.rmtree(frames_dir, ignore_errors=True)
+    shutil.rmtree(work + "-frames", ignore_errors=True)
     shutil.rmtree(work, ignore_errors=True)
 
 
