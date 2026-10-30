@@ -121,17 +121,14 @@ wait_workers() {
     exit 1
 }
 
-# cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: just before a job is
-# submitted, appends to DIR/cache.jsonl a "start" row with the state of the
-# kernel's page cache the job begins with, and cache_finish appends an "end"
-# row after it with the disk sectors the host read meanwhile, which is the
-# direct evidence of a cold or warm trial: a warm one reads almost none. The
-# input is written shortly before the first trial and later trials read it
-# from memory when it fits, so trials are warm unless DROP_CACHES=1, which
-# flushes and drops the page, dentry and inode caches first. "Cold" means
-# the kernel's page cache and nothing else. Dropping affects the whole
-# machine, needs root, and stops the experiment if it fails: a run asked to
-# be cold must not be recorded as one. Every trial of one comparison must
+# cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: before submission,
+# appends a "start" snapshot to DIR/cache.jsonl; cache_finish records the
+# corresponding "end" snapshot. The difference in disk_read_sectors can
+# help distinguish warm and cold trials. Without DROP_CACHES=1, the input
+# may remain cached. With it, pending writes are synced and the kernel's
+# page, dentry and inode caches are dropped across the whole machine. This
+# needs root or passwordless sudo and a writable /proc/sys; failure to drop
+# exits before recording the start row. Every trial of one comparison must
 # share a cache state; docs/runbook.md says so.
 cache_prepare() {
     local dropped=false
@@ -152,15 +149,19 @@ cache_prepare() {
     cache_row "$1" start "$2" "$3" "$4" "$5" "$dropped"
 }
 
-# cache_finish DIR EXPERIMENT SETTING PROGRAM RUN: appends the "end" row.
+# cache_finish DIR EXPERIMENT SETTING PROGRAM RUN: appends an "end" snapshot
+# to DIR/cache.jsonl with dropped set to null.
 cache_finish() {
     cache_row "$1" end "$2" "$3" "$4" "$5" null
 }
 
-# cache_row DIR PHASE EXPERIMENT SETTING PROGRAM RUN DROPPED: appends one row
-# of DIR/cache.jsonl. Fields the host cannot report (macOS has no /proc) are
-# null. disk_read_sectors counts whole disks only, so a partition is not
-# counted twice.
+# cache_row DIR PHASE EXPERIMENT SETTING PROGRAM RUN DROPPED: appends a JSON
+# snapshot to DIR/cache.jsonl. DROPPED is the JSON literal true, false or
+# null; input_bytes comes from SIZE. Memory values are in KiB. An unavailable
+# metric is null when no value is read; missing fields in readable data are zero.
+# disk_read_sectors is a cumulative count for whole sd, vd, xvd and nvme
+# disks, excluding partitions and other device names. An append error is
+# returned to the caller.
 cache_row() {
     local mem_free cached dirty ram sectors
     read -r mem_free cached dirty ram < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } $1 == "Dirty:" { d = $2 } $1 == "MemTotal:" { t = $2 } END { print f + 0, c + 0, d + 0, t + 0 }' /proc/meminfo 2>/dev/null) || true
@@ -274,8 +275,10 @@ stop_sampler() {
 # The job uses the current submit_flags; its output directory is removed
 # before submission and after a completed run. Attempts to save cluster logs
 # from before the workers restarted to logs-SETTING-PROGRAM-RUN.log in the
-# experiment's directory.
-# If submission fails, reports its error, attempts to save the logs and exits.
+# experiment's directory. Records a cache start snapshot before submission
+# and an end snapshot after polling finishes, including on failure or timeout.
+# If cache dropping fails, exits before submission. If submission fails,
+# reports its error, attempts to save the logs and exits without an end row.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
@@ -354,7 +357,8 @@ prune_volume() {
 
 # begin EXPERIMENT: starts the experiment's results. Results of an earlier
 # run move to bench/results/previous/, which keeps the last three per
-# experiment; results worth keeping go in bench/evaluation/ (bench/README.md).
+# experiment and reports each older result before deleting it; results worth
+# keeping go in bench/evaluation/ (bench/README.md).
 begin() { # EXPERIMENT
     local dir=bench/results/$1 old=()
     if [ -f "$dir/runs.csv" ]; then
