@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -53,5 +54,39 @@ func TestTempWorkDirReapsDeadWorkers(t *testing.T) {
 		if _, err := os.Stat(dir); !os.IsNotExist(err) {
 			t.Errorf("%s not removed on release: %v", filepath.Base(dir), err)
 		}
+	}
+}
+
+// Workers that start at the same moment each get a work directory that
+// survives the others' sweeps: a sweep may take a new directory's lock
+// between its creation and the owner's locking it, and the owner then makes
+// another.
+func TestTempWorkDirConcurrentStarts(t *testing.T) {
+	parent := t.TempDir()
+	var wg sync.WaitGroup
+	errs := make(chan error, 16*50*2)
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				dir, release, err := tempWorkDir(parent)
+				if err != nil {
+					errs <- err
+					return
+				}
+				if _, err := os.Stat(dir); err != nil {
+					errs <- err
+				}
+				if err := release(); err != nil {
+					errs <- err
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
 	}
 }

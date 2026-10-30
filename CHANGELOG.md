@@ -75,6 +75,9 @@ cut a release.
 ### Fixed
 
 - The CircleCI badge URL (#261).
+- Worker: a starting worker's sweep could delete a new worker's temporary
+  directory, which made it fail with "already locked" (and flaked
+  `internal/e2e`); the lock is now on the directory itself.
 - Bench: `wait_workers` retries when the coordinator is unreachable, instead of
   exiting silently, and saves the logs on a registration timeout (#307).
 
