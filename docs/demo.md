@@ -94,3 +94,38 @@ end with `chaos: 5 runs from seed 1, each with the reference output`.
   `docker logs mapreduce-coordinator-1` and the workers' logs say why.
 - Disk: `df -h /`; the experiments' inputs and outputs live in the Compose
   `output` volume, and `make cluster-down` removes it.
+
+## Recording the README GIFs
+
+`scripts/capture-status-gifs.py` regenerates `docs/assets/status-*.gif` from
+a real job running on the cluster, in the reader's light or dark color
+scheme (the status page's own `?theme=dark` parameter). It captures the
+page's server-rendered refreshes while one whole job runs — a submit's
+start to its last frame, never a looped fragment — and reports frame count,
+duration, dimensions and file size for each variant, plus a
+`<prefix>-provenance.json` sidecar recording the commit, machine, job, input
+and capture settings. A minutes-long job ships as an honest time-lapse:
+consecutive frames are `--interval` seconds apart, the page's own duration
+clock is the visible elapsed-time indicator, and the speed factor (interval
+over GIF frame delay) is in the provenance.
+
+Requirements: a Chrome-family browser (`CHROME` if not in the default
+location), `ffmpeg` and `ffprobe` on `PATH`, and the cluster running, e.g.
+via `make cluster-up` on the course VM or Compose.
+
+```sh
+# words: a 1 GiB web log, word count with 32 maps and 4 reduces (E0-like)
+python3 bench/gen-weblog.py 1073741824 > data/input/capture-1g/access.log
+make upload-example   # or: bin/mr upload data/input/capture-1g /data/input/capture-1g
+scripts/capture-status-gifs.py \
+  --program examples/wordcount.go -m 32 -r 4 \
+  --out data/out/gif-wordcount-1g \
+  --inputs /data/input/capture-1g/access.log \
+  --prefix status-wordcount-1g --assets docs/assets
+```
+
+`--status-url` defaults to the local page, `http://127.0.0.1:18780/`; pass
+it to capture through an SSH-forwarded page. `--watch` (no `--submit`)
+captures a job someone else already submitted. The script refuses a capture
+shorter than 3 frames as a looped fragment; it never synthesizes progress
+values.
