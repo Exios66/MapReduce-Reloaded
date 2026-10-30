@@ -22,6 +22,12 @@
 # new commit was already tested. On main the select job only finishes the
 # pipeline, continuing with an empty config (the orb's finish command sends
 # "version: 2", which CircleCI now rejects).
+#
+# This repository is connected to CircleCI twice: through the GitHub App
+# (pipeline.project.type is "circleci") and through the older OAuth
+# connection ("github"). Both build every push, and branch protection takes
+# the App's results only, so the OAuth connection continues with the empty
+# config too and spends nothing. Remove it in CircleCI when convenient.
 version: 2.1
 setup: true
 orbs:
@@ -34,7 +40,9 @@ jobs:
     steps:
       - unless:
           condition:
-            equal: [main, << pipeline.git.branch >>]
+            or:
+              - equal: [main, << pipeline.git.branch >>]
+              - equal: [github, << pipeline.project.type >>]
           steps:
             - checkout
             - run:
@@ -45,7 +53,9 @@ jobs:
                 parameters: /tmp/ci-params.json
       - when:
           condition:
-            equal: [main, << pipeline.git.branch >>]
+            or:
+              - equal: [main, << pipeline.git.branch >>]
+              - equal: [github, << pipeline.project.type >>]
           steps:
             - checkout
             - continuation/continue:

@@ -45,7 +45,13 @@ the merge base, turns the changed files into six boolean pipeline
 parameters, and continues with `.circleci/continue-config.yml`, which holds
 the jobs.
 
-Filtering applies to PR branches only. A push to `main` runs no CI jobs
+Filtering applies to PR branches only. The repository is connected to
+CircleCI twice, through the GitHub App and through the older OAuth connection,
+and both build every push. Branch protection takes the App's results only, so
+the setup job continues with the empty config when `pipeline.project.type` is
+`github` (the OAuth connection), and the second connection spends one small
+job per push instead of the whole suite. Removing that connection in
+CircleCI ends even that. A push to `main` runs no CI jobs
 (ADR 0021): there the `select` job continues with the empty
 `.circleci/empty-continue-config.yml` instead of selecting, so the pipeline ends after that one small job.
 Branch protection merges a PR only when its six checks passed on a branch up

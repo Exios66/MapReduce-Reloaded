@@ -85,6 +85,11 @@ cut a release.
 
 ### Fixed
 
+- CI: the repository's older CircleCI OAuth connection no longer runs the
+  suite. Both connections built every push, doubling credit use and posting
+  statuses that could land after the GitHub App's; the setup job now
+  continues with the empty config when `pipeline.project.type` is `github`
+  (#318).
 - CI: a push to `main` no longer ends in a config error. The continuation
   orb's `finish` command sends `version: 2`, which CircleCI no longer
   accepts, so `.circleci/config.yml` continues with the empty 2.1
