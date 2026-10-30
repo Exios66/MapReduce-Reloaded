@@ -17,40 +17,38 @@ playing that role on a solo project) cannot see that the checks passed.
 
 ## Decision
 
-- `.github/workflows/ci.yml` runs on every `pull_request`, on pushes to
-  `main` and by hand. It has three jobs, each a set of make targets:
-  - `proto`: `make proto-check` (buf lint, buf breaking against `main`, and
-    a check that the generated code is up to date);
-  - `go`: `make go-lint go-test`, with `golangci-lint` built from source by
-    the module's Go version, as the README requires;
-  - `python`: `make py-lint py-test` on Python 3.11 and 3.13.
-- A newer push to the same branch cancels the run still in progress.
+- CircleCI is the sole CI provider. Its six checks are `proto`, `go`,
+  `python-3.11`, `python-3.13`, `lint` and `mapping-coverage`; see
+  [CI](../ci.md) for their commands and triggers.
+- A newer push to a pull request branch cancels its run still in progress.
 - `make check` and the pre-push hook stay. They catch failures before a
   push, and CI shows the result on the PR.
 - `main` is changed only through pull requests. That is enforced by a branch
   protection rule for `main` (Settings, Branches; rule 85457483, strict
   status checks on since 2026-10-28, settings verified 2026-10-29) that
-  requires a pull request and the four CircleCI checks (see "CircleCI as
-  the primary provider" below), with branches up to date before merging
-  and administrators exempt from the rule.
+  requires a pull request and all six CircleCI checks: `proto`, `go`,
+  `python-3.11`, `python-3.13`, `lint` and `mapping-coverage`, with branches
+  up to date before merging and administrators exempt from the rule.
 
 ## CircleCI as the primary provider (#212)
 
 GitHub-hosted jobs fail on the account lock described below, and every failure
 notifies the owner. `.circleci/config.yml` therefore runs the same gate on
-CircleCI's Free plan, in four jobs named `proto`, `go`, `python-3.11` and
-`python-3.13`. Each job calls the same make targets as the Actions jobs, so the
-two providers cannot disagree about what a check means. [CI](../ci.md) has the
+CircleCI's Free plan, in six jobs named `proto`, `go`, `python-3.11`,
+`python-3.13`, `lint` and `mapping-coverage`. Each job calls make targets;
+the original four call the same ones as the Actions jobs, so the two
+providers cannot disagree about what a check means, and `lint` and
+`mapping-coverage` are CircleCI-only additions for dynamic config (ADR 0020).
+[CI](../ci.md) has the
 jobs, the caches, the Free-plan limits, the setup the owner completes, and
 rollback.
 
-- CircleCI is the only CI. The Actions workflow is kept, runs only by hand
-  (`workflow_dispatch`), and is disabled in the repository's Actions
-  settings, so the billing lock no longer fails a run on every push. Its Go
-  job now installs Python, as the golden tests need it. Actions stay on for
-  the repository.
-- The required checks become the four CircleCI checks, in place of the
-  Actions names `proto`, `go`, `python` above.
+- CircleCI is the only CI. The Actions workflow was first kept, run only
+  by hand (`workflow_dispatch`) and disabled in the repository's Actions
+  settings, so the billing lock no longer failed a run on every push; on
+  2026-10-29 it was deleted (docs/ci.md, Setup, step 5).
+- The required checks are the six CircleCI checks listed in the Decision,
+  in place of the former Actions checks `proto`, `go` and `python`.
 - `make check`, the pre-push hook and `make ci-report` are unchanged.
 - The Compose end-to-end test, the S3 test, the long chaos, fuzz and flaky
   runs and the benchmarks stay on their own targets, outside CI.

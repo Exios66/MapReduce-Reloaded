@@ -240,3 +240,11 @@ CI runs the same targets in four jobs (`proto`, `go`, `python-3.11`,
   the results against the paper's §5.
 - [Runbook](docs/runbook.md) and [demo](docs/demo.md): from SSH to a demo.
 - [`examples/demo.ipynb`](examples/demo.ipynb): the demo in Jupyter.
+- [Security policy](SECURITY.md): the trust model and how to report a
+  vulnerability.
+
+## License
+
+[MIT](LICENSE). The texts in [`testdata/corpus/`](testdata/corpus/README.md)
+are public-domain works in the United States, and the datasets that `scripts/` fetches keep their
+own terms ([data sources](docs/data.md#sources-and-terms)).

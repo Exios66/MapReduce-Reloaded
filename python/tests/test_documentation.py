@@ -199,17 +199,22 @@ def test_current_evaluation_claim_includes_the_last_experiment():
 
 
 def test_ci_documentation_names_the_configured_circleci_checks():
-    config = yaml.safe_load((ROOT / ".circleci/config.yml").read_text())
+    # The jobs live in the continuation config now; .circleci/config.yml is
+    # only the setup config (ADR 0020).
+    config = yaml.safe_load((ROOT / ".circleci/continue-config.yml").read_text())
     jobs = config["workflows"]["ci"]["jobs"]
     configured = {job if isinstance(job, str) else next(iter(job.values()))["name"] for job in jobs}
     ci = (ROOT / "docs/ci.md").read_text()
-    table = ci.split("## The four jobs", 1)[1].split("## Caching", 1)[0]
+    table = ci.split("## The jobs", 1)[1].split("## Implicated-only CI", 1)[0]
     assert set(re.findall(r"^\| `([^`]+)` \|", table, re.M)) == configured
     adr = prose("docs/design/0014-ci-on-pull-requests.md")
     provider = adr.split("## CircleCI as the primary provider", 1)[1]
     named = re.search(r"jobs named (.*?)\. Each job", provider)
     assert named
-    assert set(re.findall(r"\b(?:proto|go|python-\d+\.\d+)\b", named[1])) == configured
+    assert (
+        set(re.findall(r"\b(?:proto|go|python-\d+\.\d+|lint|mapping-coverage)\b", named[1]))
+        == configured
+    )
     requirements = prose("design.md").split("## Key decisions", 1)[0]
     assert "CircleCI runs tests on PRs" in requirements
     assert "Actions run tests on PRs" not in requirements

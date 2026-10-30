@@ -316,7 +316,7 @@ four engineering practices:
   merging a pull request.
 - **CI runs tests on pull requests.** CircleCI (`.circleci/config.yml`) runs
   the `make check` targets on every PR. GitHub's hosted runners fail on the
-  account's billing lock, so the Actions workflow runs only by hand; `make
+  account's billing lock, so the repository has no Actions workflow; `make
   ci-report` can still record a local run on the PR's commit
   ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165, #212).
 - **Many small pull requests.** One concern each, as the roadmap's

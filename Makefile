@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -213,6 +213,13 @@ proto-check: proto-lint proto-breaking proto
 go-test:
 	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
+
+# The Go tests that read python/: cmd/mr's golden comparison with the Python
+# examples, and papermap's check of the Python test names. CI's go job runs
+# only these (with py-e2e) when a PR changes python/ alone; every other Go
+# package passes with python/ removed (docs/ci.md).
+go-python-test:
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./cmd/mr && go test -count=1 ./internal/papermap
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.

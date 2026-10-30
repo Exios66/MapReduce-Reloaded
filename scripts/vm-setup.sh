@@ -30,7 +30,7 @@ esac
 GO_HOME="$HOME/.local/go"
 GO_DL_BASE=${GO_DL_BASE:-https://go.dev/dl}
 VENV="$REPO/python/.venv"
-# The linter make go-lint runs; keep in step with .github/workflows/ci.yml.
+# The linter make go-lint runs; CircleCI's go job reads this pin too.
 GOLANGCI_VERSION=v2.14.0
 # The shell linter make sh-lint runs (#159): a release binary, checked
 # against these SHA-256 sums of its archives.
