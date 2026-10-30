@@ -185,8 +185,10 @@ tag pushes" (Project Settings, Triggers). Each event starts one pipeline:
   one that opening a PR starts.
 - A push to `main` runs only the `select` job, which ends the pipeline
   (ADR 0021).
-- A tag push runs `select`, which finds no changed files against `main`, so
-  all six jobs skip in seconds.
+- A tag push runs `select`, which compares the tagged commit with `main` at
+  their merge base. A tag on a commit already in `main` changes no files, so
+  five jobs skip in seconds and `mapping-coverage` checks that selection. A
+  tag on a commit not yet in `main` runs the jobs its changes select.
 
 Do not add a second trigger. Until 2026-10-29 a separate "Pushes to default
 branch" trigger also matched `main`, so every push to `main` started two
