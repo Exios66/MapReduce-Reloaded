@@ -27,9 +27,11 @@ continuing it. Its steps are two conditional steps on
 
 - `unless` the branch is `main`: check out, run `scripts/ci-params.py`, and
   continue with `.circleci/continue-config.yml`, exactly as before.
-- `when` the branch is `main`: run the continuation orb's `finish` command,
-  which continues the pipeline with an empty configuration. No continuation
-  workflow and no CI job runs.
+- `when` the branch is `main`: check out and continue with
+  `.circleci/empty-continue-config.yml`, an empty version 2.1 configuration.
+  No continuation workflow and no CI job runs. (The orb's `finish` command
+  does the same, but sends `version: 2`, which CircleCI now rejects as end
+  of life.)
 
 A push to `main` therefore costs one small `select` job of a few seconds,
 with no checkout, and produces no other job. PR pipelines are unchanged: the
@@ -47,8 +49,8 @@ six checks.
 - **A filter or a workflow `when` that leaves the setup workflow with no job.**
   CircleCI's documentation requires that a setup config let exactly one
   workflow run per pipeline. It does not say how a pipeline that is never
-  continued ends. The orb's `finish` command is the documented way to end a
-  setup pipeline without running further workflows.
+  continued ends. Continuing with an empty configuration is how the orb's `finish`
+  command ends a setup pipeline without running further workflows.
 
 ## Consequences
 
