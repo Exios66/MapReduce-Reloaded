@@ -1,0 +1,26 @@
+{
+  // Line length is off on purpose: the docs use long lines and wide tables
+  // throughout (92 hits on main), and wrapping them would be churn, not clarity.
+  // Issue references (#NN) are not headings, so MD018 is off: it flags every
+  // "#35" style reference in lists. Bold labels are used as subheads in the
+  // roadmap, so MD036 is off. Tabs inside fenced code blocks are correct Go
+  // formatting, so MD010 ignores code blocks.
+  // Note: allowed_elements takes a comma-separated string, not a list.
+  "plugins": {
+    "md013": {
+      "enabled": false
+    },
+    "md018": {
+      "enabled": false
+    },
+    "md033": {
+      "allowed_elements": "picture,sub,img"
+    },
+    "md036": {
+      "enabled": false
+    },
+    "md010": {
+      "code_blocks": false
+    }
+  }
+}

@@ -2,7 +2,8 @@
 
 Scripts that measure the cluster. Each one runs on the Compose cluster and
 writes its raw results to `bench/results/`, which git ignores. The numbers
-below are copied from a run, with the machine it ran on.
+below are copied from a run, with the machine it ran on. Rule: every results
+table names its machine, in the text above it or in its caption.
 
 The [10 GB campaign plan](10gb-paper-run.md) records scope, VM handover and
 storage prerequisites. Its [evidence](evaluation/10gb/README.md) is published
@@ -107,10 +108,11 @@ from map to reduce tasks, and the rate at which reduce tasks write output
 - [`scrape-metrics.py`](scrape-metrics.py) `INTERVAL DURATION URL...`
   fetches each worker's `/metrics` every INTERVAL seconds and writes its byte
   counters to stdout as CSV.
-- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png]` sums the counters
+- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png [TITLE]]` sums the counters
   over the workers and differentiates them between samples. It writes the
   input, shuffle and output rates in MB/s as CSV, or, given `OUT.png`, draws
-  them in three panels as the paper does. Drawing needs matplotlib.
+  them in three panels as the paper does, with TITLE (program, size, M, R,
+  commit) as an identification line. Drawing needs matplotlib.
 
 Workers count input and output bytes as each task ends, so those two rates
 rise in steps of whole tasks. The shuffle is counted as it is fetched.
@@ -160,10 +162,10 @@ Compose cluster, through [`run.sh`](run.sh):
   - The CSV also has `wall_seconds`, the time of `mr submit -wait`, which
     adds about a second to start its container.
 
-Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
+**Development-machine results — not the course VM.** Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
 Docker 29.9.1, 4 workers. This was a development machine, not the course
 VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
-([the VM](../docs/cluster-vm.md#the-vm)). Time is the median of three runs, with the range.
+([the VM](../docs/cluster-vm.md#the-vm)). Time is the median of three runs, with the range. Each results section in this file identifies its machine; do not compare development-machine numbers with course-VM numbers.
 
 | Job | Codec | Bytes shuffled | vs none | Time (s) |
 |---|---|---:|---:|---|
@@ -173,6 +175,8 @@ VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
 | distsort | none | 68,353,231 | 1.00 | 2.25 (1.98–2.37) |
 | distsort | zstd | 31,892,233 | 0.47 | 2.40 (2.22–2.58) |
 | distsort | snappy | 51,049,537 | 0.75 | 2.28 (2.23–2.34) |
+
+<sub>Table: codec results on the development machine (4 vCPUs, Intel Xeon 2.1 GHz, 16 GB), 2026-10-24, not the course VM.</sub>
 
 What the numbers show:
 
@@ -252,6 +256,12 @@ succeeded, and every run's output matched the normal run's checksum.
 ```sh
 python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 ```
+
+That also draws `E2-comparison.png` (and `-dark`) from two directories: the
+no-straggler rows from `E2-pairs/` and the straggler rows from `E2/`; the
+image's subtitle says so. The two rates plots in `evaluation/paper/` were drawn
+from their `samples.csv` with `plot-rates.py`, whose third argument is the
+identification line in the image.
 
 Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1 and E4 ran at commit `4b5a235`, and E2 again at `ca082a3` and `162be31` (below); E3 ran again at `9a3cd42`, after
 its rate plot was found to mark the kill about 8 s too early (the workers
@@ -439,3 +449,47 @@ record the offset between those two clocks.
   downloads the ten pinned Common Crawl WET files; `bench/gen-crawl.py`
   writes their English pages or every page. The book is War and Peace's
   lines repeated (`bench/gen-book.py`).
+
+## E7: the paper's backups against LATE on mixed-speed workers (#59, not yet run)
+
+E2 slows one worker. E7 slows all four, each to a different speed, which is
+what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for. It
+is wired but has not been run: there are no results here, and nothing in
+this repository says which setting is faster.
+
+| Setting | Coordinator | Compose files |
+|---|---|---|
+| `mixed-paper` | `-speculation=paper` (the default): the oldest attempt, once nothing is idle (§3.6) | `compose.yaml` |
+| `mixed-late` | `-speculation=late` | `compose.yaml`, [`speculation-late.yaml`](../deploy/compose/speculation-late.yaml) |
+| `mixed-off` | `-backups=false` | `compose.yaml`, [`backups-off.yaml`](../deploy/compose/backups-off.yaml) |
+
+- **Workload.** `distsort` on 1 GiB with M = 32 and R = 4, as E2, on four
+  workers. After each setting's cluster starts, `docker update --cpus`
+  gives the workers `E7_CPUS`, one value for each in the order `docker
+  compose ps` lists them: `1 0.6 0.3 0.15` by default, 2.05 CPUs in all.
+  The limits go back to 1 after each run, and on any exit.
+- **Order.** The three settings take turns within each repeat, reversed on
+  even repeats, as in E2.
+- **Output.** `bench/results/E7/runs.csv`, in the format of the other
+  experiments, with `backups` and `backups_won` from the job's status;
+  `tasks-SETTING-N.csv` (the coordinator's task counts over time, as E2's);
+  and `machine.json`. Output is checksummed against the first run, and a
+  run that differs has `valid` 0.
+- **Not in `all`,** and `plot-experiments.py` does not draw it yet. For the
+  job time, backups started and backups won of each valid run:
+
+  ```sh
+  bench/experiments.sh E7
+  awk -F, 'NR > 1 && $16 == 1 { print $2, $11, $13, $14 }' bench/results/E7/runs.csv | sort
+  ```
+
+- **Knobs.** `E7_SETTINGS="mixed-late mixed-off"` runs some settings; an
+  unknown one stops the script before it starts the cluster. `E7_CPUS`
+  must hold four positive numbers. `SIZE`, `M`, `R` and `REPEAT` work as in
+  the other experiments.
+- **What it can show.** With four workers LATE allows one running backup at
+  a time and refuses the slowest worker, so this tests a small cluster; it
+  says nothing about 1,800 machines. The LATE settings are the defaults of
+  ADR 0019, not tuned.
+- `python/tests/test_bench_experiments.py` checks the settings, the
+  overrides and the CPU limits with the cluster and Docker stubbed out.

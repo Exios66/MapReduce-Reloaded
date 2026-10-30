@@ -27,7 +27,7 @@ R regions) and §4.4 (input and output types).
 
 ## Layout
 
-```
+```text
 file   := header block* footer
 header := magic version codec reserved
 block  := stored_len record_count checksum payload
@@ -54,11 +54,12 @@ footer := end_marker total_records block_count footer_checksum
 
 Once decompressed, the payload is `record_count` records back to back:
 
-```
+```text
 record := uvarint(len(key)) key uvarint(len(value)) value
 ```
 
 Rules:
+
 - Keys and values are arbitrary bytes. Either may be empty.
 - **A record never spans two blocks.**
 - Writers append each record to the current block, then close the block once
@@ -94,6 +95,7 @@ No bytes may follow the footer.
 | 2 | snappy | The payload is in Snappy's block format, without the framing format |
 
 Rules:
+
 - One codec applies to every block in the file.
 - The block rules above apply to the decompressed payload: a block closes
   once 64 KiB of records are in it, and holds at most 64 MiB of them.
@@ -121,6 +123,7 @@ Readers reject codec IDs they don't support as `unsupported_codec`.
 Each job chooses its codecs (#42), by name: `none`, `zstd` or `snappy`.
 `mr run` and `mr submit` set them with flags; Python's local mode has no
 codec setting, so its jobs write uncompressed files.
+
 - `JobSpec.intermediate_codec` (`-intermediate-codec`) applies to the map
   output and the external sort's spill files.
 - `JobSpec.output_codec` (`-output-codec`) applies to output files, and
@@ -143,14 +146,14 @@ although reduce output is sorted in practice (§4.2).
 A map task writes each record to one of R partitions, one per reduce task.
 The default partition of a key is (§3.1, §4.1):
 
-```
+```text
 partition(key, R) = fnv1a64(key) mod R        R ≥ 1
 ```
 
 `fnv1a64` is the 64-bit FNV-1a hash over the key's **raw bytes**. All
 arithmetic is on unsigned 64-bit integers and wraps around (mod 2^64):
 
-```
+```text
 h = 0xcbf29ce484222325            # offset basis
 for each byte b of key:
     h = h XOR b
@@ -202,7 +205,7 @@ all-or-nothing behaviour must wait for the footer before trusting the file.
 
 One record, key `"hello"`, value `"1"`, no compression:
 
-```
+```text
 4D 52 4B 56 01 00 00 00     header: "MRKV", version 1, codec 0, reserved
 08 00 00 00                 block: stored_len = 8
 01 00 00 00                        record_count = 1

@@ -1,10 +1,13 @@
 """Tests for the coordinator's status page and metrics, ported from
 go/internal/statusweb/statusweb_test.go, and for Server.status."""
 
+import json
+import re
 import socket
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 from test_coordinator_server import Aborted, Coordinator, write
@@ -64,8 +67,12 @@ STATUS = Status(
         _job(job_id="job-3", state=coordinator_pb2.JOB_STATE_SUCCEEDED),
     ],
     workers=[
-        WorkerStatus(Worker("w2", types_pb2.WorkerInfo(host="host-b"), AT), [M0]),
-        WorkerStatus(Worker("w3", types_pb2.WorkerInfo(), AT), []),
+        WorkerStatus(
+            Worker("w2", types_pb2.WorkerInfo(host="host-b", zone="zone-x", slots=4), AT - 3),
+            [M0],
+            {M0: 0.426},
+        ),
+        WorkerStatus(Worker("w3", types_pb2.WorkerInfo(), 0.0), [], {}),
     ],
     lost=[LostWorker("w1", AT, [M0])],
 )
@@ -109,15 +116,112 @@ def test_page(get):
         "w3",
         "w1",
         str(M0),
+        f"{M0}</span> 43%<br>",
         "&lt;script&gt;",
         "prefers-color-scheme: dark",
+        'id="job-job-1"',
+        'href="#job-job-1"',
+        "local maps: host <b>5</b>, zone <b>2</b>",
+        "zone-x",
+        "1/4",
+        "3s ago",
     ]:
         assert want in body, want
-    assert "<script>" not in body
+    assert body.count("<script") == 1, "only the page's own script, not the job's error"
     assert "<body>" in body
     assert '<body class="dark">' in get("/?theme=dark")[2]
     assert get("/?refresh=1")[0] == 200
     assert get("/nope")[0] == 404
+
+
+def _style(html_text):
+    """The page's <style> block with all whitespace removed."""
+    block = re.search(r"<style>(.*?)</style>", html_text, re.S).group(1)
+    return re.sub(r"\s+", "", block)
+
+
+def test_css_matches_go_page(get):
+    """Both pages carry the same stylesheet, so they look the same."""
+    go = (Path(__file__).parents[2] / "go/internal/statusweb/status.html").read_text()
+    assert _style(get("/")[2]) == _style(go)
+
+
+def test_page_is_self_contained(get):
+    """The page loads nothing: its one script is inline, so it works offline."""
+    body = get("/")[2].replace("&lt;script&gt;", "")
+    for bad in ["http://", "https://", "@import", "<link", "<img", "src="]:
+        assert bad not in body, bad
+    assert body.count("<script>") == 1 and body.count("<script") == 1
+    assert '<noscript><meta http-equiv="refresh"' in body
+
+
+def test_script_matches_go_page(get):
+    """Both pages carry the same script."""
+    go = (Path(__file__).parents[2] / "go/internal/statusweb/status.html").read_text()
+
+    def script(text):
+        return re.sub(r"\s+", "", re.search(r"<script>(.*?)</script>", text, re.S).group(1))
+
+    assert script(get("/")[2]) == script(go)
+
+
+JOB_KEYS = (
+    "id state error map_completed map_total reduce_completed reduce_total backup_attempts "
+    "backup_wins map_host_local map_zone_local counters submitted_at finished_at "
+    "duration_seconds"
+).split()
+
+
+def test_status_json(get):
+    """/status.json has the keys the Go server's has, and the page's numbers."""
+    code, headers, body = get("/status.json")
+    assert code == 200 and headers["Content-Type"] == "application/json"
+    doc = json.loads(body)
+    assert sorted(doc) == ["at", "jobs", "lost", "workers"]
+    assert sorted(doc["jobs"][0]) == sorted(JOB_KEYS)
+    assert sorted(doc["workers"][0]) == sorted(
+        ["id", "host", "zone", "slots", "last_seen", "running"]
+    )
+    assert sorted(doc["workers"][0]["running"][0]) == ["progress", "task"]
+    assert sorted(doc["lost"][0]) == ["at", "id", "tasks"]
+    j1, j2, j3 = doc["jobs"]
+    assert (j1["id"], j1["state"], j1["map_completed"], j1["map_total"]) == (
+        "job-1",
+        "mapping",
+        3,
+        7,
+    )
+    assert j1["duration_seconds"] == 2.5 and j2["duration_seconds"] == 90
+    assert j3["duration_seconds"] is None and j3["submitted_at"] is None
+    assert j2["backup_wins"] == 1 and j2["map_zone_local"] == 2
+    assert doc["workers"][0]["running"][0]["task"] == str(M0)
+    assert doc["workers"][1]["last_seen"] is None
+
+
+def _luminance(hex_color):
+    """WCAG relative luminance of #rrggbb."""
+    if len(hex_color) == 4:
+        hex_color = "#" + "".join(c * 2 for c in hex_color[1:])
+    chans = [int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    r, g, b = (c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in chans)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_text_colours_are_readable(get, scheme):
+    """Muted text and the state colours reach WCAG AA (4.5:1) on the panel."""
+    css = re.search(r"<style>(.*?)</style>", get("/")[2], re.S).group(1)
+    block = (
+        re.search(r":root \{(.*?)\}", css, re.S)
+        if scheme == "light"
+        else re.search(r"prefers-color-scheme: dark\) \{\s*:root \{(.*?)\}", css, re.S)
+    ).group(1)
+    colours = dict(re.findall(r"--([a-z]+): (#[0-9a-f]{3,6})", block))
+    panel = _luminance(colours["panel"])
+    for name in ["text", "muted", "blue", "green", "red", "purple"]:
+        lum = _luminance(colours[name])
+        ratio = (max(lum, panel) + 0.05) / (min(lum, panel) + 0.05)
+        assert ratio >= 4.5, f"{scheme} {name}: {ratio:.2f}"
 
 
 def _fetch(url):

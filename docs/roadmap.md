@@ -4,10 +4,10 @@ The full design and phased plan for MapReduce-Reloaded. Feature IDs (F1–F24)
 are tracked in [paper-mapping.md](paper-mapping.md). Each unit of work is a
 GitHub issue, labelled by phase and numbered in the order it should be done.
 
-**Status.** Phases 0–4 are done: every paper feature F1–F23 runs in Go and
-has a test, and so are #41 and #42 (Phase 6 Tier A). Phase 7's benchmarks
-and evaluation (#57, #58) are done; the course deliverables below and the
-final report (#60) remain. Where the build departed
+**Status.** Phases 0–4 and Phase 7 are done: F1–F23 run in Go and have
+tests; F24 is covered by the Phase 7 evaluation harness. #41 and #42
+(Phase 6 Tier A) are also done. Phase 7's benchmarks
+and evaluation (#57, #58) and the final report (#60) are done; the course deliverables below remain. Where the build departed
 from this plan, [design.md](../design.md) lists the differences from the paper
 and why.
 
@@ -28,7 +28,8 @@ Work still due by Nov 16, each a small pull request reviewed by an AI agent
 before it merges ([design.md](../design.md#process)):
 
 1. **Deployment:** four workers limited to one CPU each; the VM described
-   as 4 vCPUs, 8 GB and a 35 GB disk ([cluster VM](cluster-vm.md)).
+   as 4 vCPUs, 8 GB and a 35 GB disk (33 GB root, shared;
+   [cluster VM](cluster-vm.md), the source of truth).
 2. **CI on pull requests** ([ADR 0014](design/0014-ci-on-pull-requests.md)).
 3. **Shared storage:** `data/` bind-mounted at `/data`; `make data`,
    `make upload-example`
@@ -53,7 +54,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
 
 ## Context
 
@@ -66,8 +67,8 @@ possible, then extend them for modern infrastructure and modern use cases.
   the network. The cluster runs locally with Docker Compose and can optionally
   be deployed to Kubernetes.
 - **Languages:** Go is the primary implementation. Python is the
-  reference implementation of the API, the file format and local mode; a
-  Python coordinator and worker are stretch work (#35–#39). The original system was C++; see
+  reference implementation of the API, the file format and local mode, and it
+  also has a coordinator server (done, #36); a Python worker is stretch work (#37). The original system was C++; see
   [ADR 0001](design/0001-languages-and-shared-contract.md) for why we use Go
   and Python instead.
 - **Key architectural idea:** both languages share one contract:
@@ -86,20 +87,22 @@ week-by-week schedule and a plain-language walkthrough, is in
 [roadmap-explained.md](roadmap-explained.md). In short:
 
 - **In scope:**
-  - Phases 0–4: every paper feature, F1–F23, in Go (done);
+  - Phases 0–4: every paper feature, F1–F23, in Go (done), plus F24 with Phase 7;
   - the Python halves of #5 and #8–#12: file format, hash, formats, sort,
     combiner and local mode;
   - #41 S3 storage and #42 compression;
   - #57 and #58: benchmarks and the paper's §5 experiments;
   - #60: the final report.
 - **Stretch** (issues kept open with a `[stretch]` prefix):
-  - #35–#39: Python distributed parity;
+  - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
-  - #59: evaluation of the extensions.
-- **Cluster host:** the course VM (Ubuntu 24.04, 4 vCPUs, 8 GB RAM, 35 GB disk). The whole
+  - #59: evaluation of the extensions. LATE (#284, tracked in #45) is built; its experiment
+    E7 is wired and has not been run.
+- **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk with a 33 GB root, shared). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
-  [cluster-vm.md](cluster-vm.md).
+  [cluster-vm.md](cluster-vm.md), the single source of truth for the VM's
+  specification.
 
 ## Development process
 
@@ -155,6 +158,7 @@ Each item maps to a paper section and will get a test.
 Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 
 **Tier A — infrastructure (2004 → 2026)**
+
 - **Pluggable storage** instead of GFS: local FS, **S3-compatible object storage** (VersityGW in Compose), and optionally GCS/Azure. The `Storage` interface handles listing, ranged reads and atomic commit.
 - **gRPC + protobuf** instead of the custom RPC layer. Supports streaming shuffle, deadlines and retries.
 - **Containers**: Docker images for the coordinator and worker, `docker-compose.yml` for a local cluster, and a Helm chart/manifests for Kubernetes.
@@ -162,8 +166,9 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 - **Compression** (zstd/snappy) for intermediate and output files, plus checksums (CRC32C) on every block.
 
 **Tier B — robustness and operations**
+
 - **Coordinator high availability**: leader election via an etcd lease, or embedded Raft (`hashicorp/raft`). This builds on the F9 WAL.
-- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold.
+- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); its evaluation is pending in #59 (experiment E7, not yet run).
 - **Skew handling**: sample-based range partitioner (TeraSort-style) and hot-key salting.
 - **Memory-aware spilling**: a bounded sort buffer that spills to disk under memory pressure.
 - **Observability**: Prometheus metrics, OpenTelemetry traces, structured JSON logs. A React or HTMX UI replaces the static status page.
@@ -171,6 +176,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 - **Autoscaling**: Kubernetes horizontal pod autoscaling (HPA) or KEDA, scaled on the queue depth of pending tasks.
 
 **Tier C — flexibility (fits modern workloads)**
+
 - **Multi-language user-defined functions (UDFs)**: Go native; Python via a worker subprocess speaking the shared proto ("streaming" mode, like Hadoop Streaming but typed); optional WASM UDFs for sandboxing.
 - **Columnar formats**: Parquet/Arrow input and output, and JSON Lines.
 - **Job DAGs / pipelines**: chain jobs (`map→reduce→map→reduce`) with a typed Python/Go builder API. This is a lightweight step toward Spark/Beam.
@@ -181,7 +187,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 
 ## 3. Architecture
 
-```
+```text
             ┌──────────── mr CLI / REST / Python SDK ────────────┐
             ▼                                                     │
    ┌──────────────────┐        WAL        ┌───────────────┐       │
@@ -211,7 +217,7 @@ or an S3-compatible store (#41), every worker is Go, and the UDF host is Phase 5
 
 ## 4. Repository layout
 
-```
+```text
 MapReduce-Reloaded/
 ├── design.md                    # key decisions; one job's lifecycle; differences from the paper
 ├── proto/mapreduce/v1/          # coordinator, shuffle, types, log .proto  ← shared contract
@@ -242,7 +248,7 @@ MapReduce-Reloaded/
 └── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
 
-`tests/interop/` (Phase 5) does not exist yet; `bench/` came with #57.
+`tests/interop/` (Phase 5) does not exist yet; the Python-coordinator interop coverage that does exist lives in `python/tests/test_coordinator_e2e.py` (`make py-e2e`). `bench/` came with #57.
 
 ---
 
@@ -251,37 +257,45 @@ MapReduce-Reloaded/
 Each phase ends in a runnable, tested state.
 
 **Phase 0 — Foundations (about 1 week)**
+
 - Write `proto/` messages and services: `Task`, `TaskKind`, `TaskState`, `RequestTask`, `ReportTask`, `Heartbeat`, `FetchPartition` (server-stream), `SubmitJob`, `JobStatus`, `Counters`.
 - Write `docs/file-format.md`: length-prefixed `(key, value)` records with block CRC32C and optional compression. Both languages must read and write it identically.
 - Set up the Go module and Python package skeletons, the Makefile (`buf` or `protoc` codegen), and the local quality gate (`make check` plus a pre-push hook: buf lint and breaking checks, generated-code freshness, go test, pytest, ruff, golangci-lint).
 
 **Phase 1 — Sequential core + local mode (F1, F15–F17, F20)**
+
 - Public API in both languages, plus text/kv input formats and the external merge sort.
 - `mr run --local wordcount input/ out/`: the whole pipeline in one process. This mode is the **correctness oracle** for every later phase.
 
 **Phase 2 — Distributed core (F2–F7, F10, F12, F14)**
+
 - Coordinator task table and scheduler; workers pull tasks; map partitions spill to local disk; the shuffle server streams partitions; reducers fetch, merge and reduce; atomic rename commit.
 - Run with Docker Compose: 1 coordinator and 4 workers on a shared volume.
 
 **Phase 3 — Fault tolerance (F8, F9, F13, F18, F19, F22)**
+
 - Heartbeats with timeouts, map re-execution on worker loss; reduce attempts get the new locations.
 - Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
-- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs, broken fetches, a torn log tail, a clock set back, full disks, bad records and S3 commit failures too (#155). Driving the same faults against the Compose cluster is #29.
+- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs, broken fetches, a torn log tail, a clock set back, full disks, bad records and S3 commit failures too (#155). Driving the same faults against the Compose cluster is #29. Dropped-packet fault injection is out of scope (#287).
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
+
 - Locality-aware scheduling, the status web UI, Prometheus `/metrics`, and all paper example programs.
 - `docs/paper-mapping.md` complete: every row F1–F24 linked to code and tests (F24 with Phase 7).
 
 **Phase 5 — Python parity & interop**
-- Finish the Python coordinator and worker.
+
+- Finish the Python worker (the coordinator is done, #36).
 - Python UDF host for Go workers (subprocess over stdio, using the proto framing).
 - Interop matrix in `tests/interop/`: {Go, Py} coordinator × {Go, Py} worker × {Go, Py} UDF, all byte-identical to local mode.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
-- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
+
+- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
+
 - Reproduce the paper's §5 experiments at small scale:
   - grep over about 10 GB, plotting input rate over time;
   - sort (TeraSort-style), comparing normal, no-backup-tasks, and "200 tasks killed" runs, as in the paper's Figure 3.

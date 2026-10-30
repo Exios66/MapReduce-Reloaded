@@ -3,7 +3,7 @@
 `make check` runs everything that needs no Docker: code generation checks,
 lint, the Go tests under the race detector, the Python tests, and the
 coverage floors. CI runs the same targets on every pull request, split into
-four jobs ([CI](ci.md)); `make ci-report` posts the VM's run as a commit
+six jobs ([CI](ci.md)); `make ci-report` posts the VM's run as a commit
 status when no hosted service is available (ADR 0014). The other kinds of
 test below are run by hand or by their own target, and CI runs none of the
 rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
@@ -39,13 +39,15 @@ runs the tests and prints each package's coverage beside its floor.
 
 Measured on 2026-10-29:
 
-- Go: 89.8% of 3,003 statements in 31 checked packages. The lowest are
-  `cmd/worker` (85.6%), `internal/wal` (86.0%), `cmd/coordinator` (86.1%)
+- Go: 90.3% of 3,150 statements in 31 checked packages. The lowest are
+  `cmd/worker` (85.6%), `internal/wal` (86.0%), `cmd/coordinator` (86.8%)
   and `cmd/mr` (87.7%). Unchecked: the generated protobuf code, the S3 test
   server, `examples/internal/run` (a test helper) and `examples/wordcount`,
   which the cluster, local and golden tests run as their reference.
-- Python: 100% of 2,042 statements in 5 checked packages, the generated
-  protobuf code left out.
+- Python: 99.8% of 2,172 statements in 5 checked packages, the generated
+  protobuf code left out. The four lines missed are the IPv6 listener in
+  `coordinator/statusweb.py`, which `test_serve_ipv6` reaches only on a host
+  with an IPv6 loopback address.
   `tests/test_edges.py` covers the last error paths: the MRKV writer's
   `MAX_BLOCK_SIZE` checks, a bad Snappy length prefix, a write that
   accepts no bytes, and others.

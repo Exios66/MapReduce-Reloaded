@@ -20,9 +20,15 @@ seconds,input,shuffle,output, one row per interval between samples, at the
 interval's end. With OUT.png it draws them in three panels, one above the
 other, as the paper does; that needs matplotlib.
 
-Usage: python3 bench/plot-rates.py SAMPLES.csv [OUT.png] [--restart-dir RUN_DIR]
+With a TITLE after OUT.png, the chart carries it as an identification
+line (program, input size, M, R, commit), so the image is readable apart
+from the page that embeds it. Only the annotation changes: the plotted
+rates are the same with or without it.
+
 The campaign's recorded restart resets its worker's series even when the
 first observed new counter exceeds the last old counter.
+
+Usage: python3 bench/plot-rates.py SAMPLES.csv [OUT.png [TITLE]] [--restart-dir RUN_DIR]
 """
 
 import argparse
@@ -30,6 +36,7 @@ import csv
 import json
 import sys
 from pathlib import Path
+import textwrap
 
 METRICS = {
     "input": "mr_worker_map_input_bytes_total",
@@ -77,7 +84,14 @@ def rates(rows, restart=None):
     return times, series
 
 
-def plot(seconds, series, path):
+# The light theme of bench/plot-experiments.py, so a rates plot reads as
+# part of the same figure set: text in ink tokens, hairline recessive axes
+# and grid, one series color per panel.
+SURFACE, INK, INK2, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9", "#c3c2b7"
+SERIES = {"input": "#2a78d6", "shuffle": "#eb6834", "output": "#1baf7a"}
+
+
+def plot(seconds, series, path, title=None):
     if len(seconds) < 2:  # no interval to draw, as when no worker answered
         print("plot-rates: fewer than two samples; no chart drawn", file=sys.stderr)
         return
@@ -86,21 +100,47 @@ def plot(seconds, series, path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(len(series), 1, sharex=True, figsize=(6, 6))
+    # A long title wraps instead of running past the figure's edge; each
+    # line adds height, so the panels keep their size.
+    lines = textwrap.wrap(title, 68) if title else []
+    height = 6 + (0.3 + 0.2 * len(lines) if lines else 0)
+    fig, axes = plt.subplots(len(series), 1, sharex=True, figsize=(6, height), facecolor=SURFACE)
     for ax, (rate, values) in zip(axes, series.items(), strict=True):
+        ax.set_facecolor(SURFACE)
         # Each rate is an average over the interval between two rounds.
-        ax.stairs(values, seconds)
-        ax.set_ylabel(f"{rate.capitalize()} (MB/s)")
+        ax.stairs(values, seconds, color=SERIES[rate], linewidth=1.5, zorder=3)
+        ax.set_ylabel(f"{rate.capitalize()} (MB/s)", color=INK2)
         ax.set_ylim(bottom=0)
-    axes[-1].set_xlabel("Seconds")
-    fig.tight_layout()
-    fig.savefig(path)
+        ax.grid(color=GRID, linewidth=1, zorder=0)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="both", color=AXIS, labelcolor=INK2)
+        for side, spine in ax.spines.items():
+            spine.set_visible(side in ("left", "bottom"))
+            spine.set_color(AXIS)
+    axes[-1].set_xlabel("Seconds", color=INK2)
+    if lines:
+        fig.text(
+            0.012,
+            1 - 0.1 / height,
+            "\n".join(lines),
+            ha="left",
+            va="top",
+            fontsize=10,
+            weight="bold",
+            color=INK,
+            linespacing=1.4,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 1 - (0.25 + 0.2 * len(lines)) / height))
+    else:
+        fig.tight_layout()
+    fig.savefig(path, facecolor=SURFACE)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("samples")
     parser.add_argument("output", nargs="?")
+    parser.add_argument("title", nargs="?")
     parser.add_argument("--restart-dir", type=Path)
     args = parser.parse_args()
     restart = None
@@ -114,7 +154,7 @@ def main():
     with open(args.samples, newline="") as f:
         seconds, series = rates(csv.DictReader(f), restart)
     if args.output is not None:
-        plot(seconds, series, args.output)
+        plot(seconds, series, args.output, args.title)
         return
     out = csv.writer(sys.stdout, lineterminator="\n")
     out.writerow(["seconds", *METRICS])

@@ -25,19 +25,29 @@ E2, E3 and E6 are the course evaluation in
 [bench/README.md](../bench/README.md#evaluation-e0e6), each the median of
 three runs.
 
+Provenance of the machine. The E-series directories each hold a
+`machine.json`, written by `bench/experiments.sh`. The grep and sort
+directories predate it. They record the machine inside `result.json`, which
+`bench/run.sh` writes: CPU count and model, memory, kernel and Docker
+version, which match the VM table in [cluster VM](cluster-vm.md#the-vm).
+That block does not say which host it was. That these two runs were on the
+course VM comes from the context of the runs, not from a record. No
+`machine.json` was added for them afterwards.
+
 A separate [decimal-10-GB campaign](../bench/evaluation/10gb/README.md)
 started on 2026-10-30: the E0–E5 controls at approximately ten times the
 1 GiB evaluation, each setting repeated three times on the same generated
-formats and Zipf skew. It is not yet complete. Completed and accepted so
-far: nine grep trials at exactly 100M records/10,000,000,000 bytes (median
-16.016 s on four workers). A full-size compressed-KV sort pilot calibrated at
-262.453 s (160/160 maps, 8/8 reduces, 100M verified output records), but a
-later sort job OOM-killed a worker at 765 MiB of the 768 MiB cap. That pilot
-is therefore excluded from final evidence; the final sort cohort uses
-1,024 MiB per worker and is being recalibrated and rerun. Native uncompressed
-sort is capacity-blocked on the VM's one 35 GB disk; admitted sort is the
-explicitly labeled zstd-KV input/intermediate/output variant. A later
-campaign table replaces none of the historical rows above.
+formats and Zipf skew. Complete: nine grep trials at exactly 100M
+records/10,000,000,000 bytes and the 39-trial whole-line sort matrix
+(medians 636.7 s at 1 worker, 336.2 s at 2 and 190.6 s at 4; straggler
+275.8 s with backups against 302.1 s without; permanent worker loss
+236.8/239.6/268.7 s at 25/50/75% against a 208.8 s normal). Nine
+paper-format (`papersort`) trials complete: 204.2 s normal, 182.9 s without
+backups, 221.1 s with an immediate worker restart. The 36-trial word-count
+cohort is running. Native uncompressed sort is capacity-blocked on the
+VM's one 35 GB disk; admitted sort is the explicitly labeled zstd-KV
+input/intermediate/output variant. A later campaign table replaces none of
+the historical rows above.
 
 E6 repeats §4.3's combiner measurement on real text at 1 GiB. On crawled
 English the combiner cut the bytes shuffled 5.2× and the job time 14%; on
@@ -123,7 +133,10 @@ The sort's scaling over 1, 2 and 4 workers is E0: 36.7 s, 20.4 s and
 
 ## Backup tasks (§5.4)
 
-<img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png" width="480">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E2-comparison-dark.png">
+  <img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png" width="480">
+</picture>
 
 The paper turned backup tasks off for the same sort and it took 1,283 s
 instead of 891 s, 44% longer: the last 5 reduce tasks straggled and took
@@ -144,7 +157,10 @@ and with no straggler:
 The straggler rows are medians of three runs; the others, of ten pairs of
 runs taken in turn ([bench/README.md](../bench/README.md#e2-backup-tasks-and-a-straggler)).
 The chart uses these same measurements: the no-straggler rows from
-`bench/evaluation/E2-pairs/` and the straggler rows from `bench/evaluation/E2/`.
+`bench/evaluation/E2-pairs/` and the straggler rows from `bench/evaluation/E2/`,
+which is why it differs from `E2.png` (that one draws only the main E2 runs,
+where no-straggler with backups on is 9.1 s). The image says so in its
+subtitle, and `bench/plot-experiments.py` redraws it from both directories.
 The saved `straggler-backups` trials ran as one block, followed by the
 `straggler-no-backups` block, so the +56% estimate is not drift-controlled.
 The current harness alternates settings, but that order does not apply to
@@ -154,7 +170,7 @@ these saved straggler rows.
   slow worker's last tasks and takes 56% longer, close to the paper's 44%,
   subject to the run-order limitation above.
 - **With no straggler, no statistically significant cost was found.** Backups still run,
-  5 or 6 a job, and none win: with as many reduce tasks as workers, a
+  4 to 6 a job, and none win: with as many reduce tasks as workers, a
   worker that finishes its reduce task has nothing left to do, so it backs
   up another. Over ten pairs the mean difference is -0.11 s, with a 95%
   interval of -0.38 to +0.16 s, allowing a mean cost of up to 0.16 s.
@@ -167,6 +183,10 @@ these saved straggler rows.
 ## Machine failures (§5.5)
 
 <img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png" width="480">
+
+The rates panel's "worker lost" band is on the sampling clock and the kill
+times are on the submission clock; the saved data does not record the offset
+between them, so the band's position is approximate against the kill times.
 
 The paper killed 200 of 1,746 workers a few minutes into the sort. The
 cluster restarted them, the lost map work ran again, and the job took
@@ -197,6 +217,31 @@ are not drift-controlled.
 - **Killed late, it costs most.** At 75% the worker has finished most of its
   map tasks, and their output is on its disk, so they all run again before
   the reduce phase can finish.
+
+## Paper vs LATE on mixed-speed workers (#59) — not yet run
+
+E2 makes one worker slow. [ADR 0019](design/0019-late-speculation.md) adds
+LATE, which picks the task to back up by its estimated time left and keeps
+backups off slow workers, and it is meant for workers of different speeds.
+E7 compares the paper's rule, LATE and no backups with all four workers
+throttled to different CPU limits (1, 0.6, 0.3 and 0.15 by default). It has
+not been run, so there is no result here: no claim that LATE is faster, or
+that it is not.
+
+To run it on the VM (needs Docker; about 3 GiB of disk, as E2):
+
+```sh
+bench/experiments.sh E7                      # three settings, REPEAT times each
+E7_SETTINGS="mixed-paper mixed-late" bench/experiments.sh E7   # some of them
+awk -F, 'NR > 1 && $16 == 1 { print $2, $11, $13, $14 }' bench/results/E7/runs.csv | sort
+```
+
+The last command prints each valid run's setting, job time, backups started
+and backups won. [bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run)
+has the settings, the output files and the knobs. As with E2, the
+settings alternate within each repeat, so drift on the VM does not fall on
+one of them. With four workers LATE allows one backup at a time, so a
+result here is for a small cluster only.
 
 ## What scale changes
 

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -113,6 +114,7 @@ func (w *Worker) session(parent context.Context) error {
 	w.stats.registrations.Add(1)
 	w.id = reg.GetWorkerId()
 	w.logger = slog.Default().With("worker", w.id)
+	w.logger.Info("registered", "heartbeat_interval", reg.GetHeartbeatInterval().AsDuration())
 	ctx, end := context.WithCancelCause(parent)
 	defer end(nil)
 	cur := new(current)
@@ -146,17 +148,23 @@ func (w *Worker) serve(ctx context.Context, cur *current) error {
 		switch a := resp.GetAssignment().(type) {
 		case *pb.RequestTaskResponse_MapTask:
 			log, done := w.attemptLogger(a.MapTask.GetAttempt()), w.stats.start(mapKind)
+			log.Info("task started", "input", a.MapTask.GetSplit().GetUri(), "offset", a.MapTask.GetSplit().GetOffset(), "length", a.MapTask.GetSplit().GetLength(), "skip_records", len(a.MapTask.GetSkipRecords()))
+			began := time.Now()
 			actx, stop := cur.start(ctx, a.MapTask.GetAttempt())
-			outputs, counts, err := w.runMap(actx, a.MapTask, log)
+			outputs, counts, err := w.runMap(actx, a.MapTask, log, cur.advance)
 			stop()
 			done(err)
+			logEnd(log, began, err)
 			report = w.finish(cur, a.MapTask.GetAttempt(), log, outputs, counts, err)
 		case *pb.RequestTaskResponse_ReduceTask:
 			log, done := w.attemptLogger(a.ReduceTask.GetAttempt()), w.stats.start(reduceKind)
+			log.Info("task started", "sources", len(a.ReduceTask.GetSources()), "skip_records", len(a.ReduceTask.GetSkipRecords()))
+			began := time.Now()
 			actx, stop := cur.start(ctx, a.ReduceTask.GetAttempt())
-			counts, err := w.runReduce(actx, a.ReduceTask, log)
+			counts, err := w.runReduce(actx, a.ReduceTask, log, cur.advance)
 			stop()
 			done(err)
+			logEnd(log, began, err)
 			report = w.finish(cur, a.ReduceTask.GetAttempt(), log, nil, counts, err)
 		case *pb.RequestTaskResponse_Shutdown:
 			return nil
@@ -192,6 +200,12 @@ func (w *Worker) serve(ctx context.Context, cur *current) error {
 	}
 }
 
+// logEnd logs that an attempt that began at began has ended with err. A
+// failure is logged again, with its kind, when it is reported.
+func logEnd(log *slog.Logger, began time.Time, err error) {
+	log.Info("task ended", "seconds", time.Since(began).Seconds(), "ok", err == nil)
+}
+
 func (w *Worker) requestTask(ctx context.Context, paused bool) (*pb.RequestTaskResponse, error) {
 	resp, err := w.coordinator.RequestTask(ctx, &pb.RequestTaskRequest{WorkerId: w.id, Paused: paused})
 	if status.Code(err) == codes.NotFound {
@@ -219,6 +233,11 @@ type current struct {
 	attempt *pb.TaskAttemptId // nil between attempts
 	cancel  context.CancelFunc
 	stopped bool // the coordinator said to stop the last attempt
+
+	// progress is the float32 bits of the fraction of the attempt's input
+	// processed. The attempt writes it once per record or read, so it is not
+	// guarded by mu.
+	progress atomic.Uint32
 }
 
 // start makes attempt the current one, and returns its context and a
@@ -228,6 +247,7 @@ func (c *current) start(ctx context.Context, attempt *pb.TaskAttemptId) (context
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.attempt, c.cancel, c.stopped = attempt, cancel, false
+	c.progress.Store(0)
 	return actx, func() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -236,14 +256,28 @@ func (c *current) start(ctx context.Context, attempt *pb.TaskAttemptId) (context
 	}
 }
 
-// running lists the current attempt, if any, for a heartbeat.
+// running lists the current attempt, if any, with its progress, for a
+// heartbeat.
 func (c *current) running() []*pb.TaskProgress {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.attempt == nil {
 		return nil
 	}
-	return []*pb.TaskProgress{{Attempt: c.attempt}}
+	return []*pb.TaskProgress{{Attempt: c.attempt, FractionDone: math.Float32frombits(c.progress.Load())}}
+}
+
+// advance records that the current attempt has processed fraction of its
+// input. The reported fraction never decreases and never exceeds 1; a
+// fraction that is NaN or not above the last is ignored. Only the attempt's
+// goroutine may call it.
+func (c *current) advance(fraction float64) {
+	if !(fraction > 0) { // also NaN
+		return
+	}
+	if f := float32(min(fraction, 1)); f > math.Float32frombits(c.progress.Load()) {
+		c.progress.Store(math.Float32bits(f))
+	}
 }
 
 // stop cancels the current attempt if it is one of attempts.
@@ -266,12 +300,12 @@ func (c *current) cancelled() bool {
 }
 
 // heartbeat tells the coordinator every interval that worker id is alive,
-// and which attempt it runs, until ctx is done. Asking for a task counts as
-// a heartbeat too; these cover the time a task runs. The reply may say to
-// stop the attempt (§3.6), or to end the session with errForgotten, and
-// lists the jobs still running so the worker can delete the others' map
-// output. A failed heartbeat is not retried: the next one, or the next task
-// request, tells the coordinator.
+// and which attempt it runs and how far it has got, until ctx is done.
+// Asking for a task counts as a heartbeat too; these cover the time a task
+// runs. The reply may say to stop the attempt (§3.6), or to end the session
+// with errForgotten, and lists the jobs still running so the worker can
+// delete the others' map output. A failed heartbeat is not retried: the
+// next one, or the next task request, tells the coordinator.
 func (w *Worker) heartbeat(ctx context.Context, end context.CancelCauseFunc, id string, interval time.Duration, cur *current) {
 	if interval <= 0 {
 		return
@@ -310,8 +344,10 @@ func (w *Worker) attemptLogger(attempt *pb.TaskAttemptId) *slog.Logger {
 	return log
 }
 
-// runMap runs a map task and returns where its output partitions are.
-func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([]*pb.PartitionLocation, map[string]int64, error) {
+// runMap runs a map task and returns where its output partitions are. It
+// calls progress, if not nil, with the fraction of the split read (see
+// task.WithProgress).
+func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger, progress func(float64)) ([]*pb.PartitionLocation, map[string]int64, error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, nil, &fatalError{err}
@@ -328,7 +364,7 @@ func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	sizes, counts, err := task.Map(ctx, spec, id, split, dir, m.GetSkipRecords(), log)
+	sizes, counts, err := task.Map(task.WithProgress(ctx, progress), spec, id, split, dir, m.GetSkipRecords(), log)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -351,8 +387,11 @@ func (w *Worker) runMap(ctx context.Context, m *pb.MapTask, log *slog.Logger) ([
 	return locations, counts, nil
 }
 
-// runReduce runs a reduce task over the map outputs it lists.
-func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logger) (counts map[string]int64, err error) {
+// runReduce runs a reduce task over the map outputs it lists. It calls
+// progress, if not nil, with the fraction of their bytes read so far. The
+// merge fetches and reduces in one pass, with no separate copy and sort
+// phases, so the bytes read from all the sources measure the whole task.
+func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logger, progress func(float64)) (counts map[string]int64, err error) {
 	spec, err := wire.JobSpec(m.GetJob())
 	if err != nil {
 		return nil, &fatalError{err}
@@ -362,18 +401,57 @@ func (w *Worker) runReduce(ctx context.Context, m *pb.ReduceTask, log *slog.Logg
 		return nil, err
 	}
 	sources := make([]extsort.Records, len(m.GetSources()))
+	read := newMeter(m.GetSources(), progress)
 	for i, src := range m.GetSources() {
 		var r io.ReadCloser
 		if r, err = w.open(ctx, m.GetAttempt().GetTask().GetJobId(), src); err != nil {
 			return nil, err
 		}
 		defer func() { err = errors.Join(err, r.Close()) }()
-		sources[i] = checked(kv.NewReader(r), src)
+		sources[i] = checked(kv.NewReader(read.wrap(r)), src)
 	}
 	if counts, err = task.Reduce(ctx, spec, id, sources, m.GetSkipRecords(), log); err == nil {
 		w.stats.outputBytes.Add(uint64(max(0, counts[task.ReduceOutputBytes])))
 	}
 	return counts, err
+}
+
+// meter reports the progress of a reduce task as its sources are read.
+type meter struct {
+	read, total atomic.Int64 // bytes read from all the sources; their sizes
+	report      func(float64)
+}
+
+// newMeter returns a meter for srcs that calls report, or nil if there is
+// nothing to report to or no bytes to read.
+func newMeter(srcs []*pb.PartitionLocation, report func(float64)) *meter {
+	m := &meter{report: report}
+	for _, src := range srcs {
+		m.total.Add(int64(src.GetSizeBytes()))
+	}
+	if report == nil || m.total.Load() <= 0 {
+		return nil
+	}
+	return m
+}
+
+// wrap returns r with its reads counted. A nil meter returns r.
+func (m *meter) wrap(r io.ReadCloser) io.ReadCloser {
+	if m == nil {
+		return r
+	}
+	return &metered{r, m}
+}
+
+type metered struct {
+	io.ReadCloser
+	m *meter
+}
+
+func (r *metered) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	r.m.report(float64(r.m.read.Add(int64(n))) / float64(r.m.total.Load()))
+	return n, err
 }
 
 // open opens one map output: from the worker that holds it, or from shared

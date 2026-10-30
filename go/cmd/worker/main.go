@@ -1,6 +1,6 @@
 // Command worker runs tasks for a coordinator until it says to exit.
 //
-//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-min-free-mib n] [-http :8081] [-log-format text|json]
+//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-min-free-mib n] [-http :8081] [-log-format text|json] [-log-level debug|info|warn|error]
 //
 // It keeps map output in its work directory and serves it to reducers on
 // -listen; other workers reach it at -advertise. It deletes a job's map
@@ -41,8 +41,8 @@ import (
 )
 
 type config struct {
-	coordinator, listen, advertise, workDir, http, logFormat string
-	minFreeMiB                                               uint64
+	coordinator, listen, advertise, workDir, http, logFormat, logLevel string
+	minFreeMiB                                                         uint64
 }
 
 // main runs the worker until the coordinator says to exit, or it is
@@ -66,7 +66,7 @@ func start(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "worker:", err)
 		return 2
 	}
-	if err = logs.Setup(c.logFormat); err == nil {
+	if err = logs.Setup(c.logFormat, c.logLevel); err == nil {
 		limitHeap(memlimit.FromCgroup())
 		err = run(ctx, c, nil)
 	}
@@ -89,6 +89,7 @@ func parse(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&c.http, "http", "", "address to serve /metrics on (default: none)")
 	fs.Uint64Var(&c.minFreeMiB, "min-free-mib", 1024, "take no task while the -work-dir file system has less than this free, in MiB")
 	fs.StringVar(&c.logFormat, "log-format", "text", "log format: text or json")
+	fs.StringVar(&c.logLevel, "log-level", "info", "lowest level to log: debug, info, warn or error")
 	err := fs.Parse(args)
 	switch {
 	case err != nil:

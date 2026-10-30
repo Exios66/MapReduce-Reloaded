@@ -45,6 +45,16 @@ type RecordReader interface {
 	io.Closer
 }
 
+// Positioned is a RecordReader that knows how far into its split it has
+// read, for the progress an attempt reports.
+type Positioned interface {
+	RecordReader
+	// Offset returns the bytes of the split read so far. It may run ahead
+	// of the last record by what the reader buffers, and pass the split's
+	// length when the last record ends beyond it.
+	Offset() int64
+}
+
 // OutputFormat creates output files.
 type OutputFormat interface {
 	Create(ctx context.Context, path string) (RecordWriter, error)

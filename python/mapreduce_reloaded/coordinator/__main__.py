@@ -2,7 +2,8 @@
 go/cmd/coordinator, with the same flags:
 
     python -m mapreduce_reloaded.coordinator [-addr :7070] [-http :8080]
-        [-data-dir dir] [-backups=false] [-keep-jobs n] [-max-task-failures n]
+        [-data-dir dir] [-backups=false] [-speculation paper|late|off]
+        [-keep-jobs n] [-max-task-failures n]
         [-log-format text|json]
 
 It runs until interrupted or terminated, then tells workers to exit. With
@@ -29,7 +30,15 @@ from datetime import datetime
 
 from mapreduce_reloaded.coordinator import statusweb
 from mapreduce_reloaded.coordinator.recover import recover
-from mapreduce_reloaded.coordinator.server import Config, Server, serve, start
+from mapreduce_reloaded.coordinator.server import (
+    SPECULATION_LATE,
+    SPECULATION_PAPER,
+    Config,
+    Server,
+    serve,
+    start,
+    valid_speculation,
+)
 from mapreduce_reloaded.coordinator.tasktable import SKIP_AFTER
 
 log = logging.getLogger("mapreduce_reloaded.coordinator")
@@ -50,6 +59,7 @@ class Options:
     keep_jobs: int = 100
     max_task_failures: int = 8
     log_format: str = "text"
+    speculation: str = ""
 
 
 def _bool(v: str) -> bool:
@@ -91,6 +101,13 @@ def parse(args: list[str]) -> Options:
         help="run backup attempts of the last tasks of each phase",
     )
     p.add_argument(
+        "-speculation",
+        "--speculation",
+        default=d.speculation,
+        help="how backup attempts start: paper (the paper's rule, §3.6), late (LATE, "
+        "Zaharia et al. 2008) or off (default: paper, or off with -backups=false)",
+    )
+    p.add_argument(
         "-keep-jobs",
         "--keep-jobs",
         type=int,
@@ -109,8 +126,19 @@ def parse(args: list[str]) -> Options:
     )
     a = p.parse_args(args)
     o = Options(
-        a.addr, a.http, a.data_dir, a.backups, a.keep_jobs, a.max_task_failures, a.log_format
+        a.addr,
+        a.http,
+        a.data_dir,
+        a.backups,
+        a.keep_jobs,
+        a.max_task_failures,
+        a.log_format,
+        a.speculation,
     )
+    if not valid_speculation(o.speculation):
+        p.error(f'-speculation is "{o.speculation}"; it must be paper, late or off')
+    if not o.backups and o.speculation in (SPECULATION_PAPER, SPECULATION_LATE):
+        p.error(f"-backups=false conflicts with -speculation={o.speculation}; use -speculation=off")
     if o.keep_jobs < 0:
         p.error(f"-keep-jobs is {o.keep_jobs}; it must be 0 (all) or more")
     if o.max_task_failures != 0 and o.max_task_failures <= SKIP_AFTER:
@@ -131,6 +159,7 @@ def config(o: Options) -> Config:
         worker_timeout=10.0,  # three missed heartbeats
         retry_after=1.0,
         backups=o.backups,
+        speculation=o.speculation,
         keep_jobs=o.keep_jobs,
         max_task_failures=o.max_task_failures,
     )

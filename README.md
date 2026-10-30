@@ -9,13 +9,13 @@ Dean & Ghemawat, [*MapReduce: Simplified Data Processing on Large Clusters*](htt
 (OSDI 2004), extended for modern infrastructure: object storage, compression,
 containers, gRPC, observability and user job files. Go runs the cluster;
 Python is the reference implementation of the API, the file format and local
-mode, and gives the same bytes for the same uncompressed job.
+mode and a coordinator server, and gives the same bytes for the same uncompressed job.
 
 ## Quick start
 
 Needs Docker with Compose, GNU `make`, and Python 3.11+ (for the example
 data). Go is optional: `make mr` builds the client in Docker without it.
-The cluster needs 4 CPUs, about 3.3 GB of memory and a few GB of disk;
+The cluster needs 4 vCPUs, about 3.3 GB of memory and a few GB of disk;
 [Cluster VM](docs/cluster-vm.md) has the budgets and the setup.
 
 ```sh
@@ -30,7 +30,7 @@ bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -5
 
 `mr submit` prints the job's id and status:
 
-```
+```text
 mr: 8 map tasks (-m 8)
 job-1   SUCCEEDED
 map     8/8
@@ -60,10 +60,11 @@ removes the containers and keeps `data/`.
 | Data | Text and key/value formats; zstd and Snappy for intermediate and output data |
 | Jobs | A job is one Go file the workers interpret; nothing to compile or upload |
 | Operations | Status page, Prometheus metrics, Grafana dashboard, chaos test with seeded worker kills and coordinator crashes |
-| Languages | Go cluster and Python reference implementation; the same bytes for the same uncompressed job |
+| Languages | Go cluster; Python reference implementation and a coordinator tested with Go workers; the same bytes for the same uncompressed job |
 
-Phases 0–4 and most of Phase 6 are done; Python workers and Go↔Python
-interoperability (Phase 5) are stretch goals. See the [roadmap](docs/roadmap.md)
+Phases 0–4 and the first part of Phase 6 (#41, #42 and LATE speculation, #284) are done; Python workers and full Go↔Python
+interoperability (Phase 5) are stretch goals — the Python-coordinator/Go-worker
+combination is already tested (`make py-e2e`). See the [roadmap](docs/roadmap.md)
 and the [final report](docs/report.md).
 
 ## Results
@@ -102,7 +103,7 @@ The other plots (E2–E5), the raw CSVs, the machine and the commands are in
 
 ## How a job runs
 
-```
+```text
                  mr submit
                      │  SubmitJob
                      ▼
@@ -132,7 +133,7 @@ is logged before the reply, so a restarted coordinator resumes the job.
 
 ## The `mr` command
 
-```
+```text
 mr run -local [job flags] <program | job.go> <output-dir> <inputs>
 mr submit [-coordinator addr] [-max-skipped N] [-wait] [job flags] <program | job.go> <output-dir> <inputs>
 mr status [-coordinator addr] <job-id>
@@ -196,10 +197,10 @@ diff -r /tmp/wc /tmp/wc-py && echo identical
 
 ## Repository layout
 
-```
+```text
 proto/     gRPC/protobuf contract shared by Go and Python
 go/        Go implementation: coordinator, worker, mr, example programs
-python/    Python reference implementation: API, file format, local mode
+python/    Python reference implementation: API, file format, local mode, coordinator
 deploy/    Dockerfile, Compose cluster, Prometheus and Grafana
 bench/     data generators, benchmark harness and the evaluation
 scripts/   code generation, the end-to-end test, test-data generators
@@ -220,8 +221,8 @@ make proto                     # regenerate code after editing proto/
 
 `make check` checks the generated code, runs the linters and every test,
 including a short chaos run that kills workers and restarts the coordinator.
-CI runs the same targets in four jobs (`proto`, `go`, `python-3.11`,
-`python-3.13`); work reaches `main` only through pull requests. See
+CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
+`python-3.13`, `lint`, `mapping-coverage`); work reaches `main` only through pull requests. See
 [CI](docs/ci.md) and [ADR 0014](docs/design/0014-ci-on-pull-requests.md).
 `make` runs Python as `python3`; pass `PYTHON=...` to use another interpreter.
 
@@ -239,3 +240,12 @@ CI runs the same targets in four jobs (`proto`, `go`, `python-3.11`,
   the results against the paper's §5.
 - [Runbook](docs/runbook.md) and [demo](docs/demo.md): from SSH to a demo.
 - [`examples/demo.ipynb`](examples/demo.ipynb): the demo in Jupyter.
+- [Changelog](CHANGELOG.md): every release and what changed in it.
+- [Security policy](SECURITY.md): the trust model and how to report a
+  vulnerability.
+
+## License
+
+[MIT](LICENSE). The texts in [`testdata/corpus/`](testdata/corpus/README.md)
+are public-domain works in the United States, and the datasets that `scripts/` fetches keep their
+own terms ([data sources](docs/data.md#sources-and-terms)).

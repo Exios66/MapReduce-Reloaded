@@ -10,6 +10,12 @@ This page covers the VM's specifications, the CPU, memory and disk budgets,
 one-time setup, and daily use. The [runbook](runbook.md) is the short
 version: from SSH to a full demo, in order.
 
+This page is the single source of truth for the VM's specification. Other
+pages that state it for planning ([design](../design.md), the
+[roadmap](roadmap.md), the [report](report.md), the
+[evaluation](evaluation.md)) link here; when a figure differs, this page is
+right.
+
 ## The VM
 
 Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
@@ -23,10 +29,15 @@ Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
 | OS | Ubuntu 24.04.4 LTS, kernel 6.8.0-139-generic, x86_64 |
 | Docker | Engine 29.8.1, Compose 5.5.1; the user is in the `docker` group |
 | Tools | git 2.43.0, Python 3.12.3; Go 1.26.0 is installed by `scripts/vm-setup.sh --install`; `make` and `gcc` are not installed by default (`sudo apt-get install -y make gcc`) |
+| Network | Inter-worker traffic runs over the host-local Docker network (service-name DNS); it was never measured, and the paper's gigabit figure must not be imported for it. |
 
 The budgets below are planned against these totals. The VM is shared with
 other coursework, so what is free at any moment is less;
 `scripts/vm-setup.sh` reports it at the start of each session.
+
+Re-verify at freeze: before the project is submitted, run the commands above
+again on the course VM and update this table and its date. The other pages
+link here and need no change.
 
 ## CPU budget
 
@@ -88,7 +99,7 @@ of job data while a 1 GiB experiment runs. `scripts/vm-setup.sh` warns
 when less than 5 GB is free in `$HOME`. A job's data exists several times at
 once: input, intermediate files (about the input's size; the `distsort`
 benchmark shuffled 68 MB for a 64 MB input) and output. The experiments
-(E0–E5) use 1 GiB inputs; keep any larger input to a few GB at most, and
+(E0–E7) use 1 GiB inputs; keep any larger input to a few GB at most, and
 delete old output and `bench/results/` files as you go.
 
 Workers delete a job's map output once it ends and stop taking tasks under
@@ -106,7 +117,7 @@ Add this to `~/.ssh/config` so every command below can say `mr-vm` instead of
 the full host name. Fill in your own values: the real host and user name stay
 out of this public repository.
 
-```
+```text
 Host mr-vm
     HostName <your-vm-hostname>
     User <your-username>
@@ -186,7 +197,6 @@ The status page and Prometheus metrics are at `127.0.0.1:18780` (`/` and
 `ssh -L 18780:127.0.0.1:18780 mr-vm`. After `make monitoring-up`, Grafana
 is at `127.0.0.1:13000` and Prometheus at `127.0.0.1:19090`:
 `ssh -L 13000:127.0.0.1:13000 mr-vm`.
-
 
 ## Living alongside other coursework
 

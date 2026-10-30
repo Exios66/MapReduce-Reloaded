@@ -13,7 +13,7 @@ the format of the *messages*, this is the format of the *saved data*.
 
 ## The shape of a file
 
-```
+```text
 [header 8 bytes] [block] [block] ... [block] [footer 24 bytes]
 ```
 
@@ -22,7 +22,7 @@ the format of the *messages*, this is the format of the *saved data*.
 - **Blocks:** groups of records, about 64 KB each. A record is a key and a
   value, each prefixed with its length:
 
-  ```
+  ```text
   [5]hello[1]1   →   key "hello", value "1"
   ```
 

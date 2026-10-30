@@ -6,7 +6,7 @@ A map task's output stays on the worker that ran it (§3.1 step 4). Each
 reduce task then fetches its partition from every map task's worker over
 RPC (step 5). Only locations go through the coordinator, never data.
 
-```
+```text
 worker A: map 0 ──► A's disk: map-00000-r-00000.kv, map-00000-r-00001.kv …
 worker B: reduce 1 ──FetchPartition(job, map 0, partition 1)──► A
 ```

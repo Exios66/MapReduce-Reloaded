@@ -14,7 +14,7 @@ python3 -m mapreduce_reloaded run --local -m 3 -r 4 wordcount /tmp/wc '../testda
 
 Usage mirrors `mr run -local`:
 
-```
+```sh
 python -m mapreduce_reloaded run --local [-m M] [-r R] [--param NAME=VALUE]...
     [--input-format text|kv] [--output-format text|kv] PROGRAM OUTPUT_DIR INPUT...
 ```
@@ -30,9 +30,10 @@ uncompressed files, though the MRKV reader and writer handle every codec
 `go/cmd/coordinator` does, with the same flags and defaults. Go workers and
 `mr` work with it unchanged:
 
-```
+```sh
 python -m mapreduce_reloaded.coordinator [-addr :7070] [-http :8080]
-    [-data-dir dir] [-backups=false] [-keep-jobs n] [-max-task-failures n]
+    [-data-dir dir] [-backups=false] [-speculation paper|late|off]
+    [-keep-jobs n] [-max-task-failures n]
     [-log-format text|json]
 ```
 

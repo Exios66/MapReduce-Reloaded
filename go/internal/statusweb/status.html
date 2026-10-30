@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="2">
+<noscript><meta http-equiv="refresh" content="2"></noscript>
 <meta name="color-scheme" content="light dark">
 <title>MapReduce status</title>
 <style>
@@ -70,9 +70,40 @@ tbody tr:last-child td { border-bottom: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .nowrap { white-space: nowrap; }
 .empty { margin: 0; padding: 8px 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.job:target { border-color: var(--blue); }
+.job-id a { color: inherit; text-decoration: none; }
+.job-id a:hover { text-decoration: underline; }
+.badge::before { content: "\25CF\00a0"; }
+.state-succeeded::before { content: "\2713\00a0"; }
+.state-failed::before { content: "\2715\00a0"; }
+.state-pending::before, .state-unspecified::before { content: "\25CB\00a0"; }
+.age { color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.table-wrap table { border: 0; border-radius: 0; min-width: 480px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 640px) {
+  body { padding: 12px; }
+  .phases { grid-template-columns: 3em 1fr; }
+  .phases .count { grid-column: 2; }
+}
+.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar[hidden], .stale[hidden] { display: none; }
+.bar button {
+  padding: 2px 10px; font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+.bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.stale { color: var(--red); font-weight: 600; }
 </style>
 </head>
 <body{{if .Dark}} class="dark"{{end}}>
+<div class="bar" id="bar" hidden>
+<button type="button" id="pause" aria-pressed="false">Pause</button>
+<span class="stale" id="stale" role="status" hidden>
+No answer from the coordinator. Showing the last update.
+</span>
+</div>
+<div id="live">
 <header>
 <h1>MapReduce status</h1>
 <p class="summary"><b>{{len .Jobs}}</b> jobs &middot; <b>{{len .Workers}}</b> workers &middot; <b>{{len .Lost}}</b> lost &middot; {{.At.Format "15:04:05"}}</p>
@@ -81,9 +112,9 @@ tbody tr:last-child td { border-bottom: 0; }
 <h2>Jobs</h2>
 <section class="jobs">
 {{range .Jobs}}
-<article class="job">
+<article class="job" id="job-{{.JobId}}">
 <div class="job-head">
-<span class="job-id">{{.JobId}}</span>
+<span class="job-id"><a href="#job-{{.JobId}}">{{.JobId}}</a></span>
 {{$state := state .State}}<span class="badge state-{{$state}}">{{$state}}</span>
 <span class="spacer"></span>
 <span class="duration">{{with duration . $.At}}{{.}}{{else}}&mdash;{{end}}</span>
@@ -98,6 +129,7 @@ tbody tr:last-child td { border-bottom: 0; }
 </div>
 <div class="meta">
 <span>backups: {{.BackupAttempts}} started, {{.BackupWins}} won</span>
+<span>local maps: host <b>{{.MapTasksHostLocal}}</b>, zone <b>{{.MapTasksZoneLocal}}</b></span>
 <span>map in <b>{{counter .GetCounters "map.input.records"}}</b></span>
 <span>map out <b>{{counter .GetCounters "map.output.records"}}</b></span>
 <span>reduce out <b>{{counter .GetCounters "reduce.output.records"}}</b></span>
@@ -114,18 +146,21 @@ tbody tr:last-child td { border-bottom: 0; }
 </section>
 
 <h2>Workers</h2>
+<div class="table-wrap">
 <table>
-<thead><tr><th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Last seen</th><th scope="col">Running</th></tr></thead>
+<thead><tr><th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Zone</th><th scope="col">Slots</th><th scope="col">Last seen</th><th scope="col">Running</th></tr></thead>
 <tbody>
 {{range .Workers}}
-<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}}</td><td>{{range .Running}}<span class="mono">{{.}}</span><br>{{end}}</td></tr>
+<tr><td class="mono">{{.ID}}</td><td>{{.Info.GetHost}}</td><td>{{with .Info.GetZone}}{{.}}{{else}}&mdash;{{end}}</td><td class="nowrap">{{len .Running}}/{{.Info.GetSlots}}</td><td class="nowrap">{{.LastSeen.Format "15:04:05"}} <span class="age">{{heartbeat $.At .LastSeen}}</span></td><td>{{$p := .Progress}}{{range .Running}}<span class="mono">{{.}}</span> {{fraction (index $p .)}}<br>{{end}}</td></tr>
 {{else}}
-<tr><td colspan="4">No workers.</td></tr>
+<tr><td colspan="6">No workers.</td></tr>
 {{end}}
 </tbody>
 </table>
+</div>
 
 <h2>Lost workers</h2>
+<div class="table-wrap">
 <table>
 <thead><tr><th scope="col">Worker</th><th scope="col">Lost at</th><th scope="col">Tasks run again</th></tr></thead>
 <tbody>
@@ -136,5 +171,42 @@ tbody tr:last-child td { border-bottom: 0; }
 {{end}}
 </tbody>
 </table>
+</div>
+</div>
+<script>
+(function () {
+  var live = document.getElementById("live"), bar = document.getElementById("bar");
+  var btn = document.getElementById("pause"), stale = document.getElementById("stale");
+  var paused = false;
+  if (!window.fetch || !window.DOMParser) return;
+  bar.hidden = false;
+  function refresh() {
+    if (paused) return;
+    fetch(location.pathname + location.search, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    }).then(function (text) {
+      var next = new DOMParser().parseFromString(text, "text/html").getElementById("live");
+      if (!next) throw new Error("not a status page");
+      var open = [].map.call(live.querySelectorAll("details[open]"), function (d) {
+        return d.closest("article").id;
+      });
+      live.innerHTML = next.innerHTML;
+      open.forEach(function (id) {
+        var a = document.getElementById(id), d = a && a.querySelector("details");
+        if (d) d.open = true;
+      });
+      stale.hidden = true;
+    }).catch(function () { stale.hidden = false; });
+  }
+  btn.addEventListener("click", function () {
+    paused = !paused;
+    btn.textContent = paused ? "Resume" : "Pause";
+    btn.setAttribute("aria-pressed", String(paused));
+    if (!paused) refresh();
+  });
+  setInterval(refresh, 2000);
+})();
+</script>
 </body>
 </html>

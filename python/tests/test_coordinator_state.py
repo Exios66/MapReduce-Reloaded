@@ -7,10 +7,21 @@ import random
 import pytest
 
 from mapreduce_reloaded.coordinator import SKIP_AFTER, Registry, Task, TaskTable
-from mapreduce_reloaded.coordinator.tasktable import COMPLETED, IDLE, IN_PROGRESS, MAP, REDUCE
+from mapreduce_reloaded.coordinator.tasktable import (
+    COMPLETED,
+    IDLE,
+    IN_PROGRESS,
+    MAP,
+    REDUCE,
+    LateParams,
+    percentile,
+)
 from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2, types_pb2
 
 M0, M1, R0, R1 = Task(MAP, 0), Task(MAP, 1), Task(REDUCE, 0), Task(REDUCE, 1)
+
+# A base time for the LATE tests, in seconds.
+BASE = 1_000_000.0
 
 # When the next attempt that assign starts begins: one second after the last.
 _clock = itertools.count(1)
@@ -187,6 +198,217 @@ def test_backups():
     assert tt.state(M0) == IDLE
     check_counts(tt)
     assert tt.backups() == (2, 1)
+
+
+LATE = LateParams(1.0, 25.0, 25.0, 0.0)
+
+
+def late(slow_task=25.0, **params):
+    """Returns LATE's settings with the given slow task percentile."""
+    return LATE._replace(slow_task_percentile=slow_task, **params)
+
+
+def start_at(tt, id, worker, after, fraction, report_at):
+    """Assigns task id to worker at BASE+after, and reports that it had
+    processed fraction at BASE+report_at."""
+    attempt = tt.assign(id, worker, BASE + after)
+    assert tt.set_fraction(id, attempt, worker, fraction, BASE + report_at)
+    return attempt
+
+
+def late_backup(tt, worker, after, params, workers):
+    """Returns the task late_backup picks for worker at BASE+after, or None."""
+    return tt.late_backup(worker, BASE + after, params, workers)
+
+
+def test_late_backup_picks_longest_time_left():
+    # LATE backs up the candidate with the most time left, not the slowest
+    # one, among the slow candidates (Zaharia et al. 2008).
+    tt = TaskTable(3, 1)
+    # M0 has done 0.5 in 100 s: rate 0.005, 100 s left.
+    start_at(tt, M0, "w1", 0, 0.5, 100)
+    # M1 has done 0.3 in 50 s: faster, 0.006, but 116.7 s left.
+    start_at(tt, M1, "w2", 50, 0.3, 100)
+    start_at(tt, Task(MAP, 2), "w3", 0, 0.9, 100)  # 0.009, 11.1 s left
+    for slow_task, want in ((100, M1), (50, M1), (25, M0)):
+        # 100: every candidate is slow enough. 50: the cut is 0.006, so M0
+        # and M1. 25: the cut is 0.0055, so only M0.
+        assert late_backup(tt, "w4", 100, late(slow_task), 4) == want, slow_task
+    assert late_backup(tt, "w1", 100, late(100), 4) == M1, "w1 runs M0"
+    assert tt.backups() == (0, 0), "late_backup starts nothing"
+
+
+def test_late_backup_cap():
+    # LATE starts no more backup attempts than speculative_cap of the
+    # workers, and at least one may run.
+    tt = TaskTable(3, 1)
+    start_at(tt, M0, "w1", 0, 0.1, 10)
+    start_at(tt, M1, "w2", 0, 0.1, 10)
+    p = LateParams(0.1, 100.0, 25.0, 0.0)
+    assert late_backup(tt, "w3", 10, p, 10) == M0
+    assign(tt, M0, "w3")  # a backup
+    assert late_backup(tt, "w4", 10, p, 10) is None, "at the cap of 1 of 10 workers"
+    assert late_backup(tt, "w4", 10, p, 3) is None, "the cap is at least 1"
+    assert late_backup(tt, "w4", 10, p, 20) == M1, "under the cap of 2 of 20 workers"
+
+
+def test_late_backup_skips_slow_worker():
+    # A worker that is slower than slow_node_percentile of the workers with
+    # history gets no backup; one with no history gets one.
+    tt = TaskTable(5, 1)
+    for i, (worker, took) in enumerate([("w1", 10), ("w2", 20), ("w3", 100)]):
+        id = Task(MAP, i)
+        a = tt.assign(id, worker, BASE)
+        assert tt.complete(id, a, worker, outputs(i, 1), BASE + took)
+    M3 = Task(MAP, 3)
+    start_at(tt, M3, "w5", 0, 0.1, 20)
+    # Speeds 0.1, 0.05 and 0.01 per second; the 25th percentile is 0.03.
+    for worker, want in {"w1": M3, "w2": M3, "w3": None, "w4": M3}.items():
+        assert late_backup(tt, worker, 100, late(100), 5) == want, worker
+
+    # An attempt completed without a time, or not after it started, leaves
+    # no record.
+    a = tt.assign(Task(MAP, 4), "w4", BASE)
+    assert tt.complete(Task(MAP, 4), a, "w4", outputs(4, 1), BASE)
+    assert "w4" not in tt._speeds[MAP]
+
+
+def test_late_backup_waits_for_min_runtime():
+    # A task is a candidate only once its attempt has run for min_runtime and
+    # reported its progress.
+    tt = TaskTable(2, 1)
+    start_at(tt, M0, "w1", 0, 0.1, 5)
+    tt.assign(M1, "w2", BASE)  # never reports
+    p = late(100, min_runtime=10.0)
+    assert late_backup(tt, "w3", 5, p, 5) is None
+    assert late_backup(tt, "w3", 9, p, 5) is None
+    assert late_backup(tt, "w3", 10, p, 5) == M0, "M1 has not reported"
+    assert late_backup(tt, "w3", -1, late(100), 5) is None, "before the attempt started"
+
+
+def test_late_backup_stuck_task_first():
+    # An attempt that has reported no progress counts as having infinite time
+    # left, so it is backed up first; among those, the oldest.
+    tt = TaskTable(4, 1)
+    M2, M3 = Task(MAP, 2), Task(MAP, 3)
+    start_at(tt, M0, "w1", 5, 0, 20)
+    start_at(tt, M1, "w2", 0, 0.01, 20)  # started first, but moves
+    start_at(tt, M2, "w3", 5, 0, 20)
+    start_at(tt, M3, "w4", 2, 0, 20)
+    assert late_backup(tt, "w5", 100, late(100), 5) == M3, "the oldest stuck task"
+    assert late_backup(tt, "w4", 100, late(100), 5) == M0, "w4 runs M3: the lowest index"
+    assert late_backup(tt, "w5", 100, late(25), 5) == M3, "only stuck tasks are slow"
+    assert late_backup(TaskTable(2, 1), "w1", 100, late(100), 5) is None, "idle table"
+
+
+def finish(tt, id, worker, took, r):
+    """Assigns task id to worker at BASE, and completes it took seconds
+    later. A map task reports r partitions."""
+    a = tt.assign(id, worker, BASE)
+    assert tt.complete(id, a, worker, outputs(id.index, r) if id.kind == MAP else (), BASE + took)
+
+
+def test_late_backup_accepts_equal_speeds():
+    # Workers of equal speed are not slow: only a speed below the percentile
+    # refuses a backup.
+    tt = TaskTable(4, 1)
+    for i, w in enumerate(["w1", "w2", "w3"]):
+        finish(tt, Task(MAP, i), w, 10, 1)
+    m3 = Task(MAP, 3)
+    start_at(tt, m3, "w5", 0, 0.1, 20)
+    for w in ("w1", "w2", "w3"):
+        assert late_backup(tt, w, 100, late(100), 5) == m3, w
+
+
+def test_late_backup_separates_kinds():
+    # The speeds of a phase's kind of task are kept apart: a worker slow at
+    # map tasks is not refused a reduce task's backup for that, and its reduce
+    # attempts do not count toward its map speed.
+    tt = TaskTable(2, 3)
+    finish(tt, Task(MAP, 0), "w1", 5, 3)  # speed 0.2
+    finish(tt, Task(MAP, 1), "w2", 100, 3)  # speed 0.01
+    finish(tt, Task(REDUCE, 0), "w2", 10, 3)
+    finish(tt, Task(REDUCE, 1), "w3", 10, 3)
+    r2 = Task(REDUCE, 2)
+    start_at(tt, r2, "w5", 0, 0.1, 20)
+    # In reduce speeds w2 and w3 are equal at 0.1. Were the kinds mixed, w2
+    # would have 0.055 against a 25th percentile of 0.0775.
+    for w in ("w1", "w2", "w3"):
+        assert late_backup(tt, w, 100, late(100), 5) == r2, w
+    assert {w: s.n for w, s in tt._speeds[MAP].items()} == {"w1": 1, "w2": 1}
+
+
+def test_late_backup_forgets_lost_workers():
+    # A lost worker's speed leaves the slow-node percentile, so that dead fast
+    # workers do not make the live ones look slow. A restart forgets them all.
+    tt = TaskTable(7, 1)
+    for i, w in enumerate(["w1", "w2", "w3", "w4", "w5", "w6"]):
+        finish(tt, Task(MAP, i), w, 5 if i < 4 else 20, 1)  # w1 to w4 are fast
+    m6 = Task(MAP, 6)
+    start_at(tt, m6, "w7", 0, 0.1, 20)
+    # Speeds 0.2 four times, 0.05 twice: the 25th percentile is 0.0875.
+    for w in ("w5", "w6"):
+        assert late_backup(tt, w, 100, late(100), 7) is None, w
+    for w in ("w1", "w2", "w3", "w4"):
+        tt.reset_worker(w)
+    for w in ("w5", "w6"):
+        assert late_backup(tt, w, 100, late(100), 7) == m6, w
+    assert set(tt._speeds[MAP]) == {"w5", "w6"}
+    tt.stop_all()
+    assert not tt._speeds
+
+
+@pytest.mark.parametrize(
+    "values, p, want",
+    [
+        ([], 25, 0),
+        ([7], 25, 7),
+        ([1, 2, 3, 4], 25, 1.75),
+        ([1, 2, 3, 4], 0, 1),
+        ([1, 2, 3, 4], 100, 4),
+        ([1, 2, 3, 4], 150, 4),
+        ([1, 2, 3, 4], -5, 1),
+        ([0, 10], 50, 5),
+    ],
+)
+def test_percentile(values, p, want):
+    # Percentiles interpolate linearly between the closest ranks.
+    assert percentile(values, p) == want
+
+
+def test_set_fraction():
+    # A reported fraction is recorded, clamped, for an attempt running on the
+    # reporting worker only, with the time it was heard, and never lowered. The
+    # paper's rule does not change which task gets a backup (§3.6).
+    tt = TaskTable(2, 1)
+    a = assign(tt, M0, "w1")
+    assign(tt, M1, "w2")
+    nan = float("nan")
+    for name, (id, attempt, worker, f, ok, want) in {
+        "recorded": (M0, a, "w1", 0.5, True, 0.5),
+        "another worker's": (M0, a, "w2", 0.9, False, 0.5),
+        "unknown attempt": (M0, a + 1, "w1", 0.9, False, 0.5),
+        "NaN": (M0, a, "w1", nan, False, 0.5),
+        "a lower one is ignored": (M0, a, "w1", 0.25, True, 0.5),
+        "a higher one is kept": (M0, a, "w1", 0.75, True, 0.75),
+        "over 1": (M0, a, "w1", 7, True, 1.0),
+        "under 0 after 1": (M0, a, "w1", -1, True, 1.0),
+        "infinite": (M0, a, "w1", float("inf"), True, 1.0),
+    }.items():
+        assert tt.set_fraction(id, attempt, worker, f, 99.0) is ok, name
+        assert tt.fraction(M0, "w1") == want, name
+    assert tt._maps[0].running[a].reported == 99.0
+    tt.set_fraction(M1, 0, "w2", -1, 99.0)
+    assert tt.fraction(M1, "w2") == 0, "a fraction under 0"
+    assert tt.fraction(M1, "w2") == 0, "an attempt that has not reported"
+    assert tt.fraction(M0, "w2") == 0, "a worker not running the task"
+    assert not tt.set_fraction(Task(MAP, 9), a, "w1", 0.5, 99.0)
+    assert tt.fraction(Task(MAP, 9), "w1") == 0, "no such task"
+
+    # M1 started later but is further along; M0 still gets the backup.
+    tt.set_fraction(M1, 0, "w2", 0.9, 99.0)
+    tt.set_fraction(M0, a, "w1", 0.1, 99.0)
+    assert tt.backup("w3") == M0
 
 
 @pytest.mark.parametrize("kind", [MAP, REDUCE])

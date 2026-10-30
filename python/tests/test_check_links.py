@@ -135,6 +135,32 @@ def test_main(repo, capsys):
     assert "2 files, 1 broken links" in out.err
 
 
+@pytest.mark.lint_inputs
 def test_the_repository_has_no_broken_links():
     """Every tracked Markdown file, as make lint checks them."""
     assert links.main([]) == 0
+
+
+@pytest.mark.parametrize(
+    "page, required_targets",
+    [
+        ("docs/README.md", {"../deploy/README.md", "../scripts/README.md"}),
+        ("examples/README.md", {"wordcount.go", "demo.ipynb", "../README.md#quick-start"}),
+        (
+            "deploy/compose/README.md",
+            {
+                "compose.yaml",
+                "soak.yaml",
+                "backups-off.yaml",
+                "../README.md",
+                "../../docs/cluster-vm.md",
+            },
+        ),
+    ],
+)
+def test_documentation_guides_keep_their_navigation(page, required_targets):
+    """A removed link passes the link sweep but makes the guides harder to find."""
+    md = links.ROOT / page
+    targets = {target for _, target in links.links(md.read_text(encoding="utf-8"))}
+    assert required_targets <= targets
+    assert check(md) == []

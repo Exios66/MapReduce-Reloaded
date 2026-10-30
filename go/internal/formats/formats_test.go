@@ -235,3 +235,74 @@ func TestByteSplitsLimit(t *testing.T) {
 		t.Fatalf("2-byte splits: %d splits, %v", len(got), err)
 	}
 }
+
+// A reader says how many bytes of its split it has read, from 0, past the
+// split's length if its last line ends beyond it: a text split counts the
+// partial line it skips and the lines it reads, and a kv file the bytes read
+// from the file.
+func TestOffset(t *testing.T) {
+	text := "aa\nbbbb\ncc\ndddddd\n" // lines at offsets 0, 3, 8 and 11
+	t.Run("text", func(t *testing.T) {
+		path := writeFile(t, []byte(text))
+		for _, tc := range []struct {
+			s    Split
+			want []int64
+		}{
+			{Split{path, 0, int64(len(text))}, []int64{3, 8, 11, 18}},
+			{Split{path, 5, 12}, []int64{6, 13}}, // skips the rest of line 3, then reads lines 8 and 11
+		} {
+			r, err := Text{}.Open(t.Context(), tc.s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := r.(Positioned)
+			var got []int64
+			for r.Next() {
+				got = append(got, p.Offset())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("%v: offsets %v, want %v", tc.s, got, tc.want)
+			}
+			_ = r.Close()
+		}
+	})
+	t.Run("kv", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "part")
+		out, _ := Output("kv", kv.CodecNone)
+		w, err := out.Create(t.Context(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range 100 {
+			if err := w.Write([]byte(strconv.Itoa(i)), []byte("v")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		splits, err := KV{}.Splits(t.Context(), path, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := KV{}.Open(t.Context(), splits[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := r.(Positioned)
+		if p.Offset() != 0 {
+			t.Errorf("offset %d before reading", p.Offset())
+		}
+		var last int64
+		for r.Next() {
+			if o := p.Offset(); o < last || o > splits[0].End {
+				t.Fatalf("offset %d after %d, file has %d bytes", o, last, splits[0].End)
+			}
+			last = p.Offset()
+		}
+		if err := r.Err(); err != nil || last <= 0 || last > splits[0].End {
+			t.Errorf("last offset %d of %d bytes, err %v", last, splits[0].End, err)
+		}
+		_ = r.Close()
+	})
+}

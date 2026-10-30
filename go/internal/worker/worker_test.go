@@ -2,13 +2,16 @@ package worker
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -73,10 +76,10 @@ func TestBadJobIsFatal(t *testing.T) {
 	job := &pb.JobSpec{Program: "wc.go", ProgramSource: "package main\n\nfunc Map("}
 	log := slog.New(slog.DiscardHandler)
 	var fatal *fatalError
-	if _, _, err := w.runMap(t.Context(), &pb.MapTask{Job: job}, log); !errors.As(err, &fatal) {
+	if _, _, err := w.runMap(t.Context(), &pb.MapTask{Job: job}, log, nil); !errors.As(err, &fatal) {
 		t.Errorf("map: %v; want a fatal error", err)
 	}
-	if _, err := w.runReduce(t.Context(), &pb.ReduceTask{Job: job}, log); !errors.As(err, &fatal) {
+	if _, err := w.runReduce(t.Context(), &pb.ReduceTask{Job: job}, log, nil); !errors.As(err, &fatal) {
 		t.Errorf("reduce: %v; want a fatal error", err)
 	}
 }
@@ -94,5 +97,102 @@ func TestAttemptLogger(t *testing.T) {
 	want := `"job":"job-1","task":{"kind":"reduce","index":3,"attempt":1}}`
 	if !strings.HasSuffix(strings.TrimSpace(b.String()), want) {
 		t.Fatalf("got %s, want suffix %s", b.String(), want)
+	}
+}
+
+// A heartbeat reports the current attempt's progress: never above 1, never
+// less than before, starting at 0 for each attempt.
+func TestCurrentProgress(t *testing.T) {
+	cur := new(current)
+	if got := cur.running(); got != nil {
+		t.Fatalf("running between attempts: %v", got)
+	}
+	reported := func() float32 { return cur.running()[0].GetFractionDone() }
+	first, second := &pb.TaskAttemptId{Attempt: 1}, &pb.TaskAttemptId{Attempt: 2}
+
+	_, stop := cur.start(t.Context(), first)
+	if got := reported(); got != 0 {
+		t.Fatalf("new attempt reports %v, want 0", got)
+	}
+	for _, tc := range []struct {
+		fraction float64
+		want     float32
+	}{
+		{0.25, 0.25},
+		{0.1, 0.25}, // never less than before
+		{math.NaN(), 0.25},
+		{-1, 0.25},
+		{0.5, 0.5},
+		{2, 1}, // clamped
+		{math.Inf(1), 1},
+		{0.75, 1},
+	} {
+		cur.advance(tc.fraction)
+		if got := reported(); got != tc.want {
+			t.Errorf("after advance(%v): reported %v, want %v", tc.fraction, got, tc.want)
+		}
+	}
+	stop()
+	if got := cur.running(); got != nil {
+		t.Fatalf("running after the attempt: %v", got)
+	}
+
+	_, stop = cur.start(t.Context(), second)
+	defer stop()
+	if got := reported(); got != 0 {
+		t.Errorf("next attempt starts at %v, want 0", got)
+	}
+}
+
+// A reduce task's progress is the share of its sources' bytes read, and
+// stays within 1 however much is read.
+func TestReduceMeter(t *testing.T) {
+	srcs := []*pb.PartitionLocation{{SizeBytes: 6}, {SizeBytes: 4}}
+	var got []float64
+	m := newMeter(srcs, func(f float64) { got = append(got, f) })
+	a := m.wrap(io.NopCloser(strings.NewReader("123456")))
+	b := m.wrap(io.NopCloser(strings.NewReader("abcd")))
+	buf := make([]byte, 3)
+	for _, r := range []io.Reader{a, b, a, b, b} {
+		_, _ = r.Read(buf)
+	}
+	if want := []float64{0.3, 0.6, 0.9, 1, 1}; len(got) != len(want) {
+		t.Fatalf("reported %v, want %v", got, want)
+	} else {
+		for i := range want {
+			if math.Abs(got[i]-want[i]) > 1e-9 {
+				t.Fatalf("reported %v, want %v", got, want)
+			}
+		}
+	}
+
+	r := io.NopCloser(strings.NewReader("x"))
+	for _, m := range []*meter{newMeter(srcs, nil), newMeter([]*pb.PartitionLocation{{}}, func(float64) {})} {
+		if m != nil || m.wrap(r) != r {
+			t.Errorf("a meter with nothing to report: %v, want a nil one that passes reads through", m)
+		}
+	}
+}
+
+// An attempt's end is logged with how long it ran and whether it worked.
+func TestLogEnd(t *testing.T) {
+	var b bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&b, nil))
+	logEnd(log, time.Now().Add(-2*time.Second), nil)
+	logEnd(log, time.Now(), errors.New("boom"))
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %d records, want 2: %s", len(lines), b.String())
+	}
+	var ok, failed struct {
+		Msg     string  `json:"msg"`
+		Seconds float64 `json:"seconds"`
+		OK      bool    `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &ok); err != nil || ok.Msg != "task ended" || ok.Seconds < 2 || !ok.OK {
+		t.Fatalf("got %s (%v)", lines[0], err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &failed); err != nil || failed.OK {
+		t.Fatalf("got %s (%v)", lines[1], err)
 	}
 }

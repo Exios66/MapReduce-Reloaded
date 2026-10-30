@@ -21,9 +21,9 @@ are not bugs in one function but a property of the whole design:
 authenticate or encrypt its RPCs.** The assignment's deployment is four
 containers and a client on one VM. Under Compose:
 
-- the coordinator, Prometheus, Grafana and MinIO publish their ports on
-  `127.0.0.1` only (`deploy/compose/compose.yaml`), so nothing outside the VM
-  reaches the coordinator;
+- the coordinator, Prometheus, Grafana and the S3 gateway (VersityGW)
+  publish their ports on `127.0.0.1` only (`deploy/compose/compose.yaml`), so
+  nothing outside the VM reaches the coordinator;
 - workers and the coordinator talk over the Compose network, which only the
   containers on it share.
 

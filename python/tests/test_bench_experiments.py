@@ -2,11 +2,13 @@
 
 import csv
 import io
+import re
 import subprocess
 import textwrap
 from pathlib import Path
 
 import pytest
+import yaml
 
 SCRIPT = Path(__file__).resolve().parents[2] / "bench" / "experiments.sh"
 
@@ -283,7 +285,10 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
         """,
         check=False,
     )
-    calls = log.read_text().splitlines()
+    # The time a run's logs start from varies; the rest of the call does not.
+    calls = [
+        c.split(" 20")[0] if c.startswith("logs ") else c for c in log.read_text().splitlines()
+    ]
     if free_kib < 5 << 20:
         assert result.returncode == 1
         assert "under 5 GB free on /; stopping" in result.stderr
@@ -304,6 +309,7 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
                 "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"{flag}wordcount /out/exp-E1-s{exponent}-{combiner}-1 "
                 f"/out/exp-input-wordcount-100-{exponent}.txt",
+                "logs --no-color --timestamps --since",
             ]
         )
     assert calls == expected
@@ -326,6 +332,123 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
         ]
         assert float(row[11]) >= 0
         assert row[12:] == ["0", "0", "123", "1", "job-1"]
+
+
+def test_run_saves_the_clusters_logs_from_before_the_run(experiment, tmp_path):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        compose_stub() {
+            printf '%s\n' "$*" >> "$CALL_LOG"
+            case $1 in
+            logs) echo "coordinator-1  | 2026-10-30T00:00:00Z msg=hello" ;;
+            restart) ;;
+            *) echo job-1 ;;
+            esac
+        }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+            printf 'disk 10000000 0 9000000 0%% /\n'
+        }
+        status_stub() { printf 'job-1\tSUCCEEDED\nseconds\t2\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E1
+        run E1 base wordcount 2 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    saved = (tmp_path / "bench/results/E1/logs-base-wordcount-2.log").read_text()
+    assert saved == "coordinator-1  | 2026-10-30T00:00:00Z msg=hello\n"
+    # Taken before the workers restart, so their registrations are in it.
+    calls = log.read_text().splitlines()
+    (logs,) = (i for i, c in enumerate(calls) if c.startswith("logs "))
+    assert calls[0] == "restart worker" and logs > 0
+    assert re.fullmatch(
+        r"logs --no-color --timestamps --since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", calls[logs]
+    )
+
+
+def test_sampled_run_saves_logs_from_before_its_workers_restarted(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/input.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        save_logs() { printf 'save|%s|%s\\n' "$1" "$2" >> "$CALL_LOG"; }
+        python3() { :; }
+        compose_stub() { [ "$1" = restart ] || echo job-1; }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\\n'
+            printf 'disk 10000000 0 9000000 0%% /\\n'
+        }
+        status_stub() { printf 'job-1\\tSUCCEEDED\\nseconds\\t2\\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E3
+        start_sampler tasks bench/sample.csv
+        wait "$sampler"; sampler=
+        run E3 normal distsort 1 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    (saved,) = (c for c in log.read_text().splitlines() if c.startswith("save|"))
+    _, path, since = saved.split("|")
+    assert path == "bench/results/E3/logs-normal-distsort-1.log"
+    # The time start_sampler's restart began, not the time run began.
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", since)
+
+
+def test_run_reports_why_submit_failed_and_still_saves_the_logs(experiment, tmp_path):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        fresh() { :; }
+        compose_stub() {
+            case $1 in
+            logs) echo "coordinator-1  | msg=refused" ;;
+            *)
+                echo "rpc error: code = FailedPrecondition desc = job-3 is still running" >&2
+                return 1 ;;
+            esac
+        }
+        compose=(compose_stub)
+        mkdir -p bench/results/E1
+        run E1 base wordcount 1 4 ""
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "mr submit failed for E1 base run 1" in result.stderr
+    assert "job-3 is still running" in result.stderr
+    assert "msg=refused" in (tmp_path / "bench/results/E1/logs-base-wordcount-1.log").read_text()
+
+
+def test_save_logs_reports_a_failure_without_stopping(experiment, tmp_path):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        compose_stub() { echo "no such service" >&2; return 1; }
+        compose=(compose_stub)
+        save_logs out.log 2026-10-30T00:00:00Z
+        echo continued
+        """
+    )
+    assert result.stdout == "continued\n"
+    assert "could not save the cluster's logs to out.log" in result.stderr
 
 
 @pytest.mark.parametrize("failure", ["restart", "registration"])
@@ -532,9 +655,14 @@ def test_each_sampled_run_refreshes_workers_before_discovery_and_sampling(
                 f"-v {tmp_path}/bench/jobs:/jobs:ro "
                 "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"distsort /out/exp-E3-normal-{n} /out/input.txt",
+                "compose:logs --no-color --timestamps --since",
             ]
         )
-    assert log.read_text().splitlines() == expected
+    calls = [
+        c.split(" 20")[0] if c.startswith("compose:logs ") else c
+        for c in log.read_text().splitlines()
+    ]
+    assert calls == expected
     rows = list(csv.reader(io.StringIO(result.stdout)))
     assert [row[4] for row in rows] == ["1", "2"]
     assert all(row[15] == "1" for row in rows)
@@ -556,3 +684,217 @@ def test_e2_rejects_unknown_settings_before_starting(experiment, monkeypatch, se
     assert "E2_SETTINGS: unknown setting" in result.stderr
     assert "begun" not in result.stdout
     assert "configured" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "settings", ["mixed", "mixed-paper mixed-lates", "Mixed-late", "straggler-backups"]
+)
+def test_e7_rejects_unknown_settings_before_starting(experiment, monkeypatch, settings):
+    invoke, _ = experiment
+    monkeypatch.setenv("E7_SETTINGS", settings)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        argument="E7",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E7_SETTINGS: unknown setting" in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "cpus", ["1 0.5 0.25", "1 0.5 0.25 0.1 0.1", "1 0.5 0.25 slow", "1 0 1 1", "1 -1 1 1"]
+)
+def test_e7_rejects_cpu_limits_that_do_not_fit_four_workers(experiment, monkeypatch, cpus):
+    invoke, _ = experiment
+    monkeypatch.setenv("E7_CPUS", cpus)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        argument="E7",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E7_CPUS" in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e7_takes_settings_in_turn_with_their_overrides_and_throttles(
+    experiment, monkeypatch, repeat
+):
+    """Each setting gets its coordinator override and the same four CPU limits, restored after."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        configure() { note "configure|$1|${2:-}"; }
+        compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
+        compose=(compose_stub)
+        docker() { note "docker|$*"; }
+        start_sampler() { note "sample|$1|$2"; }
+        stop_sampler() { note stop; }
+        run() { note "run|$1|$2|$3|$4|$5|$slow"; }
+        """,
+        "E7",
+        after='note "defaults|$slow"',
+    )
+    assert result.stdout == ""
+    overrides = {
+        "mixed-paper": "",
+        "mixed-late": "speculation-late.yaml",
+        "mixed-off": "backups-off.yaml",
+    }
+    expected = ["begin|E7"]
+    orders = {1: list(overrides), 2: list(reversed(overrides))}
+    for n in range(1, int(repeat) + 1):
+        for setting in orders[n]:
+            expected.append(f"configure|4|{overrides[setting]}")
+            expected += [
+                f"docker|update --cpus {cpus} w{i}"
+                for i, cpus in enumerate(("1", "0.6", "0.3", "0.15"), 1)
+            ]
+            expected += [
+                f"sample|tasks|bench/results/E7/tasks-{setting}-{n}.csv",
+                f"run|E7|{setting}|distsort|{n}|4|w1 w2 w3 w4",
+                "stop",
+            ]
+            expected += [f"docker|update --cpus 1 w{i}" for i in range(1, 5)]
+    expected += ["configure|4|", "defaults|"]
+    assert log.read_text().splitlines() == expected
+
+
+def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", "1")
+    monkeypatch.setenv("E7_CPUS", "1 1 0.5 .2")
+    monkeypatch.setenv("E7_SETTINGS", "mixed-late")
+    invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { note "configure|$1|${2:-}"; }
+        compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
+        compose=(compose_stub)
+        docker() { note "docker|$*"; }
+        start_sampler() { :; }
+        stop_sampler() { :; }
+        run() { :; }
+        """,
+        "E7",
+    )
+    assert log.read_text().splitlines() == [
+        "configure|4|speculation-late.yaml",
+        "docker|update --cpus 1 w1",
+        "docker|update --cpus 1 w2",
+        "docker|update --cpus 0.5 w3",
+        "docker|update --cpus .2 w4",
+        *(f"docker|update --cpus 1 w{i}" for i in range(1, 5)),
+        "configure|4|",
+    ]
+
+
+def test_e7_stops_when_the_cluster_has_another_number_of_workers(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        begin() { :; }
+        configure() { :; }
+        compose_stub() { printf 'w1\nw2\nw3\n'; }
+        compose=(compose_stub)
+        docker() { echo "docker|$*" >> "$CALL_LOG"; }
+        run() { echo submitted >> "$CALL_LOG"; }
+        """,
+        "E7",
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "3 workers are running; expected 4 CPU limits" in result.stderr
+    assert log.read_text() == ""
+
+
+def test_cleanup_restores_every_throttled_worker(experiment):
+    """A script that exits mid-run (an error, Ctrl-C) leaves no worker throttled."""
+    invoke, log = experiment
+    invoke(
+        """
+        docker() { echo "docker|$*" >> "$CALL_LOG"; }
+        slow="w1 w2 w3 w4"
+        exit 0
+        """
+    )
+    assert log.read_text().splitlines() == [f"docker|update --cpus 1 w{i}" for i in range(1, 5)]
+
+
+def test_e7_is_run_by_name_and_left_out_of_all(experiment, tmp_path):
+    """E7 is groundwork for #59: `all` keeps running E0 to E6 only."""
+    invoke, _ = experiment
+    (tmp_path / "data/input/warpeace").mkdir(parents=True)
+    (tmp_path / "data/input/warpeace/warpeace.txt").write_text("text\n")
+    (tmp_path / "data/input/crawl").mkdir(parents=True)
+    (tmp_path / "data/input/crawl/a.warc.wet.gz").write_text("")
+    stubs = "".join(f"e{i}() {{ echo E{i}; }}\n" for i in range(8))
+    assert invoke(stubs, "E7").stdout.splitlines() == ["E7"]
+    assert invoke(stubs, "all").stdout.splitlines() == [f"E{i}" for i in range(7)]
+
+
+def test_usage_lists_e7(experiment):
+    invoke, _ = experiment
+    result = invoke("", "E9", check=False)
+    assert result.returncode == 2
+    assert "E0|E1|E2|E3|E4|E5|E6|E7|all" in result.stderr
+
+
+def test_every_compose_override_the_script_uses_exists_and_sets_the_speculation():
+    """E2 and E7 name an override in deploy/compose; it must be there and change the flag."""
+    text = SCRIPT.read_text()
+    root = SCRIPT.parents[1] / "deploy/compose"
+    used = set(re.findall(r"\bconfigure 4 ([\w.-]+\.yaml)", text))
+    assert used == {"backups-off.yaml", "speculation-late.yaml"}
+    flags = {"backups-off.yaml": "-backups=false", "speculation-late.yaml": "-speculation=late"}
+    for name in sorted(used):
+        override = yaml.safe_load((root / name).read_text())
+        command = override["services"]["coordinator"]["command"]
+        assert command[:5] == ["coordinator", "-addr", ":7070", "-http", ":8080"], name
+        assert command[command.index("-data-dir") + 1] == "/out/wal", name
+        assert command[-1] == flags[name], name
+
+
+@pytest.mark.parametrize(
+    ("curl", "reported"),
+    [("echo 'mr_workers 2'", "has 2"), ("return 22", "has none")],
+    ids=["wrong-count", "coordinator-unreachable"],
+)
+def test_registration_timeout_saves_the_logs_since_the_restart(
+    experiment, tmp_path, curl, reported
+):
+    invoke, log = experiment
+    result = invoke(
+        f"""
+        sleep() {{ :; }}
+        curl() {{ {curl}; }}
+        compose_stub() {{ printf 'compose:%s\\n' "$*" >> "$CALL_LOG"; }}
+        compose=(compose_stub)
+        metrics=http://unused
+        results_dir=bench/results/E1
+        fresh_at=2026-10-30T00:00:00.000000000Z
+        mkdir -p "$results_dir"
+        wait_workers 4
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"expected 4 workers, the coordinator {reported}" in result.stderr
+    assert log.read_text().splitlines() == [
+        "compose:logs --no-color --timestamps --since 2026-10-30T00:00:00.000000000Z"
+    ]
+    assert (tmp_path / "bench/results/E1/logs-registration-timeout.log").exists()

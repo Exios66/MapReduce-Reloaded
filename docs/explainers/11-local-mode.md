@@ -4,7 +4,7 @@
 
 The whole MapReduce pipeline in one process, one task at a time (§4.7):
 
-```
+```sh
 mr run -local -m 3 -r 4 wordcount out/ 'testdata/corpus/*.txt'
 python -m mapreduce_reloaded run --local -m 3 -r 4 wordcount out/ 'testdata/corpus/*.txt'
 ```

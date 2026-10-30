@@ -1,8 +1,10 @@
 # The five-minute demo
 
 A walkthrough for a course review or a portfolio, in the order that tells the
-story: the cluster, a job, the output, a failure, and the recovery. The same
-sequence runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
+story: the cluster, a job, the output, a failure, and the recovery.
+[`examples/demo.ipynb`](../examples/demo.ipynb) runs the same sequence cell by
+cell: it submits the compiled programs and the job file, plots the output,
+kills a worker during a 1 GiB sort and checks local mode.
 Timings are for the course VM.
 
 ## Before the clock starts

@@ -38,6 +38,19 @@ type Config struct {
 	// idle, a worker that asks for work gets a second attempt of a task
 	// still running elsewhere (§3.6).
 	Backups bool
+	// Speculation chooses how backup attempts are started once no task of
+	// the current phase is idle: SpeculationPaper (the paper's rule, §3.6),
+	// SpeculationLate (LATE, Zaharia et al., OSDI 2008) or SpeculationOff.
+	// Empty means Backups decides: paper if it is set, off if not.
+	Speculation string
+	// SpeculativeCap, SlowTaskPercentile, SlowNodePercentile and MinRuntime
+	// are the LATE settings (see LateParams). A zero field means its
+	// default: 0.1 of the workers, the 25th percentile for tasks and for
+	// workers, and twice HeartbeatInterval.
+	SpeculativeCap     float64
+	SlowTaskPercentile float64
+	SlowNodePercentile float64
+	MinRuntime         time.Duration
 	// Locate, if set, returns the hosts or zones that hold a split, which
 	// map tasks then prefer to run on (§3.4). It runs once per split, when
 	// the job is submitted.
@@ -66,6 +79,49 @@ type Config struct {
 	// Now, if set, replaces time.Now as the coordinator's clock, for tests
 	// of a clock that is set back.
 	Now func() time.Time
+}
+
+// The values of Config.Speculation.
+const (
+	SpeculationPaper = "paper"
+	SpeculationLate  = "late"
+	SpeculationOff   = "off"
+)
+
+// ValidSpeculation reports whether s is a value of Config.Speculation:
+// "", paper, late or off.
+func ValidSpeculation(s string) bool {
+	return s == "" || s == SpeculationPaper || s == SpeculationLate || s == SpeculationOff
+}
+
+// speculation returns how the server starts backup attempts.
+func (c Config) speculation() string {
+	switch {
+	case c.Speculation != "":
+		return c.Speculation
+	case c.Backups:
+		return SpeculationPaper
+	}
+	return SpeculationOff
+}
+
+// lateParams returns the LATE settings, with the defaults of Zaharia et al.
+// (OSDI 2008) for the zero fields.
+func (c Config) lateParams() LateParams {
+	p := LateParams{c.SpeculativeCap, c.SlowTaskPercentile, c.SlowNodePercentile, c.MinRuntime}
+	if p.SpeculativeCap == 0 {
+		p.SpeculativeCap = 0.1
+	}
+	if p.SlowTaskPercentile == 0 {
+		p.SlowTaskPercentile = 25
+	}
+	if p.SlowNodePercentile == 0 {
+		p.SlowNodePercentile = 25
+	}
+	if p.MinRuntime == 0 {
+		p.MinRuntime = 2 * c.HeartbeatInterval
+	}
+	return p
 }
 
 // Log is where a coordinator records its decisions. After a failed Append
@@ -196,8 +252,11 @@ func (s *Server) RegisterWorker(_ context.Context, req *pb.RegisterWorkerRequest
 	if err := s.failed(); err != nil {
 		return nil, err
 	}
+	id := s.workers.Register(req.GetWorker(), s.now())
+	slog.Info("worker registered", "worker", id, "host", req.GetWorker().GetHost(),
+		"shuffle_address", req.GetWorker().GetShuffleAddress(), "workers", s.workers.Len())
 	return &pb.RegisterWorkerResponse{
-		WorkerId:          s.workers.Register(req.GetWorker(), s.now()),
+		WorkerId:          id,
 		HeartbeatInterval: durationpb.New(s.cfg.HeartbeatInterval),
 	}, nil
 }
@@ -216,6 +275,7 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 	}
 	worker := req.GetWorkerId()
 	if !s.workers.Heartbeat(worker, s.now()) {
+		slog.Info("heartbeat from an unknown worker; told to register again", "worker", worker)
 		return &pb.HeartbeatResponse{Reregister: true}, nil
 	}
 	resp := &pb.HeartbeatResponse{ActiveJobs: &pb.ActiveJobs{}}
@@ -223,9 +283,15 @@ func (s *Server) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.Hea
 		resp.ActiveJobs.JobIds = []string{s.active.id}
 	}
 	for _, p := range req.GetRunning() {
-		if id := p.GetAttempt(); !s.runs(id, worker) {
+		id := p.GetAttempt()
+		if !s.runs(id, worker) {
+			slog.Debug("attempt told to stop", "worker", worker, "job", id.GetTask().GetJobId(),
+				"kind", kindName(id.GetTask().GetKind()), "index", id.GetTask().GetIndex(), "attempt", id.GetAttempt())
 			resp.Cancel = append(resp.Cancel, id)
+			continue
 		}
+		t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
+		s.active.tasks.SetFraction(t, id.GetAttempt(), worker, p.GetFractionDone(), s.now())
 	}
 	return resp, nil
 }
@@ -306,6 +372,9 @@ func (s *Server) SubmitJob(ctx context.Context, req *pb.SubmitJobRequest) (*pb.S
 		return nil, err
 	}
 	s.submit(rec, now)
+	slog.Info("job submitted", "job", rec.GetJobId(), "program", m.GetProgram(), "inputs", len(m.GetInputs()),
+		"output", m.GetOutput(), "map_tasks", len(splits), "reduce_tasks", m.GetNumReduceTasks(),
+		"combiner", m.GetUseCombiner(), "workers", s.workers.Len())
 	return &pb.SubmitJobResponse{JobId: rec.GetJobId()}, nil
 }
 
@@ -399,7 +468,7 @@ func (s *Server) compact() {
 
 // RequestTask hands an idle worker its next task: map tasks first, the
 // nearest to their input (§3.4), reduce tasks once every map task has
-// completed (§3.1), then backup attempts if enabled (§3.6).
+// completed (§3.1), then backup attempts if enabled (§3.6, or LATE).
 // It returns a wait instruction when no task is ready, or a shutdown
 // instruction after Shutdown. Errors are NotFound for an unknown worker,
 // Internal if assigning a task fails, or Unavailable if recording it fails
@@ -420,14 +489,19 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	if s.active != nil && !req.GetPaused() {
 		info := s.workerInfo(worker)
 		t, ok := s.active.tasks.Next(func(i uint32) int { return int(locality(s.active.splits[i], info)) })
+		backup := false
 		switch {
 		case ok && s.holdBack(t, info, now):
 			ok = false
-		case !ok && s.cfg.Backups:
+		case !ok && s.cfg.speculation() == SpeculationPaper:
 			t, ok = s.active.tasks.Backup(worker)
+			backup = ok
+		case !ok && s.cfg.speculation() == SpeculationLate:
+			t, ok = s.active.tasks.LateBackup(worker, now, s.cfg.lateParams(), s.workers.Len())
+			backup = ok
 		}
 		if ok {
-			return s.assign(t, worker, now)
+			return s.assign(t, worker, now, backup)
 		}
 	}
 	return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_Wait{
@@ -435,10 +509,10 @@ func (s *Server) RequestTask(_ context.Context, req *pb.RequestTaskRequest) (*pb
 	}}, nil
 }
 
-// assign starts an attempt at t, a task of the active job, on worker at now.
-// It returns the map or reduce assignment, or Internal for task table errors
+// assign starts an attempt at t, a task of the active job, on worker at now;
+// backup says it duplicates an attempt still running. It returns the map or reduce assignment, or Internal for task table errors
 // and Unavailable for log errors. An error does not roll back the attempt.
-func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskResponse, error) {
+func (s *Server) assign(t Task, worker string, now time.Time, backup bool) (*pb.RequestTaskResponse, error) {
 	j := s.active
 	attempt, err := j.tasks.Assign(t, worker, now)
 	if err != nil {
@@ -457,6 +531,8 @@ func (s *Server) assign(t Task, worker string, now time.Time) (*pb.RequestTaskRe
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}, now); err != nil {
 		return nil, err
 	}
+	slog.Info("task assigned", "job", j.id, "kind", kindName(t.Kind), "index", t.Index, "attempt", attempt,
+		"worker", worker, "backup", backup, "locality", rec.GetLocality())
 	if t.Kind == pb.TaskKind_TASK_KIND_MAP {
 		return &pb.RequestTaskResponse{Assignment: &pb.RequestTaskResponse_MapTask{
 			MapTask: &pb.MapTask{Attempt: id, Job: j.spec, Split: j.splits[t.Index], SkipRecords: skip},
@@ -543,10 +619,41 @@ func (s *Server) ReportTask(_ context.Context, req *pb.ReportTaskRequest) (*pb.R
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskReported{TaskReported: req}}, now); err != nil {
 		return nil, err
 	}
+	logReport(j, req, accepted, ended)
 	if ended {
 		j.cleanup()
 	}
 	return &pb.ReportTaskResponse{Accepted: accepted}, nil
+}
+
+// kindName is a task kind's name as the logs show it: map or reduce.
+func kindName(k pb.TaskKind) string {
+	return strings.ToLower(strings.TrimPrefix(k.String(), "TASK_KIND_"))
+}
+
+// logReport logs req, a worker's report on an attempt of j, and, if it ended
+// j, how j ended. accepted says the report completed its task, which a
+// failure or a slower twin of a finished task does not. ReportTask calls it
+// and Recover does not, so replaying the log repeats no event.
+func logReport(j *job, req *pb.ReportTaskRequest, accepted, ended bool) {
+	id := req.GetAttempt()
+	attrs := []any{"job", j.id, "kind", kindName(id.GetTask().GetKind()), "index", id.GetTask().GetIndex(),
+		"attempt", id.GetAttempt(), "worker", req.GetWorkerId()}
+	if f := req.GetFailure(); f != nil {
+		slog.Warn("task attempt failed", append(attrs, "err", f.GetMessage(), "fatal", f.GetFatal(),
+			"lost_output", f.GetLostOutput() != nil, "bad_record", f.FailedRecord != nil)...)
+	} else {
+		slog.Info("task attempt finished", append(attrs, "accepted", accepted)...)
+	}
+	if !ended {
+		return
+	}
+	secs := j.finished.Sub(j.submitted).Seconds()
+	if j.err != "" {
+		slog.Error("job failed", "job", j.id, "err", j.err, "seconds", secs)
+		return
+	}
+	slog.Info("job succeeded", "job", j.id, "seconds", secs)
 }
 
 // report applies req, received at at, to j, and says whether it completed
@@ -577,7 +684,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 		}
 		return false, s.active != j, err
 	}
-	accepted, err = j.tasks.Complete(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs())
+	accepted, err = j.tasks.CompleteAt(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs(), at)
 	if accepted {
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()

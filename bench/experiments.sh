@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The performance evaluation (design.md, "Performance evaluation") on
-# the Compose cluster: experiments E0 to E5, each run REPEAT times
+# the Compose cluster: experiments E0 to E7 (E7 is not part of `all`), each run REPEAT times
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
-# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|all
+# Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
@@ -25,11 +25,17 @@
 #   its pages in every language, which favors the combiner less; and book,
 #   War and Peace's lines repeated (bench/gen-book.py), a fixed-vocabulary
 #   best case. It needs scripts/fetch-data.sh warpeace crawl.
+# - E7 (#59, not part of `all`): distsort on four workers throttled to
+#   different CPU limits, with the coordinator's speculation set to the
+#   paper's rule (mixed-paper), LATE (mixed-late) or none (mixed-off);
+#   E7_CPUS sets the four limits and E7_SETTINGS picks some settings.
 #
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
 # time, tasks-LABEL.csv (scrape-tasks.py) or samples-LABEL.csv
-# (scrape-metrics.py) per run. bench/plot-experiments.py draws the plots.
+# (scrape-metrics.py) per run; and logs-SETTING-PROGRAM-RUN.log per run, what the
+# coordinator and workers logged from before the run's workers restarted
+# until it ended, one line per event with its container's name and time. bench/plot-experiments.py draws the plots.
 #
 # Every run's output is checksummed and compared with the first normal run
 # on the same input; a run that differs has valid=0 and is not plotted.
@@ -55,10 +61,13 @@ metrics=http://127.0.0.1:18780/metrics
 tmp=$(mktemp -d)
 sampler=
 ready=
-slow= # the worker E2 throttles, restored however the script exits
+fresh_at= # when fresh last began, for the logs of the run that follows it
+results_dir= # the running experiment's directory, set by begin
+slow= # the workers E2 and E7 throttle (container IDs), restored however the script exits
 cleanup() {
+    local c
     [ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
-    [ -z "$slow" ] || docker update --cpus 1 "$slow" >/dev/null 2>&1 || true
+    for c in $slow; do docker update --cpus 1 "$c" >/dev/null 2>&1 || true; done
     rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -71,6 +80,16 @@ mr=$tmp/mr
 
 in_volume() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine "$@"; }
 log() { echo "[$(date +%T)] $*" >&2; }
+
+# save_logs FILE SINCE: saves what the cluster's containers logged since
+# SINCE (an RFC 3339 time) to FILE, each line stamped and named for its
+# container. A run's logs are all that explains a failed, slow or invalid
+# run once the next run recreates the containers. A failure to save is
+# reported and does not stop the experiment.
+save_logs() {
+    "${compose[@]}" logs --no-color --timestamps --since "$2" > "$1" 2>&1 ||
+        echo "experiments: could not save the cluster's logs to $1" >&2
+}
 
 # configure WORKERS [OVERRIDE.yaml]: restarts the cluster with WORKERS
 # workers and a new coordinator, which reopens its log (E4 deletes the old
@@ -88,11 +107,17 @@ configure() {
 wait_workers() {
     local n
     for _ in $(seq 120); do
-        n=$(curl -fsS "$metrics" 2>/dev/null | awk '$1 == "mr_workers" { print $2 }')
+        # An unreachable coordinator is the likeliest failure: it must count as
+        # no workers and be retried, not stop the script under `set -e`.
+        n=$(curl -fsS "$metrics" 2>/dev/null | awk '$1 == "mr_workers" { print $2 }') || n=
         [ "$n" = "$1" ] && return 0
         sleep 0.5
     done
     echo "experiments: expected $1 workers, the coordinator has ${n:-none}" >&2
+    # Without these logs nothing explains the failed registration once the
+    # next start recreates the containers.
+    [ -z "$results_dir" ] ||
+        save_logs "$results_dir/logs-registration-timeout.log" "${fresh_at:-1970-01-01T00:00:00Z}"
     exit 1
 }
 
@@ -144,9 +169,11 @@ valid() {
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 
 # fresh WORKERS: restarts workers to clear their temporary map output and
-# waits for WORKERS registrations before sampling. Exits if / has less
-# than 5 GiB free; marks the workers ready for the next run.
+# waits for WORKERS registrations before sampling. Records the restart time
+# for the next run's logs and marks the workers ready. Exits if restarting or
+# registration fails, or if / has less than 5 GiB free or cannot be checked.
 fresh() {
+    fresh_at=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
     if ! "${compose[@]}" restart worker >/dev/null; then
         echo "experiments: worker restart failed; stopping" >&2
         exit 1
@@ -196,10 +223,17 @@ stop_sampler() {
 # EVENT_AT seconds after the job is submitted. The job is polled with
 # mr status, which, unlike submit -wait, outlives a coordinator restart.
 # The job uses the current submit_flags; its output directory is removed
-# before and after the run.
+# before submission and after a completed run. Attempts to save cluster logs
+# from before the workers restarted to logs-SETTING-PROGRAM-RUN.log in the
+# experiment's directory.
+# If submission fails, reports its error, attempts to save the logs and exits.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
-    local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
+    local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
+    # Before the workers restart, so the log holds their registrations too:
+    # a sampled run's workers restarted in start_sampler, before run.
+    since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
+    [ -z "$ready" ] || since=${fresh_at:-$since}
     in=$(input "$program")
     in_volume rm -rf "$out"
     [ -n "$ready" ] || fresh "$workers"
@@ -210,9 +244,11 @@ run() {
     # A job file is read from the repository's examples/ or bench/jobs/,
     # mounted read-only.
     job=$("${compose[@]}" run --rm -q -v "$PWD/examples:/examples:ro" -v "$PWD/bench/jobs:/jobs:ro" mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>/dev/null | tail -1)
+        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>"$tmp/submit.err" | tail -1) || job= # not to stop silently under set -e
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
+        cat "$tmp/submit.err" >&2
+        save_logs "$dir/logs-$setting-$program-$n.log" "$since"
         exit 1
     fi
     start=$(date +%s.%N)
@@ -242,6 +278,7 @@ run() {
         log "$exp $setting run $n finished before its event at ${at}s; marked invalid"
     fi
     [ -z "$pid" ] || wait "$pid" 2>/dev/null || true
+    save_logs "$dir/logs-$setting-$program-$n.log" "$since"
     echo "$exp,$setting,$program,$workers,$n,$size,$m,$r,$at,$state,$(counter seconds)," \
         "$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }'),$(counter backups),$(counter backups_won)," \
         "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$in" "$out"; else echo 0; fi),$job" |
@@ -280,6 +317,7 @@ begin() { # EXPERIMENT
     fi
     prune_volume "$1"
     mkdir -p "$dir"
+    results_dir=$dir
     echo "experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job" > "$dir/runs.csv"
     python3 - "$(git rev-parse HEAD)" "$(git status --porcelain | wc -l)" "$(docker version --format '{{.Server.Version}}')" > "$dir/machine.json" <<'EOF'
 import json, os, platform, sys
@@ -399,6 +437,85 @@ e2() {
     configure 4
 }
 
+# E7 is #59: the paper's backup rule, LATE and no backups, on workers of
+# different speeds. The four workers get the CPU limits in E7_CPUS (the
+# first worker gets the first), where E2 slows one. E7_SETTINGS limits it to
+# some settings, which take turns as in E2. It is not part of `all`, and
+# bench/plot-experiments.py does not draw it: runs.csv has the job times and
+# the backup counts.
+e7_settings=${E7_SETTINGS:-mixed-paper mixed-late mixed-off}
+e7_cpus=${E7_CPUS:-1 0.6 0.3 0.15}
+
+# throttle CPUS...: limits the running workers to CPUS, one value each, in
+# the order compose lists them. It saves their IDs in slow, so that cleanup
+# and unthrottle restore them.
+throttle() {
+    local ids i cpus=("$@")
+    mapfile -t ids < <("${compose[@]}" ps -q worker)
+    if [ "${#ids[@]}" != "$#" ]; then
+        echo "experiments: ${#ids[@]} workers are running; expected $# CPU limits" >&2
+        exit 1
+    fi
+    slow=${ids[*]}
+    for i in "${!ids[@]}"; do
+        docker update --cpus "${cpus[$i]}" "${ids[$i]}" >/dev/null
+    done
+}
+
+unthrottle() {
+    local c
+    for c in $slow; do docker update --cpus 1 "$c" >/dev/null; done
+    slow=
+}
+
+e7() {
+    local order s v n
+    # A misspelled setting would run as the paper's rule and be left out of
+    # the comparison, so reject it before the cluster starts.
+    for s in $e7_settings; do
+        case $s in
+        mixed-paper | mixed-late | mixed-off) ;;
+        *)
+            echo "E7_SETTINGS: unknown setting '$s'; expected mixed-paper, mixed-late or mixed-off" >&2
+            exit 2
+            ;;
+        esac
+    done
+    # shellcheck disable=SC2086 # E7_CPUS is a list
+    set -- $e7_cpus
+    if [ $# != 4 ]; then
+        echo "E7_CPUS: '$e7_cpus' has $# limits; expected 4, one for each worker" >&2
+        exit 2
+    fi
+    for v in "$@"; do
+        if ! [[ $v =~ ^([0-9]+\.?[0-9]*|\.[0-9]+)$ ]] || ! awk -v v="$v" 'BEGIN { exit !(v > 0) }'; then
+            echo "E7_CPUS: '$v' is not a positive number of CPUs" >&2
+            exit 2
+        fi
+    done
+    begin E7
+    for n in $(seq "$repeat"); do
+        order=$e7_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e7_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            case $setting in
+            mixed-off) configure 4 backups-off.yaml ;;
+            mixed-late) configure 4 speculation-late.yaml ;;
+            *) configure 4 ;;
+            esac
+            throttle "$@"
+            start_sampler tasks "bench/results/E7/tasks-$setting-$n.csv"
+            run E7 "$setting" distsort "$n" 4 ""
+            stop_sampler
+            unthrottle
+        done
+    done
+    configure 4
+}
+
 e3() {
     begin E3
     configure 4
@@ -491,6 +608,7 @@ E3) e3 ;;
 E4) e4 ;;
 E5) e5 ;;
 E6) e6 ;;
+E7) e7 ;;
 all)
     need_e6 # before E0, not after E5
     # Not an && list: set -e does not apply to a function called there.
@@ -503,7 +621,7 @@ all)
     e6
     ;;
 *)
-    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|all" >&2
+    echo "usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all" >&2
     exit 2
     ;;
 esac
