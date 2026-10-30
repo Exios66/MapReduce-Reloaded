@@ -101,15 +101,15 @@ verified by container inspection before every run. The grep cohort ran under
 768 MiB but used about 10 MiB per worker, so its cap did not constrain that
 workload; its nine trials remain a consistent cohort.
 
-### Provisional sort-matrix rows
+### Final sort-matrix rows
 
-The matrix has 33 of 39 rows landed so far. Walls per trial, in run order;
-medians are provisional until all 39 rows and their independent audit land.
-Wording follows the audit state in
-[`docs/evaluation.md`](../../../docs/evaluation.md);
-this is a live table, not the final cohort result.
+All 39 trials landed; the independent VM audit returned `verified: true,
+trials: 39` and produced the private cohort archive
+(`E0-E4-sort-1024-final-private.tar.gz`,
+`12c68cf1a6f8a1cd308cb692a38b7269bde1cd7ab87f4a486af3d734de8b1d39`). Walls per
+trial; medians are now final.
 
-| Trial | Walls r1, r2, r3 | Provisional median |
+| Trial | Walls r1, r2, r3 | Median |
 |---|---|---:|
 | E0 sort, 1 worker | 637.329, 635.715, 697.900 | 637.329 |
 | E0 sort, 2 workers | 379.293, 331.893, 336.173 | 336.173 |
@@ -118,14 +118,18 @@ this is a live table, not the final cohort result.
 | E2 no-backups | 192.858, 176.182, 187.657 | 187.657 |
 | E2 straggler (+backups) | 275.796, 247.221, 289.586 | 275.796 |
 | E2 straggler-no-backups | 300.841, 302.129, 303.864 | 302.129 |
-| E3 normal | 208.768, 198.884 | 203.826 |
-| E3 kill 25% | 237.757, 236.837 | 237.297 |
-| E3 kill 50% | 240.134, 238.461 | 239.298 |
-| E3 kill 75% | 268.427, 268.682 | 268.555 |
-| E4 normal | 198.494, 193.454 | 195.974 |
-| E4 coordinator-restart | 186.082, 197.613 | 191.847 |
+| E3 normal | 208.768, 198.884, 217.532 | 208.768 |
+| E3 kill 25% | 237.757, 236.837, 233.621 | 236.837 |
+| E3 kill 50% | 240.134, 238.461, 239.578 | 239.578 |
+| E3 kill 75% | 268.427, 268.682, 361.989 | 268.682 |
+| E4 normal | 198.494, 193.454, 188.990 | 193.454 |
+| E4 coordinator-restart | 186.082, 197.613, 188.194 | 188.194 |
 
-The remaining six rows (trial-3 E3 and E4 blocks) are running. One E2
+Scale-up medians: **1 → 4 worker speedup 3.33×** (637.329 → 191.454). Within
+E3 the kill medians (236.837 / 239.578 / 268.682) sit **+14 / +15 / +33%** over
+the normal median 208.768, and the kill-75 run-3 outlier (361.989 s wall; no
+OOM, all four workers exited cleanly, output verified) is retained as a range
+bound rather than an excluded row. One E2
 straggler r2 attempt (`kill-75` run 2 as labelled in the ledger) was rejected
 by the telemetry gate after an unscheduled second-worker container OOM; its
 diagnostics are retained, its output was registered as a rejection (no
