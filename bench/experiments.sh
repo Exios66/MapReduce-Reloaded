@@ -124,8 +124,8 @@ wait_workers() {
 # cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: just before a job is
 # submitted, appends to DIR/cache.jsonl a "start" row with the state of the
 # kernel's page cache the job begins with, and cache_finish appends an "end"
-# row after it with the disk sectors the host read meanwhile, which is the
-# direct evidence of a cold or warm trial: a warm one reads almost none. The
+# row after it with a host-wide disk sector counter, including reads by other
+# processes, which cannot determine whether this trial's input was cached. The
 # input is written shortly before the first trial and later trials read it
 # from memory when it fits, so trials are warm unless DROP_CACHES=1, which
 # flushes and drops the page, dentry and inode caches first. "Cold" means
@@ -160,11 +160,11 @@ cache_finish() {
 # cache_row DIR PHASE EXPERIMENT SETTING PROGRAM RUN DROPPED: appends one row
 # of DIR/cache.jsonl. Fields the host cannot report (macOS has no /proc) are
 # null. disk_read_sectors counts whole disks only, so a partition is not
-# counted twice.
+# counted twice; if none are recognized, the counter is null.
 cache_row() {
     local mem_free cached dirty ram sectors
     read -r mem_free cached dirty ram < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } $1 == "Dirty:" { d = $2 } $1 == "MemTotal:" { t = $2 } END { print f + 0, c + 0, d + 0, t + 0 }' /proc/meminfo 2>/dev/null) || true
-    sectors=$(awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+)$/ { s += $6 } END { print s + 0 }' /proc/diskstats 2>/dev/null) || sectors=
+    sectors=$(awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$/ { s += $6; found = 1 } END { if (found) print s + 0 }' /proc/diskstats 2>/dev/null) || sectors=
     printf '{"phase":"%s","experiment":"%s","setting":"%s","program":"%s","run":%s,"at":"%s","dropped":%s,"input_bytes":%s,"mem_free_kib":%s,"cached_kib":%s,"dirty_kib":%s,"ram_kib":%s,"disk_read_sectors":%s}\n' \
         "$2" "$3" "$4" "$5" "$6" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$7" "$size" \
         "${mem_free:-null}" "${cached:-null}" "${dirty:-null}" "${ram:-null}" "${sectors:-null}" >> "$1/cache.jsonl"

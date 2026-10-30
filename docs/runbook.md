@@ -176,9 +176,9 @@ plots committed in `bench/evaluation/`, which come from the saved runs there:
 Every trial appends two rows to `bench/results/EXPERIMENT/cache.jsonl`: a
 `start` row at submission (`MemFree`, `Cached`, `Dirty` and `MemTotal` in
 KiB, the input's size, and whether the cache was dropped) and an `end` row
-with the sectors the host's disks had read by then. The difference between
-the `disk_read_sectors` of the two rows is the direct evidence of a cold or a
-warm trial: a warm one reads almost nothing.
+with the sectors the host's disks had read by then. `disk_read_sectors` is a
+host-wide counter that includes reads by other processes. The difference
+between the rows cannot determine whether this trial's input was in cache.
 
 Trials are warm by default. The input is written moments before the first
 trial and fits in RAM (1 GiB of 8 GB), so reads come from memory, and the

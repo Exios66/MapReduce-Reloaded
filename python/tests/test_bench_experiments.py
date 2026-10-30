@@ -949,6 +949,44 @@ def test_cache_row_reports_null_for_what_the_host_cannot_say(experiment, tmp_pat
         assert row[field] is None
 
 
+@pytest.mark.parametrize(
+    ("diskstats", "expected"),
+    [
+        (
+            "8 0 sda 0 0 11\n8 1 sda1 0 0 90\n"
+            "252 0 vda 0 0 12\n202 0 xvda 0 0 13\n"
+            "259 0 nvme0n1 0 0 14\n259 1 nvme0n1p1 0 0 90\n"
+            "179 0 mmcblk0 0 0 15\n179 1 mmcblk0p1 0 0 90\n",
+            65,
+        ),
+        ("179 0 mmcblk0 0 0 0\n", 0),
+        ("7 0 loop0 0 0 42\n179 1 mmcblk0p1 0 0 90\n", None),
+        ("", None),
+    ],
+)
+def test_cache_row_counts_recognized_whole_disks(
+    experiment, tmp_path, monkeypatch, diskstats, expected
+):
+    invoke, _ = experiment
+    fixture = tmp_path / "diskstats"
+    fixture.write_text(diskstats)
+    monkeypatch.setenv("DISKSTATS_FIXTURE", str(fixture))
+    invoke(
+        """
+        awk() {
+            if [ "$2" = /proc/diskstats ]; then
+                command awk "$1" "$DISKSTATS_FIXTURE"
+            else
+                command awk "$@"
+            fi
+        }
+        cache_prepare bench/results/E1 E1 base grep 1
+        """
+    )
+    row = json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())
+    assert row["disk_read_sectors"] == expected
+
+
 def test_cache_prepare_drops_the_caches_when_asked(experiment, tmp_path, monkeypatch):
     invoke, log = experiment
     monkeypatch.setenv("DROP_CACHES", "1")
