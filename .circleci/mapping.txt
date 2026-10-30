@@ -58,6 +58,8 @@
 ^design\.md$ run-python
 ^docs/README\.md$ run-python
 ^docs/design/0001-languages-and-shared-contract\.md$ run-python
+^CHANGELOG\.md$ run-python
+^AGENTS\.md$ run-python
 ^docs/design/0014-ci-on-pull-requests\.md$ run-python
 ^docs/roadmap\.md$ run-python
 ^docs/roadmap-explained\.md$ run-python

@@ -14,6 +14,49 @@ agent's or a tool's identity.
 - Avoid posting GitHub comments. Fix review findings in code, and resolve
   threads without replying unless a reply is needed.
 
+## Changelog: every PR adds its entry
+
+`CHANGELOG.md` records every notable change, newest first, in the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format, with
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) for releases.
+`python/tests/test_changelog.py` checks its layout in `make check`.
+The file turns off pymarkdown's duplicate-heading rule (MD024) for itself
+only, because every release repeats the same categories; keep that pragma.
+
+### In every PR
+
+1. Add one bullet per notable change under `## [Unreleased]`, in the same
+   PR as the change, under the category that fits: `Added`, `Changed`,
+   `Deprecated`, `Removed`, `Fixed` or `Security`. Create the `###`
+   subsection if it is missing, in that order, and never repeat one.
+2. Write for someone using the repository: what changed and where, in plain
+   words, not how it was done. Match the existing entries: start with the
+   area (`Python coordinator:`, `CI:`, `Docs:`), name files and flags in
+   backticks, and cite the ADR when there is one.
+3. End each bullet with the PR number, `(#NNN)`. You learn it when you open
+   the PR; add it in the next push, a review round's `[skip ci]` push or the
+   final push, so it never costs a pipeline of its own.
+4. A change no user would notice (a typo, a comment, a test-only refactor)
+   needs no entry. When unsure, add one.
+5. When merging `main` into the branch conflicts in `CHANGELOG.md`, keep
+   both sides' bullets; never drop another PR's entry.
+
+### Cutting a release
+
+Only the repository owner decides when to release. Agents tag or publish
+releases only when asked. While the version is 0.y.z, raise the minor
+version when the release adds or changes behavior, and the patch version
+when it only fixes bugs or changes docs. To cut version `X.Y.Z`:
+
+1. In one PR, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, with
+   today's date and a one- or two-sentence summary under it, and add a new,
+   empty `## [Unreleased]` above it.
+2. Update the links at the bottom: `[Unreleased]` compares `vX.Y.Z...HEAD`,
+   and a new `[X.Y.Z]` line compares the previous tag with `vX.Y.Z`.
+3. Once that PR merges, tag the merge commit on `main` as `vX.Y.Z` and
+   publish a GitHub release named `Version X.Y.Z` whose notes are that
+   version's section.
+
 ## CI: one full run per PR, at the end
 
 CircleCI's Free plan is the only CI (docs/ci.md, ADR 0014), and its credits
