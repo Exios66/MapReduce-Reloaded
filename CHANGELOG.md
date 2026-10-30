@@ -88,6 +88,10 @@ cut a release.
 
 ### Fixed
 
+- Go tests: the cluster tests that run a whole job (`runJob`) give workers a
+  5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
+  longer makes a worker re-register and fail `TestClusterWorkerMetrics`
+  (#310).
 - CI: a push to `main` no longer ends in a config error. The continuation
   orb's `finish` command sends `version: 2`, which CircleCI no longer
   accepts, so `.circleci/config.yml` continues with the empty 2.1
