@@ -121,6 +121,57 @@ wait_workers() {
     exit 1
 }
 
+# cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: before submission,
+# appends a "start" snapshot to DIR/cache.jsonl; cache_finish records the
+# corresponding "end" snapshot. disk_read_sectors is a host-wide counter
+# including reads by other processes; it cannot determine whether this trial's
+# input was cached. Without DROP_CACHES=1, the input may remain cached. With
+# it, pending writes are synced and the kernel's page, dentry and inode caches
+# are dropped across the whole machine. This needs root or passwordless sudo
+# and a writable /proc/sys; failure to drop exits before recording the start
+# row. Every trial of one comparison must
+# share a cache state; docs/runbook.md says so.
+cache_prepare() {
+    local dropped=false
+    mkdir -p "$1"
+    if [ "${DROP_CACHES:-}" = 1 ]; then
+        sync
+        if [ "$(id -u)" = 0 ]; then
+            echo 3 > /proc/sys/vm/drop_caches || dropped=failed
+        else
+            echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null || dropped=failed
+        fi
+        if [ "$dropped" = failed ]; then
+            echo "experiments: DROP_CACHES=1, but the page cache could not be dropped (needs root or passwordless sudo, and a writable /proc/sys)" >&2
+            exit 1
+        fi
+        dropped=true
+    fi
+    cache_row "$1" start "$2" "$3" "$4" "$5" "$dropped"
+}
+
+# cache_finish DIR EXPERIMENT SETTING PROGRAM RUN: appends an "end" snapshot
+# to DIR/cache.jsonl with dropped set to null.
+cache_finish() {
+    cache_row "$1" end "$2" "$3" "$4" "$5" null
+}
+
+# cache_row DIR PHASE EXPERIMENT SETTING PROGRAM RUN DROPPED: appends a JSON
+# snapshot to DIR/cache.jsonl. DROPPED is the JSON literal true, false or
+# null; input_bytes comes from SIZE. Memory values are in KiB. An unavailable
+# metric is null when no value is read; missing memory fields in readable data
+# are zero. disk_read_sectors is a cumulative count for whole sd, vd, xvd,
+# nvme and mmcblk disks, excluding partitions and other device names. It is
+# null when no disk is recognized. An append error is returned to the caller.
+cache_row() {
+    local mem_free cached dirty ram sectors
+    read -r mem_free cached dirty ram < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } $1 == "Dirty:" { d = $2 } $1 == "MemTotal:" { t = $2 } END { print f + 0, c + 0, d + 0, t + 0 }' /proc/meminfo 2>/dev/null) || true
+    sectors=$(awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$/ { s += $6; found = 1 } END { if (found) print s + 0 }' /proc/diskstats 2>/dev/null) || sectors=
+    printf '{"phase":"%s","experiment":"%s","setting":"%s","program":"%s","run":%s,"at":"%s","dropped":%s,"input_bytes":%s,"mem_free_kib":%s,"cached_kib":%s,"dirty_kib":%s,"ram_kib":%s,"disk_read_sectors":%s}\n' \
+        "$2" "$3" "$4" "$5" "$6" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$7" "$size" \
+        "${mem_free:-null}" "${cached:-null}" "${dirty:-null}" "${ram:-null}" "${sectors:-null}" >> "$1/cache.jsonl"
+}
+
 # input PROGRAM: generates PROGRAM's input once and prints its path.
 # Cached paths include size in bytes and, for word count, the current zipf
 # exponent used to generate the input.
@@ -225,8 +276,10 @@ stop_sampler() {
 # The job uses the current submit_flags; its output directory is removed
 # before submission and after a completed run. Attempts to save cluster logs
 # from before the workers restarted to logs-SETTING-PROGRAM-RUN.log in the
-# experiment's directory.
-# If submission fails, reports its error, attempts to save the logs and exits.
+# experiment's directory. Records a cache start snapshot before submission
+# and an end snapshot after polling finishes, including on failure or timeout.
+# If cache dropping fails, exits before submission. If submission fails,
+# reports its error, attempts to save the logs and exits without an end row.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
@@ -239,6 +292,7 @@ run() {
     [ -n "$ready" ] || fresh "$workers"
     ready=
     log "$exp $setting $program run $n"
+    cache_prepare "$dir" "$exp" "$setting" "$program" "$n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
     # A job file is read from the repository's examples/ or bench/jobs/,
@@ -270,6 +324,7 @@ run() {
         state=$(awk 'NR == 1 { print $2 }' "$tmp/status")
     done
     end=$(date +%s.%N)
+    cache_finish "$dir" "$exp" "$setting" "$program" "$n"
     # An event still pending missed the job: cancel it, and do not count the run.
     local missed=0
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -303,7 +358,8 @@ prune_volume() {
 
 # begin EXPERIMENT: starts the experiment's results. Results of an earlier
 # run move to bench/results/previous/, which keeps the last three per
-# experiment; results worth keeping go in bench/evaluation/ (bench/README.md).
+# experiment and reports each older result before deleting it; results worth
+# keeping go in bench/evaluation/ (bench/README.md).
 begin() { # EXPERIMENT
     local dir=bench/results/$1 old=()
     if [ -f "$dir/runs.csv" ]; then
@@ -311,6 +367,7 @@ begin() { # EXPERIMENT
         mv "$dir" "bench/results/previous/$1-$(date +%Y%m%d-%H%M%S)"
         old=("bench/results/previous/$1-"*) # oldest first: the names sort by time
         while [ "${#old[@]}" -gt 3 ]; do
+            echo "experiments: deleting ${old[0]}: only the last three runs of $1 are kept; results worth keeping go in bench/evaluation/" >&2
             rm -rf "${old[0]}"
             old=("${old[@]:1}")
         done

@@ -45,7 +45,13 @@ the merge base, turns the changed files into six boolean pipeline
 parameters, and continues with `.circleci/continue-config.yml`, which holds
 the jobs.
 
-Filtering applies to PR branches only. A push to `main` runs no CI jobs
+Filtering applies to PR branches only. The repository is connected to
+CircleCI twice, through the project `gh/Exios66/MapReduce-Reloaded` (the one
+in use, `pipeline.project.type` is `github`) and through a second project made
+by the GitHub App (`circleci`), and both build every push. The setup job
+continues with the empty config when `pipeline.project.type` is `circleci`, so
+the second project spends one small job per push instead of the whole suite.
+Deleting that project in CircleCI ends even that. A push to `main` runs no CI jobs
 (ADR 0021): there the `select` job continues with the empty
 `.circleci/empty-continue-config.yml` instead of selecting, so the pipeline ends after that one small job.
 Branch protection merges a PR only when its six checks passed on a branch up

@@ -172,6 +172,31 @@ plots committed in `bench/evaluation/`, which come from the saved runs there:
 `python/.venv/bin/python bench/plot-experiments.py bench/evaluation bench/evaluation` (see
 [bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
+
+Every trial appends two rows to `bench/results/EXPERIMENT/cache.jsonl`: a
+`start` row at submission (`MemFree`, `Cached`, `Dirty` and `MemTotal` in
+KiB, the input's size, and whether the cache was dropped) and an `end` row
+with the sectors the host's disks had read by then. `disk_read_sectors` is a
+host-wide counter that includes reads by other processes. The difference
+between the rows cannot determine whether this trial's input was in cache.
+
+Trials are warm by default. The input is written moments before the first
+trial and fits in RAM (1 GiB of 8 GB), so reads come from memory, and the
+read rates of these runs are not comparable with the 2004 paper's, which read
+from disk. Read them as relative comparisons (combiner on and off, a failure
+or a straggler). At 10 GB the input exceeds RAM and trials are cold in part
+by construction.
+
+`DROP_CACHES=1` flushes and drops the kernel's page, dentry and inode caches
+before each trial, after the workers restart and before submission, so it
+also costs the workers their own pages. "Cold" means that and nothing more;
+process memory and the coordinator's state are not reset. It acts on the
+whole machine, including any other user or campaign on it, so set it only
+for runs on the course VM that nothing else is using. It runs as root or
+through `sudo -n tee`, and the experiment stops if that fails. Every trial of
+one comparison must share a cache state (all dropped or none), so set it for
+all of E1 or none of it, and do not compare the `start` rows' `dropped`
+values across groups.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 `bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not
 part of `all` and has not been run; see

@@ -6,6 +6,7 @@
 /go/mr
 *.test
 *.out
+/go/.cover/
 *.prof
 /go/vendor/
 go.work.sum
@@ -64,3 +65,6 @@ pip-wheel-metadata/
 *.iml
 .DS_Store
 Thumbs.db
+
+# chunk local pool state
+.chunk/*-pool.json

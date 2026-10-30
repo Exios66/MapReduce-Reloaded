@@ -19,6 +19,17 @@ cut a release.
   Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
   `Makefile`) with `store_test_results`, so CircleCI shows each test, its
   time and its failures, and keep them as artifacts (#314).
+- Status page (Go and Python): `/status.json` serves the status as data,
+  and the page updates itself every two seconds from an inline script, with
+  a pause button and a notice when the coordinator stops answering. Without
+  scripts it still reloads with `<noscript>`. ADR 0022 records the change
+  (#312).
+- Status page (Go and Python): job cards link to themselves (`#job-<id>`),
+  show host- and zone-local map counts, and the workers table shows zone,
+  slots in use and heartbeat age. Badges carry a symbol as well as a color,
+  the tables scroll on narrow screens, and tests check that both pages share
+  one stylesheet, load nothing external, and keep text at WCAG AA contrast
+  (#311).
 - Python and Go coordinators: LATE speculation (Zaharia et al., ADR 0019) as
   an alternative to the paper's backups, selected with `-speculation=late`
   on the Go coordinator; the Python coordinator reports task progress in
@@ -66,9 +77,15 @@ cut a release.
   kill step (#303).
 - Docs: the chaos explainer says what `make chaos` covers and that dropped
   packets are out of scope (#287).
+- Go coverage: each package's coverage counts every test in the module
+  and the runs of the commands that `internal/e2e` builds, through
+  `-coverpkg` and `GOCOVERDIR` in `make go-test` (#245).
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
   LATE speculation cites #284, and E0 to E7 ranges are corrected.
+- Bench: each trial records the page cache's state in `cache.jsonl`, an
+  optional `DROP_CACHES=1` makes trials cold, and `begin` says which older
+  results it deletes (#310).
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed
@@ -78,6 +95,15 @@ cut a release.
 
 ### Fixed
 
+- Go tests: the cluster tests that run a whole job (`runJob`) give workers a
+  5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
+  longer makes a worker re-register and fail `TestClusterWorkerMetrics`
+  (#310).
+- CI: the repository's second CircleCI project, made by the GitHub App, no
+  longer runs the suite. Both projects built every push, doubling credit use
+  and posting statuses that could disagree; the setup job now continues
+  with the empty config when `pipeline.project.type` is `circleci`, so only
+  `gh/Exios66/MapReduce-Reloaded` runs it (#318).
 - CI: a push to `main` no longer ends in a config error. The continuation
   orb's `finish` command sends `version: 2`, which CircleCI no longer
   accepts, so `.circleci/config.yml` continues with the empty 2.1

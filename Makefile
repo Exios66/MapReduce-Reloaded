@@ -216,10 +216,21 @@ proto-check: proto-lint proto-breaking proto
 # MR_PYTHON lets go/cmd/mr compare the Go examples with Python's (#153); a
 # relative PYTHON is a command name, looked up on the PATH.
 # Each package's coverage must stay at or over its floor in go/cover-floors.txt
-# and python/cover-floors.txt (scripts/cover.py, #161).
+# and python/cover-floors.txt (scripts/cover.py, #161). A Go package's
+# coverage counts every test in the module (-coverpkg), and the runs of the
+# commands that internal/e2e builds, which write their counters to
+# GO_COVERDIR; go/cover.out holds both. The race detector runs in a pass of
+# its own: with -coverpkg it makes every package's counters atomic, which
+# slows the cluster tests past their deadlines on a 2-CPU runner.
+GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
 	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/go)
-	cd go && MR_PYTHON=$(PYTHON) $(GOTEST) -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
+	cd go && MR_PYTHON=$(PYTHON) $(GOTEST) -race -shuffle=on ./...
+	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) $(GOTEST) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
+		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
+	fi
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
 # The Go tests that read python/: cmd/mr's golden comparison with the Python
