@@ -122,28 +122,52 @@ wait_workers() {
 }
 
 # cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: just before a job is
-# submitted, appends to DIR/cache.jsonl the state of the kernel's page cache
-# that the job starts with, so a result is never read as cold when it was
-# warm. The input is written shortly before the first trial, and the next
-# trials read it from memory when it fits, so trials are warm unless
-# DROP_CACHES=1, which flushes and drops the page, dentry and inode caches
-# first. Dropping needs root, so it uses passwordless sudo and stops the
-# experiment if it cannot: a run asked to be cold must not be recorded as
-# one. Only the course VM's own runs should set it.
+# submitted, appends to DIR/cache.jsonl a "start" row with the state of the
+# kernel's page cache the job begins with, and cache_finish appends an "end"
+# row after it with the disk sectors the host read meanwhile, which is the
+# direct evidence of a cold or warm trial: a warm one reads almost none. The
+# input is written shortly before the first trial and later trials read it
+# from memory when it fits, so trials are warm unless DROP_CACHES=1, which
+# flushes and drops the page, dentry and inode caches first. "Cold" means
+# the kernel's page cache and nothing else. Dropping affects the whole
+# machine, needs root, and stops the experiment if it fails: a run asked to
+# be cold must not be recorded as one. Every trial of one comparison must
+# share a cache state; docs/runbook.md says so.
 cache_prepare() {
-    local dropped=false mem_free cached
+    local dropped=false
     mkdir -p "$1"
     if [ "${DROP_CACHES:-}" = 1 ]; then
         sync
-        if ! echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1; then
-            echo "experiments: DROP_CACHES=1, but the page cache cannot be dropped (needs passwordless sudo on Linux); stopping" >&2
+        if [ "$(id -u)" = 0 ]; then
+            echo 3 > /proc/sys/vm/drop_caches || dropped=failed
+        else
+            echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null || dropped=failed
+        fi
+        if [ "$dropped" = failed ]; then
+            echo "experiments: DROP_CACHES=1, but the page cache could not be dropped (needs root or passwordless sudo, and a writable /proc/sys)" >&2
             exit 1
         fi
         dropped=true
     fi
-    read -r mem_free cached < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } END { print f + 0, c + 0 }' /proc/meminfo 2>/dev/null) || true
-    printf '{"experiment":"%s","setting":"%s","program":"%s","run":%s,"at":"%s","dropped":%s,"mem_free_kib":%s,"cached_kib":%s}\n' \
-        "$2" "$3" "$4" "$5" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$dropped" "${mem_free:-null}" "${cached:-null}" >> "$1/cache.jsonl"
+    cache_row "$1" start "$2" "$3" "$4" "$5" "$dropped"
+}
+
+# cache_finish DIR EXPERIMENT SETTING PROGRAM RUN: appends the "end" row.
+cache_finish() {
+    cache_row "$1" end "$2" "$3" "$4" "$5" null
+}
+
+# cache_row DIR PHASE EXPERIMENT SETTING PROGRAM RUN DROPPED: appends one row
+# of DIR/cache.jsonl. Fields the host cannot report (macOS has no /proc) are
+# null. disk_read_sectors counts whole disks only, so a partition is not
+# counted twice.
+cache_row() {
+    local mem_free cached dirty ram sectors
+    read -r mem_free cached dirty ram < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } $1 == "Dirty:" { d = $2 } $1 == "MemTotal:" { t = $2 } END { print f + 0, c + 0, d + 0, t + 0 }' /proc/meminfo 2>/dev/null) || true
+    sectors=$(awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+)$/ { s += $6 } END { print s + 0 }' /proc/diskstats 2>/dev/null) || sectors=
+    printf '{"phase":"%s","experiment":"%s","setting":"%s","program":"%s","run":%s,"at":"%s","dropped":%s,"input_bytes":%s,"mem_free_kib":%s,"cached_kib":%s,"dirty_kib":%s,"ram_kib":%s,"disk_read_sectors":%s}\n' \
+        "$2" "$3" "$4" "$5" "$6" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$7" "$size" \
+        "${mem_free:-null}" "${cached:-null}" "${dirty:-null}" "${ram:-null}" "${sectors:-null}" >> "$1/cache.jsonl"
 }
 
 # input PROGRAM: generates PROGRAM's input once and prints its path.
@@ -296,6 +320,7 @@ run() {
         state=$(awk 'NR == 1 { print $2 }' "$tmp/status")
     done
     end=$(date +%s.%N)
+    cache_finish "$dir" "$exp" "$setting" "$program" "$n"
     # An event still pending missed the job: cancel it, and do not count the run.
     local missed=0
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
