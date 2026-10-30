@@ -176,9 +176,26 @@ Bump a `-v1-` in a key to throw a cache away.
 
 ## Triggers
 
-The workflow runs when a PR is opened and on each new commit to a PR branch.
-A push to `main` runs only the `select` job, which ends the pipeline
-(ADR 0021). It needs no secrets, so a build triggered by a fork's PR
+The project has one pipeline, `quality-gate` (a GitHub App pipeline), with
+exactly one trigger: the preset "PR opened or pushed to, default branch and
+tag pushes" (Project Settings, Triggers). Each event starts one pipeline:
+
+- Opening a PR, and each push to a PR branch, runs the selected jobs.
+  `[skip ci]` in the pushed head commit skips a push's pipeline, but not the
+  one that opening a PR starts.
+- A push to `main` runs only the `select` job, which ends the pipeline
+  (ADR 0021).
+- A tag push runs `select`, which compares the tagged commit with `main` at
+  their merge base. A tag on a commit already in `main` changes no files, so
+  five jobs skip in seconds and `mapping-coverage` checks that selection. A
+  tag on a commit not yet in `main` runs the jobs its changes select.
+
+Do not add a second trigger. Until 2026-10-29 a separate "Pushes to default
+branch" trigger also matched `main`, so every push to `main` started two
+pipelines. The trigger lives in the CircleCI settings, not in this
+repository, so this section is its record.
+
+The pipeline needs no secrets, so a build triggered by a fork's PR
 does not see any. Whether CircleCI builds fork PRs at all is a project
 setting (Project Settings, Advanced, "Build fork pull requests"). Leave it on
 only while no secret is added to the project. The checks need none.
