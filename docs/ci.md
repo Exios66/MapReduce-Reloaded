@@ -45,9 +45,15 @@ the merge base, turns the changed files into six boolean pipeline
 parameters, and continues with `.circleci/continue-config.yml`, which holds
 the jobs.
 
-Filtering applies to PR branches only. A push to `main` runs no CI jobs
-(ADR 0021): there the `select` job runs the continuation orb's `finish`
-command instead of selecting, so the pipeline ends after that one small job.
+Filtering applies to PR branches only. The repository is connected to
+CircleCI twice, through the project `gh/Exios66/MapReduce-Reloaded` (the one
+in use, `pipeline.project.type` is `github`) and through a second project made
+by the GitHub App (`circleci`), and both build every push. The setup job
+continues with the empty config when `pipeline.project.type` is `circleci`, so
+the second project spends one small job per push instead of the whole suite.
+Deleting that project in CircleCI ends even that. A push to `main` runs no CI jobs
+(ADR 0021): there the `select` job continues with the empty
+`.circleci/empty-continue-config.yml` instead of selecting, so the pipeline ends after that one small job.
 Branch protection merges a PR only when its six checks passed on a branch up
 to date with `main`, so the merged tree was already tested. Should a `main`
 pipeline ever continue, the script selects `run-all` there and each job's
@@ -81,7 +87,7 @@ regex matches it. Three rules keep the selection conservative:
 | `proto/**`, `buf.yaml`, `go/gen/**`, `python/mapreduce_reloaded/gen/**` | proto (it regenerates the code and fails if the committed copy differs) |
 | `testdata/**` | go, python-3.11, python-3.13 |
 | `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
-| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `docs/design/0001-*`, `docs/design/0014-*`, `bench/README.md`, `bench/*.py`, `bench/*.sh`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `go/examples/**`, `.github/workflows/**`, `.coderabbit.yaml`, `.codeant/**` | python-3.11, python-3.13, and lint where the file is docs |
+| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `docs/design/0001-*`, `docs/design/0014-*`, `bench/README.md`, `bench/*.py`, `bench/*.sh`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `go/examples/**`, `.coderabbit.yaml`, `.codeant/**` | python-3.11, python-3.13, and lint where the file is docs |
 | files outside `go/` the Go tests read: `README.md`, `docs/paper-mapping.md`, `examples/**`, `bench/jobs/**`, `deploy/compose/monitoring/**` | go, and lint where the file is docs |
 
 The cross-directory rows come from tracing every file the Go and Python test
@@ -105,13 +111,6 @@ requiring skipped jobs would never run.
 When adding a new top-level area to the repo, add its lines to
 `.circleci/mapping.txt` in the same PR; `mapping-coverage` enforces it, and
 `test_every_tracked_file_is_mapped` fails locally first.
-
-Transition: before this lands, branch protection requires the original four
-checks. This change itself touches `.circleci/**`, so it maps to run-all
-and runs the full suite under the old protection, merging normally with no
-admin bypass. After merge, the owner adds `lint` and `mapping-coverage` to
-the required checks (a separate action, not part of the PR); until then
-those two report but are not required.
 
 How each job meets its requirements:
 
@@ -176,9 +175,26 @@ Bump a `-v1-` in a key to throw a cache away.
 
 ## Triggers
 
-The workflow runs when a PR is opened and on each new commit to a PR branch.
-A push to `main` runs only the `select` job, which ends the pipeline
-(ADR 0021). It needs no secrets, so a build triggered by a fork's PR
+The project has one pipeline, `quality-gate` (a GitHub App pipeline), with
+exactly one trigger: the preset "PR opened or pushed to, default branch and
+tag pushes" (Project Settings, Triggers). Each event starts one pipeline:
+
+- Opening a PR, and each push to a PR branch, runs the selected jobs.
+  `[skip ci]` in the pushed head commit skips a push's pipeline, but not the
+  one that opening a PR starts.
+- A push to `main` runs only the `select` job, which ends the pipeline
+  (ADR 0021).
+- A tag push runs `select`, which compares the tagged commit with `main` at
+  their merge base. A tag on a commit already in `main` changes no files, so
+  five jobs skip in seconds and `mapping-coverage` checks that selection. A
+  tag on a commit not yet in `main` runs the jobs its changes select.
+
+Do not add a second trigger. Until 2026-10-29 a separate "Pushes to default
+branch" trigger also matched `main`, so every push to `main` started two
+pipelines. The trigger lives in the CircleCI settings, not in this
+repository, so this section is its record.
+
+The pipeline needs no secrets, so a build triggered by a fork's PR
 does not see any. Whether CircleCI builds fork PRs at all is a project
 setting (Project Settings, Advanced, "Build fork pull requests"). Leave it on
 only while no secret is added to the project. The checks need none.
@@ -281,7 +297,7 @@ that does not depend on any hosted service.
   [Implicated-only CI](#implicated-only-ci)). If the job should have run,
   its inputs are mapped wrong — fix the mapping, not the job.
 - **`mapping-coverage` fails.** A changed file matches no mapping pattern;
-  the failure lists it. Add a mapping line for it in `.circleci/config.yml`.
+  the failure lists it. Add a mapping line for it in `.circleci/mapping.txt`.
 
 ## Rollback
 
@@ -301,8 +317,9 @@ Delete `.circleci/` when no PR needs it. Nothing else depends on it.
 ## Status
 
 Live since 2026-10-27. The project is connected through the CircleCI GitHub
-App, with triggers for pull requests (opened and pushed) and for pushes to
-`main`, and GitHub shows the checks as `ci/circleci: proto`,
+App, with one trigger, the preset "PR opened or pushed to, default branch and
+tag pushes" (see Triggers); a push to `main` runs no CI jobs (ADR 0021),
+and GitHub shows the checks as `ci/circleci: proto`,
 `ci/circleci: go`, `ci/circleci: python-3.11`, `ci/circleci: python-3.13`,
 `ci/circleci: lint` and `ci/circleci: mapping-coverage`.
 The first runs found two problems, both fixed: buf v1.74.0 needs a newer Go

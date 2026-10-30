@@ -14,15 +14,26 @@ import (
 // which it removes when it exits cleanly. A worker that is killed cannot,
 // and its restarted process makes a new directory, so the old one's map
 // output, which nothing will read again, stays until the disk fills. Each
-// worker therefore holds a lock on a file in its directory while it runs,
-// and a starting worker deletes every other worker directory whose lock it
-// can take: their workers have exited. A directory without the lock file
-// is kept; it may belong to a worker that is still starting.
+// worker therefore holds a lock on its directory while it runs, and a
+// starting worker deletes every other worker directory whose lock it can
+// take: their workers have exited.
+//
+// The lock is on the directory itself, not on a file inside it: a lock on a
+// file can be taken on a file that a sweep has just unlinked, and then
+// protects nothing. A worker locks its directory before it writes anything
+// there, and a sweep that wins the lock first deletes a directory its worker
+// has not yet locked, so the worker makes another. A directory is swept only
+// if it holds the marker file, which a worker writes once it holds the lock,
+// so one that is not a worker's (or an older worker's, still starting) is
+// kept.
 
 const (
 	workDirPattern = "mr-worker-"
 	lockName       = ".lock"
 )
+
+// lockAttempts is how many directories tempWorkDir tries to make and lock.
+const lockAttempts = 5
 
 // tempWorkDir makes this worker's work directory under parent (empty: the
 // system's temporary directory), after deleting those of dead workers. The
@@ -32,25 +43,32 @@ func tempWorkDir(parent string) (string, func() error, error) {
 		parent = os.TempDir()
 	}
 	reapDead(parent)
-	dir, err := os.MkdirTemp(parent, workDirPattern)
-	if err != nil {
-		return "", nil, err
+	for range lockAttempts {
+		dir, err := os.MkdirTemp(parent, workDirPattern)
+		if err != nil {
+			return "", nil, err
+		}
+		f, err := lock(dir)
+		if err == nil && f != nil {
+			if err = os.WriteFile(filepath.Join(dir, lockName), nil, 0o600); err == nil {
+				return dir, func() error { return errors.Join(os.RemoveAll(dir), f.Close()) }, nil
+			}
+			_ = f.Close()
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return "", nil, errors.Join(err, os.RemoveAll(dir))
+		}
+		// A sweep took the lock first, or already deleted the directory.
+		_ = os.RemoveAll(dir)
 	}
-	f, err := lock(filepath.Join(dir, lockName))
-	if err == nil && f == nil {
-		err = errors.New("locking a new work directory: already locked")
-	}
-	if err != nil {
-		return "", nil, errors.Join(err, os.RemoveAll(dir))
-	}
-	return dir, func() error { return errors.Join(os.RemoveAll(dir), f.Close()) }, nil
+	return "", nil, errors.New("locking a new work directory: swept by another worker every time")
 }
 
 // lock opens path and takes an exclusive lock on it, which the kernel drops
 // when the process exits. It returns a nil file and no error if another
 // open file holds the lock.
 func lock(path string) (*os.File, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -70,11 +88,10 @@ func lock(path string) (*os.File, error) {
 func reapDead(parent string) {
 	dirs, _ := filepath.Glob(filepath.Join(parent, workDirPattern+"*"))
 	for _, dir := range dirs {
-		path := filepath.Join(dir, lockName)
-		if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		if info, err := os.Lstat(filepath.Join(dir, lockName)); err != nil || !info.Mode().IsRegular() {
 			continue
 		}
-		f, err := lock(path)
+		f, err := lock(dir)
 		if err != nil || f == nil {
 			continue
 		}

@@ -14,7 +14,7 @@ Where to start depends on the question.
 - **How is it tested, and how do I run each kind of test?** [Testing](testing.md),
   with the coverage floors.
 - **What checks run on a pull request, and how is CI set up?** [CI](ci.md):
-  the four CircleCI jobs, caching, the Free-plan limits, the steps the owner
+  the six CircleCI jobs, caching, the Free-plan limits, the steps the owner
   completes, and troubleshooting.
 - **How do the results compare with the paper's?** [Evaluation](evaluation.md):
   §5's grep, sort, backup tasks and machine failures, run again on the VM.
@@ -65,6 +65,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0019](design/0019-late-speculation.md) | LATE speculation as an opt-in mode beside the paper's backup tasks |
 | [0020](design/0020-implicated-only-ci.md) | Implicated-only CI: dynamic config runs only the jobs a PR's files implicate |
 | [0021](design/0021-no-ci-on-main-pushes.md) | No CI jobs on pushes to main: the merged tree already passed on its PR |
+| [0022](design/0022-status-page-updates-itself.md) | The status page updates itself with one inline script (supersedes part of 0012) |
 
 ## Explainers
 
