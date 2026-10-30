@@ -34,7 +34,7 @@ cut a release.
   (#298).
 - `CHANGELOG.md`, backfilled for v0.1.0 to v0.3.0, with the workflow for
   adding entries and cutting releases in AGENTS.md and a layout test,
-  `python/tests/test_changelog.py`.
+  `python/tests/test_changelog.py` (#305).
 
 ### Changed
 
