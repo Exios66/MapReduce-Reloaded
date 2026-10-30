@@ -15,6 +15,9 @@ cut a release.
 
 ### Added
 
+- Worker: `/metrics` serves `mr_worker_info{host="..."} 1`, the host that
+  `/status.json` lists for the worker, so a scrape target matches its worker
+  whatever its address; ADR 0023 records why (#333).
 - Docs: ADR 0023 proposes a read-only showcase service that samples, records
   and replays a run, and `docs/roadmap.md` lays out its phases (#333).
 - Status page (Go and Python): `/status.json` serves the status as data,

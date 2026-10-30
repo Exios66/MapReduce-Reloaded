@@ -379,6 +379,16 @@ func TestClusterWorkerMetrics(t *testing.T) {
 	}
 }
 
+// A worker's /metrics names its host, as the coordinator's /status.json
+// does, so a scrape target can be matched to a worker whatever its address.
+func TestWorkerInfoMetric(t *testing.T) {
+	w := worker.New(nil, "", &pb.WorkerInfo{Host: `a"b`})
+	want := "# TYPE mr_worker_info gauge\n" + `mr_worker_info{host="a\"b"} 1` + "\n"
+	if body := scrape(t, w); !strings.Contains(body, want) {
+		t.Errorf("metrics lack %q:\n%s", want, body)
+	}
+}
+
 func TestClusterLocality(t *testing.T) {
 	for _, workers := range []int{8, 3} {
 		t.Run(fmt.Sprint(workers, " workers"), func(t *testing.T) {

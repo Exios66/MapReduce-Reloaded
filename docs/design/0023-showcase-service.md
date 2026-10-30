@@ -150,6 +150,9 @@ not replace their pages.
 
 - There is a new service and a third port to forward over SSH.
 - Very brief states can fall between samples.
+- Workers gain one identifying metric, `mr_worker_info{host}`, so a scrape
+  target matches its `/status.json` worker whatever its address; job behavior
+  is unchanged.
 - A failed scrape shows that a worker did not answer, not that it died, so the
   page must say "unreachable" until the coordinator declares the worker lost.
 - The service depends on `/status.json` and the worker metrics, so tests must

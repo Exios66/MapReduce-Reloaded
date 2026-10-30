@@ -24,8 +24,10 @@ times are in `GetJobStatusResponse` (`submitted_at`, `finished_at`), so
 coordinator measured it. The paper gives each benchmark's time the same
 way, from start to finish (§5.2, §5.3).
 
-`worker -http :8081` serves the worker's own `/metrics`: task attempts
-finished by kind and result (`mr_worker_tasks_total{kind,result}`), those
+`worker -http :8081` serves the worker's own `/metrics`: its host
+(`mr_worker_info{host}`, always 1, the `host` that `/status.json` lists for
+the worker), task attempts finished by kind and result
+(`mr_worker_tasks_total{kind,result}`), those
 running (`mr_worker_task_running{kind}`), bytes of input mapped, of map
 output written and fetched, and of output reduced, and registrations. Input
 and output bytes are counted as each task ends; output bytes are the keys
