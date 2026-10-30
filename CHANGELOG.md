@@ -73,6 +73,9 @@ cut a release.
   kill step (#303).
 - Docs: the chaos explainer says what `make chaos` covers and that dropped
   packets are out of scope (#287).
+- Go coverage: each package's coverage counts every test in the module
+  and the runs of the commands that `internal/e2e` builds, through
+  `-coverpkg` and `GOCOVERDIR` in `make go-test` (#245).
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
   LATE speculation cites #284, and E0 to E7 ranges are corrected.
