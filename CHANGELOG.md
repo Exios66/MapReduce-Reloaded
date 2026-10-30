@@ -21,6 +21,8 @@ cut a release.
   heartbeats (#284).
 - Job and task event logging in the coordinator and worker, with a
   `-log-level` flag (#302).
+- Experiment runs save the cluster's logs, one file per setting, program and
+  run, in the results directory (#301).
 - The demo notebook, `examples/demo.ipynb`, and a test that every cell
   compiles (#252); the five-minute demo script and README badges (#255).
 - The soak run, `make soak`: 1 GiB with the combiner off at a 256 MB worker
