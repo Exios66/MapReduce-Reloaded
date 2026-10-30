@@ -217,11 +217,11 @@ proto-check: proto-lint proto-breaking proto
 # slows the cluster tests past their deadlines on a 2-CPU runner.
 GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
-	rm -rf $(GO_COVERDIR) && mkdir -p $(GO_COVERDIR)
+	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
 	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./...
-	cd go && MR_E2E_GOCOVERDIR=$(GO_COVERDIR) MR_PYTHON=$(PYTHON) go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
-	if ls $(GO_COVERDIR)/covcounters.* >/dev/null 2>&1; then \
-		cd go && go tool covdata textfmt -i=$(GO_COVERDIR) -o $(GO_COVERDIR)/e2e.out && tail -n +2 $(GO_COVERDIR)/e2e.out >> cover.out; \
+	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
+		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
 	fi
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
