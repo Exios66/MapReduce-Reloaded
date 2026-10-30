@@ -11,8 +11,8 @@ PYTHON ?= python3
 # XML there, for CircleCI's test results: gotestsum runs `go test` and
 # pytest gets --junitxml. Left unset, they run as before.
 JUNIT_DIR ?=
-GOTEST = $(if $(JUNIT_DIR),gotestsum --junitfile $(JUNIT_DIR)/go/$@.xml --format standard-quiet --,go test)
-PYTEST_JUNIT = $(if $(JUNIT_DIR),--junitxml=$(JUNIT_DIR)/python/$@.xml)
+GOTEST = $(if $(JUNIT_DIR),gotestsum --junitfile $(abspath $(JUNIT_DIR))/go/$@$(if $(1),-$(1)).xml --format standard-quiet --,go test)
+PYTEST_JUNIT = $(if $(JUNIT_DIR),--junitxml=$(abspath $(JUNIT_DIR))/python/$@.xml)
 
 all: check
 
@@ -224,10 +224,10 @@ proto-check: proto-lint proto-breaking proto
 # slows the cluster tests past their deadlines on a 2-CPU runner.
 GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
-	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/go)
+	$(if $(JUNIT_DIR),mkdir -p $(abspath $(JUNIT_DIR))/go)
 	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
-	cd go && MR_PYTHON=$(PYTHON) $(GOTEST) -race -shuffle=on ./...
-	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) $(GOTEST) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	cd go && MR_PYTHON=$(PYTHON) $(call GOTEST,race) -race -shuffle=on ./...
+	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) $(call GOTEST,coverage) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && $(call GOTEST,uncached) -count=1 ./internal/papermap ./internal/statusweb
 	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
 		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
 	fi
@@ -269,7 +269,7 @@ go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
 
 py-test:
-	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/python)
+	$(if $(JUNIT_DIR),mkdir -p $(abspath $(JUNIT_DIR))/python)
 	cd python && $(PYTHON) -m coverage run -m pytest -q $(PYTEST_JUNIT) && $(PYTHON) -m coverage json -q -o cover.json
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
 
@@ -283,7 +283,7 @@ cover: test
 # jobs; CI's go job runs them here, and MR_REQUIRE_GO makes a skip a
 # failure, so the integration is checked on every pull request.
 py-e2e:
-	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/python)
+	$(if $(JUNIT_DIR),mkdir -p $(abspath $(JUNIT_DIR))/python)
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q $(PYTEST_JUNIT) tests/test_coordinator_e2e.py
 
 py-lint:

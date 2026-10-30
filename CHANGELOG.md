@@ -95,6 +95,8 @@ cut a release.
 
 ### Fixed
 
+- CI: preserve separate Go test reports and publish Python integration test
+  results on Python-only changes, including failures.
 - Go tests: the cluster tests that run a whole job (`runJob`) give workers a
   5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
   longer makes a worker re-register and fail `TestClusterWorkerMetrics`
