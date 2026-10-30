@@ -411,9 +411,7 @@ def test_sampled_run_saves_logs_from_before_its_workers_restarted(experiment):
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", since)
 
 
-def test_run_reports_why_submit_failed_and_still_saves_the_logs(
-    experiment, tmp_path, monkeypatch
-):
+def test_run_reports_why_submit_failed_and_still_saves_the_logs(experiment, tmp_path, monkeypatch):
     invoke, _ = experiment
     monkeypatch.delenv("DROP_CACHES", raising=False)
     result = invoke(
@@ -1013,7 +1011,9 @@ def test_cache_prepare_drops_the_caches_when_asked(experiment, tmp_path, monkeyp
     )
     assert json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())["dropped"] is True
     assert log.read_text().splitlines() == [
-        "sync", "sudo:-n tee /proc/sys/vm/drop_caches", "value:3"
+        "sync",
+        "sudo:-n tee /proc/sys/vm/drop_caches",
+        "value:3",
     ]
 
 
