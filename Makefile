@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up showcase-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -34,10 +34,11 @@ vm-check:
 COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
 
 # The shared storage mounted at /data in every container (ADR 0016).
-# Distroless workers run as UID 65532 and need to write output here.
+# Distroless workers run as UID 65532 and need to write output here. The
+# showcase (profile showcase) records each run to data/showcase.
 data:
-	mkdir -p data/input data/out
-	chmod a+rwx data/out
+	mkdir -p data/input data/out data/showcase
+	chmod a+rwx data/out data/showcase
 
 # Real datasets for the example programs, fetched into data/input/ and
 # checked in Go and Python against an independent oracle (docs/data.md).
@@ -66,7 +67,7 @@ cluster-up: data
 	$(COMPOSE) up -d --build
 
 cluster-down:
-	$(COMPOSE) --profile monitoring --profile s3 down -v --remove-orphans
+	$(COMPOSE) --profile monitoring --profile s3 --profile showcase down -v --remove-orphans
 
 # Select completed job directory names explicitly, e.g.
 # make clean-output CLEAN_OUTPUTS='sort-kill-123 exp-E0-w4-1'
@@ -85,6 +86,11 @@ clean-output:
 # Prometheus at 127.0.0.1:19090 and Grafana at 127.0.0.1:13000.
 monitoring-up:
 	$(COMPOSE) --profile monitoring up -d prometheus grafana
+
+# The showcase page at 127.0.0.1:18781 (ADR 0023): read-only, and off unless
+# asked for. It needs the image that cluster-up builds.
+showcase-up: data
+	$(COMPOSE) --profile showcase up -d showcase
 
 e2e: cluster-up mr
 	scripts/e2e.sh

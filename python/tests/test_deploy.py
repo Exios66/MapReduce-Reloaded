@@ -53,11 +53,19 @@ def test_documented_memory_totals_include_replicas_and_profiles():
         int(services[name]["mem_limit"].removesuffix("m")) for name in ("mr", "s3")
     )
     everything = with_tools_and_s3 + sum(
-        int(services[name]["mem_limit"].removesuffix("m")) for name in ("prometheus", "grafana")
+        int(services[name]["mem_limit"].removesuffix("m"))
+        for name in ("prometheus", "grafana", "showcase")
     )
     text = (ROOT / "docs/cluster-vm.md").read_text()
     totals = [int(value.replace(",", "")) for value in re.findall(r"\*\*([\d,]+) MB", text)]
     assert totals == [core, with_tools_and_s3, everything]
+
+
+def test_showcase_is_optional_and_on_loopback():
+    service = load(COMPOSE)["services"]["showcase"]
+    assert service["profiles"] == ["showcase"]
+    assert service["ports"] == ["127.0.0.1:18781:8080"]
+    assert service["mem_limit"] == "128m"
 
 
 def test_prometheus_preserves_mapreduce_job_labels():

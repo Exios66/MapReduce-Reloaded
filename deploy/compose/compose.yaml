@@ -3,7 +3,8 @@
 # tasks are spread over all four (the VM has 4 vCPUs). `make cluster-up` starts it, `make e2e` runs word count on it and
 # `make cluster-down` removes it. `make monitoring-up` adds Prometheus and
 # Grafana with a dashboard of the cluster's metrics, and `make e2e-s3` runs
-# the same job against an S3 store in the s3 profile.
+# the same job against an S3 store in the s3 profile. `make showcase-up` adds
+# the showcase page on 127.0.0.1:18781 (ADR 0023).
 #
 # Every container sees the host's data/ directory at /data, the shared
 # storage that bin/mr upload and bin/mr cat reach from the host (ADR 0016);
@@ -111,6 +112,17 @@ services:
     ports:
       - "127.0.0.1:19090:9090"
     mem_limit: 256m
+
+  # The showcase profile (ADR 0023): a read-only page of the cluster, sampled
+  # from the coordinator and the workers, and recorded to data/showcase/. It
+  # is published on loopback only and has no write endpoint.
+  showcase:
+    <<: *node
+    command: [showcase, -out, /data/showcase]
+    profiles: [showcase]
+    ports:
+      - "127.0.0.1:18781:8080"
+    mem_limit: 128m
 
   grafana:
     image: grafana/grafana:12.1.0

@@ -96,6 +96,18 @@ def test_data_creates_directories_and_worker_permissions(make_project):
     assert output.is_dir()
     # UID 65532 needs write and traversal permission, regardless of host ownership.
     assert stat.S_IMODE(output.stat().st_mode) & 0o777 == 0o777
+    # The showcase records here as UID 65532 too (ADR 0023).
+    showcase = project / "data/showcase"
+    assert showcase.is_dir()
+    assert stat.S_IMODE(showcase.stat().st_mode) & 0o777 == 0o777
+
+
+def test_showcase_up_prepares_data_and_starts_only_its_profile(make_project):
+    project, make, log = make_project
+    make("showcase-up")
+    assert (project / "data/showcase").is_dir()
+    compose = "docker compose -p mapreduce -f deploy/compose/compose.yaml"
+    assert log.read_text().splitlines() == [f"{compose} --profile showcase up -d showcase"]
 
 
 def test_data_rerun_preserves_files_and_repairs_permissions(make_project):

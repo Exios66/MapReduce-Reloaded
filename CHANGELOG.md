@@ -15,6 +15,12 @@ cut a release.
 
 ### Added
 
+- Showcase: `go/cmd/showcase` samples the coordinator's `/status.json` and each
+  worker's `/metrics` every `-interval`, and serves one read-only page at `/`
+  with its frames at `/frames`, on `-http`. With `-out` it records each run to
+  `<UTC start time>.jsonl` up to `-max-record-bytes`, and `-replay <file>` serves
+  a recording with no cluster. `make showcase-up` starts it in the `showcase`
+  Compose profile on `127.0.0.1:18781`; ADR 0023 records the design (#333).
 - Worker: `/metrics` serves `mr_worker_info{host="..."} 1`, the host that
   `/status.json` lists for the worker, so a scrape target matches its worker
   whatever its address; ADR 0023 records why (#333).
