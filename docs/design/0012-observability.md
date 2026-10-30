@@ -1,6 +1,7 @@
 # ADR 0012 — Status page, hand-written metrics and structured logs
 
-**Status:** accepted · **Phase:** 4 · **Issue:** #32
+**Status:** accepted, superseded in part by [ADR 0022](0022-status-page-updates-itself.md):
+the page is no longer script-free · **Phase:** 4 · **Issue:** #32
 
 ## Context
 

@@ -1,6 +1,7 @@
 """Tests for the coordinator's status page and metrics, ported from
 go/internal/statusweb/statusweb_test.go, and for Server.status."""
 
+import json
 import re
 import socket
 import time
@@ -126,7 +127,7 @@ def test_page(get):
         "3s ago",
     ]:
         assert want in body, want
-    assert "<script>" not in body
+    assert body.count("<script") == 1, "only the page's own script, not the job's error"
     assert "<body>" in body
     assert '<body class="dark">' in get("/?theme=dark")[2]
     assert get("/?refresh=1")[0] == 200
@@ -146,10 +147,55 @@ def test_css_matches_go_page(get):
 
 
 def test_page_is_self_contained(get):
-    """The page loads and runs nothing, so it works on an offline host."""
+    """The page loads nothing: its one script is inline, so it works offline."""
     body = get("/")[2].replace("&lt;script&gt;", "")
-    for bad in ["http://", "https://", "@import", "<script", "<link", "<img", "src="]:
+    for bad in ["http://", "https://", "@import", "<link", "<img", "src="]:
         assert bad not in body, bad
+    assert body.count("<script>") == 1 and body.count("<script") == 1
+    assert '<noscript><meta http-equiv="refresh"' in body
+
+
+def test_script_matches_go_page(get):
+    """Both pages carry the same script."""
+    go = (Path(__file__).parents[2] / "go/internal/statusweb/status.html").read_text()
+
+    def script(text):
+        return re.sub(r"\s+", "", re.search(r"<script>(.*?)</script>", text, re.S).group(1))
+
+    assert script(get("/")[2]) == script(go)
+
+
+JOB_KEYS = (
+    "id state error map_completed map_total reduce_completed reduce_total backup_attempts "
+    "backup_wins map_host_local map_zone_local counters submitted_at finished_at "
+    "duration_seconds"
+).split()
+
+
+def test_status_json(get):
+    """/status.json has the keys the Go server's has, and the page's numbers."""
+    code, headers, body = get("/status.json")
+    assert code == 200 and headers["Content-Type"] == "application/json"
+    doc = json.loads(body)
+    assert sorted(doc) == ["at", "jobs", "lost", "workers"]
+    assert sorted(doc["jobs"][0]) == sorted(JOB_KEYS)
+    assert sorted(doc["workers"][0]) == sorted(
+        ["id", "host", "zone", "slots", "last_seen", "running"]
+    )
+    assert sorted(doc["workers"][0]["running"][0]) == ["progress", "task"]
+    assert sorted(doc["lost"][0]) == ["at", "id", "tasks"]
+    j1, j2, j3 = doc["jobs"]
+    assert (j1["id"], j1["state"], j1["map_completed"], j1["map_total"]) == (
+        "job-1",
+        "mapping",
+        3,
+        7,
+    )
+    assert j1["duration_seconds"] == 2.5 and j2["duration_seconds"] == 90
+    assert j3["duration_seconds"] is None and j3["submitted_at"] is None
+    assert j2["backup_wins"] == 1 and j2["map_zone_local"] == 2
+    assert doc["workers"][0]["running"][0]["task"] == str(M0)
+    assert doc["workers"][1]["last_seen"] is None
 
 
 def _luminance(hex_color):

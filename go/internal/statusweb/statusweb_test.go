@@ -1,10 +1,12 @@
 package statusweb
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -71,8 +73,8 @@ func TestPage(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	if strings.Contains(body, "<script>") {
-		t.Error("page did not escape the job's error")
+	if strings.Count(body, "<script") != 1 {
+		t.Error("page has a script besides its own: the job's error was not escaped")
 	}
 	if !strings.Contains(body, "<body>") {
 		t.Error("page is dark by default")
@@ -125,12 +127,70 @@ func TestDurationClockSetBack(t *testing.T) {
 	}
 }
 
-// The page works offline: it loads nothing and runs nothing.
+// The page works offline: its one script is inline, and it loads nothing.
 func TestPageIsSelfContained(t *testing.T) {
 	_, body := get(t, "/")
-	for _, bad := range []string{"http://", "https://", "@import", "<script", "<link", "<img", "src="} {
-		if strings.Contains(strings.ReplaceAll(body, "&lt;script&gt;", ""), bad) {
+	body = strings.ReplaceAll(body, "&lt;script&gt;", "")
+	for _, bad := range []string{"http://", "https://", "@import", "<link", "<img", "src="} {
+		if strings.Contains(body, bad) {
 			t.Errorf("page contains %q", bad)
 		}
+	}
+	if strings.Count(body, "<script>") != 1 || strings.Count(body, "<script") != 1 {
+		t.Error("page does not have exactly one inline script")
+	}
+	if !strings.Contains(body, `<noscript><meta http-equiv="refresh"`) {
+		t.Error("page does not refresh without its script")
+	}
+}
+
+func TestStatusJSON(t *testing.T) {
+	resp, body := get(t, "/status.json")
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("content type %q", ct)
+	}
+	var doc struct {
+		At      float64
+		Jobs    []map[string]any
+		Workers []map[string]any
+		Lost    []map[string]any
+	}
+	if err := json.Unmarshal([]byte(body), &doc); err != nil {
+		t.Fatal(err)
+	}
+	keys := func(m map[string]any) string {
+		var ks []string
+		for k := range m {
+			ks = append(ks, k)
+		}
+		slices.Sort(ks)
+		return strings.Join(ks, " ")
+	}
+	// The Python server's test lists the same keys.
+	if got, want := keys(doc.Jobs[0]), "backup_attempts backup_wins counters duration_seconds error finished_at id map_completed map_host_local map_total map_zone_local reduce_completed reduce_total state submitted_at"; got != want {
+		t.Errorf("job keys\n got %s\nwant %s", got, want)
+	}
+	if got, want := keys(doc.Workers[0]), "host id last_seen running slots zone"; got != want {
+		t.Errorf("worker keys %s, want %s", got, want)
+	}
+	if got, want := keys(doc.Lost[0]), "at id tasks"; got != want {
+		t.Errorf("lost keys %s, want %s", got, want)
+	}
+	j1, j2, j3 := doc.Jobs[0], doc.Jobs[1], doc.Jobs[2]
+	if j1["id"] != "job-1" || j1["state"] != "mapping" || j1["map_completed"] != 3.0 || j1["duration_seconds"] != 2.5 {
+		t.Errorf("job-1 = %v", j1)
+	}
+	if j2["duration_seconds"] != 90.0 || j2["backup_wins"] != 1.0 || j2["map_zone_local"] != 2.0 {
+		t.Errorf("job-2 = %v", j2)
+	}
+	if j3["duration_seconds"] != nil || j3["submitted_at"] != nil {
+		t.Errorf("job-3 = %v", j3)
+	}
+	run := doc.Workers[0]["running"].([]any)[0].(map[string]any)
+	if run["task"] != m0.String() {
+		t.Errorf("running task %v, want %v", run["task"], m0)
+	}
+	if doc.Workers[1]["last_seen"] != nil {
+		t.Errorf("a worker never seen has last_seen %v", doc.Workers[1]["last_seen"])
 	}
 }

@@ -11,7 +11,7 @@ them to predict how long a job would take and to find slow machines.
 
 | Path | What | Where |
 |------|------|-------|
-| `/` | Jobs as compact cards, each linkable as `#job-<id>`: duration, state badge, map and reduce progress with a percentage, backup attempts, host- and zone-local map counts, key counters, all counters in a `<details>`, and errors; live workers with their zone, slots in use, heartbeat age and what each runs, with the percentage of its input each task reported done in the last heartbeat; lost workers and the tasks that had to run again. It refreshes every 2 seconds and follows the reader's light or dark color scheme; `?theme=dark` forces dark. | `statusweb/status.html` |
+| `/` | Jobs as compact cards, each linkable as `#job-<id>`: duration, state badge, map and reduce progress with a percentage, backup attempts, host- and zone-local map counts, key counters, all counters in a `<details>`, and errors; live workers with their zone, slots in use, heartbeat age and what each runs, with the percentage of its input each task reported done in the last heartbeat; lost workers and the tasks that had to run again. It updates every 2 seconds without reloading, can be paused, and follows the reader's light or dark color scheme; `?theme=dark` forces dark. | `statusweb/status.html` |
 | `/metrics` | `mr_workers`, `mr_job_tasks{job,kind,state}`, `mr_job_duration_seconds{job}`, `mr_job_backups{job,state}`, `mr_job_map_tasks_local{job,level}` and `mr_job_counter{job,name}`, in the Prometheus text format | `statusweb/metrics.go` |
 
 Both read `coordinator.Server.Status`, a copy of the coordinator's state
@@ -86,8 +86,12 @@ is `info`. The events, at `info` unless noted:
 - **Gauges for jobs, counters for workers.** A job's counters can go down
   when a lost map task's counts are replaced by its re-run's (#27), so they
   are not Prometheus counters. A worker's only go up while it runs.
-- **A refreshing page, not a script.** `<meta http-equiv="refresh">` keeps
-  the page free of JavaScript and of any CDN.
+- **A page that fetches itself.** One inline script fetches the rendered
+  page every 2 seconds and swaps it in, so scroll position and open
+  counters stay, with a pause button and a notice when the coordinator
+  does not answer. It loads no external file. Without scripts,
+  `<meta http-equiv="refresh">` in a `<noscript>` reloads the page.
+  `/status.json` gives the same status as data.
 - **Lost workers since the process started.** They are kept in memory, the
   last 100, and are not rebuilt from the log after a restart.
 
