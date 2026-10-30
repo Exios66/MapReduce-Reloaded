@@ -12,7 +12,8 @@
     "diff -r \"$demo_dir/go\" \"$demo_dir/python\" && echo identical"
   ],
   "exit_code": 0,
-  "elapsed_seconds": 44.643,
+  "capture_and_render_elapsed_seconds": 44.643,
+  "command_elapsed_seconds": 9.386,
   "recorded_output": [
     [
       0.01,
