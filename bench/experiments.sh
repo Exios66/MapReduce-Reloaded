@@ -162,8 +162,9 @@ valid() {
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 
 # fresh WORKERS: restarts workers to clear their temporary map output and
-# waits for WORKERS registrations before sampling. Exits if / has less
-# than 5 GiB free; marks the workers ready for the next run.
+# waits for WORKERS registrations before sampling. Records the restart time
+# for the next run's logs and marks the workers ready. Exits if restarting or
+# registration fails, or if / has less than 5 GiB free or cannot be checked.
 fresh() {
     fresh_at=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
     if ! "${compose[@]}" restart worker >/dev/null; then
@@ -215,7 +216,10 @@ stop_sampler() {
 # EVENT_AT seconds after the job is submitted. The job is polled with
 # mr status, which, unlike submit -wait, outlives a coordinator restart.
 # The job uses the current submit_flags; its output directory is removed
-# before and after the run.
+# before submission and after a completed run. Attempts to save cluster logs
+# from before the workers restarted to logs-SETTING-PROGRAM-RUN.log in the
+# experiment's directory.
+# If submission fails, reports its error, attempts to save the logs and exits.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
     local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
