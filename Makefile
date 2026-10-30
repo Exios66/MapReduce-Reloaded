@@ -286,5 +286,11 @@ cover: test
 py-e2e:
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
+# One root per invocation: with paths outside python/ in the same call, ruff
+# resolves its config from the common ancestor (the repository root, which
+# has none) and falls back to defaults, flagging files the pinned config
+# accepts. Each root therefore gets its own call and config.
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format --check . && $(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff format --check --config python/pyproject.toml scripts bench
+	$(PYTHON) -m ruff check --config python/pyproject.toml scripts bench

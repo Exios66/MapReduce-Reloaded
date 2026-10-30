@@ -35,8 +35,8 @@ import argparse
 import csv
 import json
 import sys
-from pathlib import Path
 import textwrap
+from pathlib import Path
 
 METRICS = {
     "input": "mr_worker_map_input_bytes_total",

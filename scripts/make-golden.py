@@ -7,7 +7,6 @@ check that their own serialization of each .txtpb matches the .binpb exactly.
 from pathlib import Path
 
 from google.protobuf import text_format
-
 from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2
 
 GOLDEN = Path(__file__).resolve().parent.parent / "testdata" / "proto"

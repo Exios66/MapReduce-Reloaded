@@ -71,13 +71,13 @@ def main():
             written += count
             pages += documents
             sources.append(
-                dict(
-                    url=url,
-                    sha256=digest.hexdigest(),
-                    compressed_bytes=path.stat().st_size,
-                    emitted_bytes=count,
-                    emitted_pages=documents,
-                )
+                {
+                    "url": url,
+                    "sha256": digest.hexdigest(),
+                    "compressed_bytes": path.stat().st_size,
+                    "emitted_bytes": count,
+                    "emitted_pages": documents,
+                }
             )
             print(
                 f"crawl-stream: sources={index + 1} bytes={written} pages={pages}",
