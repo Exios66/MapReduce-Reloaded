@@ -546,10 +546,11 @@ func TestSampleRetainsAWorkerWhoseAddressWasRecycled(t *testing.T) {
 	}
 }
 
-// An answer over the size cap is a gap, for the coordinator and for workers.
+// An answer over its size cap is a gap: a status over 1 MiB, and a worker's
+// /metrics over 256 KiB.
 func TestSampleTreatsAnOversizedAnswerAsAGap(t *testing.T) {
 	big := strings.Repeat("x", 256<<10)
-	status := serve(t, `{"pad":"`+big+`"}`)
+	status := serve(t, `{"pad":"`+strings.Repeat("x", 1<<20)+`"}`)
 	wk := serve(t, "# "+big+"\n"+metricsFor("w"))
 	c := showcase.Config{
 		StatusURL: status.URL + "/status.json",
@@ -567,6 +568,82 @@ func TestSampleTreatsAnOversizedAnswerAsAGap(t *testing.T) {
 	}
 	if w, _ := sampleOf(f, addrOf(wk)); w.OK {
 		t.Errorf("an oversized worker answer was accepted: %+v", w)
+	}
+}
+
+// A status of 512 KiB, more than the old 256 KiB cap, is answered in full. A
+// big job's status must not be a permanent gap.
+func TestSampleAcceptsAStatusLargerThan256KiB(t *testing.T) {
+	status := serve(t, `{"pad":"`+strings.Repeat("x", 512<<10)+`"}`)
+	c := showcase.Config{
+		StatusURL: status.URL + "/status.json",
+		Interval:  time.Millisecond,
+		Timeout:   time.Second,
+	}
+	frames := sample(t, c, func(fs []showcase.Frame) bool { return len(fs) == 1 })
+	if !frames[0].StatusOK || len(frames[0].Status) < 512<<10 {
+		t.Errorf("a 512 KiB status: ok %v with %d bytes, want it answered in full", frames[0].StatusOK, len(frames[0].Status))
+	}
+}
+
+// When an address answers as a host again, a retained entry for that host is
+// gone: the address A, B, A leaves one live A and one retained B, with no
+// stale retained A.
+func TestSampleDropsARetainedEntryWhenItsHostAnswersAgain(t *testing.T) {
+	wk := newServer(t, metricsFor("h1"))
+	c := showcase.Config{
+		StatusURL: serve(t, statusJSON).URL + "/status.json",
+		Discover:  fixed(wk.addr()),
+		Interval:  time.Millisecond,
+		Timeout:   time.Second,
+	}
+	phase := 0
+	frames := sample(t, c, func(fs []showcase.Frame) bool {
+		f := fs[len(fs)-1]
+		live := func(host string) bool {
+			for _, w := range entriesAt(f, wk.addr()) {
+				if w.OK && w.Host == host {
+					return true
+				}
+			}
+			return false
+		}
+		switch phase {
+		case 0: // answering as h1: the address now answers as h2
+			if live("h1") {
+				wk.set(metricsFor("h2"))
+				phase = 1
+			}
+		case 1: // h2 is live, and h1 is retained: h1 answers again
+			if live("h2") {
+				wk.set(metricsFor("h1"))
+				phase = 2
+			}
+		case 2: // h1 is live again: the retained h1 must be gone
+			if live("h1") {
+				return true
+			}
+		}
+		return false
+	})
+	if len(frames) == 0 {
+		t.Fatal("no frames")
+	}
+	ws := entriesAt(frames[len(frames)-1], wk.addr())
+	if len(ws) != 2 {
+		t.Fatalf("last frame has %d samples at the address, want the live h1 and the retained h2: %+v", len(ws), ws)
+	}
+	var liveH1, retainedH2 bool
+	for _, w := range ws {
+		switch {
+		case w.Host == "h1" && w.OK:
+			liveH1 = true
+		case w.Host == "h2" && !w.OK:
+			retainedH2 = true
+		}
+	}
+	if !liveH1 || !retainedH2 {
+		t.Errorf("last frame samples = %+v, want live h1 and retained h2 only", ws)
 	}
 }
 

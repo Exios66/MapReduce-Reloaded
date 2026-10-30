@@ -31,7 +31,7 @@ type Frame struct {
 // the old worker is listed too, with OK false, for 60 s after it last answered.
 type WorkerSample struct {
 	Address string           `json:"address"` // the address the sampler scraped
-	Host    string           `json:"host"`    // from mr_worker_info, if it answered
+	Host    string           `json:"host"`    // from mr_worker_info; for an address that did not answer, the host it last answered with
 	OK      bool             `json:"ok"`
 	Bytes   map[string]int64 `json:"bytes,omitempty"`
 }

@@ -33,9 +33,12 @@ const (
 	// in DNS or answering, so the page can show it as unreachable. Docker
 	// removes a killed container's name at once.
 	retainFor = 60 * time.Second
-	// maxBody bounds what one source may send. An answer over the cap is a
-	// gap, so a runaway source cannot use up the showcase's memory limit.
-	maxBody = 256 << 10
+	// maxStatus and maxMetrics bound what one source may send. An answer over
+	// its cap is a gap, so a runaway source cannot use up the showcase's
+	// memory limit. A big job's status can run past 256 KiB, so the status
+	// cap is 1 MiB.
+	maxStatus  = 1 << 20
+	maxMetrics = 256 << 10
 )
 
 // entry is one worker the sampler tracks. A live entry is keyed by its
@@ -148,11 +151,17 @@ func Sample(ctx context.Context, c Config, out func(Frame)) error {
 			}
 			if ws.Host == "" {
 				ws.Host = e.host
-			} else if e.host != "" && ws.Host != e.host {
-				// The address now answers as another worker. The old one
-				// stays listed, unreachable, for the rest of its retainFor.
-				if start.Sub(e.answered) < retainFor {
-					entries[e.addr+"\x00"+e.host] = &entry{addr: e.addr, host: e.host, answered: e.answered, lastSeen: e.answered, retained: true}
+			} else {
+				// The address answers as ws.Host now, so a retained entry
+				// for that host is out of date: that worker is live again.
+				delete(entries, e.addr+"\x00"+ws.Host)
+				if e.host != "" && ws.Host != e.host {
+					// The address now answers as another worker. The old
+					// one stays listed, unreachable, for the rest of its
+					// retainFor.
+					if start.Sub(e.answered) < retainFor {
+						entries[e.addr+"\x00"+e.host] = &entry{addr: e.addr, host: e.host, answered: e.answered, lastSeen: e.answered, retained: true}
+					}
 				}
 			}
 			e.host, e.answered, e.lastSeen = ws.Host, start, start
@@ -224,7 +233,7 @@ func watch(ctx context.Context, discover func(context.Context) ([]string, error)
 // status returns the coordinator's /status.json as it came, and whether it
 // answered with valid JSON. A garbage answer is a gap, like no answer.
 func status(ctx context.Context, client *http.Client, timeout time.Duration, url string) (json.RawMessage, bool) {
-	body, ok := get(ctx, client, timeout, url)
+	body, ok := get(ctx, client, timeout, url, maxStatus)
 	if !ok || !json.Valid(body) {
 		return nil, false
 	}
@@ -235,7 +244,7 @@ func status(ctx context.Context, client *http.Client, timeout time.Duration, url
 // gap, as is one that did not answer.
 func scrape(ctx context.Context, client *http.Client, timeout time.Duration, addr string) WorkerSample {
 	ws := WorkerSample{Address: addr}
-	body, ok := get(ctx, client, timeout, "http://"+addr+"/metrics")
+	body, ok := get(ctx, client, timeout, "http://"+addr+"/metrics", maxMetrics)
 	if !ok {
 		return ws
 	}
@@ -247,8 +256,8 @@ func scrape(ctx context.Context, client *http.Client, timeout time.Duration, add
 	return ws
 }
 
-// get reads url with a 200 answer within timeout, and at most maxBody bytes.
-func get(ctx context.Context, client *http.Client, timeout time.Duration, url string) ([]byte, bool) {
+// get reads url with a 200 answer within timeout, and at most limit bytes.
+func get(ctx context.Context, client *http.Client, timeout time.Duration, url string, limit int64) ([]byte, bool) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -263,8 +272,8 @@ func get(ctx context.Context, client *http.Client, timeout time.Duration, url st
 	if resp.StatusCode != http.StatusOK {
 		return nil, false
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
-	if err != nil || len(body) > maxBody {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil || int64(len(body)) > limit {
 		return nil, false
 	}
 	return body, true

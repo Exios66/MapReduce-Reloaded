@@ -2,6 +2,7 @@ package showcase_test
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -177,4 +178,112 @@ func TestRingIsSafeForConcurrentUse(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// sizedFrame is a frame that costs size bytes in the ring: its status.
+func sizedFrame(seq uint64, size int) showcase.Frame {
+	f := seqFrame(seq)
+	f.Status = json.RawMessage(`"` + strings.Repeat("x", size-2) + `"`)
+	return f
+}
+
+func TestRingEvictsTheOldestPastItsByteLimit(t *testing.T) {
+	r := showcase.NewRing(100)
+	for seq := uint64(1); seq <= 5; seq++ {
+		r.Add(sizedFrame(seq, 300))
+	}
+	r.LimitBytes(1000) // three frames of 300 bytes
+	frames, _ := r.After(0, 100)
+	if got, want := seqs(frames), []uint64{3, 4, 5}; !sameSeqs(got, want) {
+		t.Errorf("after LimitBytes(1000) seqs = %v, want %v", got, want)
+	}
+	r.Add(sizedFrame(6, 300))
+	frames, _ = r.After(0, 100)
+	if got, want := seqs(frames), []uint64{4, 5, 6}; !sameSeqs(got, want) {
+		t.Errorf("after an Add over the limit seqs = %v, want %v", got, want)
+	}
+}
+
+func TestRingLimitBytesEvictsAtOnce(t *testing.T) {
+	r := showcase.NewRing(100)
+	for seq := uint64(1); seq <= 5; seq++ {
+		r.Add(sizedFrame(seq, 300))
+	}
+	r.LimitBytes(450) // one frame of 300 fits; two would be 600
+	frames, _ := r.After(0, 100)
+	if got, want := seqs(frames), []uint64{5}; !sameSeqs(got, want) {
+		t.Errorf("after LimitBytes(450) seqs = %v, want %v", got, want)
+	}
+}
+
+func TestRingKeepsItsNewestFrameOverTheLimit(t *testing.T) {
+	r := showcase.NewRing(10)
+	r.LimitBytes(10)
+	r.Add(sizedFrame(1, 300))
+	r.Add(sizedFrame(2, 300))
+	frames, _ := r.After(0, 100)
+	if got, want := seqs(frames), []uint64{2}; !sameSeqs(got, want) {
+		t.Errorf("seqs = %v, want only the newest %v", got, want)
+	}
+}
+
+func TestRingCostsWorkersByAddressAndHost(t *testing.T) {
+	// One worker costs len(Address) + len(Host) + 64: 13 + 2 + 64 = 79.
+	worker := func(seq uint64) showcase.Frame {
+		return showcase.Frame{Seq: seq, Workers: []showcase.WorkerSample{{Address: "10.0.0.1:9000", Host: "w1", OK: true}}}
+	}
+	r := showcase.NewRing(10)
+	for seq := uint64(1); seq <= 3; seq++ {
+		r.Add(worker(seq))
+	}
+	r.LimitBytes(158) // two frames of 79
+	frames, _ := r.After(0, 100)
+	if got, want := seqs(frames), []uint64{2, 3}; !sameSeqs(got, want) {
+		t.Errorf("after LimitBytes(158) seqs = %v, want %v", got, want)
+	}
+	r.LimitBytes(157) // one frame of 79 fits; two would be 158
+	frames, _ = r.After(0, 100)
+	if got, want := seqs(frames), []uint64{3}; !sameSeqs(got, want) {
+		t.Errorf("after LimitBytes(157) seqs = %v, want %v", got, want)
+	}
+}
+
+// Byte eviction is an eviction like any other: a client that last saw a
+// frame that is gone must resync, and one that saw the frame before the
+// oldest kept one must not.
+func TestRingAfterResyncsWhenBytesEvictedTheClientsFrame(t *testing.T) {
+	r := showcase.NewRing(100)
+	for seq := uint64(1); seq <= 5; seq++ {
+		r.Add(sizedFrame(seq, 300))
+	}
+	r.LimitBytes(1000) // keeps 3, 4 and 5
+	frames, resync := r.After(1, 100)
+	if !resync {
+		t.Errorf("After(1) resync = false, want true: frame 2 was evicted")
+	}
+	if got, want := seqs(frames), []uint64{3, 4, 5}; !sameSeqs(got, want) {
+		t.Errorf("After(1) seqs = %v, want %v", got, want)
+	}
+	if _, resync := r.After(2, 100); resync {
+		t.Errorf("After(2) resync = true, want false: nothing after 2 was evicted")
+	}
+}
+
+func TestRingDefaultsToDefaultRingBytes(t *testing.T) {
+	if showcase.DefaultRingBytes != 64<<20 {
+		t.Fatalf("DefaultRingBytes = %d, want 64 MiB", showcase.DefaultRingBytes)
+	}
+	// Sixteen frames of 4 MiB fill the default limit exactly; the seventeenth
+	// evicts the first. One shared status keeps the test's own memory small.
+	big := json.RawMessage(strings.Repeat("x", 4<<20))
+	r := showcase.NewRing(showcase.DefaultRingSize)
+	for seq := uint64(1); seq <= 17; seq++ {
+		f := seqFrame(seq)
+		f.Status = big
+		r.Add(f)
+	}
+	frames, _ := r.After(0, 100)
+	if got := seqs(frames); len(got) != 16 || got[0] != 2 || got[15] != 17 {
+		t.Errorf("default ring kept seqs %v, want 16 frames from 2 to 17", got)
+	}
 }
