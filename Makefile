@@ -7,6 +7,13 @@
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
 
+# When JUNIT_DIR is set (CI sets it), the Go and Python tests also write JUnit
+# XML there, for CircleCI's test results: gotestsum runs `go test` and
+# pytest gets --junitxml. Left unset, they run as before.
+JUNIT_DIR ?=
+GOTEST = $(if $(JUNIT_DIR),gotestsum --junitfile $(JUNIT_DIR)/go/$@.xml --format standard-quiet --,go test)
+PYTEST_JUNIT = $(if $(JUNIT_DIR),--junitxml=$(JUNIT_DIR)/python/$@.xml)
+
 all: check
 
 # Run the three stages one after another, even under `make -j`: code
@@ -211,7 +218,8 @@ proto-check: proto-lint proto-breaking proto
 # Each package's coverage must stay at or over its floor in go/cover-floors.txt
 # and python/cover-floors.txt (scripts/cover.py, #161).
 go-test:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/go)
+	cd go && MR_PYTHON=$(PYTHON) $(GOTEST) -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
 # The Go tests that read python/: cmd/mr's golden comparison with the Python
@@ -250,7 +258,8 @@ go-lint:
 	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
 
 py-test:
-	cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
+	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/python)
+	cd python && $(PYTHON) -m coverage run -m pytest -q $(PYTEST_JUNIT) && $(PYTHON) -m coverage json -q -o cover.json
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
 
 # The tests, then each package's coverage against its floor.
@@ -263,7 +272,8 @@ cover: test
 # jobs; CI's go job runs them here, and MR_REQUIRE_GO makes a skip a
 # failure, so the integration is checked on every pull request.
 py-e2e:
-	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
+	$(if $(JUNIT_DIR),mkdir -p $(JUNIT_DIR)/python)
+	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q $(PYTEST_JUNIT) tests/test_coordinator_e2e.py
 
 py-lint:
 	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench

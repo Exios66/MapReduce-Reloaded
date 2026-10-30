@@ -153,6 +153,17 @@ How each job meets its requirements:
   week, so the cache is saved about once a week, not on every run.
 - **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
 
+## Test results and artifacts
+
+The `go` and `python` jobs set `JUNIT_DIR=/tmp/test-results`, so `make`
+writes JUnit XML there: `gotestsum` runs the Go tests (`go-test.xml`), and
+pytest gets `--junitxml` (`py-test.xml`, `py-e2e.xml`). The jobs hand the
+directory to CircleCI's `store_test_results`, even when a test failed, so
+the Tests tab lists every test with its time and failures, and CircleCI's
+flaky-test and timing insights work. The same files are artifacts under
+`test-results/`, with `go/cover.out` and `python/cover.json`. Without
+`JUNIT_DIR`, as in `make check`, the tests run as before.
+
 ## Caching
 
 Caches only save time; none of them replaces a check.

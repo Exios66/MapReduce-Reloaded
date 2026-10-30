@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
+  Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
+  `Makefile`) with `store_test_results`, so CircleCI shows each test, its
+  time and its failures, and keep them as artifacts (#314).
 - Python and Go coordinators: LATE speculation (Zaharia et al., ADR 0019) as
   an alternative to the paper's backups, selected with `-speculation=late`
   on the Go coordinator; the Python coordinator reports task progress in
