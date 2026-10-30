@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -21,9 +22,24 @@ import (
 
 func TestParseDefaults(t *testing.T) {
 	c, err := parse(nil, io.Discard)
-	want := config{coordinator: "localhost:7070", listen: ":7071", logFormat: "text", minFreeMiB: 1024}
+	want := config{coordinator: "localhost:7070", listen: ":7071", logFormat: "text", logLevel: "info", minFreeMiB: 1024}
 	if err != nil || c != want {
 		t.Fatalf("parse() = %+v, %v; want %+v", c, err, want)
+	}
+}
+
+// The worker keeps the Go heap under the container's limit, and leaves the
+// runtime alone when there is no limit (#47).
+func TestLimitHeap(t *testing.T) {
+	before := debug.SetMemoryLimit(-1)
+	defer debug.SetMemoryLimit(before)
+	limitHeap(256 << 20)
+	if got := debug.SetMemoryLimit(-1); got != 192<<20 {
+		t.Fatalf("heap limit = %d, want 192 MiB", got)
+	}
+	limitHeap(0)
+	if got := debug.SetMemoryLimit(-1); got != 192<<20 {
+		t.Fatalf("heap limit changed without a container limit: %d", got)
 	}
 }
 
@@ -39,6 +55,7 @@ func TestStartErrors(t *testing.T) {
 		{[]string{"-listen", ""}, 2, `-listen "" needs a shared -work-dir`},
 		{[]string{"-min-free-mib", "18446744073709551615"}, 2, "is too large"},
 		{[]string{"-log-format", "xml"}, 1, `log format "xml"`},
+		{[]string{"-log-level", "loud"}, 1, `log level "loud"`},
 		{[]string{"-listen", "nowhere:-1"}, 1, "worker: listen tcp"},
 		{[]string{"-h"}, 0, "Usage of worker"},
 	} {

@@ -7,13 +7,15 @@ summary; each section links to the page that has the detail.
 
 This repository rebuilds the system in Dean and Ghemawat's *MapReduce:
 Simplified Data Processing on Large Clusters* (OSDI 2004) and runs it on
-one VM with 4 vCPUs and 8 GB: a coordinator and four worker containers,
+one VM with 4 vCPUs and 8 GB ([cluster VM](cluster-vm.md)): a coordinator and four worker containers,
 each limited to one CPU, under Docker Compose. Go implements the
 coordinator, the workers and the `mr` client; Python implements the same
-API, file format, partition hash and local mode as a reference, and for
-the same uncompressed job both produce the same bytes. All 23 of the
-paper's features (F1–F23) are built and each is named with the test that
-proves it. The paper's §5 experiments and six more (E0–E5) ran on the VM.
+API, file format, partition hash and local mode as a reference, and also
+provides a coordinator server, and for
+the same uncompressed job both produce the same bytes. All 24 of the
+paper's features (F1–F24) are built and each is named with the test that
+proves it. The paper's §5 experiments (grep, sort, backups, failures) were reproduced
+on the VM, alongside further experiments E0, E1, and E4–E6.
 The mechanisms behave as the paper says: phases overlap, backups cut a
 straggler's tail (17.6 s without them, 11.2 s with), and a job survives a
 lost worker or a restarted coordinator with the same output. What changes
@@ -38,7 +40,7 @@ and the job continues.
 - [Design](../design.md): the assignment's design questions, one job from
   submission to completion, and sequence diagrams for scheduling, the
   shuffle, failure recovery and the commit.
-- [Design records](README.md#design-records): eighteen ADRs, one per
+- [Design records](README.md#design-records): nineteen ADRs, one per
   decision.
 - [Explainers](README.md#explainers): one page per component.
 
@@ -67,6 +69,9 @@ The full table, with the reason and the record for each, is in
 [design.md](../design.md#differences-from-the-2004-paper). The ones that
 change behavior:
 
+- **Go, with Python as a second implementation,** replace C++. The
+  argument, the evidence and the costs are in [language
+  choice](language-choice.md).
 - **gRPC and protobuf** replace Google's RPC, so Go and Python share one
   contract.
 - **A bind-mounted directory or S3** replaces GFS. An S3 commit is a copy
@@ -92,9 +97,10 @@ change behavior:
 | E1: combiner | 15× to 78× fewer bytes shuffled, 18–44% faster |
 | E4: coordinator restart | 1.6 s, every finished task kept |
 | E5: interpreted job file | 2.4× slower than compiled with the compiled helpers, 10.5× without |
+| E6: combiner on real text | 5.2× fewer bytes shuffled and 14% faster on crawled English, 3.2× and 7% in every language, 33× and 22% on the book (a best case) |
 
 [Evaluation](evaluation.md) compares each run with the paper's figure;
-[bench/README.md](../bench/README.md#evaluation-e0e5) has the plots, the
+[bench/README.md](../bench/README.md#evaluation-e0e6) has the plots, the
 tables and the commands, and `bench/evaluation/` has the data.
 
 ## How it is tested
@@ -104,7 +110,7 @@ short: unit tests in both languages, golden vectors shared by Go and
 Python for the file format, the hash and the messages, in-process cluster
 tests, a seeded chaos test that kills workers and restarts the
 coordinator, fuzzing of the decoders, a model-based test of the
-coordinator's RPCs, coverage floors per package (Go 91.7%, Python 100%),
+coordinator's RPCs, coverage floors per package (Go 89.8%, Python 100%),
 and mutation testing of the core packages. `make check` runs the fast set
 locally and CircleCI runs it on every pull request.
 
@@ -141,20 +147,21 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests, each reviewed.** About 120 merged pull requests,
-  each reviewed by an AI agent and CI before it merged; several real bugs
-  were found in review, not by tests.
+- **Small pull requests.** 157 merged pull requests (as of October 2026).
+  The documented process calls for AI review and CI before merging; several
+  real bugs were found in review, not by tests.
 
 ## Future work
 
 Kept open as `[stretch]` issues:
 
-- **Python parity (#35–#39):** a Python coordinator and worker, Python
+- **Python parity (#35, #37–#39):** a Python worker, Python
   map and reduce functions on Go workers, and a test matrix over every
   Go/Python combination.
 - **Modern extensions (#43–#55):** an external shuffle service,
-  coordinator high availability, LATE-style speculation, skew handling,
-  memory-aware spilling, tracing, mTLS, Kubernetes, Parquet and JSON
-  Lines, a job service, job DAGs, incremental execution and WebAssembly
+  coordinator high availability, LATE-style speculation (built as an
+  opt-in coordinator mode, [ADR 0019](design/0019-late-speculation.md), and
+  not yet evaluated), skew handling, memory-aware spilling, tracing, mTLS,
+  Kubernetes, Parquet and JSON Lines, a job service, job DAGs, incremental execution and WebAssembly
   user functions.
 - **Their evaluation (#59)** against this baseline.

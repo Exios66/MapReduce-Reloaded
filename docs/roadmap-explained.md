@@ -22,10 +22,11 @@ identical bytes, which gives a second, independent correctness check.
 ## The phases
 
 Phases 0–4 are done, and so are #41 and #42 and Phase 7's benchmarks and
-evaluation (#57, #58); the final report (#60) remains. Where the build
+evaluation (#57, #58) and the final report (#60). Where the build
 differs from the plan, [design.md](../design.md) says how and why.
 
 ### Phase 0 — Foundations (#1–#5)
+
 *Agree on the language and the paperwork before anyone builds anything.*
 
 - **#2 Repository skeleton:** build commands and the `make check` quality gate.
@@ -40,6 +41,7 @@ differs from the plan, [design.md](../design.md) says how and why.
   [explainers/05-partition-hash.md](explainers/05-partition-hash.md).
 
 ### Phase 1 — Single-computer version (#6–#12)
+
 *Before running a restaurant chain, cook the dish perfectly in one kitchen.*
 
 - **#7 The programming interface:** the user writes only a `map` function
@@ -59,6 +61,7 @@ differs from the plan, [design.md](../design.md) says how and why.
   oracle.** See [explainers/11-local-mode.md](explainers/11-local-mode.md).
 
 ### Phase 2 — Make it distributed (#13–#21)
+
 *Open several kitchens, with a head chef handing out tickets.*
 
 - **#14** Split the input into M pieces. See
@@ -80,6 +83,7 @@ differs from the plan, [design.md](../design.md) says how and why.
   [`deploy/compose/compose.yaml`](../deploy/compose/compose.yaml).
 
 ### Phase 3 — Survive failures (#22–#29)
+
 *The paper's famous result: thousands of cheap machines, some always
 failing, and jobs still finish correctly.*
 
@@ -119,9 +123,9 @@ failing, and jobs still finish correctly.*
   ([design.md](../design.md)) and decision records. This makes the "faithful
   recreation" claim checkable.
 
-### Phase 5 — Python catches up (#35–#39) · *stretch*
+### Phase 5 — Python catches up (#35, #37–#39) · *stretch*
 
-- Full Python coordinator and worker.
+- Full Python worker (coordinator done).
 - Python map and reduce functions running on Go workers.
 - Every Go/Python combination tested against the oracle.
 
@@ -176,6 +180,7 @@ appear in the report as future work.
 | 6 | #31 locality, #32 status, #33 examples, #34 mapping, #41 S3, #42 compression, #57/#58 benchmarks, #60 report | All paper features done, report written |
 
 **If we fall behind, cut in this order:**
+
 1. #42 compression
 2. #41 S3 storage
 3. trim #33 to word count, grep, inverted index and sort

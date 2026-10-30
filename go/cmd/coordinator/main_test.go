@@ -21,7 +21,7 @@ import (
 
 func TestParseDefaults(t *testing.T) {
 	o, err := parse(nil, io.Discard)
-	want := options{addr: ":7070", httpAddr: ":8080", logFormat: "text", backups: true, keepJobs: 100, maxTaskFailures: 8}
+	want := options{addr: ":7070", httpAddr: ":8080", logFormat: "text", logLevel: "info", backups: true, keepJobs: 100, maxTaskFailures: 8}
 	if err != nil || o != want {
 		t.Fatalf("parse() = %+v, %v; want %+v", o, err, want)
 	}
@@ -32,13 +32,45 @@ func TestParseDefaults(t *testing.T) {
 }
 
 func TestParseFlags(t *testing.T) {
-	o, err := parse([]string{"-addr", ":1", "-http", "", "-data-dir", "d", "-backups=false", "-keep-jobs", "0", "-max-task-failures", "0", "-log-format", "json"}, io.Discard)
-	want := options{addr: ":1", dataDir: "d", logFormat: "json", keepJobs: 0}
+	o, err := parse([]string{"-addr", ":1", "-http", "", "-data-dir", "d", "-backups=false", "-keep-jobs", "0", "-max-task-failures", "0", "-log-format", "json", "-log-level", "debug"}, io.Discard)
+	want := options{addr: ":1", dataDir: "d", logFormat: "json", logLevel: "debug", keepJobs: 0}
 	if err != nil || o != want {
 		t.Fatalf("parse = %+v, %v; want %+v", o, err, want)
 	}
 	if cfg := config(o); cfg.Backups || cfg.KeepJobs != 0 {
 		t.Fatalf("-backups=false -keep-jobs 0 gave %+v", cfg)
+	}
+}
+
+// -speculation picks how backups start; without it, -backups decides, and
+// -backups=false conflicts with paper or late.
+func TestParseSpeculation(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string // the effective mode: Backups and Speculation of the config
+	}{
+		{nil, "paper"},
+		{[]string{"-backups=false"}, "off"},
+		{[]string{"-speculation", "paper"}, "paper"},
+		{[]string{"-speculation=late"}, "late"},
+		{[]string{"-speculation=off"}, "off"},
+		{[]string{"-backups=false", "-speculation=off"}, "off"},
+	} {
+		o, err := parse(tc.args, io.Discard)
+		if err != nil {
+			t.Errorf("parse(%q): %v", tc.args, err)
+			continue
+		}
+		cfg := config(o)
+		got := cfg.Speculation
+		if got == "" && cfg.Backups {
+			got = "paper"
+		} else if got == "" {
+			got = "off"
+		}
+		if got != tc.want {
+			t.Errorf("parse(%q) gives %q, want %q", tc.args, got, tc.want)
+		}
 	}
 }
 
@@ -53,7 +85,11 @@ func TestStartErrors(t *testing.T) {
 		{[]string{"extra"}, 2, `unexpected arguments ["extra"]`},
 		{[]string{"-keep-jobs", "-1"}, 2, "-keep-jobs is -1"},
 		{[]string{"-max-task-failures", "2"}, 2, "-max-task-failures is 2"},
+		{[]string{"-speculation", "fast"}, 2, `-speculation is "fast"`},
+		{[]string{"-backups=false", "-speculation=late"}, 2, "-backups=false conflicts with -speculation=late"},
+		{[]string{"-backups=false", "-speculation=paper"}, 2, "-backups=false conflicts with -speculation=paper"},
 		{[]string{"-log-format", "xml"}, 1, `log format "xml"`},
+		{[]string{"-log-level", "loud"}, 1, `log level "loud"`},
 		{[]string{"-addr", "nowhere:-1", "-http", ""}, 1, "coordinator: listen tcp"},
 		{[]string{"-h"}, 0, "Usage of coordinator"},
 	} {

@@ -1,0 +1,7 @@
+# The soak run of #160 (make soak): the same cluster with each worker
+# limited to 256 MB, to prove that a job whose intermediate data is larger
+# than that spills to disk instead of being killed for running out of
+# memory (#47). Not used by make check or make e2e.
+services:
+  worker:
+    mem_limit: 256m

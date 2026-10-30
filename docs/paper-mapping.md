@@ -2,12 +2,16 @@
 
 Traceability from each feature of Dean & Ghemawat, *MapReduce: Simplified Data
 Processing on Large Clusters* (OSDI 2004), to where it lives in this repo and
-the test that proves it. Rows are filled in as phases land. A dash in the
-Python column marks a feature that only the Go cluster has: Python is the
-reference implementation and local mode (ADR 0001), and a Python cluster is
-stretch work (#35). `TestPaperMapping` checks that every path and test named
-here exists. Where we chose differently from the paper, the notes below the
-table say how.
+the test that proves it. Rows are filled in as phases land. The Python
+column lists the reference implementation and local mode. Python also has a
+coordinator server that `make py-e2e` runs with Go workers (ADR 0001,
+[explainer 25](explainers/25-python-coordinator.md)); it implements the
+master's side of several coordinator rows, the F21 status page among them,
+but no Python worker runs tasks, so a dash marks a feature with no Python
+implementation outside that coordinator. A Python worker and a Python
+user-function host are stretch work (#37, #38). `TestPaperMapping` checks
+that every path and test named here exists. Where we chose differently from
+the paper, the notes below the table say how.
 
 Status: `planned` → `in progress` → `done`.
 
@@ -33,7 +37,7 @@ Status: `planned` → `in progress` → `done`.
 | F18 | Atomic side-effect files | §4.5 | 3 | `go/internal/task` | `mapreduce_reloaded/local.py` | `TestSideOutput`, `test_side_output` | done |
 | F19 | Skipping bad records | §4.6 | 3 | `go/internal/task`, `go/internal/coordinator` | — | `TestBadRecords`, `TestFailWithCrash`, `TestClusterSkipsBadRecords` | done |
 | F20 | Local execution mode | §4.7 | 1 | `go/internal/local`, `go/cmd/mr` | `mapreduce_reloaded/local.py`, `mapreduce_reloaded/__main__.py` | `TestWordCountGolden`, `test_local.py` | done |
-| F21 | HTTP status pages | §4.8 | 4 | `go/internal/statusweb`, `go/cmd/coordinator` | — | `TestStatus`, `TestPage`, `TestMetrics`, `scripts/e2e.sh` | done |
+| F21 | HTTP status pages | §4.8 | 4 | `go/internal/statusweb`, `go/cmd/coordinator` | — | `TestStatus`, `TestPage`, `TestMetrics`, `TestClusterReportsProgress`, `scripts/e2e.sh` | done |
 | F22 | Counters (de-duplicated) | §4.9 | 3 | `go/internal/coordinator`, `go/internal/task` | `mapreduce_reloaded/local.py` | `TestClusterCountersMatchLocal`, `test_wordcount_golden`, `TestChaos` | done |
 | F23 | Paper example programs | §2.3 | 4 | `go/examples` | `mapreduce_reloaded/examples` | `TestWordCountGolden`, `TestGrep`, `TestURLFreq`, `TestReverseLinks`, `TestSort`, `TestInvertedIndex`, `TestTermVector`, `test_wordcount_golden`, `test_grep`, `test_urlfreq`, `test_reverselinks`, `test_distsort`, `test_invertedindex`, `test_termvector` | done |
 | F24 | Performance experiments (grep, sort, backups, killed workers) | §5 | 7 | — | — | `bench/run.sh`, `bench/experiments.sh`, `docs/evaluation.md`, `test_input_is_accessible_to_nonroot_workers`, `test_e2_draws_four_settings_in_two_colors` | done |
@@ -47,6 +51,14 @@ Status: `planned` → `in progress` → `done`.
   coordinator replays the log, so the job survives instead of being
   aborted (ADR 0007). Without it there is no log, and a restart loses the
   job.
+- **F8, F21.** Workers' heartbeats (§3.3) also carry each running attempt's
+  `fraction_done`: bytes of the split read for a map task, bytes of the map
+  outputs read for a reduce task. The coordinator shows it on the status
+  page (§4.8). The paper does not specify per-task fractions. The
+  coordinator also uses them for LATE speculation (Zaharia et al., OSDI
+  2008), an opt-in mode with `-speculation=late` that is not in the paper
+  and has no F row; F13 is the paper's rule, unchanged (#45; ADR 0009,
+  0010, 0019).
 - **F11.** The scheduler ranks tasks by host, then zone, and can wait for a
   local worker (`Config.Locate`, `LocalityWait`). Nothing in the shipped
   binaries labels splits yet: Compose workers share one volume, so there is

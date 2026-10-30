@@ -23,6 +23,7 @@ internal/formats/kv 89
 internal/jobfile 91
 internal/local 89
 internal/logs 99
+internal/memlimit 91
 internal/partition 99
 internal/promtext 99
 internal/rpcguard 99

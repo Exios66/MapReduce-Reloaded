@@ -343,7 +343,7 @@ func TestClusterWordCount(t *testing.T) {
 	c, _, status := runJob(t, "wordcount", 3)
 	assertGolden(t, c.output())
 	if status.GetMapTasksTotal() < 7 || status.GetReduceTasksCompleted() != 4 ||
-		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 11786 {
+		status.GetCounters().GetValues()[task.ReduceOutputRecords] != 16851 {
 		t.Fatalf("status %v", status)
 	}
 }
@@ -382,7 +382,9 @@ func TestClusterLocality(t *testing.T) {
 		t.Run(fmt.Sprint(workers, " workers"), func(t *testing.T) {
 			splits := 0
 			c := newCluster(t, func(cfg *coordinator.Config) {
-				cfg.LocalityWait = time.Second
+				// Long enough that a busy host's worker, not a timeout, takes
+				// its next split even when the whole module's tests run at once.
+				cfg.LocalityWait = 5 * time.Second
 				cfg.Locate = func(*pb.InputSplit) []string {
 					splits++
 					return []string{fmt.Sprint("host-", splits%8)}
@@ -413,8 +415,8 @@ func TestClusterSkipsBadRecords(t *testing.T) {
 	c, _, status := runJob(t, "test.bad-record", 2)
 	assertGolden(t, c.output())
 	assertMapOutputRecords(t, status)
-	if n := status.GetCounters().GetValues()[task.SkippedRecords]; n != 3 {
-		t.Fatalf("skipped %d records, want 3, one per input file", n)
+	if n := status.GetCounters().GetValues()[task.SkippedRecords]; n != 4 {
+		t.Fatalf("skipped %d records, want 4, one per input file", n)
 	}
 }
 
@@ -525,6 +527,23 @@ func TestClusterBackupTasks(t *testing.T) {
 	}
 }
 
+// With LATE, a task that has reported progress but is slow gets a backup on
+// a worker with nothing else to do, which finishes it while the slow attempt
+// is still running.
+func TestClusterLateBackupTasks(t *testing.T) {
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Speculation = coordinator.SpeculationLate })
+	job := c.submit("test.slow-map")
+	c.addWorker()
+	<-mapStuck
+	c.addWorker()
+	if st := c.succeeded(job); st.GetBackupWins() < 1 || st.GetBackupAttempts() < st.GetBackupWins() {
+		t.Errorf("status %v; want the slow map task won by a backup", st)
+	}
+	status := c.wait(job)
+	assertGolden(t, c.output())
+	assertMapOutputRecords(t, status)
+}
+
 // The losing attempt of a backed-up task is stopped once its twin finishes
 // (§3.6), so its worker is free again and exits when the job ends.
 func TestClusterStopsLosingAttempt(t *testing.T) {
@@ -537,6 +556,36 @@ func TestClusterStopsLosingAttempt(t *testing.T) {
 	assertGolden(t, c.output())
 	if body := scrape(t, c.workers[0]); !strings.Contains(body, `mr_worker_tasks_total{kind="map",result="failed"} 1`+"\n") {
 		t.Fatalf("want the slow attempt stopped:\n%s", body)
+	}
+}
+
+// A running task's progress travels in the worker's heartbeats to the
+// coordinator's status: above 0 once the task has read some input.
+func TestClusterReportsProgress(t *testing.T) {
+	for program, tc := range map[string]struct {
+		stuck chan struct{}
+		task  coordinator.Task
+	}{
+		"test.slow-map":    {mapStuck, coordinator.Task{Kind: pb.TaskKind_TASK_KIND_MAP}},
+		"test.hang-reduce": {reduceStuck, coordinator.Task{Kind: pb.TaskKind_TASK_KIND_REDUCE}},
+	} {
+		t.Run(program, func(t *testing.T) {
+			c := newCluster(t)
+			c.submit(program)
+			kill := c.addWorker()
+			<-tc.stuck
+			var got float32
+			for got == 0 {
+				if c.ctx.Err() != nil {
+					t.Fatal("no progress reported")
+				}
+				time.Sleep(10 * time.Millisecond)
+				if w := c.srv.Status().Workers; len(w) > 0 {
+					got = w[0].Progress[tc.task]
+				}
+			}
+			kill()
+		})
 	}
 }
 
@@ -799,8 +848,8 @@ func TestClusterReRunsLostMapOutput(t *testing.T) {
 // however many times it ran.
 func assertMapOutputRecords(t *testing.T, status *pb.GetJobStatusResponse) {
 	t.Helper()
-	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 59372 {
-		t.Fatalf("%s = %d, want 59372", task.MapOutputRecords, got)
+	if got := status.GetCounters().GetValues()[task.MapOutputRecords]; got != 78658 {
+		t.Fatalf("%s = %d, want 78658", task.MapOutputRecords, got)
 	}
 }
 

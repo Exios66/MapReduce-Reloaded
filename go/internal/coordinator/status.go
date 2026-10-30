@@ -17,10 +17,12 @@ type Status struct {
 	Lost    []LostWorker               // the last maxLost workers lost since the process started, oldest first
 }
 
-// WorkerStatus is a live worker and the tasks it is running.
+// WorkerStatus is a live worker and the tasks it is running, with the
+// fraction of each one's input the worker last reported processed.
 type WorkerStatus struct {
 	Worker
-	Running []Task
+	Running  []Task
+	Progress map[Task]float32
 }
 
 // LostWorker is a worker declared dead (§3.3), and the tasks of the running
@@ -44,7 +46,14 @@ func (s *Server) Status() Status {
 		running = s.active.tasks.Running()
 	}
 	for _, w := range s.workers.All() {
-		st.Workers = append(st.Workers, WorkerStatus{Worker: w, Running: running[w.ID]})
+		ws := WorkerStatus{Worker: w, Running: running[w.ID]}
+		if len(ws.Running) > 0 {
+			ws.Progress = map[Task]float32{}
+			for _, t := range ws.Running {
+				ws.Progress[t] = s.active.tasks.Fraction(t, w.ID)
+			}
+		}
+		st.Workers = append(st.Workers, ws)
 	}
 	return st
 }

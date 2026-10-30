@@ -1,6 +1,6 @@
 // Command coordinator serves the coordinator ("master", §3.2) of a cluster.
 //
-//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-keep-jobs n] [-log-format text|json]
+//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-keep-jobs n] [-log-format text|json] [-log-level debug|info|warn|error]
 //
 // It runs until interrupted, then tells workers to exit. With -data-dir it
 // logs every decision there, and a restarted coordinator resumes its job
@@ -37,9 +37,10 @@ import (
 
 // options are the coordinator's flags.
 type options struct {
-	addr, httpAddr, dataDir, logFormat string
-	backups                            bool
-	keepJobs, maxTaskFailures          int
+	addr, httpAddr, dataDir, logFormat, logLevel string
+	speculation                                  string
+	backups                                      bool
+	keepJobs, maxTaskFailures                    int
 }
 
 // main runs the coordinator until interrupted or terminated. It exits with
@@ -62,7 +63,7 @@ func start(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "coordinator:", err)
 		return 2
 	}
-	if err = logs.Setup(o.logFormat); err == nil {
+	if err = logs.Setup(o.logFormat, o.logLevel); err == nil {
 		err = run(ctx, o, nil)
 	}
 	if err != nil {
@@ -81,12 +82,20 @@ func parse(args []string, stderr io.Writer) (options, error) {
 	fs.StringVar(&o.httpAddr, "http", ":8080", "address of the status page and /metrics (empty: none)")
 	fs.StringVar(&o.dataDir, "data-dir", "", "directory for the write-ahead log (default: none, so a restart loses the job)")
 	fs.BoolVar(&o.backups, "backups", true, "run backup attempts of the last tasks of each phase")
+	fs.StringVar(&o.speculation, "speculation", "", "how backup attempts start: paper (the paper's rule, §3.6), late (LATE, Zaharia et al. 2008) or off (default: paper, or off with -backups=false)")
 	fs.IntVar(&o.keepJobs, "keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
 	fs.IntVar(&o.maxTaskFailures, "max-task-failures", 8, "fail the job once one task has failed this many times (0: retry for ever)")
 	fs.StringVar(&o.logFormat, "log-format", "text", "log format: text or json")
+	fs.StringVar(&o.logLevel, "log-level", "info", "lowest level to log: debug, info, warn or error")
 	err := fs.Parse(args)
 	if err == nil && fs.NArg() > 0 {
 		err = fmt.Errorf("unexpected arguments %q", fs.Args())
+	}
+	if err == nil && !coordinator.ValidSpeculation(o.speculation) {
+		err = fmt.Errorf("-speculation is %q; it must be paper, late or off", o.speculation)
+	}
+	if err == nil && !o.backups && (o.speculation == coordinator.SpeculationPaper || o.speculation == coordinator.SpeculationLate) {
+		err = fmt.Errorf("-backups=false conflicts with -speculation=%s; use -speculation=off", o.speculation)
 	}
 	if err == nil && o.keepJobs < 0 {
 		err = fmt.Errorf("-keep-jobs is %d; it must be 0 (all) or more", o.keepJobs)
@@ -105,6 +114,7 @@ func config(o options) coordinator.Config {
 		WorkerTimeout:     10 * time.Second, // three missed heartbeats
 		RetryAfter:        time.Second,
 		Backups:           o.backups,
+		Speculation:       o.speculation,
 		KeepJobs:          o.keepJobs,
 		MaxTaskFailures:   o.maxTaskFailures,
 	}
@@ -118,7 +128,8 @@ func config(o options) coordinator.Config {
 // If listening is not nil, run calls it with the RPC and HTTP addresses
 // (nil without -http) once both listen.
 // It returns storage, recovery, listen, and RPC server errors, joined with
-// any log close error. Status HTTP server errors do not stop RPCs.
+// any log close error, and an error if another coordinator holds
+// o.dataDir. Status HTTP server errors do not stop RPCs.
 func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (err error) {
 	cfg := config(o)
 	var srv *coordinator.Server
@@ -129,6 +140,14 @@ func run(ctx context.Context, o options, listening func(rpc, status net.Addr)) (
 	} else {
 		if err := os.MkdirAll(o.dataDir, 0o755); err != nil {
 			return err
+		}
+		var held *os.File
+		if held, err = lock(o.dataDir); err != nil {
+			return err
+		}
+		if held != nil {
+			// Unlocked last: after the log is closed.
+			defer func() { err = errors.Join(err, held.Close()) }()
 		}
 		if srv, _, err = coordinator.Recover(cfg, filepath.Join(o.dataDir, "coordinator.log")); err != nil {
 			return err

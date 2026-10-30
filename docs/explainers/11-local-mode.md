@@ -4,7 +4,7 @@
 
 The whole MapReduce pipeline in one process, one task at a time (§4.7):
 
-```
+```sh
 mr run -local -m 3 -r 4 wordcount out/ 'testdata/corpus/*.txt'
 python -m mapreduce_reloaded run --local -m 3 -r 4 wordcount out/ 'testdata/corpus/*.txt'
 ```
@@ -65,13 +65,13 @@ other Program.
 
 ## How we know it works
 
-- **Golden files:** word count over three public-domain books
+- **Golden files:** word count over four public-domain books, one German
   (`testdata/corpus`) must match `expected/` byte for byte, in both
   languages, with and without the combiner.
 - The expected files come from `scripts/make-corpus-expected.py`, a separate
   program written only with the standard library. It shares no code with
   either implementation.
-- Counters agree with it too: 59,372 words, 11,786 distinct.
+- Counters agree with it too: 78,658 words, 16,851 distinct.
 
 ## Likely review questions
 

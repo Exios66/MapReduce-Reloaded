@@ -2,12 +2,14 @@
 
 Scripts that measure the cluster. Each one runs on the Compose cluster and
 writes its raw results to `bench/results/`, which git ignores. The numbers
-below are copied from a run, with the machine it ran on.
+below are copied from a run, with the machine it ran on. Rule: every results
+table names its machine, in the text above it or in its caption.
 
 ## Data generators (#57)
 
 Each generator writes reproducible input to stdout from a size in bytes and
-an optional seed (42 by default). Measured on the machine below, each
+an optional seed (42 by default); `gen-crawl.py` takes `SIZE LANG [DIR]`
+instead, and no seed. Measured on the machine below, each
 writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 
 | Script | Records | For |
@@ -17,6 +19,8 @@ writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 | [`gen-sort.py`](gen-sort.py) | TeraSort-style 100-byte records with random 10-byte keys, as in the paper's sort (§5.3) | `distsort` |
 | [`gen-zipf.py`](gen-zipf.py) | Lines of words from a vocabulary of 100,000, with Zipf-distributed frequencies (exponent S, 1 by default) | Word count with a skewed key |
 | [`gen-weblog.py`](gen-weblog.py) | Requests in the Common Log Format for 10,000 pages; the page is drawn with probability proportional to 1 / N | `urlfreq` |
+| [`gen-book.py`](gen-book.py) | Whole lines of War and Peace, every line once a pass in a new order, to any size; [`scripts/fetch-data.sh`](../scripts/fetch-data.sh) fetches the book. The vocabulary stops at the book's 41,631 words and lines repeat, so it is word count's best case, not real text at scale | Word count, the combiner's best case (E6 `book`) |
+| [`gen-crawl.py`](gen-crawl.py) | `gen-crawl.py SIZE LANG [DIR]`. The text of Common Crawl's pages, one page a line, no page repeated, from ten pinned WET files (`scripts/fetch-data.sh crawl`, about 2.9 GB of text); `eng` keeps the pages Common Crawl identifies as English, `all` keeps every language | Word count on real text (E6 `crawl-eng`, and `crawl` in every language) |
 | [`gen-links.py`](gen-links.py) | A source page, a tab and a target page, over 100,000 pages; targets are drawn with probability proportional to 1 / N | `reverselinks` |
 
 - `gen-grep.py`: the rest of each record is lowercase letters and digits,
@@ -38,17 +42,18 @@ from map to reduce tasks, and the rate at which reduce tasks write output
 - [`scrape-metrics.py`](scrape-metrics.py) `INTERVAL DURATION URL...`
   fetches each worker's `/metrics` every INTERVAL seconds and writes its byte
   counters to stdout as CSV.
-- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png]` sums the counters
+- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png [TITLE]]` sums the counters
   over the workers and differentiates them between samples. It writes the
   input, shuffle and output rates in MB/s as CSV, or, given `OUT.png`, draws
-  them in three panels as the paper does. Drawing needs matplotlib.
+  them in three panels as the paper does, with TITLE (program, size, M, R,
+  commit) as an identification line. Drawing needs matplotlib.
 
 Workers count input and output bytes as each task ends, so those two rates
 rise in steps of whole tasks. The shuffle is counted as it is fetched.
 `python/tests/test_bench_rates.py` tests both scripts against a fake
 `/metrics`.
 
-`make bench SCENARIO=grep|sort|zipf` runs one benchmark with them on the
+`make bench SCENARIO=grep|sort|zipf|book` runs one benchmark with them on the
 Compose cluster, through [`run.sh`](run.sh):
 
 | Scenario | Input | Program |
@@ -91,10 +96,10 @@ Compose cluster, through [`run.sh`](run.sh):
   - The CSV also has `wall_seconds`, the time of `mr submit -wait`, which
     adds about a second to start its container.
 
-Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
+**Development-machine results — not the course VM.** Results on 2026-10-24: 4 vCPUs (Intel Xeon, 2.1 GHz), 16 GB of memory,
 Docker 29.9.1, 4 workers. This was a development machine, not the course
 VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
-([the VM](../docs/cluster-vm.md#the-vm)). Time is the median of three runs, with the range.
+([the VM](../docs/cluster-vm.md#the-vm)). Time is the median of three runs, with the range. Each results section in this file identifies its machine; do not compare development-machine numbers with course-VM numbers.
 
 | Job | Codec | Bytes shuffled | vs none | Time (s) |
 |---|---|---:|---:|---|
@@ -104,6 +109,8 @@ VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
 | distsort | none | 68,353,231 | 1.00 | 2.25 (1.98–2.37) |
 | distsort | zstd | 31,892,233 | 0.47 | 2.40 (2.22–2.58) |
 | distsort | snappy | 51,049,537 | 0.75 | 2.28 (2.23–2.34) |
+
+<sub>Table: codec results on the development machine (4 vCPUs, Intel Xeon 2.1 GHz, 16 GB), 2026-10-24, not the course VM.</sub>
 
 What the numbers show:
 
@@ -148,7 +155,7 @@ The cluster runs above need Docker and a person to read them. These run in
   records 0.368 with zstd and 0.532 with Snappy, line records 0.446 and
   0.673.
 
-## Evaluation (E0–E5)
+## Evaluation (E0–E6)
 
 The performance evaluation in [design](../design.md#performance-evaluation),
 run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,
@@ -163,12 +170,20 @@ succeeded, and every run's output matched the normal run's checksum.
 python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 ```
 
+That also draws `E2-comparison.png` (and `-dark`) from two directories: the
+no-straggler rows from `E2-pairs/` and the straggler rows from `E2/`; the
+image's subtitle says so. The two rates plots in `evaluation/paper/` were drawn
+from their `samples.csv` with `plot-rates.py`, whose third argument is the
+identification line in the image.
+
 Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1 and E4 ran at commit `4b5a235`, and E2 again at `ca082a3` and `162be31` (below); E3 ran again at `9a3cd42`, after
 its rate plot was found to mark the kill about 8 s too early (the workers
 were restarted after the sampler started). The `dirty` flag in their
 `machine.json` was set by an untracked backup directory, not a code change.
 E5 ran at `6b6c7be`; its harness log is
-[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log).
+[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log). E6 ran at
+`b9bb3f4`; its harness log is
+[`evaluation/experiments-E6.log`](evaluation/experiments-E6.log).
 
 ### E0: scaling over workers
 
@@ -315,3 +330,79 @@ record the offset between those two clocks.
   interpreter for every byte, not the call into the job file. The compiled
   helpers for that work (`api.Words`, `api.Sum`) cut the job from 399 s to
   91 s.
+
+### E6: what the combiner saves on real text
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E6-dark.png">
+  <img alt="E6: bytes shuffled and job time, combiner on and off, on crawled English, crawled pages in every language, and the book" src="evaluation/E6.png">
+</picture>
+
+| Input | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
+|---|---:|---:|---:|---|---|---:|
+| Crawled English | 265,983,823 | 1,374,954,686 | 5.2% | 43.05 (42.82–43.69) | 50.06 (49.84–50.53) | 14% |
+| Crawled, every language | 417,952,270 | 1,320,092,762 | 31.7% | 41.19 (40.08–41.73) | 44.33 (43.84–44.68) | 7% |
+| Book (War and Peace lines) | 43,372,796 | 1,452,704,780 | 3.0% | 45.89 (45.80–46.27) | 59.08 (58.18–59.52) | 22% |
+
+- E1 varies the skew of a generated vocabulary; E6 uses real text. The
+  combiner cuts the bytes shuffled by 3.2× to 33×, and the job time by 7%
+  to 22%, as §4.3 predicts: the more often a key repeats within one map
+  task, the more records the combiner folds into one.
+- The book is the best case, and the earlier book-only E6 showed only it:
+  33× fewer bytes and 22% faster, because its 41,631-word vocabulary
+  repeats. Crawled English is the real-text answer: 5.2× fewer bytes and
+  14% faster.
+- Crawl in every language saves the least, 3.2× and 7%, because Chinese,
+  Japanese and Thai text has no spaces, so word count reads a whole run of
+  it as one word, and a mix of languages has more distinct words. There is
+  less for the combiner to fold per map task. It is also the fastest job in
+  both settings (41.2 s on), for the same reason: fewer words.
+- Every run is one 1 GiB input, M = 32, R = 4, and the median of three,
+  alternating the combiner on and off. `scripts/fetch-data.sh crawl`
+  downloads the ten pinned Common Crawl WET files; `bench/gen-crawl.py`
+  writes their English pages or every page. The book is War and Peace's
+  lines repeated (`bench/gen-book.py`).
+
+## E7: the paper's backups against LATE on mixed-speed workers (#59, not yet run)
+
+E2 slows one worker. E7 slows all four, each to a different speed, which is
+what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for. It
+is wired but has not been run: there are no results here, and nothing in
+this repository says which setting is faster.
+
+| Setting | Coordinator | Compose files |
+|---|---|---|
+| `mixed-paper` | `-speculation=paper` (the default): the oldest attempt, once nothing is idle (§3.6) | `compose.yaml` |
+| `mixed-late` | `-speculation=late` | `compose.yaml`, [`speculation-late.yaml`](../deploy/compose/speculation-late.yaml) |
+| `mixed-off` | `-backups=false` | `compose.yaml`, [`backups-off.yaml`](../deploy/compose/backups-off.yaml) |
+
+- **Workload.** `distsort` on 1 GiB with M = 32 and R = 4, as E2, on four
+  workers. After each setting's cluster starts, `docker update --cpus`
+  gives the workers `E7_CPUS`, one value for each in the order `docker
+  compose ps` lists them: `1 0.6 0.3 0.15` by default, 2.05 CPUs in all.
+  The limits go back to 1 after each run, and on any exit.
+- **Order.** The three settings take turns within each repeat, reversed on
+  even repeats, as in E2.
+- **Output.** `bench/results/E7/runs.csv`, in the format of the other
+  experiments, with `backups` and `backups_won` from the job's status;
+  `tasks-SETTING-N.csv` (the coordinator's task counts over time, as E2's);
+  and `machine.json`. Output is checksummed against the first run, and a
+  run that differs has `valid` 0.
+- **Not in `all`,** and `plot-experiments.py` does not draw it yet. For the
+  job time, backups started and backups won of each valid run:
+
+  ```sh
+  bench/experiments.sh E7
+  awk -F, 'NR > 1 && $16 == 1 { print $2, $11, $13, $14 }' bench/results/E7/runs.csv | sort
+  ```
+
+- **Knobs.** `E7_SETTINGS="mixed-late mixed-off"` runs some settings; an
+  unknown one stops the script before it starts the cluster. `E7_CPUS`
+  must hold four positive numbers. `SIZE`, `M`, `R` and `REPEAT` work as in
+  the other experiments.
+- **What it can show.** With four workers LATE allows one running backup at
+  a time and refuses the slowest worker, so this tests a small cluster; it
+  says nothing about 1,800 machines. The LATE settings are the defaults of
+  ADR 0019, not tuned.
+- `python/tests/test_bench_experiments.py` checks the settings, the
+  overrides and the CPU limits with the cluster and Docker stubbed out.

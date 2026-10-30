@@ -7,11 +7,16 @@ Input and expected output for the local-mode golden tests (#12).
 | `alice.txt` | Alice's Adventures in Wonderland | Lewis Carroll | #11 |
 | `jekyll.txt` | The Strange Case of Dr. Jekyll and Mr. Hyde | Robert Louis Stevenson | #42 |
 | `raven.txt` | The Raven | Edgar Allan Poe | #17192 |
+| `verwandlung.txt` | Die Verwandlung (German) | Franz Kafka | #22367 |
 
 The works are in the public domain in the United States. The files contain
 only the text of each work: `scripts/fetch-corpus.sh` fetched them from the
 GITenberg mirror and removed the Project Gutenberg header, footer and
-licence. They keep their original CRLF line endings.
+licence. The English texts keep their original CRLF line endings.
+`verwandlung.txt` was published in ISO-8859-1. The script converts it to
+UTF-8 with LF line endings, so the corpus has words of multibyte
+characters (1,229 of its 5,117 distinct words) and both kinds of line
+ending.
 
 `expected/` is word count with R = 4, written by the independent oracle
 `scripts/make-corpus-expected.py`. Words are maximal runs of bytes that

@@ -1,6 +1,6 @@
 // Command worker runs tasks for a coordinator until it says to exit.
 //
-//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-min-free-mib n] [-http :8081] [-log-format text|json]
+//	worker -coordinator host:7070 [-listen :7071] [-advertise host:7071] [-work-dir dir] [-min-free-mib n] [-http :8081] [-log-format text|json] [-log-level debug|info|warn|error]
 //
 // It keeps map output in its work directory and serves it to reducers on
 // -listen; other workers reach it at -advertise. It deletes a job's map
@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -33,14 +34,15 @@ import (
 	_ "github.com/exios66/mapreduce-reloaded/go/examples/all"
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/logs"
+	"github.com/exios66/mapreduce-reloaded/go/internal/memlimit"
 	"github.com/exios66/mapreduce-reloaded/go/internal/rpcguard"
 	"github.com/exios66/mapreduce-reloaded/go/internal/shuffle"
 	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
 )
 
 type config struct {
-	coordinator, listen, advertise, workDir, http, logFormat string
-	minFreeMiB                                               uint64
+	coordinator, listen, advertise, workDir, http, logFormat, logLevel string
+	minFreeMiB                                                         uint64
 }
 
 // main runs the worker until the coordinator says to exit, or it is
@@ -64,7 +66,8 @@ func start(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "worker:", err)
 		return 2
 	}
-	if err = logs.Setup(c.logFormat); err == nil {
+	if err = logs.Setup(c.logFormat, c.logLevel); err == nil {
+		limitHeap(memlimit.FromCgroup())
 		err = run(ctx, c, nil)
 	}
 	if err != nil {
@@ -86,6 +89,7 @@ func parse(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&c.http, "http", "", "address to serve /metrics on (default: none)")
 	fs.Uint64Var(&c.minFreeMiB, "min-free-mib", 1024, "take no task while the -work-dir file system has less than this free, in MiB")
 	fs.StringVar(&c.logFormat, "log-format", "text", "log format: text or json")
+	fs.StringVar(&c.logLevel, "log-level", "info", "lowest level to log: debug, info, warn or error")
 	err := fs.Parse(args)
 	switch {
 	case err != nil:
@@ -97,6 +101,19 @@ func parse(args []string, stderr io.Writer) (config, error) {
 		err = fmt.Errorf("-min-free-mib %d is too large", c.minFreeMiB)
 	}
 	return c, err
+}
+
+// limitHeap keeps the Go heap under the container's memory limit, if there
+// is one: the runtime collects harder instead of the kernel killing the
+// process (#47). A quarter of the limit is left for stacks, gRPC and the
+// buffers outside the heap accounting.
+func limitHeap(limit int64) {
+	if limit <= 0 {
+		return
+	}
+	heap := limit - limit/4
+	debug.SetMemoryLimit(heap)
+	slog.Info("memory limit from the cgroup", "bytes", limit, "heap_limit_bytes", heap)
 }
 
 // run serves map output and runs tasks using c until the coordinator says to

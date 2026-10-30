@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -38,6 +38,13 @@ COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
 data:
 	mkdir -p data/input data/out
 	chmod a+rwx data/out
+
+# Real datasets for the example programs, fetched into data/input/ and
+# checked in Go and Python against an independent oracle (docs/data.md).
+# Not in make check: they are 300 MB and take minutes.
+real-data: mr
+	scripts/fetch-data.sh
+	$(PYTHON) scripts/check-real-data.py
 
 # The host client, bin/mr (ADR 0016), built with the host's Go if it has
 # one, otherwise in the same golang image the cluster's image is built from.
@@ -82,6 +89,12 @@ monitoring-up:
 e2e: cluster-up mr
 	scripts/e2e.sh
 
+# The soak run of #160: 1 GiB with the combiner off on two workers limited
+# to 256 MB, which must finish with no out-of-memory kill (the acceptance
+# criterion of #47). Needs the cluster and a few minutes; not in make check.
+soak: data
+	scripts/soak.sh
+
 # Seeded chaos on the cluster (#29): worker kills and pauses and coordinator
 # restarts during word count jobs, which must all give the same output.
 # RUNS (default 5) runs from SEED (default 1); see scripts/chaos.sh.
@@ -95,7 +108,7 @@ e2e-s3: cluster-up
 	cd go && go test -count=1 ./internal/storage -run TestGatewayContract -s3.endpoint=http://127.0.0.1:18790
 
 # One of the paper's benchmarks, with its data rates over time
-# (bench/README.md): make bench SCENARIO=grep|sort|zipf.
+# (bench/README.md): make bench SCENARIO=grep|sort|zipf|book.
 SCENARIO ?= grep
 bench:
 	bench/run.sh $(SCENARIO)
@@ -112,7 +125,40 @@ perf:
 
 test: go-test py-test
 
-lint: go-lint py-lint
+lint: go-lint py-lint sh-lint md-lint
+
+# shellcheck on every tracked shell script and the git hook (#159). Where it
+# is not installed, it says so and passes, unless MR_REQUIRE_SHELLCHECK is
+# set, as CI's go job sets it. scripts/vm-setup.sh --install (or
+# --shellcheck) puts it in ~/.local/bin.
+SH_FILES = $(shell git ls-files '*.sh') .githooks/pre-push
+sh-lint:
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck $(SH_FILES) && echo "sh-lint: shellcheck passed on $(words $(SH_FILES)) scripts"; \
+	elif [ -n "$$MR_REQUIRE_SHELLCHECK" ]; then \
+		echo "sh-lint: shellcheck is not installed, and MR_REQUIRE_SHELLCHECK is set" >&2; exit 1; \
+	else \
+		echo "sh-lint: shellcheck is not installed; skipping (scripts/vm-setup.sh installs it)"; \
+	fi
+
+# Every relative link and anchor in the tracked Markdown files resolves
+# (scripts/check-links.py, #159), and the Markdown style passes pymarkdown
+# (.pymarkdown.json: line length off, picture/sub HTML allowed). CI's
+# Python jobs run it; pymarkdown comes with python[dev]. Where it is not
+# installed, the style check is skipped unless MR_REQUIRE_PYMARKDOWN is set,
+# mirroring sh-lint's shellcheck handling.
+# PR templates live under .github and use HTML comments by design, so the
+# style scan skips them; the link check above still covers them.
+MD_FILES = $(shell git ls-files '*.md' | grep -v '^\.github/')
+md-lint:
+	$(PYTHON) scripts/check-links.py
+	@if $(PYTHON) -m pymarkdown --help >/dev/null 2>&1; then \
+		$(PYTHON) -m pymarkdown --config .pymarkdown.json scan $(MD_FILES); \
+	elif [ -n "$$MR_REQUIRE_PYMARKDOWN" ]; then \
+		echo "md-lint: pymarkdown is not installed" >&2; exit 1; \
+	else \
+		echo "md-lint: pymarkdown is not installed; skipping style check (install python[dev])"; \
+	fi
 
 fmt:
 	cd go && gofmt -w .
@@ -176,6 +222,13 @@ go-test:
 	fi
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
+# The Go tests that read python/: cmd/mr's golden comparison with the Python
+# examples, and papermap's check of the Python test names. CI's go job runs
+# only these (with py-e2e) when a PR changes python/ alone; every other Go
+# package passes with python/ removed (docs/ci.md).
+go-python-test:
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./cmd/mr && go test -count=1 ./internal/papermap
+
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
 flaky:
@@ -212,6 +265,13 @@ py-test:
 cover: test
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt --report
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt --report
+
+# The Python coordinator with the Go worker and mr commands (#36). py-test
+# runs these too, but skips them where Go is missing, as in CI's Python
+# jobs; CI's go job runs them here, and MR_REQUIRE_GO makes a skip a
+# failure, so the integration is checked on every pull request.
+py-e2e:
+	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
 py-lint:
 	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench

@@ -5,6 +5,7 @@ All state is guarded by one lock (ADR 0006). Nothing slow runs under it:
 SubmitJob plans the input splits before locking.
 """
 
+import errno
 import glob
 import logging
 import os
@@ -19,8 +20,8 @@ from typing import NamedTuple, Protocol
 
 import grpc
 
-from mapreduce_reloaded.coordinator.registry import Registry
-from mapreduce_reloaded.coordinator.tasktable import COMPLETED, MAP, Task, TaskTable
+from mapreduce_reloaded.coordinator.registry import Registry, Worker
+from mapreduce_reloaded.coordinator.tasktable import COMPLETED, MAP, LateParams, Task, TaskTable
 from mapreduce_reloaded.coordinator.wire import PROGRAMS, input_split, path, validate
 from mapreduce_reloaded.formats import input_format
 from mapreduce_reloaded.gen.mapreduce.v1 import (
@@ -53,6 +54,18 @@ class Log(Protocol):
     def append(self, record: bytes) -> None:
         """Appends a serialized LogRecord, raising an exception on failure."""
         ...
+
+
+# The values of Config.speculation.
+SPECULATION_PAPER = "paper"
+SPECULATION_LATE = "late"
+SPECULATION_OFF = "off"
+
+
+def valid_speculation(s: str) -> bool:
+    """Reports whether s is a value of Config.speculation: "", paper, late or
+    off."""
+    return s in ("", SPECULATION_PAPER, SPECULATION_LATE, SPECULATION_OFF)
 
 
 @dataclass
@@ -103,6 +116,34 @@ class Config:
     # it, as the log keeps IDs unique. Last, so positional arguments keep
     # the meaning they had before it was added.
     id_prefix: str = ""
+    # How backup attempts start once no task of the current phase is idle:
+    # SPECULATION_PAPER (the paper's rule, §3.6), SPECULATION_LATE (LATE,
+    # Zaharia et al., OSDI 2008) or SPECULATION_OFF. Empty means backups
+    # decides: paper if it is set, off if not.
+    speculation: str = ""
+    # The LATE settings (see LateParams). A zero field means its default: 0.1
+    # of the workers, the 25th percentile for tasks and for workers, and twice
+    # heartbeat_interval.
+    speculative_cap: float = 0.0
+    slow_task_percentile: float = 0.0
+    slow_node_percentile: float = 0.0
+    min_runtime: float = 0.0
+
+    def effective_speculation(self) -> str:
+        """Returns how the server starts backup attempts."""
+        if self.speculation:
+            return self.speculation
+        return SPECULATION_PAPER if self.backups else SPECULATION_OFF
+
+    def late_params(self) -> LateParams:
+        """Returns the LATE settings, with the defaults of Zaharia et al.
+        (OSDI 2008) for the zero fields."""
+        return LateParams(
+            self.speculative_cap or 0.1,
+            self.slow_task_percentile or 25.0,
+            self.slow_node_percentile or 25.0,
+            self.min_runtime or 2 * self.heartbeat_interval,
+        )
 
 
 class RpcError(Exception):
@@ -119,6 +160,26 @@ class LostWorker(NamedTuple):
     id: str
     at: float
     tasks: list[Task]
+
+
+class WorkerStatus(NamedTuple):
+    """A live worker, last seen by the coordinator's clock (now), and the
+    tasks of the active job it is running, with the fraction of each one's
+    input the worker last reported processed."""
+
+    worker: Worker
+    running: list[Task]
+    progress: dict[Task, float]
+
+
+class Status(NamedTuple):
+    """What the coordinator's status page shows (§4.8), as
+    go/internal/coordinator.Status."""
+
+    at: float  # when it was taken, by now
+    jobs: list[coordinator_pb2.GetJobStatusResponse]  # every job kept, in the order submitted
+    workers: list[WorkerStatus]  # the live workers, in the order they registered
+    lost: list[LostWorker]  # the last MAX_LOST workers lost since the process started
 
 
 @dataclass(eq=False)
@@ -185,11 +246,34 @@ class _Job:
         holds the job's end. A missing directory is ignored; other OSError
         and ValueError failures are caught without changing the job's outcome."""
         try:
-            shutil.rmtree(os.path.join(path(self.spec.output), TEMP_DIR))
-        except FileNotFoundError:
-            pass
+            remove_all(os.path.join(path(self.spec.output), TEMP_DIR))
         except (OSError, ValueError) as e:
             log.warning("cleaning up job output: job %s: %s", self.id, e)
+
+
+# How many times remove_all starts over before it gives up.
+REMOVE_TRIES = 10
+
+
+def remove_all(d: str):
+    """Removes directory d and what it holds, as Go's os.RemoveAll; a
+    missing d is not an error. A losing backup attempt may rename its file
+    out of d, or create one in it, while it runs: rmtree then fails on the
+    entry, or on d not being empty, and remove_all starts over, up to
+    REMOVE_TRIES times. Raises rmtree's other errors."""
+    for i in range(REMOVE_TRIES):
+        last = i == REMOVE_TRIES - 1
+        try:
+            shutil.rmtree(d)
+            return
+        except FileNotFoundError:
+            if not os.path.lexists(d):
+                return
+            if last:
+                raise
+        except OSError as e:
+            if e.errno != errno.ENOTEMPTY or last:
+                raise
 
 
 def _ns(t: float) -> int:
@@ -301,6 +385,23 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         with self._mu:
             getattr(self._cfg.log, "close", lambda: None)()
 
+    def status(self) -> Status:
+        """Returns retained jobs in submission order, live workers in
+        registration order with their running tasks, and recent lost workers.
+        Snapshot and last-seen times use the coordinator's wall clock in Unix
+        seconds. It works while the log has failed, so the status page shows
+        what memory holds."""
+        with self._mu:
+            at, tick = self.now(), self._clock()
+            running = self._active.tasks.running() if self._active is not None else {}
+            workers = []
+            for w in self._workers.all():
+                w.last_seen = at - (tick - w.last_seen)  # heartbeats are timed by _clock
+                tasks = running.get(w.id, [])
+                progress = {t: self._active.tasks.fraction(t, w.id) for t in tasks}
+                workers.append(WorkerStatus(w, tasks, progress))
+            return Status(at, [j.status() for j in self._order], workers, list(self._lost))
+
     def now(self) -> float:
         """Reads the coordinator's clock: Config.now, or time.time."""
         return self._cfg.now() if self._cfg.now else time.time()
@@ -379,6 +480,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             for p in request.running:
                 if not self._runs(p.attempt, worker):
                     resp.cancel.append(p.attempt)
+                    continue
+                a = p.attempt
+                self._active.tasks.set_fraction(
+                    Task(a.task.kind, a.task.index), a.attempt, worker, p.fraction_done, self.now()
+                )
             return resp
 
     def _runs(self, attempt: types_pb2.TaskAttemptId, worker: str) -> bool:
@@ -555,7 +661,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
     def RequestTask(self, request, context):
         """Hands an idle worker its next task: map tasks first, the nearest
         to their input (§3.4), reduce tasks once every map task has completed
-        (§3.1), then backup attempts if enabled (§3.6). It returns a wait
+        (§3.1), then backup attempts if enabled (§3.6, or LATE). It returns a wait
         instruction when no task is ready, or a shutdown instruction after
         shutdown. A paused worker receives only wait or shutdown instructions.
         Errors are NotFound for an unknown worker, Internal if
@@ -576,8 +682,12 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 t = j.tasks.next(lambda i: locality(j.splits[i], info))
                 if t is not None and self._hold_back(t, info, tick):
                     t = None
-                elif t is None and self._cfg.backups:
+                elif t is None and self._cfg.effective_speculation() == SPECULATION_PAPER:
                     t = j.tasks.backup(worker)
+                elif t is None and self._cfg.effective_speculation() == SPECULATION_LATE:
+                    t = j.tasks.late_backup(
+                        worker, now, self._cfg.late_params(), len(self._workers)
+                    )
                 if t is not None:
                     return self._assign(t, worker, now)
             resp = coordinator_pb2.RequestTaskResponse(wait=coordinator_pb2.WaitInstruction())
@@ -696,7 +806,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             elif limit is not None and j.tasks.skipped() > limit:
                 self._end(j, f"more than {limit} bad records to skip", at)
             return False, self._active is not j
-        accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs)
+        accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs, at)
         if accepted:
             # A map task run again after its worker died replaces its counts.
             j.counts[t] = dict(req.success.counters.values)
@@ -762,10 +872,25 @@ def serve(address: str, cfg: Config | None = None, threads: int = 16):
         # Without a log, IDs start from 1 again: tell them from the last run's.
         cfg = replace(cfg, id_prefix=_base36(time.time_ns()) + "-")
     coordinator = Server(cfg)
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=threads))
+    server, port, stop = start(coordinator, address, threads)
+    return server, coordinator, port, stop
+
+
+def start(coordinator: Server, address: str, threads: int = 16):
+    """Serves coordinator over insecure gRPC on address, as serve does, and
+    starts its worker monitor. Returns the gRPC server, the bound port and
+    the event that stops the monitor. An address in use is an error, as in
+    Go: gRPC would otherwise share the port with SO_REUSEPORT, and two
+    coordinators would split the workers and write one log. Port 0 selects
+    an available port; threads limits concurrent RPC handlers. The caller
+    must stop the gRPC server separately from the monitor. Raises ValueError
+    if threads is nonpositive and propagates RuntimeError if binding fails."""
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=threads), options=[("grpc.so_reuseport", 0)]
+    )
     coordinator_pb2_grpc.add_CoordinatorServiceServicer_to_server(coordinator, server)
     port = server.add_insecure_port(address)
     server.start()
     stop = threading.Event()
     threading.Thread(target=coordinator.monitor, args=(stop,), daemon=True).start()
-    return server, coordinator, port, stop
+    return server, port, stop

@@ -3,8 +3,8 @@
 This repository recreates the system in Dean and Ghemawat,
 [*MapReduce: Simplified Data Processing on Large Clusters*](https://research.google.com/archive/mapreduce-osdi04.pdf)
 (OSDI 2004), for Honors Project 1: a MapReduce that runs with Docker Compose
-on one VM with 4 vCPUs and 8 GB, as four worker containers limited to one
-CPU each.
+on one VM with 4 vCPUs and 8 GB ([cluster VM](docs/cluster-vm.md)), as four
+worker containers limited to one CPU each.
 It is a solo project.
 
 The first section answers the assignment's design questions, with the
@@ -21,14 +21,14 @@ Each requirement of the assignment, and where this repository meets it.
 
 | Requirement | Where | State |
 |---|---|---|
-| Docker Compose on one VM with 4 CPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
+| Docker Compose on one VM with 4 vCPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
 | Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | built |
 | Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | built |
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E5 run, [results](bench/README.md#evaluation-e0e5) |
-| Never push to `main`; small pull requests; Actions run tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E6 run, [results](bench/README.md#evaluation-e0e6) |
+| Never push to `main`; small pull requests; CircleCI runs tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
 ## Key decisions
@@ -88,9 +88,12 @@ static binary makes a small distroless image. Job files are Go too, so users
 write the same API the built-in programs use.
 
 Python 3.11+ is a second, reference implementation of the API, the file
-format, the partition hash and local mode. It checks the shared contract
-byte for byte; it does not run on the cluster
-([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
+format, the partition hash and local mode, with a coordinator server. It
+checks the shared contract byte for byte. It does not run in the Compose
+cluster, whose image holds only Go binaries; its coordinator is tested with
+Go workers (`make py-e2e`). The
+[language choice](docs/language-choice.md) gives the argument, the evidence
+and the costs ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
 
 ### Communication
 
@@ -169,7 +172,9 @@ names four examples: combiners, extra tasks for stragglers, handling worker
 failures, and scheduling tasks where their data is. We do the first three,
 plus a fourth of our own, coordinator recovery. All four are built in code.
 Compose runs the coordinator with `-data-dir` by default, and with backups
-off through the override [`backups-off.yaml`](deploy/compose/backups-off.yaml); the
+off through the override [`backups-off.yaml`](deploy/compose/backups-off.yaml), or
+with LATE speculation through
+[`speculation-late.yaml`](deploy/compose/speculation-late.yaml); the
 combiner's switch is `mr submit -combiner=false`. Each feature has an
 experiment and a plot below.
 
@@ -183,6 +188,10 @@ are not a special feature: the assignment requires them.
 2. **Backup tasks for stragglers** (§3.6). When no task of the current phase
    is idle, an idle worker gets a second attempt of the oldest running task;
    the first to finish wins ([ADR 0010](docs/design/0010-backup-tasks.md)).
+   Beyond the paper, `-speculation=late` picks the task by estimated time
+   left (LATE, Zaharia et al., OSDI 2008) instead of by age
+   ([ADR 0019](docs/design/0019-late-speculation.md)); it is opt-in, and
+   not yet evaluated (#59).
 3. **Worker failure handling** (§3.3). Heartbeats detect a dead worker; its
    running tasks and its completed map tasks (whose output was on its disk)
    run again elsewhere ([ADR 0009](docs/design/0009-failure-detection.md)).
@@ -231,7 +240,8 @@ The write-ahead log is not compacted; it is small next to job data.
 
 All runs use the Compose cluster on the course VM: four workers at one CPU
 each, on 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory and a 35 GB
-disk ([the VM](docs/cluster-vm.md#the-vm)). `make bench` already generates the inputs, samples every worker's
+disk (33 GB root, shared; [the VM](docs/cluster-vm.md#the-vm), the source of
+truth for the VM's specification). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
 the machine in `result.json`. Every point is the median of three runs, with
 the range shown as an error bar. Each plot's caption states the input size,
@@ -245,6 +255,8 @@ M, R and the commit.
 | E3 | What does losing a worker cost? | sort, 1 GiB; `docker kill` one worker at 25%, 50% and 75% of the normal job time | Input, shuffle and output rates against time with the kill marked, as Figure 3(c); job time against kill time, with the no-failure time as a line |
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
 | E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
+| E6 | How much does the combiner save on real text? | Word count, 1 GiB each, combiner on and off, on three inputs: `crawl-eng`, Common Crawl's English pages (the real-text result); `crawl`, its pages in every language, where scripts without spaces make runs of text one word; `book`, War and Peace's lines repeated, a fixed vocabulary and so a best case | Bytes shuffled and job time, grouped bars per input |
+| E7 | Does LATE beat the paper's rule on workers of different speeds? (#59, not yet run) | sort, 1 GiB, M = 32; the four workers throttled to 1, 0.6, 0.3 and 0.15 CPU; coordinator `-speculation` `paper`, `late` and `off` | Job time and backups started and won, per setting; no plot yet |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled
@@ -258,8 +270,8 @@ whose output `make e2e` and the golden tests tie to local mode; a run that
 differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
-How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|all`
-runs the experiments and writes one CSV row per run, plus the
+How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|E6|E7|all`
+runs the experiments (`all` leaves out E7, which is groundwork for #59) and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
 draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
@@ -271,16 +283,17 @@ Budget. Each run deletes its output first; the 1 GiB inputs are generated
 once and kept in the output volume. A run holds the input, the
 intermediate files in the workers' containers and the output on the same
 disk, about 3 GiB, within the disk budget in
-[cluster VM](docs/cluster-vm.md#disk-budget). E0 runs on 1 and 2 workers with
+[cluster VM](docs/cluster-vm.md#disk-budget) (33 GB root, shared). E0 runs on 1 and 2 workers with
 `docker compose up --scale worker=N`, which keeps the one-CPU limit. E2
 changes a coordinator flag, so it uses the Compose override
-`backups-off.yaml` (`-backups=false`); E4 starts from an empty log. E1's "bytes shuffled" is the map output bytes after the
+`backups-off.yaml` (`-backups=false`); E7 also uses `speculation-late.yaml`
+(`-speculation=late`) and throttles all four workers; E4 starts from an empty log. E1's "bytes shuffled" is the map output bytes after the
 combiner, an existing counter. The Zipf generator takes its exponent as a
 parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
-[`bench/README.md`](bench/README.md#evaluation-e0e5), with the commands that
+[`bench/README.md`](bench/README.md#evaluation-e0e6), with the commands that
 made them; the data is in `bench/evaluation/`. What they showed (course VM,
 2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
 workers for word count but only 2.3× for grep, whose one-second job is mostly
@@ -303,7 +316,7 @@ four engineering practices:
   merging a pull request.
 - **CI runs tests on pull requests.** CircleCI (`.circleci/config.yml`) runs
   the `make check` targets on every PR. GitHub's hosted runners fail on the
-  account's billing lock, so the Actions workflow runs only by hand; `make
+  account's billing lock, so the repository has no Actions workflow; `make
   ci-report` can still record a local run on the PR's commit
   ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165, #212).
 - **Many small pull requests.** One concern each, as the roadmap's
@@ -317,7 +330,6 @@ four engineering practices:
   comments on it before it merges (given).
 
 ## Components
-
 
 - **Coordinator** (`go/cmd/coordinator`, `go/internal/coordinator`). The
   paper's master (§3.2). It holds the task table, the worker registry and the
@@ -337,9 +349,16 @@ four engineering practices:
   one process, using the same `split`, `task` and `extsort` code as the
   cluster (§4.7).
 - **Python reference** (`python/mapreduce_reloaded`). A second implementation
-  of the API, splitting, partition hash, sort, combiner, file format and
-  local mode. It shares the proto contract and the MRKV format with Go
-  ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
+  of the API, splitting, partition hash, sort, combiner, file format,
+  local mode, and a coordinator server (`python/mapreduce_reloaded/coordinator/`)
+  that runs Go workers (see `make py-e2e` and the
+  [Python coordinator explainer](docs/explainers/25-python-coordinator.md)).
+  There is no Python worker yet. It shares the proto contract and the MRKV
+  format with Go ([ADR 0001](docs/design/0001-languages-and-shared-contract.md)).
+- **Containers** (`deploy/`). One image holds the three Go programs, and
+  Compose runs the coordinator and four workers from it, with optional
+  `tools`, `s3` and `monitoring` profiles. What runs where, the ports, the
+  volumes and the reasons are in [Docker topology](docs/docker-topology.md).
 
 ## A job's lifecycle
 
@@ -440,7 +459,7 @@ sequenceDiagram
     W1->>C: RequestTask
     C-->>W1: MapTask(attempt 0, split)
     W2->>C: RequestTask
-    Note over C: nothing idle, Config.Backups is on, TaskTable.Backup
+    Note over C: nothing idle, speculation is paper, TaskTable.Backup
     C-->>W2: MapTask(attempt 1, same split)
 ```
 
@@ -459,12 +478,21 @@ wait, for at most `LocalityWait` since the job first held a task back. The
 hold ends sooner if a worker on a host that holds a split asks first. A
 reply of `wait` carries `retry_after`.
 
-When no task of the current phase is idle and backups are on, the
-coordinator calls `TaskTable.Backup`. It offers the in-progress task whose
-attempt started first, of those with one running attempt on another worker.
-The backup is an ordinary attempt with the next number, and the log records
-it as an ordinary assignment. The job's status counts the backups started
-and the tasks a backup won.
+When no task of the current phase is idle, the coordinator starts a backup
+by the policy that `-speculation` names (`paper`, `late` or `off`; empty
+follows `-backups`, so `-backups=false` is `off`). With `paper` it calls
+`TaskTable.Backup`, which offers the in-progress task whose attempt started
+first, of those with one running attempt on another worker. With `late` it
+calls `TaskTable.LateBackup`, which uses the progress that workers report in
+their heartbeats ([ADR 0019](docs/design/0019-late-speculation.md)): it
+refuses a worker whose speed is below the 25th percentile of the workers',
+allows running backups for at most 10% of the workers (at least one), and
+offers the task with the longest estimated time left among those whose
+progress rate is in the slowest quarter, once an attempt has run twice the
+heartbeat interval and reported. Either way the backup is an ordinary
+attempt with the next number, and the log records it as an ordinary
+assignment; LATE adds no record. The job's status counts the backups
+started and the tasks a backup won.
 
 ### Shuffle
 
@@ -597,6 +625,7 @@ no reducer is told about them.
 | Master writes periodic checkpoints, and the job aborts if the master dies (§3.3) | With `-data-dir`, a write-ahead log of decisions. A restarted coordinator replays it, and the job survives. | Logging each decision needs no snapshot, and replay reuses the live handlers. | [ADR 0007](docs/design/0007-write-ahead-log.md), [explainer](docs/explainers/18-coordinator-recovery.md) |
 | Master pings workers (§3.3) | Workers send heartbeats, and `RequestTask` counts as one. | The coordinator never opens a connection to a worker. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/16-worker-failure.md), [ADR 0009](docs/design/0009-failure-detection.md) |
 | Backups start "when a MapReduce operation is close to completion" (§3.6) | Backups start when no task of the current phase is idle, oldest attempt first. One backup at a time, never on the same worker. | The paper gives no threshold, and this never delays a task that has not started. | [explainer](docs/explainers/20-backup-tasks.md), [ADR 0010](docs/design/0010-backup-tasks.md) |
+| The paper's backups do not use how far a task has got (§3.6) | `-speculation=late`, opt-in: LATE (Zaharia et al., OSDI 2008) backs up the slow task with the most estimated time left, from the progress workers report in heartbeats, and not on slow workers. The default is the paper's rule. | Age says little on workers of different speeds. Not evaluated yet (#59). | [ADR 0019](docs/design/0019-late-speculation.md) |
 | A signal handler sends the bad record's number by UDP (§4.6) | The worker recovers the panic and reports the record in `ReportTask`. The coordinator skips it after two crashes. | Go can recover a panic, and the report already reaches the coordinator. | [explainer](docs/explainers/19-bad-records.md), [ADR 0011](docs/design/0011-bad-records.md) |
 | Master sums counters from task reports and ignores duplicates (§4.9) | Only the accepted attempt's counters are kept. A re-run map replaces its earlier counts. | A task may run more than once, and adding every attempt would over-count. | [explainer](docs/explainers/21-counters.md) |
 | Master serves HTTP status pages (§4.8) | A status page and Prometheus `/metrics` on the coordinator, `/metrics` on workers, JSON logs, and a Grafana dashboard in the Compose monitoring profile. | These are standard tools, and per-attempt logs stay on each worker. | [explainer](docs/explainers/24-status.md), [ADR 0012](docs/design/0012-observability.md) |
@@ -605,16 +634,16 @@ no reducer is told about them.
 | Keys are processed in sorted order within a partition (§4.2). The paper does not say how equal keys' values are ordered. | Equal keys keep map-task order, and within a map task, emit order. | Stable sorts and a merge in map task order make output reproducible, and Go and Python match. | [file format](docs/file-format.md), [explainer](docs/explainers/09-external-sort.md) |
 | M and R are chosen by the user, with splits of 16 to 64 MB and R a small multiple of the workers (§3.1, §3.5) | Default split size is 64 MiB (`split.DefaultSize`). Default R is 2 per registered worker (`split.DefaultR`). `-m` and `-r` override them in `mr`; `-m` is an exact M (ADR 0016). | These follow the paper's guidance, and the assignment's client names M and R. Small inputs give few splits, so M can be smaller than the number of workers. | [explainer](docs/explainers/12-splits.md) |
 | User code is linked into the user's program (§2) | A job is a Go source file sent with the job and interpreted by each worker; built-in programs are compiled in. | The assignment's client submits a file, and the workers are static binaries with no compiler. | [ADR 0015](docs/design/0015-user-job-files.md) |
-| One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode only, and it has no coordinator or worker. | A second implementation checks the contract, and only the Go cluster needs the distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
+| One implementation, in C++ | Go is primary. Python is a reference implementation for the API and local mode, and it also has a coordinator server; it has no worker yet, and the Compose cluster is Go-only. | A second implementation checks the contract, and only the Go cluster needs the full distributed code. | [ADR 0001](docs/design/0001-languages-and-shared-contract.md), [explainer](docs/explainers/11-local-mode.md) |
 | Clusters of about 1,800 machines (§5.1) | Docker Compose on one VM with 4 vCPUs and 8 GB of RAM: one coordinator and four workers, each limited to one CPU. | It is the hardware available, it still exercises every protocol path, and the CPU limits make spreading tasks over workers pay off. | [cluster VM](docs/cluster-vm.md), [explainer](docs/explainers/14-cluster.md) |
 
 ## Where to look next
 
 - [Paper mapping](docs/paper-mapping.md): each paper feature, its code and the
   test that proves it.
-- [Design records](docs/design/): ADRs 0001 to 0018, one per decision that
+- [Design records](docs/design/): ADRs 0001 to 0019, one per decision that
   shaped the code.
 - [Explainers](docs/explainers/): one plain-language page per feature, from the
-  RPC contract (03) to the status page (24).
+  RPC contract (03) to the Python coordinator (25).
 - [File format](docs/file-format.md): the MRKV specification.
 - [Cluster VM](docs/cluster-vm.md): how the Compose cluster is set up.

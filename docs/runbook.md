@@ -16,7 +16,7 @@ Connect to the campus VPN first; the VM is not reachable without it.
 On your laptop, add an alias to `~/.ssh/config` once, with your own host
 and user name (they stay out of this public repository):
 
-```
+```text
 Host mr-vm
     HostName <your-vm-hostname>
     User <your-username>
@@ -37,7 +37,7 @@ Skip this section if `~/MapReduce-Reloaded` already exists.
 sudo apt-get install -y make gcc             # not on the VM by default; gcc is for go test -race
 git clone https://github.com/Exios66/MapReduce-Reloaded.git
 cd MapReduce-Reloaded
-scripts/vm-setup.sh --install                # Go, the Python venv, golangci-lint, buf
+scripts/vm-setup.sh --install                # Go, the Python venv, golangci-lint, shellcheck, buf
 echo 'export PATH="$HOME/.local/go/bin:$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 scripts/vm-setup.sh                          # every line should say OK
@@ -158,17 +158,36 @@ Each run writes `rates.csv`, `samples.csv`, `status.txt` and `result.json`
 ```sh
 python/.venv/bin/pip install matplotlib     # once, for the plots
 mkdir -p bench/results
+scripts/fetch-data.sh warpeace crawl         # E6's inputs; `all` checks them first
 nohup bench/experiments.sh all > bench/results/experiments.log 2>&1 &
-tail -f bench/results/experiments.log        # about 90 minutes for all six
+tail -f bench/results/experiments.log        # about 2 hours for all seven
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E1|E2|E3|E4|E5` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6` runs one experiment of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
-SSH drops. The plots land in `bench/plots/E0.png` … `E5.png`, and the
-script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e5).
+SSH drops. The command above draws a fresh run into `bench/plots/`
+(`E0.png` … `E6.png`, each with a `-dark` variant), so it does not touch the
+plots committed in `bench/evaluation/`, which come from the saved runs there:
+`python/.venv/bin/python bench/plot-experiments.py bench/evaluation bench/evaluation` (see
+[bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
+`bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not
+part of `all` and has not been run; see
+[bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run).
+
+Each run also saves what the cluster logged, to
+`bench/results/EXPERIMENT/logs-SETTING-PROGRAM-RUN.log`: the coordinator's and every
+worker's lines from before the run's workers restarted until it ended, each
+with its container's name and a timestamp. (`make bench` saves
+`cluster.log` in the run's directory.) Containers are recreated between
+experiments, and Docker keeps only 3 × 10 MB per container, so these files
+are the only record of a run after that. When a run is `valid=0`, `FAILED`
+or slow, read its log first: `grep -E 'level=(WARN|ERROR)'` finds the
+failures, and the `job` column of `runs.csv` names the job to search for.
+`bench/results/` is ignored; copy the logs of runs worth keeping into
+`bench/evaluation/` with their CSVs.
 
 ### 5.7 Monitoring (optional)
 
@@ -178,6 +197,25 @@ make monitoring-up
 
 Open <http://127.0.0.1:13000/> on your laptop for the Grafana dashboard.
 This adds 512 MB of memory limits.
+
+The same demo is in [`examples/demo.ipynb`](../examples/demo.ipynb), which
+runs it cell by cell in Jupyter: upload, submit, read, plot, the job file,
+a second program, a worker killed mid-job, the metrics, and a local-mode
+check. Install its dependencies with
+`python/.venv/bin/pip install -e 'python[notebook]'`.
+
+### 5.8 The soak run (#160)
+
+```sh
+make soak        # 1 GiB with the combiner off, two workers at 256 MB
+```
+
+This is the acceptance criterion of #47: a job whose intermediate data is
+larger than the workers' memory limit must spill to disk, not be killed.
+It uses `deploy/compose/soak.yaml`, which lowers each worker's limit to
+256 MB, and fails if any container was OOM-killed. The input is cached in
+`data/input/` between runs; `SIZE` and `WORKERS` override the defaults.
+About five minutes.
 
 ## 6. Shut down
 

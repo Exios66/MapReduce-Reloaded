@@ -36,15 +36,31 @@ func (KV) Open(ctx context.Context, s Split) (RecordReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return kvReader{kv.NewReader(f), f}, nil
+	c := &counted{ReadCloser: f}
+	return kvReader{kv.NewReader(c), c}, nil
 }
 
 type kvReader struct {
 	*kv.Reader
-	f io.Closer
+	f *counted
 }
 
 func (r kvReader) Close() error { return r.f.Close() }
+
+// Offset returns the bytes of the file read so far.
+func (r kvReader) Offset() int64 { return r.f.n }
+
+// counted counts the bytes read from a file.
+type counted struct {
+	io.ReadCloser
+	n int64
+}
+
+func (c *counted) Read(p []byte) (int, error) {
+	n, err := c.ReadCloser.Read(p)
+	c.n += int64(n)
+	return n, err
+}
 
 // Create creates an MRKV output file at path.
 func (k KV) Create(ctx context.Context, path string) (RecordWriter, error) {

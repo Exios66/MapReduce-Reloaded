@@ -11,7 +11,7 @@ them to predict how long a job would take and to find slow machines.
 
 | Path | What | Where |
 |------|------|-------|
-| `/` | Jobs with their duration, map and reduce progress, backup attempts, counters and errors; live workers and what each runs; lost workers and the tasks that had to run again. It refreshes every 2 seconds. | `statusweb/status.html` |
+| `/` | Jobs as compact cards: duration, state badge, map and reduce progress with a percentage, backup attempts, key counters, all counters in a `<details>`, and errors; live workers and what each runs, with the percentage of its input each task reported done in the last heartbeat; lost workers and the tasks that had to run again. It refreshes every 2 seconds and follows the reader's light or dark color scheme; `?theme=dark` forces dark. | `statusweb/status.html` |
 | `/metrics` | `mr_workers`, `mr_job_tasks{job,kind,state}`, `mr_job_duration_seconds{job}`, `mr_job_backups{job,state}`, `mr_job_map_tasks_local{job,level}` and `mr_job_counter{job,name}`, in the Prometheus text format | `statusweb/metrics.go` |
 
 Both read `coordinator.Server.Status`, a copy of the coordinator's state
@@ -62,6 +62,21 @@ its own and those of the attempt's user code (`Context.Logger`), with
 ```json
 {"level":"WARN","msg":"task failed","worker":"…","job":"job-1","task":{"kind":"map","index":4,"attempt":1},"err":"..."}
 ```
+
+`-log-level debug|info|warn|error` sets the lowest level logged; the default
+is `info`. The events, at `info` unless noted:
+
+| From | Message | Fields |
+|---|---|---|
+| Coordinator | `worker registered` | `worker`, `host`, `shuffle_address`, `workers` |
+| Coordinator | `job submitted` | `job`, `program`, `inputs`, `output`, `map_tasks`, `reduce_tasks`, `combiner`, `workers` |
+| Coordinator | `task assigned` | `job`, `kind`, `index`, `attempt`, `worker`, `backup`, `locality` |
+| Coordinator | `task attempt finished` | the same, and `accepted` (false: a twin finished first) |
+| Coordinator | `task attempt failed` (`warn`) | the same, and `err`, `fatal`, `lost_output`, `bad_record` |
+| Coordinator | `job succeeded`, `job failed` (`error`) | `job`, `seconds`, and `err` for a failure |
+| Coordinator | `worker lost` (`warn`), `heartbeat from an unknown worker; told to register again` | `worker` |
+| Coordinator | `attempt told to stop` (`debug`) | `worker`, `job`, `kind`, `index`, `attempt` |
+| Worker | `registered`, `task started`, `task ended` | `worker`, `job`, `task`; `task ended` has `seconds` and `ok` |
 
 ## Choices
 

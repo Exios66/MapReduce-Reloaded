@@ -2,7 +2,7 @@
 results of bench/experiments.sh, and prints a Markdown table of each
 experiment's job times for bench/README.md.
 
-For each of E0 to E5 whose bench/results/EXPERIMENT/runs.csv
+For each of E0 to E6 whose bench/results/EXPERIMENT/runs.csv
 exists, this writes OUT_DIR/EXPERIMENT.png on a light background and
 OUT_DIR/EXPERIMENT-dark.png on a dark one. Every point is the median of
 the valid runs, with the range as an error bar; runs whose output differed
@@ -14,16 +14,27 @@ from the normal run's (valid=0) are left out and counted in the table.
   as grouped bars labeled with the saving.
 - E2: tasks completed against time for the median run of each setting, as
   in the paper's Figure 3, and job-time bars in the same colors.
+- E2-comparison: the same two panels, but of two datasets: the two
+  no-straggler settings come from the ten paired runs in
+  RESULTS_DIR/E2-pairs (the drift-controlled comparison), the two straggler
+  settings from the main runs in RESULTS_DIR/E2 (the only straggler data).
+  The image says so in its subtitle. It is drawn, as E2-comparison.png and
+  E2-comparison-dark.png, only when both directories have a runs.csv.
 - E3: job time against kill time, with the no-failure time as a line and
   each point labeled with its cost; and input, shuffle and output rates
   against time for the median run killed at 50%, with the loss marked, as
   Figure 3(c).
 - E4: tasks completed against time with the restart marked, and job-time
   bars with and without the restart.
+- E5: job time and map-phase time for the compiled program and the two job
+  files the workers interpret.
+- E6: bytes shuffled and job time per input (crawled English, crawled pages
+  in every language, and the book), combiner on and off, as E1 does.
 
-E0, E1 and E2 use the coordinator's job time (seconds); E3 and E4 use the time
-from submission until mr status saw the job finish (wall_seconds), since a
-restarted coordinator measures its jobs from when it replays them.
+E0, E1, E2 and E6 use the coordinator's job time (seconds); E3 and E4 use
+the time from submission until mr status saw the job finish
+(wall_seconds), since a restarted coordinator measures its jobs from when
+it replays them.
 
 Usage: python3 bench/plot-experiments.py [RESULTS_DIR [OUT_DIR]]
 (defaults: bench/results, and the same directory). Needs matplotlib.
@@ -266,8 +277,15 @@ def e0(rows, out, t):
     finish(fig, out, top=0.8)
 
 
-def grouped(ax, t, groups, stats_on, stats_off, scale):
-    """Combiner-on and -off bars per group, with a 2px surface gap."""
+def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
+    """Combiner-on and -off bars per group, with a 2px surface gap.
+
+    stats_on and stats_off align with groups and contain (median, low, high)
+    triples or None to omit a bar. Values and range bars are divided by scale.
+    Nonempty ticks supply group labels; otherwise labels use "S = " followed
+    by each group name without its first character. A nonempty xlabel sets
+    the x-axis label; otherwise the existing label is retained.
+    """
     width = 0.32
     for offset, stats, color, label in (
         (-width / 2, stats_on, t["series"][0], "combiner on"),
@@ -286,20 +304,26 @@ def grouped(ax, t, groups, stats_on, stats_off, scale):
             zorder=2,
         )
         ranges(ax, t, xs, med, [st[1] / scale for _, st in kept], [st[2] / scale for _, st in kept])
-    ax.set_xticks(range(len(groups)), [f"S = {g[1:]}" for g in groups])
-    ax.set_xlabel("Zipf exponent of the word frequencies (higher: more skew)")
+    ax.set_xticks(range(len(groups)), ticks or [f"S = {g[1:]}" for g in groups])
+    if xlabel:
+        ax.set_xlabel(xlabel)
     ax.grid(axis="x", visible=False)
     ax.set_ylim(bottom=0)
 
 
-def e1(rows, out, t):
-    """Saves E1's combiner comparison to out, in theme t: bytes shuffled
-    and job time, combiner on and off, per Zipf exponent, each group labeled
-    with the saving. Only valid="1" runs count. Missing fields, invalid
-    numbers, and file errors propagate."""
-    exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
+def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
+    """Saves a combiner comparison to out, in theme t: bytes shuffled and
+    job time, combiner on and off, per group.
+
+    groups gives setting prefixes matched as GROUP-on and GROUP-off, in
+    display order; ticks supplies their labels. Bars show valid="1" medians
+    and minimum-to-maximum ranges, in decimal MB and coordinator seconds.
+    Missing valid runs omit a bar; savings require both medians to be positive.
+    Rows must be nonempty. Saves to out and closes the figure on success.
+    Missing fields, invalid numbers, and plotting or file errors propagate.
+    """
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
-    for ax, field, scale, title, saving in (
+    for ax, field, scale, axis_title, saving in (
         (
             left,
             "map_output_bytes",
@@ -309,9 +333,9 @@ def e1(rows, out, t):
         ),
         (right, "seconds", 1, "Job time (s)", lambda on, off: f"{1 - on / off:.0%} faster"),
     ):
-        on = [spread(valid(rows, setting=f"{e}-on"), field) for e in exponents]
-        off = [spread(valid(rows, setting=f"{e}-off"), field) for e in exponents]
-        grouped(ax, t, exponents, on, off, scale)
+        on = [spread(valid(rows, setting=f"{g}-on"), field) for g in groups]
+        off = [spread(valid(rows, setting=f"{g}-off"), field) for g in groups]
+        grouped(ax, t, groups, on, off, scale, ticks=ticks, xlabel=xlabel)
         # With no valid run, or only zeros, the axis still needs a height.
         top = max((st[2] for st in on + off if st), default=0) / scale or 1
         for j, (a, b) in enumerate(zip(on, off, strict=True)):
@@ -330,16 +354,61 @@ def e1(rows, out, t):
                     fontsize=9,
                 )
         ax.set_ylim(0, top * 1.18)
-        ax.set_title(title)
+        ax.set_title(axis_title)
         ax.yaxis.set_major_formatter("{x:,.0f}")
     fig.legend(
         *left.get_legend_handles_labels(), loc="upper right", ncols=2, bbox_to_anchor=(0.99, 0.985)
     )
-    heading(fig, t, "E1: what the combiner saves in word count", label_note(rows) + ".")
+    heading(fig, t, title, label_note(rows) + ".")
     finish(fig, out)
 
 
-def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None, styles=None):
+def e1(rows, out, t):
+    """Saves E1's combiner comparison to out, in theme t: bytes shuffled
+    and job time, combiner on and off, per Zipf exponent in numeric order.
+
+    Settings have the form sEXPONENT-on or sEXPONENT-off. Only valid="1"
+    runs contribute to medians and ranges; savings require positive medians
+    for both settings. Rows must be nonempty. Missing fields, invalid numbers,
+    and plotting or file errors propagate.
+    """
+    exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
+    combiner_bars(
+        rows,
+        out,
+        t,
+        exponents,
+        [f"S = {e[1:]}" for e in exponents],
+        "Zipf exponent of the word frequencies (higher: more skew)",
+        "E1: what the combiner saves in word count",
+    )
+
+
+def e6(rows, out, t):
+    """Saves E6's combiner comparison to out, in theme t: bytes shuffled
+    and job time, combiner on and off, per input: crawled English, crawled
+    pages in every language, and the book, in that order.
+
+    Matches crawl-eng, crawl, and book settings with -on or -off suffixes.
+    Only valid="1" runs contribute to medians and ranges; missing valid runs
+    omit a bar. Rows must be nonempty. Missing fields, invalid numbers, and
+    plotting or file errors propagate.
+    """
+    inputs = ["crawl-eng", "crawl", "book"]
+    combiner_bars(
+        rows,
+        out,
+        t,
+        inputs,
+        ["crawled\nEnglish", "crawled, every\nlanguage", "book"],
+        "Word count's input",
+        "E6: what the combiner saves on real text",
+    )
+
+
+def timeline_and_bars(
+    rows, results, exp, settings, field, t, title, event=None, styles=None, note=None
+):
     """Tasks completed against time for each setting's median run, ending
     at its first maximum completed-task count, and its median job time as
     a horizontal bar in the same color, with minimum-to-maximum range bars.
@@ -357,6 +426,10 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
     drawn with a dashed line and a hatched bar. The palette has three
     validated slots; omitting styles when settings outnumber the colors
     raises ValueError. Each slot indexes t["series"].
+
+    A row with a "_dir" key has its task CSVs in results/_dir instead of
+    results/exp, so one chart can draw runs from two result directories.
+    note, if given, is a second line of the subtitle.
 
     Returns the unsaved, open figure. Missing data or style keys, invalid
     numbers or color slots, and file or plotting errors propagate.
@@ -376,7 +449,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
         if not runs:
             continue
         run = median_run(runs, field)
-        path = results / exp / f"tasks-{setting}-{run['run']}.csv"
+        path = results / run.get("_dir", exp) / f"tasks-{setting}-{run['run']}.csv"
         if path.exists():
             t0 = first_seen(path, run["job"])
             times, done = completed(path, run["job"])
@@ -435,7 +508,7 @@ def timeline_and_bars(rows, results, exp, settings, field, t, title, event=None,
     right.grid(axis="y", visible=False)
     right.tick_params(axis="y", length=0)
     right.set_title("Job time")
-    heading(fig, t, title, label_note(rows) + ".")
+    heading(fig, t, title, label_note(rows) + "." + (f"\n{note}" if note else ""))
     return fig
 
 
@@ -474,6 +547,59 @@ def e2(rows, results, out, t):
         styles=styles,
     )
     finish(fig, out)
+
+
+def e2_comparison(pairs, rows, results, out, t):
+    """Saves the E2 chart that mixes two datasets to out, in theme t, and
+    closes it: no straggler from pairs (the rows of E2-pairs/runs.csv, ten
+    runs taken in turn per setting, so drift hits both settings alike), a
+    straggler from rows (the rows of E2/runs.csv, three runs per setting,
+    the only straggler data). Both are read from results, the task CSVs of
+    each from its own directory, and the image says so in its subtitle.
+    Raises ValueError if the two ran different input sizes, M, R or worker
+    counts, since the chart would then compare unlike jobs.
+
+    Drawn as e2 draws its chart, from the same settings and styles; only
+    valid="1" runs count. Missing fields, invalid numbers, and file or
+    plotting errors propagate.
+    """
+    settings = {
+        "normal": "no straggler, backups on",
+        "normal-no-backups": "no straggler, backups off",
+        "straggler-backups": "straggler, backups on",
+        "straggler-no-backups": "straggler, backups off",
+    }
+    styles = {
+        "normal": (0, False),
+        "normal-no-backups": (0, True),
+        "straggler-backups": (1, False),
+        "straggler-no-backups": (1, True),
+    }
+    # Each setting comes only from its stated source, as the subtitle says.
+    mixed = [
+        dict(r, _dir="E2-pairs") for r in pairs if r["setting"] in ("normal", "normal-no-backups")
+    ] + [
+        dict(r, _dir="E2")
+        for r in rows
+        if r["setting"] in ("straggler-backups", "straggler-no-backups")
+    ]
+    # The subtitle states one input size, M and R for both datasets, so the
+    # plotted runs must have run the same job.
+    shapes = {(r["input_bytes"], r["m"], r["r"], r["workers"]) for r in valid(mixed)}
+    if len(shapes) > 1:
+        raise ValueError(f"E2 and E2-pairs ran different jobs: {sorted(shapes)}")
+    fig = timeline_and_bars(
+        mixed,
+        results,
+        "E2",
+        settings,
+        "seconds",
+        t,
+        "E2: backup tasks against a worker throttled to 0.2 CPU",
+        styles=styles,
+        note="No-straggler rows: paired runs (E2-pairs); straggler rows: main E2 runs.",
+    )
+    finish(fig, out, top=0.8)
 
 
 def e3(rows, results, out, t):
@@ -604,8 +730,8 @@ def e5(rows, results, out, t):
     time. Missing fields, invalid numbers, and file errors propagate."""
     settings = {
         "compiled": "compiled",
-        "interpreted": "job file\n(api.Words, api.Sum)",
-        "naive": "job file\n(own word test)",
+        "interpreted": "job file\n(api.Words,\napi.Sum)",
+        "naive": "job file\n(own word\ntest)",
     }
     present = [k for k in settings if valid(rows, setting=k)]
     phases = {}
@@ -693,7 +819,7 @@ def main():
 
     Results default to bench/results; output defaults to the results path.
     Creates the output directory, writes EXPERIMENT.png and
-    EXPERIMENT-dark.png for each nonempty E0 to E5 runs.csv, replacing
+    EXPERIMENT-dark.png for each nonempty E0 to E6 runs.csv, replacing
     existing plots, and prints tables to stdout.
     Missing or empty CSVs are skipped. Filesystem, CSV parsing, plotting,
     and table errors propagate.
@@ -708,6 +834,7 @@ def main():
         "E3": lambda rows, png, t: e3(rows, results, png, t),
         "E4": lambda rows, png, t: e4(rows, results, png, t),
         "E5": lambda rows, png, t: e5(rows, results, png, t),
+        "E6": lambda rows, png, t: e6(rows, png, t),
     }
     for exp, fn in draw.items():
         rows = load(results, exp)
@@ -716,6 +843,13 @@ def main():
                 with plt.rc_context(rc(t)):
                     fn(rows, out / (f"{exp}.png" if name == "light" else f"{exp}-{name}.png"), t)
             table(exp, rows)
+    pairs = load(results, "E2-pairs")
+    rows = load(results, "E2")
+    if pairs and rows:
+        for name, t in THEMES.items():
+            with plt.rc_context(rc(t)):
+                png = "E2-comparison.png" if name == "light" else f"E2-comparison-{name}.png"
+                e2_comparison(pairs, rows, results, out / png, t)
 
 
 main()

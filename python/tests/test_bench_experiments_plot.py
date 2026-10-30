@@ -145,6 +145,35 @@ def test_e1_sorts_exponents_numerically(plotter, tmp_path):
         assert axis.set_xticks.call_args.args[1] == ["S = 0.5", "S = 2.0", "S = 10.0"]
 
 
+def test_e6_groups_the_three_inputs_in_order(plotter, tmp_path):
+    """E6 draws the three inputs in order with their savings."""
+    module, pyplot = plotter
+    figure, shuffled, seconds = Mock(), Mock(), Mock()
+    shuffled.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = figure, (shuffled, seconds)
+    rows = [
+        row("book-on", 1, 1_000_000),
+        row("book-off", 2, 10_000_000),
+        row("crawl-eng-on", 3, 3_000_000),
+        row("crawl-eng-off", 4, 12_000_000),
+        row("crawl-on", 5, 5_000_000),
+        row("crawl-off", 6, 14_000_000),
+    ]
+
+    module.e6(rows, tmp_path / "E6.png", light(module))
+
+    ticks, labels = shuffled.set_xticks.call_args.args
+    assert list(ticks) == [0, 1, 2]
+    assert labels == ["crawled\nEnglish", "crawled, every\nlanguage", "book"]
+    # Settings are matched by name, so the rows' order does not matter.
+    heights = [bar.args[1] for bar in shuffled.bar.call_args_list]
+    assert heights[0] == pytest.approx([3, 5, 1])
+    assert heights[1] == pytest.approx([12, 14, 10])
+    heights = [bar.args[1] for bar in seconds.bar.call_args_list]
+    assert heights[0] == pytest.approx([3, 5, 1])
+    assert heights[1] == pytest.approx([4, 6, 2])
+
+
 def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsys):
     module, _ = plotter
     module.table(
@@ -373,7 +402,7 @@ def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
     module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
 
     assert jobs.bar.call_args.args[0] == [0, 1]
-    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words, api.Sum)"]
+    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words,\napi.Sum)"]
     assert [c.args[0] for c in jobs.annotate.call_args_list] == ["10.0 s", "105.0 s (10.5×)"]
 
 
@@ -436,3 +465,53 @@ def test_e0_title_places_caption_on_a_second_line(plotter, tmp_path):
     assert first.startswith("Speed-up = job time on 1 worker")
     assert "M = 32, R = 4" in second
     figure.savefig.assert_called_once_with(tmp_path / "E0.png")
+
+
+def test_e2_comparison_reads_each_setting_from_its_own_directory(plotter, tmp_path):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    right.barh.return_value = [Mock() for _ in range(4)]
+    fig = Mock()
+    pyplot.subplots.return_value = fig, (left, right)
+    kinds = {"normal": "E2-pairs", "normal-no-backups": "E2-pairs"}
+    pairs = [row(s) | {"run": "1", "event_at": "", "job": "job-1"} for s in kinds]
+    main = [
+        row(s) | {"run": "1", "event_at": "", "job": "job-1"}
+        for s in ("normal", "straggler-backups", "straggler-no-backups")
+    ]
+    for exp in ("E2", "E2-pairs"):
+        (tmp_path / exp).mkdir()
+    for setting in kinds:
+        tasks_file(tmp_path / "E2-pairs" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
+    for setting in ("straggler-backups", "straggler-no-backups"):
+        tasks_file(tmp_path / "E2" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
+    module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
+    # Four curves: the main run's own no-straggler row is not used.
+    assert left.step.call_count == 4
+    subtitle = [c.args[2] for c in fig.text.call_args_list if "paired runs" in c.args[2]]
+    assert subtitle
+
+
+def test_e2_comparison_refuses_datasets_of_different_jobs(plotter, tmp_path):
+    module, _ = plotter
+    pairs = [row("normal") | {"run": "1", "event_at": "", "job": "job-1"}]
+    main = [row("straggler-backups") | {"run": "1", "event_at": "", "job": "job-1", "m": "64"}]
+    with pytest.raises(ValueError, match="different jobs"):
+        module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
+
+
+def test_e2_comparison_takes_each_setting_from_its_source_and_checks_valid_runs(plotter, tmp_path):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    right.barh.return_value = [Mock() for _ in range(4)]
+    pyplot.subplots.return_value = Mock(), (left, right)
+    base = {"run": "1", "event_at": "", "job": "job-1"}
+    pairs = [row("normal") | base, row("straggler-backups", seconds=99) | base]
+    # An invalid run of another job is never plotted, so it must not fail the check.
+    main = [
+        row("straggler-backups") | base,
+        row("straggler-no-backups", valid="0") | base | {"m": "64"},
+    ]
+    module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
+    times = right.barh.call_args.args[1]
+    assert 99 not in times
