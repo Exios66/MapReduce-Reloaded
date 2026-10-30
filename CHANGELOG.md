@@ -18,7 +18,7 @@ cut a release.
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without
-  scripts it still reloads with `<noscript>`. ADR 0012 records the change
+  scripts it still reloads with `<noscript>`. ADR 0022 records the change
   (#312).
 - Status page (Go and Python): job cards link to themselves (`#job-<id>`),
   show host- and zone-local map counts, and the workers table shows zone,
