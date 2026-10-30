@@ -145,12 +145,12 @@ def test_proto_breaking_fetch_policy(make_project, override):
 
 def test_ci_proto_check_uses_prefetched_main(make_project):
     _, make, log = make_project
-    # Execute the workflow's actual make invocation, so changing the CI
+    # Execute the CircleCI job's actual make invocation, so changing the CI
     # override cannot silently reintroduce an authenticated fetch.
     commands = [
-        shlex.split(line.strip().removeprefix("- run: "))
-        for line in (ROOT / ".github/workflows/ci.yml").read_text().splitlines()
-        if line.strip().startswith("- run: make proto-check")
+        shlex.split(line.strip().removeprefix("command: "))
+        for line in (ROOT / ".circleci/continue-config.yml").read_text().splitlines()
+        if line.strip().startswith("command: make proto-check")
     ]
     assert len(commands) == 1
     make(*commands[0][1:])
