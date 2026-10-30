@@ -1,0 +1,89 @@
+# Which CI jobs a changed file implicates (docs/ci.md, ADR 0020).
+#
+# scripts/ci-params.py reads this file in the setup job and in the
+# mapping-coverage job. Each line is `<regex> <parameter>`; a changed file
+# sets every parameter whose regex matches its path (re.search). A deleted
+# file, or a file no line matches, sets run-all, and mapping-coverage fails
+# on the unmapped file. Lines starting with # are comments.
+#
+# A job's inputs are more than its own directory: the cross-directory lines
+# below were found by tracing every file the Go and Python test suites open.
+# When a test starts reading a file in another directory, add its
+# line here.
+
+# Build and CI files: every job.
+^\.circleci/ run-all
+^Makefile$ run-all
+^python/pyproject\.toml$ run-all
+^scripts/ run-all
+^bin/ run-all
+^go/go\.mod$ run-all
+^\.gitignore$ run-all
+
+# Go: the go job (lint, race tests, papermap, coverage floors) and sh-lint.
+^go/ run-go
+\.sh$ run-go
+^\.githooks/ run-go
+
+# Python: both Python jobs, and the go job's narrow mode (run-go-python):
+# py-e2e, cmd/mr's golden comparison with the Python examples, and papermap,
+# which reads the test names in python/tests. No other Go package reads
+# python/: they pass with it deleted and no Python on the PATH.
+^python/ run-python
+^python/ run-go-python
+
+# Protobuf: the contract, buf's config, and the generated code proto-check
+# regenerates and compares.
+^proto/ run-proto
+^buf\.yaml$ run-proto
+^go/gen/ run-proto
+^python/mapreduce_reloaded/gen/ run-proto
+
+# The Go status page's stylesheet: a Python test checks the Python page matches it.
+^go/internal/statusweb/status\.html$ run-python
+
+# Shared test data: the Go and Python tests both read it.
+^testdata/ run-go
+^testdata/ run-python
+
+# Markdown and other files no test reads: the lint job (md-lint).
+\.md$ run-lint
+^docs/ run-lint
+^bench/ run-lint
+^examples/ run-lint
+^deploy/ run-lint
+^\.github/ run-lint
+^LICENSE run-lint
+^\.[^/]*$ run-lint
+
+# Files outside python/ that the Python tests read.
+^README\.md$ run-python
+^design\.md$ run-python
+^docs/README\.md$ run-python
+^docs/design/0001-languages-and-shared-contract\.md$ run-python
+^CHANGELOG\.md$ run-python
+^AGENTS\.md$ run-python
+^docs/design/0014-ci-on-pull-requests\.md$ run-python
+^docs/roadmap\.md$ run-python
+^docs/roadmap-explained\.md$ run-python
+^docs/report\.md$ run-python
+^docs/ci\.md$ run-python
+^docs/cluster-vm\.md$ run-python
+^docs/paper-mapping\.md$ run-python
+^bench/README\.md$ run-python
+^bench/.*\.(py|sh)$ run-python
+^deploy/compose/README\.md$ run-python
+^deploy/compose/.*\.yaml$ run-python
+^deploy/compose/monitoring/ run-python
+^examples/ run-python
+^go/examples/ run-python
+^\.github/workflows/ run-python
+^\.coderabbit\.yaml$ run-python
+^\.codeant/ run-python
+
+# Files outside go/ that the Go tests read.
+^README\.md$ run-go
+^docs/paper-mapping\.md$ run-go
+^examples/ run-go
+^bench/jobs/ run-go
+^deploy/compose/monitoring/ run-go

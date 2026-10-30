@@ -149,8 +149,9 @@ resume a broken fetch at a byte offset and detect corruption.
 ### Tests
 
 Every check is a make target. `make check` runs them before every push, and
-CircleCI runs them on every pull request and on pushes to `main`
-([ADR 0014](docs/design/0014-ci-on-pull-requests.md), [CI](docs/ci.md)).
+CircleCI runs them on every pull request, and not on pushes to `main`
+([ADR 0014](docs/design/0014-ci-on-pull-requests.md),
+[ADR 0021](docs/design/0021-no-ci-on-main-pushes.md), [CI](docs/ci.md)).
 
 | Kind | What it checks | Where |
 |---|---|---|
@@ -204,6 +205,9 @@ are not a special feature: the assignment requires them.
 
 Bad-record skipping, counters, side outputs, compression, a status page with
 Prometheus and Grafana, and a locality-aware scheduler hook are also built.
+Both Go programs take `-log-format text|json` and `-log-level
+debug|info|warn|error`, and log job and task events (#302); each experiment
+run saves the cluster's logs (#301).
 
 ### Failure semantics
 
@@ -299,7 +303,7 @@ made them; the data is in `bench/evaluation/`. What they showed (course VM,
 workers for word count but only 2.3× for grep, whose one-second job is mostly
 fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
 15× to 78× fewer bytes with the combiner, more with more skew, and ran 18%
-to 44% faster. E2, run again on 2026-10-28 with the settings alternating, took 11.2 s with the straggler and backups, 17.6 s with the straggler and no backups, and 8.0 s with no straggler. E3 cost
+to 44% faster. E2, run again on 2026-10-28, took 11.2 s with the straggler and backups and 17.6 s with the straggler and no backups (run in blocks, so not drift-controlled), and 8.0 s with no straggler (ten alternating pairs). E3 cost
 about the 10 s detection timeout when the kill came early and 27 s at 75%,
 when finished map output was lost. E4's restart cost 1.6 s. E5's job file
 made word count 10.5× slower (399 s against 38 s), nearly all in the map
@@ -316,7 +320,7 @@ four engineering practices:
   merging a pull request.
 - **CI runs tests on pull requests.** CircleCI (`.circleci/config.yml`) runs
   the `make check` targets on every PR. GitHub's hosted runners fail on the
-  account's billing lock, so the Actions workflow runs only by hand; `make
+  account's billing lock, so the repository has no Actions workflow; `make
   ci-report` can still record a local run on the PR's commit
   ([ADR 0014](docs/design/0014-ci-on-pull-requests.md), #165, #212).
 - **Many small pull requests.** One concern each, as the roadmap's

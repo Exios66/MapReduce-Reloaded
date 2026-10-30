@@ -118,7 +118,10 @@ The sort's scaling over 1, 2 and 4 workers is E0: 36.7 s, 20.4 s and
 
 ## Backup tasks (§5.4)
 
-<img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png" width="480">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E2-comparison-dark.png">
+  <img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png" width="480">
+</picture>
 
 The paper turned backup tasks off for the same sort and it took 1,283 s
 instead of 891 s, 44% longer: the last 5 reduce tasks straggled and took
@@ -139,7 +142,10 @@ and with no straggler:
 The straggler rows are medians of three runs; the others, of ten pairs of
 runs taken in turn ([bench/README.md](../bench/README.md#e2-backup-tasks-and-a-straggler)).
 The chart uses these same measurements: the no-straggler rows from
-`bench/evaluation/E2-pairs/` and the straggler rows from `bench/evaluation/E2/`.
+`bench/evaluation/E2-pairs/` and the straggler rows from `bench/evaluation/E2/`,
+which is why it differs from `E2.png` (that one draws only the main E2 runs,
+where no-straggler with backups on is 9.1 s). The image says so in its
+subtitle, and `bench/plot-experiments.py` redraws it from both directories.
 The saved `straggler-backups` trials ran as one block, followed by the
 `straggler-no-backups` block, so the +56% estimate is not drift-controlled.
 The current harness alternates settings, but that order does not apply to
@@ -149,7 +155,7 @@ these saved straggler rows.
   slow worker's last tasks and takes 56% longer, close to the paper's 44%,
   subject to the run-order limitation above.
 - **With no straggler, no statistically significant cost was found.** Backups still run,
-  5 or 6 a job, and none win: with as many reduce tasks as workers, a
+  4 to 6 a job, and none win: with as many reduce tasks as workers, a
   worker that finishes its reduce task has nothing left to do, so it backs
   up another. Over ten pairs the mean difference is -0.11 s, with a 95%
   interval of -0.38 to +0.16 s, allowing a mean cost of up to 0.16 s.
@@ -162,6 +168,10 @@ these saved straggler rows.
 ## Machine failures (§5.5)
 
 <img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png" width="480">
+
+The rates panel's "worker lost" band is on the sampling clock and the kill
+times are on the submission clock; the saved data does not record the offset
+between them, so the band's position is approximate against the kill times.
 
 The paper killed 200 of 1,746 workers a few minutes into the sort. The
 cluster restarted them, the lost map work ran again, and the job took

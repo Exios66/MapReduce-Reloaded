@@ -135,6 +135,7 @@ def test_main(repo, capsys):
     assert "2 files, 1 broken links" in out.err
 
 
+@pytest.mark.lint_inputs
 def test_the_repository_has_no_broken_links():
     """Every tracked Markdown file, as make lint checks them."""
     assert links.main([]) == 0

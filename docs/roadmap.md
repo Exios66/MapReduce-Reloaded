@@ -54,7 +54,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#45) is built, and E7, its evaluation, is wired but not run.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
 
 ## Context
 
@@ -96,7 +96,7 @@ week-by-week schedule and a plain-language walkthrough, is in
 - **Stretch** (issues kept open with a `[stretch]` prefix):
   - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
-  - #59: evaluation of the extensions. LATE (#45) is built; its experiment
+  - #59: evaluation of the extensions. LATE (#284, tracked in #45) is built; its experiment
     E7 is wired and has not been run.
 - **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk with a 33 GB root, shared). The whole
   cluster runs there under Docker Compose, with each worker limited to one
@@ -277,7 +277,7 @@ Each phase ends in a runnable, tested state.
 - Heartbeats with timeouts, map re-execution on worker loss; reduce attempts get the new locations.
 - Coordinator write-ahead log (with `-data-dir`), replayed on restart.
 - Backup tasks; bad-record skipping; counters de-duplicated by task attempt.
-- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs, broken fetches, a torn log tail, a clock set back, full disks, bad records and S3 commit failures too (#155). Driving the same faults against the Compose cluster is #29.
+- **Chaos test harness**: `TestChaos` kills, replaces and freezes workers and restarts the coordinator at random, in one process, and asserts that output and counters match local mode. `TestChaosPrograms` does the same for every example program and job option, with lost map output, duplicate RPCs, broken fetches, a torn log tail, a clock set back, full disks, bad records and S3 commit failures too (#155). Driving the same faults against the Compose cluster is #29. Dropped-packet fault injection is out of scope (#287).
 
 **Phase 4 — Ops & paper parity (F11, F21, F23)**
 
@@ -292,7 +292,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
 
-- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #45; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
+- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
 

@@ -1,6 +1,6 @@
 // Command coordinator serves the coordinator ("master", §3.2) of a cluster.
 //
-//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-keep-jobs n] [-log-format text|json]
+//	coordinator [-addr :7070] [-http :8080] [-data-dir dir] [-keep-jobs n] [-log-format text|json] [-log-level debug|info|warn|error]
 //
 // It runs until interrupted, then tells workers to exit. With -data-dir it
 // logs every decision there, and a restarted coordinator resumes its job
@@ -37,10 +37,10 @@ import (
 
 // options are the coordinator's flags.
 type options struct {
-	addr, httpAddr, dataDir, logFormat string
-	speculation                        string
-	backups                            bool
-	keepJobs, maxTaskFailures          int
+	addr, httpAddr, dataDir, logFormat, logLevel string
+	speculation                                  string
+	backups                                      bool
+	keepJobs, maxTaskFailures                    int
 }
 
 // main runs the coordinator until interrupted or terminated. It exits with
@@ -63,7 +63,7 @@ func start(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "coordinator:", err)
 		return 2
 	}
-	if err = logs.Setup(o.logFormat); err == nil {
+	if err = logs.Setup(o.logFormat, o.logLevel); err == nil {
 		err = run(ctx, o, nil)
 	}
 	if err != nil {
@@ -86,6 +86,7 @@ func parse(args []string, stderr io.Writer) (options, error) {
 	fs.IntVar(&o.keepJobs, "keep-jobs", 100, "ended jobs to keep for mr status; older ones are forgotten (0: all)")
 	fs.IntVar(&o.maxTaskFailures, "max-task-failures", 8, "fail the job once one task has failed this many times (0: retry for ever)")
 	fs.StringVar(&o.logFormat, "log-format", "text", "log format: text or json")
+	fs.StringVar(&o.logLevel, "log-level", "info", "lowest level to log: debug, info, warn or error")
 	err := fs.Parse(args)
 	if err == nil && fs.NArg() > 0 {
 		err = fmt.Errorf("unexpected arguments %q", fs.Args())

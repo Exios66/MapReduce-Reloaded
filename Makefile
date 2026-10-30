@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter; many systems only have python3. Override with PYTHON=...
 PYTHON ?= python3
@@ -209,10 +209,28 @@ proto-check: proto-lint proto-breaking proto
 # MR_PYTHON lets go/cmd/mr compare the Go examples with Python's (#153); a
 # relative PYTHON is a command name, looked up on the PATH.
 # Each package's coverage must stay at or over its floor in go/cover-floors.txt
-# and python/cover-floors.txt (scripts/cover.py, #161).
+# and python/cover-floors.txt (scripts/cover.py, #161). A Go package's
+# coverage counts every test in the module (-coverpkg), and the runs of the
+# commands that internal/e2e builds, which write their counters to
+# GO_COVERDIR; go/cover.out holds both. The race detector runs in a pass of
+# its own: with -coverpkg it makes every package's counters atomic, which
+# slows the cluster tests past their deadlines on a 2-CPU runner.
+GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./...
+	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
+		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
+	fi
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
+
+# The Go tests that read python/: cmd/mr's golden comparison with the Python
+# examples, and papermap's check of the Python test names. CI's go job runs
+# only these (with py-e2e) when a PR changes python/ alone; every other Go
+# package passes with python/ removed (docs/ci.md).
+go-python-test:
+	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./cmd/mr && go test -count=1 ./internal/papermap
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
