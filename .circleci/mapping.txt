@@ -25,10 +25,12 @@
 \.sh$ run-go
 ^\.githooks/ run-go
 
-# Python: both Python jobs, and the go job, which runs py-e2e and whose
-# papermap test reads the test names in python/tests.
+# Python: both Python jobs, and the go job's narrow mode (run-go-python):
+# py-e2e, cmd/mr's golden comparison with the Python examples, and papermap,
+# which reads the test names in python/tests. No other Go package reads
+# python/: they pass with it deleted and no Python on the PATH.
 ^python/ run-python
-^python/ run-go
+^python/ run-go-python
 
 # Protobuf: the contract, buf's config, and the generated code proto-check
 # regenerates and compares.

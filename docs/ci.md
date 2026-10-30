@@ -41,7 +41,7 @@ code generation in `proto` cannot change files `go` is testing.
 CircleCI dynamic configuration (ADR 0020) runs only the jobs a PR's files
 implicate. `.circleci/config.yml` is the setup config: its one `select` job
 runs `scripts/ci-params.py`, which diffs the branch against `origin/main` at
-the merge base, turns the changed files into five boolean pipeline
+the merge base, turns the changed files into six boolean pipeline
 parameters, and continues with `.circleci/continue-config.yml`, which holds
 the jobs.
 
@@ -74,7 +74,7 @@ regex matches it. Three rules keep the selection conservative:
 | `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod`, `.gitignore` | all (run-all) |
 | any deleted file, any unmapped file | all (run-all) |
 | `go/**`, `*.sh`, `.githooks/**` | go (sh-lint lives in the go job) |
-| `python/**` | python-3.11, python-3.13, go (the go job runs py-e2e, and its paper-mapping test reads the Python test names) |
+| `python/**` | python-3.11, python-3.13, and the go job's narrow mode (run-go-python: `make go-python-test py-e2e`) |
 | `proto/**`, `buf.yaml`, `go/gen/**`, `python/mapreduce_reloaded/gen/**` | proto (it regenerates the code and fails if the committed copy differs) |
 | `testdata/**` | go, python-3.11, python-3.13 |
 | `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
@@ -140,6 +140,21 @@ How each job meets its requirements:
   runs `make proto-check PROTO_FETCH=false`. If the fetch fails, the job
   fails; the check is never skipped. A fork's build has no deploy key, so the
   job falls back to the public HTTPS URL.
+- **Narrow Go mode.** A PR whose Go-side inputs are only `python/` runs
+  `make go-python-test py-e2e` in the go job instead of the whole Go suite:
+  `cmd/mr` (its golden tests compare the Go examples with Python's),
+  `papermap` (it reads the Python test names) and `py-e2e`. Every other Go
+  package passes with `python/` deleted and no Python on the PATH, so its
+  result from `main` stands. `TestOnlyGoPythonTestPackagesReadPython` fails
+  if another Go test starts to read `python/` or run Python. Any other
+  implicated file, `run-all`, and `main` run the full mode.
+- **Go build cache.** The go job restores Go's build cache and
+  golangci-lint's analysis cache, so compiled packages (the race-built
+  standard library above all) are not rebuilt on every run. Both caches are
+  keyed by content, so an entry is reused only for identical input, and the
+  job sets `GOFLAGS=-count=1`, so test results are never cached: every test
+  runs every time. The key changes with the Go release, `go.sum` and the ISO
+  week, so the cache is saved about once a week, not on every run.
 - **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
 
 ## Caching

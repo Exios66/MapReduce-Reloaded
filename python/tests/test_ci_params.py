@@ -29,7 +29,7 @@ def test_every_tracked_file_is_mapped():
 
 def test_the_mapping_names_only_declared_parameters():
     cont = (ROOT / ".circleci/continue-config.yml").read_text()
-    declared = re.findall(r"^  (run-[a-z]+):$", cont, re.M)
+    declared = re.findall(r"^  (run-[a-z-]+):$", cont, re.M)
     assert sorted(ci_params.PARAMETERS) == sorted(declared)
     assert {param for _, param in MAPPING} == set(ci_params.PARAMETERS)
 
@@ -53,7 +53,7 @@ def test_comments_and_blank_lines_are_ignored():
         ("docs/runbook.md", {"run-lint"}),
         ("LICENSE", {"run-lint"}),
         ("go/internal/worker/worker.go", {"run-go"}),
-        ("python/mapreduce_reloaded/local.py", {"run-python", "run-go"}),
+        ("python/mapreduce_reloaded/local.py", {"run-python", "run-go-python"}),
         ("proto/mapreduce/v1/types.proto", {"run-proto"}),
         ("go/go.mod", {"run-all", "run-go"}),
         ("scripts/e2e.sh", {"run-all", "run-go"}),
@@ -187,6 +187,7 @@ def test_the_setup_job_gets_every_parameter(offline, capsys):
     assert json.loads(out) == {
         "run-all": False,
         "run-go": False,
+        "run-go-python": False,
         "run-python": False,
         "run-proto": False,
         "run-lint": True,
@@ -216,6 +217,21 @@ def test_check_fails_when_the_jobs_got_less(offline, capsys, monkeypatch):
     code, _, err = run(capsys, "--check")
     assert code == 1
     assert "need ['run-go']: the selection did not reach the jobs" in err
+
+
+def test_check_accepts_the_full_go_mode_for_the_narrow_one(offline, capsys, monkeypatch):
+    offline.append(("M", "python/mapreduce_reloaded/local.py"))
+    got = {"run-go", "run-python"}
+    monkeypatch.setenv("MR_CI_PARAMS", json.dumps({p: p in got for p in ci_params.PARAMETERS}))
+    assert run(capsys, "--check")[0] == 0
+
+
+def test_check_does_not_accept_the_narrow_go_mode_for_the_full_one(offline, capsys, monkeypatch):
+    offline.append(("M", "go/internal/worker/worker.go"))
+    monkeypatch.setenv(
+        "MR_CI_PARAMS", json.dumps({p: p == "run-go-python" for p in ci_params.PARAMETERS})
+    )
+    assert run(capsys, "--check")[0] == 1
 
 
 def test_check_accepts_run_all_for_anything(offline, capsys, monkeypatch):

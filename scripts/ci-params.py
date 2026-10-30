@@ -32,7 +32,10 @@ import sys
 from pathlib import Path
 
 MAPPING = Path(".circleci/mapping.txt")
-PARAMETERS = ("run-all", "run-go", "run-python", "run-proto", "run-lint")
+PARAMETERS = ("run-all", "run-go", "run-go-python", "run-python", "run-proto", "run-lint")
+# A parameter whose job mode includes another's: the go job's full mode
+# runs everything its python-only mode runs.
+COVERS = {"run-go": {"run-go-python"}}
 
 
 def load_mapping(text):
@@ -125,6 +128,7 @@ def main(argv):
     received = os.environ.get("MR_CI_PARAMS")
     if received is not None:
         got = {p for p, on in json.loads(received).items() if on}
+        got |= {c for p in got for c in COVERS.get(p, ())}
         missing = set() if "run-all" in got else params - got
         if missing:
             failed = True

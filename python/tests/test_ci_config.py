@@ -90,7 +90,7 @@ def test_mapping_coverage_checks_what_the_jobs_received():
     job = CONT.split("\n  mapping-coverage:\n", 1)[1].split("\nworkflows:", 1)[0]
     assert "python3 scripts/ci-params.py --check" in job
     received = re.search(r"MR_CI_PARAMS: '(.+)'", job).group(1)
-    for name in ("run-all", "run-go", "run-python", "run-proto", "run-lint"):
+    for name in ("run-all", "run-go", "run-go-python", "run-python", "run-proto", "run-lint"):
         assert f'"{name}": << pipeline.parameters.{name} >>' in received
     # Rendered with booleans, it is the JSON the script reads.
     assert json.loads(re.sub(r"<< pipeline\.parameters\.[a-z-]+ >>", "true", received))
@@ -295,5 +295,10 @@ def test_main_runs_every_job_unfiltered():
     # Filtering saves credits on PRs only; on main each gated condition must
     # also hold for the branch, so main keeps full coverage.
     conditions = CONT.count("- << pipeline.parameters.run-all >>")
-    assert conditions == 8  # proto, go, python, lint: each a when and an unless
+    # proto, go, python, lint: each a when and an unless, plus the go job's
+    # narrow mode, which must not run on main (main runs the full mode).
+    assert conditions == 9
     assert CONT.count("- equal: [main, << pipeline.git.branch >>]") == conditions
+    go = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
+    narrow = go.split("- not:\n", 1)[1].split("steps:", 1)[0]
+    assert "run-all" in narrow and "equal: [main," in narrow and "run-go >>" in narrow
