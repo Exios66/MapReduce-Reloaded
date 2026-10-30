@@ -115,11 +115,18 @@ services:
 
   # The showcase profile (ADR 0023): a read-only page of the cluster, sampled
   # from the coordinator and the workers, and recorded to data/showcase/. It
-  # is published on loopback only and has no write endpoint.
+  # is published on loopback only and has no write endpoint. Its only mount is
+  # its recordings: no output volume, corpus or S3 credentials, and a read-only
+  # root filesystem.
   showcase:
     <<: *node
     command: [showcase, -out, /data/showcase]
     profiles: [showcase]
+    restart: unless-stopped
+    read_only: true
+    environment: {}
+    volumes:
+      - ../../data/showcase:/data/showcase
     ports:
       - "127.0.0.1:18781:8080"
     mem_limit: 128m

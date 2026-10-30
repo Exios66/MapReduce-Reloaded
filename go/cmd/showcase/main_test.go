@@ -362,6 +362,90 @@ func TestReplayKeepsEveryFrameOfALargeRecording(t *testing.T) {
 	}
 }
 
+func TestPortConflictLeavesNoRecording(t *testing.T) {
+	// The port is taken before the run starts, so the run must fail before it
+	// creates its recording: an empty file would look like a recording.
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = taken.Close() }()
+	out := t.TempDir()
+	err = run(context.Background(), config{
+		http:           taken.Addr().String(),
+		status:         "http://127.0.0.1:1/status.json",
+		interval:       time.Second,
+		out:            out,
+		maxRecordBytes: showcase.DefaultRecordingCap,
+	}, nil)
+	if err == nil {
+		t.Fatal("run on a taken port succeeded, want an error")
+	}
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("a failed start left %d files in the recording directory", len(entries))
+	}
+}
+
+func TestParseReplayDefaultsToLoopback(t *testing.T) {
+	// In a container the live service listens on every address; a replay runs
+	// on the host, so it listens only on loopback unless -http says otherwise.
+	c, err := parse([]string{"-replay", "x.jsonl"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.http != "127.0.0.1:8080" {
+		t.Errorf("replay -http = %q, want 127.0.0.1:8080", c.http)
+	}
+	c, err = parse([]string{"-replay", "x.jsonl", "-http", ":9000"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.http != ":9000" {
+		t.Errorf("replay with -http :9000 = %q", c.http)
+	}
+}
+
+// panicRecorder is a recording whose writes panic, and which counts them.
+type panicRecorder struct {
+	path   string
+	writes *int
+}
+
+func (p panicRecorder) Write(showcase.Frame) {
+	*p.writes++
+	panic("disk on fire")
+}
+
+func (p panicRecorder) State() showcase.RecorderState {
+	return showcase.RecorderState{Path: p.path, Bytes: 7}
+}
+
+func TestRecordingPanicStopsRecordingNotTheLiveView(t *testing.T) {
+	writes := 0
+	s := &source{
+		mode:  showcase.ModeLive,
+		runID: "run",
+		ring:  showcase.NewRing(10),
+		rec:   panicRecorder{path: "/data/showcase/a.jsonl", writes: &writes},
+	}
+	s.add(frame(1)) // the panic must not reach the sampler
+	s.add(frame(2))
+	if writes != 1 {
+		t.Errorf("recording was written %d times, want once: it stops at the panic", writes)
+	}
+	if got, _ := s.After(0, 10); len(got) != 2 {
+		t.Errorf("live view holds %d frames, want 2", len(got))
+	}
+	rec := s.Info().Recorder
+	if !rec.Stopped || !strings.Contains(rec.Reason, "disk on fire") || rec.Path != "/data/showcase/a.jsonl" {
+		t.Errorf("recorder = %+v, want stopped with the panic as its reason", rec)
+	}
+}
+
 func TestEachStartHasANewRunID(t *testing.T) {
 	c := config{status: "http://127.0.0.1:1/status.json", interval: time.Second, maxRecordBytes: showcase.DefaultRecordingCap}
 	a, err := newSource(c, time.Now())

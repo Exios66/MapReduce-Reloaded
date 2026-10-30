@@ -2,7 +2,7 @@
 // read-only page of what they report (ADR 0023). It never changes the cluster.
 //
 //	showcase [-http :8080] [-status http://coordinator:8080/status.json] [-workers worker] [-worker-port 8081] [-interval 250ms] [-out dir] [-max-record-bytes n]
-//	showcase -replay file.jsonl [-http :8080]
+//	showcase -replay file.jsonl [-http 127.0.0.1:8080]
 //
 // It reads each worker's /metrics and the coordinator's /status.json every
 // -interval. With -out it records the run to a new file in dir, named by its
@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -79,7 +80,7 @@ func parse(args []string, stderr io.Writer) (config, error) {
 	var c config
 	flags := flag.NewFlagSet("showcase", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&c.http, "http", ":8080", "address to serve the page and /frames on")
+	flags.StringVar(&c.http, "http", "", "address to serve the page and /frames on (default :8080; 127.0.0.1:8080 with -replay)")
 	flags.StringVar(&c.status, "status", "http://coordinator:8080/status.json", "the coordinator's status URL")
 	flags.StringVar(&c.workers, "workers", "worker", `DNS name that finds the workers to sample; "" to sample none`)
 	flags.IntVar(&c.workerPort, "worker-port", 8081, "port the workers serve /metrics on")
@@ -88,6 +89,12 @@ func parse(args []string, stderr io.Writer) (config, error) {
 	flags.Int64Var(&c.maxRecordBytes, "max-record-bytes", showcase.DefaultRecordingCap, "stop a recording at this many bytes")
 	flags.StringVar(&c.replay, "replay", "", "serve this recording with no cluster; it is the only file opened")
 	err := flags.Parse(args)
+	if c.http == "" {
+		c.http = ":8080"
+		if c.replay != "" {
+			c.http = "127.0.0.1:8080" // a replay runs on the host, not in a container
+		}
+	}
 	switch {
 	case err != nil:
 	case flags.NArg() > 0:
@@ -124,12 +131,15 @@ func limitHeap(limit int64) {
 // listening is not nil, run calls it with the listener's address before it
 // samples. A done ctx ends run without error.
 func run(ctx context.Context, c config, listening func(net.Addr)) error {
-	src, err := newSource(c, time.Now())
+	// Listen before the source is made, so that a port conflict fails before
+	// a recording is created.
+	lis, err := net.Listen("tcp", c.http)
 	if err != nil {
 		return err
 	}
-	lis, err := net.Listen("tcp", c.http)
+	src, err := newSource(c, time.Now())
 	if err != nil {
+		_ = lis.Close()
 		return err
 	}
 	srv := &http.Server{Handler: showcase.Handler(src), ReadHeaderTimeout: 5 * time.Second}
@@ -162,6 +172,13 @@ func sampleConfig(c config) showcase.Config {
 	return sc
 }
 
+// recorder is where a live source writes its frames: a *showcase.Recorder,
+// or a stand-in in tests.
+type recorder interface {
+	Write(showcase.Frame)
+	State() showcase.RecorderState
+}
+
 // source is what the page is served from: the frames kept in memory, and
 // the recording, if there is one. A live source adds the frames it samples;
 // a replay source holds every frame of its recording.
@@ -169,9 +186,13 @@ type source struct {
 	mode    string
 	runID   string
 	ring    *showcase.Ring
-	rec     *showcase.Recorder     // nil when not recording, or when recording could not start
-	state   showcase.RecorderState // the recorder's state when rec is nil
-	skipped int                    // lines of a replayed recording that were skipped
+	skipped int // lines of a replayed recording that were skipped
+
+	// mu guards rec and state. The sampler's goroutine changes them when a
+	// recording stops, and the HTTP handlers read them.
+	mu    sync.Mutex
+	rec   recorder               // nil when not recording, or when recording could not start
+	state showcase.RecorderState // the recorder's state when rec is nil
 }
 
 // newSource returns the source for c: the replay of c.replay, or a live
@@ -241,9 +262,30 @@ func openRecording(dir string, now time.Time, maxBytes int64) (*showcase.Recorde
 // add keeps a sampled frame, and records it if the recording is on.
 func (s *source) add(f showcase.Frame) {
 	s.ring.Add(f)
-	if s.rec != nil {
-		s.rec.Write(f)
+	s.mu.Lock()
+	rec := s.rec
+	s.mu.Unlock()
+	if rec != nil {
+		s.record(rec, f)
 	}
+}
+
+// record writes f to rec. A panic in the recording stops the recording and is
+// logged: the live view, the sampler and the other handlers go on.
+func (s *source) record(rec recorder, f showcase.Frame) {
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+		slog.Error("showcase: recording stopped after a panic; the live view goes on", "panic", p)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		state := rec.State()
+		state.Stopped, state.Reason = true, fmt.Sprintf("panic: %v", p)
+		s.rec, s.state = nil, state
+	}()
+	rec.Write(f)
 }
 
 // After returns the frames after seq, as the ring does.
@@ -253,6 +295,8 @@ func (s *source) After(seq uint64, limit int) ([]showcase.Frame, bool) {
 
 // Info says what the source is doing and how its recording stands.
 func (s *source) Info() showcase.Info {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	state := s.state
 	if s.rec != nil {
 		state = s.rec.State()

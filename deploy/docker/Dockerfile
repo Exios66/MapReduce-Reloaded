@@ -1,5 +1,6 @@
-# One image holds the coordinator, the worker, the mr CLI and the showcase. The build
-# context is the Go module: docker build -f deploy/docker/Dockerfile go
+# One image holds the coordinator, the worker, the mr CLI and the
+# showcase. The build context is the Go module:
+# docker build -f deploy/docker/Dockerfile go
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

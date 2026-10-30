@@ -120,6 +120,9 @@ func framesQuery(q url.Values) (after uint64, limit int, err error) {
 	}
 	if q.Has("limit") {
 		n, err := strconv.Atoi(q.Get("limit"))
+		if errors.Is(err, strconv.ErrRange) && n > 0 {
+			err = nil // too large for an int: it is a large limit, capped below
+		}
 		if err != nil || n < 1 {
 			return 0, 0, errors.New("limit must be a number of at least 1")
 		}

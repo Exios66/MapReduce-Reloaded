@@ -66,6 +66,34 @@ def test_showcase_is_optional_and_on_loopback():
     assert service["profiles"] == ["showcase"]
     assert service["ports"] == ["127.0.0.1:18781:8080"]
     assert service["mem_limit"] == "128m"
+    assert service["restart"] == "unless-stopped"
+
+
+def test_showcase_is_read_only_and_mounts_only_its_recordings():
+    # The showcase must not reach the cluster's output, the corpus or the S3
+    # credentials that the other services share (ADR 0023: read-only).
+    service = load(COMPOSE)["services"]["showcase"]
+    assert service["volumes"] == ["../../data/showcase:/data/showcase"]
+    assert service["read_only"] is True
+    assert not service.get("environment")
+    assert service["command"] == ["showcase", "-out", "/data/showcase"]
+
+
+def test_showcase_config_mounts_only_its_recordings(docker_compose):
+    result = subprocess.run(
+        [*docker_compose, "--profile", "showcase", "config", "--format", "json"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=os.environ | {"COMPOSE_PROFILES": ""},
+        timeout=30,
+    )
+    service = json.loads(result.stdout)["services"]["showcase"]
+    targets = [volume["target"] for volume in service["volumes"]]
+    assert targets == ["/data/showcase"]
+    assert service["read_only"] is True
+    assert not any(name.startswith("AWS_") for name in service.get("environment", {}))
+    assert "output" not in {volume.get("source") for volume in service["volumes"]}
 
 
 def test_prometheus_preserves_mapreduce_job_labels():

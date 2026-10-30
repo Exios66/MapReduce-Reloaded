@@ -102,7 +102,7 @@ func ReadRecording(path string) (frames []Frame, skipped int, err error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only: a failed close loses nothing
 	// ReadBytes grows its buffer as needed, so a long line is not cut short
 	// the way a bufio.Scanner's default buffer would cut it.
 	br := bufio.NewReader(f)

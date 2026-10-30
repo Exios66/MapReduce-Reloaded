@@ -153,6 +153,22 @@ func TestFramesCapsTheLimit(t *testing.T) {
 	}
 }
 
+func TestFramesCapsALimitTooLargeForAnInt(t *testing.T) {
+	// A limit that overflows int is a large number, not a bad one: it caps at
+	// 2000 like any other large limit. Zero is still an error.
+	ring := showcase.NewRing(3000)
+	for seq := uint64(1); seq <= 2500; seq++ {
+		ring.Add(frameAt(seq))
+	}
+	srv := serveSource(t, ringSource{Ring: ring})
+	if n := len(framesOf(t, srv, "limit=99999999999999999999999999").Frames); n != 2000 {
+		t.Errorf("huge limit returned %d frames, want 2000", n)
+	}
+	if resp, _ := doRequest(t, http.MethodGet, srv.URL+"/frames?limit=0"); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("limit=0 = %d, want 400", resp.StatusCode)
+	}
+}
+
 func TestFramesWithNoFramesIsAnEmptyList(t *testing.T) {
 	srv := serveSource(t, ringSource{Ring: showcase.NewRing(10)})
 	_, body := doRequest(t, http.MethodGet, srv.URL+"/frames?after=0")
