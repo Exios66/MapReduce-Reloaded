@@ -50,9 +50,11 @@
 `os.Hostname()` in a Compose worker is its container ID, while DNS discovery gives IP addresses. This task decides how a metrics target maps to a `/status.json` worker, before other code assumes it.
 
 **Files:**
+
 - Create: `docs/superpowers/plans/2026-10-30-showcase-worker-matching.md` (a short note of the result)
 
 **Interfaces:**
+
 - Produces: the decision that Task 3's `Frame.Workers[].Host` relies on.
 
 - [ ] **Step 1:** Run `make cluster-up`, then from a container on the Compose network compare `getent hosts worker`, reverse lookups of each IP, and `curl -s coordinator:8080/status.json` worker `host` values.
@@ -63,9 +65,11 @@
 ### Task 2: Frames and parsing
 
 **Files:**
+
 - Create: `go/internal/showcase/frame.go`, `go/internal/showcase/frame_test.go`
 
 **Interfaces:**
+
 - Produces:
   - `type Frame struct { Seq uint64; At time.Time; Status json.RawMessage; StatusOK bool; Workers []WorkerSample; SampleInterval time.Duration }`, with JSON keys `seq`, `at`, `status`, `status_ok`, `workers`, `sample_interval_seconds`
   - `type WorkerSample struct { Address, Host string; OK bool; Bytes map[string]int64 }`
@@ -87,10 +91,12 @@ func TestFrameOfAnUnansweredSourceHasNoZeroes(t *testing.T) // OK false, Bytes n
 ### Task 3: Sampler
 
 **Files:**
+
 - Create: `go/internal/showcase/sampler.go`, `go/internal/showcase/sampler_test.go`
 - Modify: `go/internal/statusweb/statusweb_test.go` and `python/tests/test_coordinator_status.py`, to name the keys the showcase reads
 
 **Interfaces:**
+
 - Consumes: `Frame`, `ParseMetrics`.
 - Produces:
   - `type Config struct { StatusURL string; Discover func(context.Context) ([]string, error); Interval, Timeout time.Duration; Now func() time.Time; Client *http.Client }`
@@ -116,9 +122,11 @@ func TestSampleReadsARealCoordinatorAndWorker(t *testing.T) // statusweb.Handler
 ### Task 4: Ring and recorder
 
 **Files:**
+
 - Create: `go/internal/showcase/ring.go`, `go/internal/showcase/recorder.go`, and their `_test.go` files
 
 **Interfaces:**
+
 - Consumes: `Frame`.
 - Produces:
   - `func NewRing(n int) *Ring`, `func (r *Ring) Add(f Frame)`, `func (r *Ring) After(seq uint64, limit int) (frames []Frame, resync bool)`
@@ -145,10 +153,12 @@ func TestReadRecordingSkipsACutOffLine(t *testing.T)       // skipped == 1, the 
 ### Task 5: Server, command and deployment
 
 **Files:**
+
 - Create: `go/internal/showcase/server.go`, `go/internal/showcase/server_test.go`, `go/internal/showcase/page.html` (a stub that fetches frames), `go/cmd/showcase/main.go`, `go/cmd/showcase/main_test.go`
 - Modify: `deploy/docker/Dockerfile:11`, `deploy/compose/compose.yaml`, `Makefile`, `docs/cluster-vm.md:75`, `python/tests/test_deploy.py`, `go/cover-floors.txt`
 
 **Interfaces:**
+
 - Consumes: `Sample`, `Ring`, `Recorder`, `ReadRecording`.
 - Produces:
   - `func Handler(src Source) http.Handler`
@@ -190,10 +200,12 @@ def test_showcase_is_optional_and_on_loopback():
 ### Task 6: The page
 
 **Files:**
+
 - Modify: `go/internal/showcase/page.html`, `go/internal/showcase/server_test.go`
 - Create: `go/internal/showcase/page_test.go`, `python/tests/test_showcase_page.py` if Node is available in `make check`; otherwise a pure-Go test of the embedded fixture list only
 
 **Interfaces:**
+
 - Consumes: `GET /frames`.
 - Produces, in the page's script, pure functions tested apart from drawing:
   - `derive(frames, opts) -> { job, map, reduce, rates, workers, timeline, eta, health }`
@@ -222,10 +234,12 @@ client history stays bounded; resync: true drops history and restarts
 ### Task 7: End-to-end check, demo and captures
 
 **Files:**
+
 - Create: `scripts/showcase-e2e.sh`
 - Modify: `Makefile`, `docs/demo.md`, `docs/runbook.md`, `docs/cluster-vm.md`, `docs/explainers/24-status.md`, `docs/README.md`, `docs/design/0023-showcase-service.md`, `CHANGELOG.md`, `.circleci/mapping.txt` only if a check requires an entry (never narrow it)
 
 **Interfaces:**
+
 - Consumes: everything above.
 
 - [ ] **Step 1:** Write `scripts/showcase-e2e.sh`, run by `make showcase-e2e` and not by `make check`: submit a sort, `docker kill` a worker, wait for `SUCCEEDED`, then assert that the recording's last frame equals `/status.json` for that job, and that a replay of the file serves the same last frame.
