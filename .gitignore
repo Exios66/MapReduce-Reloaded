@@ -65,3 +65,6 @@ pip-wheel-metadata/
 *.iml
 .DS_Store
 Thumbs.db
+
+# chunk local pool state
+.chunk/*-pool.json
