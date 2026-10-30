@@ -60,6 +60,44 @@ The paper's sort uses a 10-byte key plus the original 100-byte record.
 the whole line as its key, so its E0/E2/E3/E4 trials are a separately labeled
 control, never the paper-format result.
 
+The prepared input is already the paper's TeraSort representation — 100-byte
+records of a random 10-byte key and a 90-byte value, keys uniform over the
+first byte so the byte-range partitioner balances — so the same bytes feed
+both programs by design. Reusing them avoids a second 5.6 GB copy of the
+identical workload; the variant is recorded per trial as
+`result.json.program` (`papersort` vs `distsort`), and no byte-level metric is
+compared across variants. `papersort` writes eight key-range partitions of
+equal width (~32 first-byte values each), and each trial reports its total
+output records and physical output bytes; the measured physical delta between
+the two variants (for the normal 4-worker trial, 5,766,836,735 B paper format
+vs 5,424,640,027 B whole-line control, **+6.3%**) tracks the different key
+ordering, not a different workload, and is reported rather than smoothed
+away. The whole-line control is never reported as the paper-format number,
+and the paper-format cohort's rows are never mixed into the E0–E4 tables
+above.
+
+### Paper-format (`papersort`) cohort: 9/9, audited
+
+Independent audit: `verified: true, trials: 9`; private archive
+`c1e06fc72a2980a9bf6f3d06d124333decc2d2b22ba68cd8b8cdef680d567267`. All rows
+sort the 10-byte key, produce 100,000,000 output records across 8 key-range
+partitions, and pass the same input-derived verification as the control.
+
+| Setting | Walls r1, r2, r3 | Median |
+|---|---|---:|
+| normal | 204.879, 204.215, 199.125 | 204.215 |
+| no-backups | 188.409, 182.864, 180.672 | 182.864 |
+| worker restart at 25% of baseline | 242.054, 217.594, 221.116 | 221.116 |
+
+Two results are worth stating plainly. First, with **no straggler**, turning
+backup tasks off is ~10% *faster* (182.9 s vs 204.2 s): speculative copies are
+pure overhead on a four-worker fleet sharing one disk. The same experiment in
+the straggler setting reverses the sign, where backups save 9–26 s per run.
+Second, paper-format sort is 5.7% slower than the whole-line control at the
+same 100M-record census (204.2 s vs 193.2 s), because key-range partitioning
+sorts and compresses differently — the physical output is 6.3% larger — so
+these are separate representations, not interchangeable measurements.
+
 The extra reduce wave and shared disk make native uncompressed sort
 infeasible on this VM. The admitted sort runs therefore use the named
 `zstdkv` variant: **compressed input, intermediate and output**. The input
