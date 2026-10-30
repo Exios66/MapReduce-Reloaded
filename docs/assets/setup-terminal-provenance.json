@@ -1,0 +1,303 @@
+{
+  "kind": "Actual README local-mode setup command transcript, rendered as terminal frames",
+  "commands": [
+    "python3 -m venv .venv",
+    ". .venv/bin/activate",
+    "python -m pip install -e python",
+    "make mr",
+    "demo_dir=$(mktemp -d)",
+    "bin/mr run -local -m 3 -r 4 examples/wordcount.go \"$demo_dir/go\" 'testdata/corpus/*.txt'",
+    "head -n 3 \"$demo_dir/go/part-r-00000\"",
+    "python -m mapreduce_reloaded run --local -m 3 -r 4 wordcount \"$demo_dir/python\" 'testdata/corpus/*.txt'",
+    "diff -r \"$demo_dir/go\" \"$demo_dir/python\" && echo identical"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 44.643,
+  "recorded_output": [
+    [
+      0.01,
+      "\n"
+    ],
+    [
+      0.01,
+      "$ python3 -m venv .venv\n"
+    ],
+    [
+      1.321,
+      "\n"
+    ],
+    [
+      1.321,
+      "$ . .venv/bin/activate\n"
+    ],
+    [
+      1.327,
+      "\n"
+    ],
+    [
+      1.327,
+      "$ python -m pip install -e python\n"
+    ],
+    [
+      1.605,
+      "Obtaining file:///private/tmp/opencode/mrr-gif277/python\n"
+    ],
+    [
+      1.608,
+      "  Installing build dependencies: started\n"
+    ],
+    [
+      2.0,
+      "  Installing build dependencies: finished with status 'done'\n"
+    ],
+    [
+      2.001,
+      "  Checking if build backend supports build_editable: started\n"
+    ],
+    [
+      2.246,
+      "  Checking if build backend supports build_editable: finished with status 'done'\n"
+    ],
+    [
+      2.248,
+      "  Getting requirements to build editable: started\n"
+    ],
+    [
+      2.587,
+      "  Getting requirements to build editable: finished with status 'done'\n"
+    ],
+    [
+      2.588,
+      "  Preparing editable metadata (pyproject.toml): started\n"
+    ],
+    [
+      2.847,
+      "  Preparing editable metadata (pyproject.toml): finished with status 'done'\n"
+    ],
+    [
+      2.855,
+      "Requirement already satisfied: grpcio>=1.84.1 in ./.venv/lib/python3.15/site-packages (from mapreduce-reloaded==0.0.1) (1.85.0)\n"
+    ],
+    [
+      2.855,
+      "Requirement already satisfied: protobuf>=7.35.1 in ./.venv/lib/python3.15/site-packages (from mapreduce-reloaded==0.0.1) (7.36.2)\n"
+    ],
+    [
+      2.855,
+      "Requirement already satisfied: typing-extensions~=4.12 in ./.venv/lib/python3.15/site-packages (from grpcio>=1.84.1->mapreduce-reloaded==0.0.1) (4.16.0)\n"
+    ],
+    [
+      2.856,
+      "Building wheels for collected packages: mapreduce-reloaded\n"
+    ],
+    [
+      2.857,
+      "  Building editable for mapreduce-reloaded (pyproject.toml): started\n"
+    ],
+    [
+      3.038,
+      "  Building editable for mapreduce-reloaded (pyproject.toml): finished with status 'done'\n"
+    ],
+    [
+      3.039,
+      "  Created wheel for mapreduce-reloaded: filename=mapreduce_reloaded-0.0.1-0.editable-py3-none-any.whl size=3148 sha256=87a5eebf75ea0f667666ba34fffb3acbf00bfda13bed81f4ac2e011f9b32cb01\n"
+    ],
+    [
+      3.039,
+      "  Stored in directory: /private/tmp/pip-ephem-wheel-cache-g3ufa0zo/wheels/3b/19/5b/6108838c9f202e73f333514e6e5ec838bcc38df542ef0e2018\n"
+    ],
+    [
+      3.041,
+      "Successfully built mapreduce-reloaded\n"
+    ],
+    [
+      3.064,
+      "Installing collected packages: mapreduce-reloaded\n"
+    ],
+    [
+      3.064,
+      "  Attempting uninstall: mapreduce-reloaded\n"
+    ],
+    [
+      3.066,
+      "    Found existing installation: mapreduce-reloaded 0.0.1\n"
+    ],
+    [
+      3.068,
+      "    Uninstalling mapreduce-reloaded-0.0.1:\n"
+    ],
+    [
+      3.115,
+      "      Successfully uninstalled mapreduce-reloaded-0.0.1\n"
+    ],
+    [
+      3.121,
+      "Successfully installed mapreduce-reloaded-0.0.1\n"
+    ],
+    [
+      3.201,
+      "\n"
+    ],
+    [
+      3.201,
+      "$ make mr\n"
+    ],
+    [
+      3.213,
+      "if command -v go >/dev/null; then cd go && go build -o ../bin/mr ./cmd/mr; \\\n"
+    ],
+    [
+      3.213,
+      "\telse docker run --rm -u \"$(id -u):$(id -g)\" -e HOME=/tmp -e CGO_ENABLED=0 \\\n"
+    ],
+    [
+      3.213,
+      "\t\t-v \"/private/tmp/opencode/mrr-gif277/go:/src:ro\" -v \"/private/tmp/opencode/mrr-gif277/bin:/bin-out\" -w /src \\\n"
+    ],
+    [
+      3.213,
+      "\t\tgolang:1.26-alpine go build -buildvcs=false -o /bin-out/mr ./cmd/mr; fi\n"
+    ],
+    [
+      7.948,
+      "\n"
+    ],
+    [
+      7.948,
+      "$ demo_dir=$(mktemp -d)\n"
+    ],
+    [
+      7.954,
+      "\n"
+    ],
+    [
+      7.954,
+      "$ bin/mr run -local -m 3 -r 4 examples/wordcount.go \"$demo_dir/go\" 'testdata/corpus/*.txt'\n"
+    ],
+    [
+      8.789,
+      "combine.input.records\t78658\n"
+    ],
+    [
+      8.789,
+      "combine.output.records\t19333\n"
+    ],
+    [
+      8.789,
+      "map.input.bytes\t461826\n"
+    ],
+    [
+      8.789,
+      "map.input.records\t9316\n"
+    ],
+    [
+      8.789,
+      "map.output.bytes\t197618\n"
+    ],
+    [
+      8.789,
+      "map.output.records\t78658\n"
+    ],
+    [
+      8.789,
+      "reduce.input.records\t19333\n"
+    ],
+    [
+      8.789,
+      "reduce.output.bytes\t142296\n"
+    ],
+    [
+      8.789,
+      "reduce.output.records\t16851\n"
+    ],
+    [
+      8.791,
+      "\n"
+    ],
+    [
+      8.791,
+      "$ head -n 3 \"$demo_dir/go/part-r-00000\"\n"
+    ],
+    [
+      8.794,
+      "\"'Wretch,'\t3\n"
+    ],
+    [
+      8.794,
+      "\"10th\t1\n"
+    ],
+    [
+      8.794,
+      "\"A\t5\n"
+    ],
+    [
+      8.794,
+      "\n"
+    ],
+    [
+      8.794,
+      "$ python -m mapreduce_reloaded run --local -m 3 -r 4 wordcount \"$demo_dir/python\" 'testdata/corpus/*.txt'\n"
+    ],
+    [
+      9.371,
+      "combine.input.records\t78658\n"
+    ],
+    [
+      9.371,
+      "combine.output.records\t19333\n"
+    ],
+    [
+      9.371,
+      "map.input.bytes\t461826\n"
+    ],
+    [
+      9.371,
+      "map.input.records\t9316\n"
+    ],
+    [
+      9.371,
+      "map.output.bytes\t197618\n"
+    ],
+    [
+      9.371,
+      "map.output.records\t78658\n"
+    ],
+    [
+      9.371,
+      "reduce.input.records\t19333\n"
+    ],
+    [
+      9.372,
+      "reduce.output.bytes\t142296\n"
+    ],
+    [
+      9.372,
+      "reduce.output.records\t16851\n"
+    ],
+    [
+      9.379,
+      "\n"
+    ],
+    [
+      9.379,
+      "$ diff -r \"$demo_dir/go\" \"$demo_dir/python\" && echo identical\n"
+    ],
+    [
+      9.386,
+      "identical\n"
+    ]
+  ],
+  "source_commit": "efbf4b24257bd1f90c9fa31d25cbf0b8eb9b65e7",
+  "source_note": "README includes uncommitted documentation fixes; commands are included verbatim above.",
+  "docker": "Not required for this local-mode recording; Compose startup is not depicted.",
+  "variants": {
+    "dark": {
+      "bytes": 548975,
+      "frames": 10
+    },
+    "light": {
+      "bytes": 544132,
+      "frames": 10
+    }
+  }
+}

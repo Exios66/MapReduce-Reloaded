@@ -58,12 +58,10 @@ cut a release.
 
 ### Changed
 
-- Docs: the README's status-page GIFs (`docs/assets/status-*.gif`) show one
-  whole 1 GiB word count, M = 32, R = 4, on four workers, from its first map
-  task to the end state, replacing the 8-second seeded chaos loop; a
-  provenance sidecar next to them records the commit, machine, job, input
-  and capture settings, and the caption describes the recording honestly as
-  a time-lapse (#277).
+- Docs: `README.md` separates CS544 Docker deployment from laptop local
+  mode, uses a virtual environment and portable shell commands, explains
+  the SSH dashboard tunnel and pre-push interpreter setup, and includes
+  recorded local setup and current VM dashboard GIFs in both themes. (#330)
 - CI: CircleCI runs only the jobs a PR implicates, through a setup config
   and a continuation config (#288, ADR 0020), selected by our own script
   with the mapping gaps closed (#293). Pushes to `main` run no jobs (#295,
