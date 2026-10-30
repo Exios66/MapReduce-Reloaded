@@ -46,8 +46,8 @@ parameters, and continues with `.circleci/continue-config.yml`, which holds
 the jobs.
 
 Filtering applies to PR branches only. A push to `main` runs no CI jobs
-(ADR 0021): there the `select` job runs the continuation orb's `finish`
-command instead of selecting, so the pipeline ends after that one small job.
+(ADR 0021): there the `select` job continues with the empty
+`.circleci/empty-continue-config.yml` instead of selecting, so the pipeline ends after that one small job.
 Branch protection merges a PR only when its six checks passed on a branch up
 to date with `main`, so the merged tree was already tested. Should a `main`
 pipeline ever continue, the script selects `run-all` there and each job's

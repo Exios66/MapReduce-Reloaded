@@ -74,6 +74,10 @@ cut a release.
 
 ### Fixed
 
+- CI: a push to `main` no longer ends in a config error. The continuation
+  orb's `finish` command sends `version: 2`, which CircleCI no longer
+  accepts, so `.circleci/config.yml` continues with the empty 2.1
+  `.circleci/empty-continue-config.yml` instead (#313).
 - The CircleCI badge URL (#261).
 - Worker: a starting worker's sweep could delete a new worker's temporary
   directory, which made it fail with "already locked" (and flaked
