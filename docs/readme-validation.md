@@ -62,3 +62,9 @@ Python tests (one skip). Its overall gate correctly failed because the six
 new media/provenance files were missing Python-test routing. Additive rules
 in `.circleci/mapping.txt` now cover both GIF themes and their provenance;
 the complete gate must be rerun on that corrected commit before pushing.
+
+The real pre-push run also exposed inherited Git repository variables:
+temporary-repository tests addressed the checked-out repository instead.
+The hook now clears `git rev-parse --local-env-vars` before `make check`;
+regression tests verify isolation and that a nonzero gate still blocks a
+push. This does not skip the gate or any test.

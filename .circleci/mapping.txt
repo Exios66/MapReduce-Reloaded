@@ -57,6 +57,7 @@
 ^\.[^/]*$ run-lint
 
 # Files outside python/ that the Python tests read.
+^\.githooks/pre-push$ run-python
 ^README\.md$ run-python
 ^docs/assets/(setup-terminal|status-vm)-(dark|light)\.gif$ run-python
 ^docs/assets/(setup-terminal|status-vm)-provenance\.json$ run-python

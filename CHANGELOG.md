@@ -95,6 +95,9 @@ cut a release.
 
 ### Fixed
 
+- Pre-push: `.githooks/pre-push` clears Git's repository-local environment
+  before `make check`, so tests creating temporary repositories do not
+  accidentally read or change the pushed repository's index. (#NNN)
 - Go tests: the cluster tests that run a whole job (`runJob`) give workers a
   5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
   longer makes a worker re-register and fail `TestClusterWorkerMetrics`
