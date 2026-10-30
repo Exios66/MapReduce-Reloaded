@@ -15,6 +15,12 @@ cut a release.
 
 ### Added
 
+- Status page (Go and Python): job cards link to themselves (`#job-<id>`),
+  show host- and zone-local map counts, and the workers table shows zone,
+  slots in use and heartbeat age. Badges carry a symbol as well as a color,
+  the tables scroll on narrow screens, and tests check that both pages share
+  one stylesheet, load nothing external, and keep text at WCAG AA contrast
+  (#311).
 - Python and Go coordinators: LATE speculation (Zaharia et al., ADR 0019) as
   an alternative to the paper's backups, selected with `-speculation=late`
   on the Go coordinator; the Python coordinator reports task progress in

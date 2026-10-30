@@ -231,6 +231,25 @@ tbody tr:last-child td { border-bottom: 0; }
   margin: 0; padding: 8px 12px; color: var(--muted);
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
+.job:target { border-color: var(--blue); }
+.job-id a { color: inherit; text-decoration: none; }
+.job-id a:hover { text-decoration: underline; }
+.badge::before { content: "\\25CF\\00a0"; }
+.state-succeeded::before { content: "\\2713\\00a0"; }
+.state-failed::before { content: "\\2715\\00a0"; }
+.state-pending::before, .state-unspecified::before { content: "\\25CB\\00a0"; }
+.age { color: var(--muted); }
+.table-wrap {
+  overflow-x: auto; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel);
+}
+.table-wrap table { border: 0; border-radius: 0; min-width: 480px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 640px) {
+  body { padding: 12px; }
+  .phases { grid-template-columns: 3em 1fr; }
+  .phases .count { grid-column: 2; }
+}
 </style>
 </head>
 """
@@ -250,6 +269,13 @@ def _state(s: int) -> str:
 def _percent(done: int, total: int) -> str:
     """done as a rounded percentage of total, "0%" if there is none."""
     return "0%" if total == 0 else f"{(done * 100 + total // 2) // total}%"
+
+
+def _heartbeat(at: float, last_seen: float) -> str:
+    """How long before at the worker was last seen, "3s ago", or "" if it never was."""
+    if last_seen <= 0:
+        return ""
+    return f"{go_duration(max(0, round(at - last_seen)) * 1_000_000_000)} ago"
 
 
 def _counter(j: coordinator_pb2.GetJobStatusResponse, name: str) -> int:
@@ -273,8 +299,8 @@ def page(st: Status, dark: bool = False) -> str:
         d = duration(j, st.at)
         state = _state(j.state)
         counters = "".join(f"{e(k)}: {v}<br>" for k, v in sorted(j.counters.values.items()))
-        out.append('<article class="job">\n<div class="job-head">\n')
-        out.append(f'<span class="job-id">{e(j.job_id)}</span>\n')
+        out.append(f'<article class="job" id="job-{e(j.job_id)}">\n<div class="job-head">\n')
+        out.append(f'<span class="job-id"><a href="#job-{e(j.job_id)}">{e(j.job_id)}</a></span>\n')
         out.append(f'<span class="badge state-{state}">{state}</span>\n')
         out.append('<span class="spacer"></span>\n')
         shown = "&mdash;" if d is None else e(go_duration(d))
@@ -295,6 +321,10 @@ def page(st: Status, dark: bool = False) -> str:
         )
         out.append('</div>\n<div class="meta">\n')
         out.append(f"<span>backups: {j.backup_attempts} started, {j.backup_wins} won</span>\n")
+        out.append(
+            f"<span>local maps: host <b>{j.map_tasks_host_local}</b>,"
+            f" zone <b>{j.map_tasks_zone_local}</b></span>\n"
+        )
         out.append(f"<span>map in <b>{_counter(j, 'map.input.records')}</b></span>\n")
         out.append(f"<span>map out <b>{_counter(j, 'map.output.records')}</b></span>\n")
         out.append(f"<span>reduce out <b>{_counter(j, 'reduce.output.records')}</b></span>\n")
@@ -304,9 +334,10 @@ def page(st: Status, dark: bool = False) -> str:
         out.append(f'<div class="counters">{counters}</div>\n</details>\n</article>\n')
     if not st.jobs:
         out.append('<p class="empty">No jobs yet.</p>\n')
-    out.append("</section>\n\n<h2>Workers</h2>\n<table>\n<thead><tr>")
+    out.append('</section>\n\n<h2>Workers</h2>\n<div class="table-wrap">\n<table>\n<thead><tr>')
     out.append(
-        '<th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Last seen</th>'
+        '<th scope="col">Worker</th><th scope="col">Host</th><th scope="col">Zone</th>'
+        '<th scope="col">Slots</th><th scope="col">Last seen</th>'
         '<th scope="col">Running</th></tr></thead>\n<tbody>\n'
     )
     for w in st.workers:
@@ -316,11 +347,18 @@ def page(st: Status, dark: bool = False) -> str:
         )
         out.append(
             f'<tr><td class="mono">{e(w.worker.id)}</td><td>{e(w.worker.info.host)}</td>'
-            f'<td class="nowrap">{_clock(w.worker.last_seen)}</td><td>{running}</td></tr>\n'
+            f"<td>{e(w.worker.info.zone) or '&mdash;'}</td>"
+            f'<td class="nowrap">{len(w.running)}/{w.worker.info.slots}</td>'
+            f'<td class="nowrap">{_clock(w.worker.last_seen)}'
+            f' <span class="age">{_heartbeat(st.at, w.worker.last_seen)}</span></td>'
+            f"<td>{running}</td></tr>\n"
         )
     if not st.workers:
-        out.append('<tr><td colspan="4">No workers.</td></tr>\n')
-    out.append("</tbody>\n</table>\n\n<h2>Lost workers</h2>\n<table>\n<thead><tr>")
+        out.append('<tr><td colspan="6">No workers.</td></tr>\n')
+    out.append(
+        '</tbody>\n</table>\n</div>\n\n<h2>Lost workers</h2>\n<div class="table-wrap">\n'
+        "<table>\n<thead><tr>"
+    )
     out.append(
         '<th scope="col">Worker</th><th scope="col">Lost at</th>'
         '<th scope="col">Tasks run again</th></tr></thead>\n<tbody>\n'
@@ -333,7 +371,7 @@ def page(st: Status, dark: bool = False) -> str:
         )
     if not st.lost:
         out.append('<tr><td colspan="3">None.</td></tr>\n')
-    out.append("</tbody>\n</table>\n</body>\n</html>\n")
+    out.append("</tbody>\n</table>\n</div>\n</body>\n</html>\n")
     return "".join(out)
 
 

@@ -40,7 +40,7 @@ var status = source{
 		JobId: "job-3", State: pb.JobState_JOB_STATE_SUCCEEDED,
 	}},
 	Workers: []coordinator.WorkerStatus{
-		{Worker: coordinator.Worker{ID: "w2", Info: &pb.WorkerInfo{Host: "host-b"}}, Running: []coordinator.Task{m0}, Progress: map[coordinator.Task]float32{m0: 0.426}},
+		{Worker: coordinator.Worker{ID: "w2", LastSeen: at.Add(-3 * time.Second), Info: &pb.WorkerInfo{Host: "host-b", Zone: "zone-x", Slots: 4}}, Running: []coordinator.Task{m0}, Progress: map[coordinator.Task]float32{m0: 0.426}},
 		{Worker: coordinator.Worker{ID: "w3"}},
 	},
 	Lost: []coordinator.LostWorker{{ID: "w1", At: time.Now(), Tasks: []coordinator.Task{m0}}},
@@ -66,7 +66,7 @@ func TestPage(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %s", resp.Status)
 	}
-	for _, want := range []string{"job-1", "badge state-mapping", ">mapping<", ">2.5s<", ">1m30s<", "3 started, 1 won", "3/7 &middot; 43%", `max="7" value="3"`, "map in <b>20</b>", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), m0.String() + "</span> 43%<br>", "&lt;script&gt;", "prefers-color-scheme: dark"} {
+	for _, want := range []string{"job-1", "badge state-mapping", ">mapping<", ">2.5s<", ">1m30s<", "3 started, 1 won", "3/7 &middot; 43%", `max="7" value="3"`, "map in <b>20</b>", "map.input_records: 12", "host-b", "w3", "w1", m0.String(), m0.String() + "</span> 43%<br>", "&lt;script&gt;", "prefers-color-scheme: dark", `id="job-job-1"`, `href="#job-job-1"`, "local maps: host <b>5</b>, zone <b>2</b>", "zone-x", "1/4", "3s ago"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -122,5 +122,15 @@ func TestDurationClockSetBack(t *testing.T) {
 	j.FinishedAt = timestamppb.New(at.Add(-time.Second))
 	if d, ok := duration(j, at); d != 0 || !ok {
 		t.Errorf("finished: duration = %v, %v; want 0, true", d, ok)
+	}
+}
+
+// The page works offline: it loads nothing and runs nothing.
+func TestPageIsSelfContained(t *testing.T) {
+	_, body := get(t, "/")
+	for _, bad := range []string{"http://", "https://", "@import", "<script", "<link", "<img", "src="} {
+		if strings.Contains(strings.ReplaceAll(body, "&lt;script&gt;", ""), bad) {
+			t.Errorf("page contains %q", bad)
+		}
 	}
 }
