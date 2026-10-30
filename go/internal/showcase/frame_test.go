@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/exios66/mapreduce-reloaded/go/internal/promtext"
 	"github.com/exios66/mapreduce-reloaded/go/internal/showcase"
@@ -196,6 +197,30 @@ func TestParseMetricsWithoutCountersHasNilBytes(t *testing.T) {
 		bytes, _ := showcase.ParseMetrics(text)
 		if bytes != nil {
 			t.Errorf("ParseMetrics(%q) bytes = %v, want nil", text, bytes)
+		}
+	}
+}
+
+// The results of ParseMetrics must not alias its input: a result that did
+// would keep the whole /metrics body alive for as long as the frame lives.
+// The input here is a []byte, and the string handed in is built over it
+// without a copy, so overwriting the bytes changes what the string reads.
+func TestParseMetricsResultsDoNotAliasTheBody(t *testing.T) {
+	b := []byte(workerText + "mr_worker_info{host=\"alias-host\"} 1\n")
+	bytes, host := showcase.ParseMetrics(unsafe.String(&b[0], len(b)))
+	for i := range b {
+		b[i] = 'x'
+	}
+	if host != "alias-host" {
+		t.Errorf("host after the body was overwritten = %q, want alias-host", host)
+	}
+	want := []string{"mr_worker_map_input_bytes_total", "mr_worker_map_output_bytes_total", "mr_worker_shuffle_fetched_bytes_total", "mr_worker_reduce_output_bytes_total"}
+	if len(bytes) != len(want) {
+		t.Fatalf("bytes has %d keys after the body was overwritten, want %d: %v", len(bytes), len(want), bytes)
+	}
+	for _, name := range want {
+		if _, ok := bytes[name]; !ok {
+			t.Errorf("key %q is gone after the body was overwritten", name)
 		}
 	}
 }

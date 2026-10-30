@@ -9,9 +9,10 @@ import (
 const DefaultRingSize = 14400
 
 // DefaultRingBytes caps what a ring's frames may cost, as frameBytes counts
-// them. It keeps the showcase within its 128 MB memory limit, whatever the
-// size of the status answers.
-const DefaultRingBytes = 64 << 20
+// them. The worst case of 14,400 frames from eight workers, with the cost of
+// each worker's parsed counters charged in full, comes to about 48 MB, which
+// leaves margin under the showcase's 128 MB memory limit.
+const DefaultRingBytes = 48 << 20
 
 // Ring keeps the newest frames in memory, oldest first. It drops the oldest
 // when it holds its frame count, and also when its frames cost more than its
@@ -38,7 +39,8 @@ func NewRing(n int) *Ring {
 
 // LimitBytes sets the most the frames held may cost, as frameBytes counts
 // them, and evicts the oldest frames at once to meet it. The newest frame is
-// always kept, even when it alone costs more than n.
+// always kept, even when it alone costs more than n. A limit of 0 or less
+// keeps only the newest frame.
 func (r *Ring) LimitBytes(n int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -70,7 +72,7 @@ func (r *Ring) Add(f Frame) {
 // trim evicts the oldest frames while the frames cost more than the limit,
 // and always keeps the newest. The caller holds the lock.
 func (r *Ring) trim() {
-	for r.n > 1 && r.bytes > r.limit {
+	for r.n > 1 && (r.limit <= 0 || r.bytes > r.limit) {
 		r.bytes -= r.cost[r.start]
 		r.buf[r.start] = Frame{}
 		r.cost[r.start] = 0
@@ -80,11 +82,12 @@ func (r *Ring) trim() {
 }
 
 // frameBytes is what a frame costs the ring: its raw status, and for each
-// worker its address and host, plus 64 bytes for its counters and flags.
+// worker its address and host, plus 512 bytes for the worker's parsed
+// counters: a map with four entries and their keys, and the sample itself.
 func frameBytes(f Frame) int64 {
 	n := int64(len(f.Status))
 	for _, w := range f.Workers {
-		n += int64(len(w.Address) + len(w.Host) + 64)
+		n += int64(len(w.Address) + len(w.Host) + 512)
 	}
 	return n
 }

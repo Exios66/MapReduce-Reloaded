@@ -107,7 +107,8 @@ var counters = map[string]bool{
 // counters it finds; a counter it does not find is absent, not zero, and
 // bytes is nil when it finds none, so a body without metrics does not look
 // like an answering worker. host is the mr_worker_info host label, unescaped,
-// or empty if there is none.
+// or empty if there is none. Neither the keys nor the host alias text: they
+// are clones, so a result does not keep a whole /metrics body alive.
 func ParseMetrics(text string) (bytes map[string]int64, host string) {
 	for _, line := range strings.Split(text, "\n") {
 		if line == "" || line[0] == '#' {
@@ -136,13 +137,13 @@ func ParseMetrics(text string) (bytes map[string]int64, host string) {
 		switch {
 		case name == "mr_worker_info":
 			if h, ok := lab["host"]; ok {
-				host = h
+				host = strings.Clone(h)
 			}
 		case counters[name]:
 			if bytes == nil {
 				bytes = make(map[string]int64)
 			}
-			bytes[name] = v
+			bytes[strings.Clone(name)] = v
 		}
 	}
 	return bytes, host

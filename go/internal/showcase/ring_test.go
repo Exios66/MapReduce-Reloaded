@@ -2,12 +2,18 @@ package showcase_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/showcase"
+	"github.com/exios66/mapreduce-reloaded/go/internal/worker"
 )
 
 // seqFrame is a frame with the given sequence number and a valid status.
@@ -228,7 +234,7 @@ func TestRingKeepsItsNewestFrameOverTheLimit(t *testing.T) {
 }
 
 func TestRingCostsWorkersByAddressAndHost(t *testing.T) {
-	// One worker costs len(Address) + len(Host) + 64: 13 + 2 + 64 = 79.
+	// One worker costs len(Address) + len(Host) + 512: 13 + 2 + 512 = 527.
 	worker := func(seq uint64) showcase.Frame {
 		return showcase.Frame{Seq: seq, Workers: []showcase.WorkerSample{{Address: "10.0.0.1:9000", Host: "w1", OK: true}}}
 	}
@@ -236,12 +242,12 @@ func TestRingCostsWorkersByAddressAndHost(t *testing.T) {
 	for seq := uint64(1); seq <= 3; seq++ {
 		r.Add(worker(seq))
 	}
-	r.LimitBytes(158) // two frames of 79
+	r.LimitBytes(1054) // two frames of 527
 	frames, _ := r.After(0, 100)
 	if got, want := seqs(frames), []uint64{2, 3}; !sameSeqs(got, want) {
 		t.Errorf("after LimitBytes(158) seqs = %v, want %v", got, want)
 	}
-	r.LimitBytes(157) // one frame of 79 fits; two would be 158
+	r.LimitBytes(1053) // one frame of 527 fits; two would be 1054
 	frames, _ = r.After(0, 100)
 	if got, want := seqs(frames), []uint64{3}; !sameSeqs(got, want) {
 		t.Errorf("after LimitBytes(157) seqs = %v, want %v", got, want)
@@ -270,20 +276,100 @@ func TestRingAfterResyncsWhenBytesEvictedTheClientsFrame(t *testing.T) {
 }
 
 func TestRingDefaultsToDefaultRingBytes(t *testing.T) {
-	if showcase.DefaultRingBytes != 64<<20 {
-		t.Fatalf("DefaultRingBytes = %d, want 64 MiB", showcase.DefaultRingBytes)
+	if showcase.DefaultRingBytes != 48<<20 {
+		t.Fatalf("DefaultRingBytes = %d, want 48 MiB", showcase.DefaultRingBytes)
 	}
-	// Sixteen frames of 4 MiB fill the default limit exactly; the seventeenth
+	// Twelve frames of 4 MiB fill the default limit exactly; the thirteenth
 	// evicts the first. One shared status keeps the test's own memory small.
 	big := json.RawMessage(strings.Repeat("x", 4<<20))
 	r := showcase.NewRing(showcase.DefaultRingSize)
-	for seq := uint64(1); seq <= 17; seq++ {
+	for seq := uint64(1); seq <= 13; seq++ {
 		f := seqFrame(seq)
 		f.Status = big
 		r.Add(f)
 	}
 	frames, _ := r.After(0, 100)
-	if got := seqs(frames); len(got) != 16 || got[0] != 2 || got[15] != 17 {
-		t.Errorf("default ring kept seqs %v, want 16 frames from 2 to 17", got)
+	if got := seqs(frames); len(got) != 12 || got[0] != 2 || got[11] != 13 {
+		t.Errorf("default ring kept seqs %v, want 12 frames from 2 to 13", got)
+	}
+}
+
+// A limit of 0 or less keeps only the newest frame. These frames cost nothing,
+// so only that rule evicts them.
+func TestRingLimitOfZeroKeepsOnlyTheNewestFrame(t *testing.T) {
+	r := showcase.NewRing(10)
+	for seq := uint64(1); seq <= 3; seq++ {
+		r.Add(showcase.Frame{Seq: seq})
+	}
+	r.LimitBytes(0)
+	frames, _ := r.After(0, 100)
+	if got := seqs(frames); !sameSeqs(got, []uint64{3}) {
+		t.Errorf("after LimitBytes(0) seqs = %v, want [3]", got)
+	}
+	r.Add(showcase.Frame{Seq: 4})
+	frames, _ = r.After(0, 100)
+	if got := seqs(frames); !sameSeqs(got, []uint64{4}) {
+		t.Errorf("after an Add with limit 0 seqs = %v, want [4]", got)
+	}
+}
+
+// realBody is one worker's /metrics as the worker writes it, for a worker on
+// host.
+func realBody(t *testing.T, host string) string {
+	t.Helper()
+	w := worker.New(nil, "", &pb.WorkerInfo{Host: host})
+	rec := httptest.NewRecorder()
+	w.MetricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("worker /metrics: status %d", rec.Code)
+	}
+	return rec.Body.String()
+}
+
+// The byte bound must hold in live memory, not only in the ring's own count.
+// Each frame parses fresh /metrics bodies from eight workers, as the sampler
+// does, so a ParseMetrics result that kept its body alive would show here.
+// It does not run in parallel with other tests: it reads the whole process's
+// heap.
+func TestRingHeapStaysBounded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("fills a ring of 14,400 frames; skipped under -short")
+	}
+	const workers = 8
+	bodies := make([]string, workers)
+	addrs := make([]string, workers)
+	for i := range bodies {
+		bodies[i] = realBody(t, fmt.Sprint("host-", i))
+		addrs[i] = fmt.Sprintf("10.0.0.%d:9000", i+1)
+	}
+	statusText := `"` + strings.Repeat("x", 2<<10-2) + `"`
+	r := showcase.NewRing(showcase.DefaultRingSize)
+
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for seq := uint64(1); seq <= showcase.DefaultRingSize; seq++ {
+		f := showcase.Frame{
+			Seq:      seq,
+			At:       time.Unix(1_700_000_000, 0).Add(time.Duration(seq) * 250 * time.Millisecond),
+			Status:   json.RawMessage(statusText), // a fresh copy each frame
+			StatusOK: true,
+			Workers:  make([]showcase.WorkerSample, workers),
+		}
+		for i := range bodies {
+			counts, host := showcase.ParseMetrics(strings.Clone(bodies[i])) // a fresh body each round
+			f.Workers[i] = showcase.WorkerSample{Address: addrs[i], Host: host, OK: true, Bytes: counts}
+		}
+		r.Add(f)
+	}
+	runtime.GC()
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+	growth := int64(after.HeapAlloc) - int64(before.HeapAlloc)
+	frames, _ := r.After(0, showcase.DefaultRingSize)
+	t.Logf("live heap growth %d MB, %d of %d frames kept, body %d bytes", growth>>20, len(frames), showcase.DefaultRingSize, len(bodies[0]))
+	runtime.KeepAlive(r)
+	if growth > 100<<20 {
+		t.Errorf("live heap grew %d MB after %d frames, want under 100 MB", growth>>20, showcase.DefaultRingSize)
 	}
 }

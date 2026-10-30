@@ -1,6 +1,7 @@
 package showcase
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -234,6 +235,7 @@ func watch(ctx context.Context, discover func(context.Context) ([]string, error)
 // answered with valid JSON. A garbage answer is a gap, like no answer.
 func status(ctx context.Context, client *http.Client, timeout time.Duration, url string) (json.RawMessage, bool) {
 	body, ok := get(ctx, client, timeout, url, maxStatus)
+	body = bytes.Clone(body) // a copy sized to its length: ReadAll's spare capacity is not kept
 	if !ok || !json.Valid(body) {
 		return nil, false
 	}
@@ -248,11 +250,11 @@ func scrape(ctx context.Context, client *http.Client, timeout time.Duration, add
 	if !ok {
 		return ws
 	}
-	bytes, host := ParseMetrics(string(body))
-	if bytes == nil {
+	counts, host := ParseMetrics(string(body))
+	if counts == nil {
 		return ws
 	}
-	ws.Bytes, ws.Host, ws.OK = bytes, host, true
+	ws.Bytes, ws.Host, ws.OK = counts, host, true
 	return ws
 }
 
