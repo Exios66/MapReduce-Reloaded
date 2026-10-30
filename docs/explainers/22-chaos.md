@@ -46,5 +46,9 @@ An attempt that runs after the job has finished fails, and leaves nothing.
 The test runs in one process, so a "dead" worker's task goroutine still
 runs, like a machine cut off from the network rather than one powered off.
 A stall holds up new RPCs but not a fetch already streaming. Killing
-containers, `docker pause` and dropped packets need the Compose cluster
-(#83). A driver for it can reuse this test's events and checks.
+containers and `docker pause` need the Compose cluster, and
+`scripts/chaos.sh` (`make chaos`) does both, and restarts the coordinator
+(#83). Dropped packets are out of scope (#287): the images are distroless
+with no `tc`, and no Compose service has `NET_ADMIN`, so the cluster cannot
+inject loss without adding a privileged sidecar to the shipped Compose
+file. The stall above is the nearest test.

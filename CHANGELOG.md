@@ -60,6 +60,8 @@ cut a release.
   corpus and dataset descriptions corrected (#253).
 - The demo notebook runs from any directory, with a job file and a worker
   kill step (#303).
+- Docs: the chaos explainer says what `make chaos` covers and that dropped
+  packets are out of scope (#287).
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed
