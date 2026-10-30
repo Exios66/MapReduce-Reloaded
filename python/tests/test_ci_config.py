@@ -20,7 +20,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 CIRCLE = (ROOT / ".circleci/config.yml").read_text()
-ACTIONS = (ROOT / ".github/workflows/ci.yml").read_text()
+CONT = (ROOT / ".circleci/continue-config.yml").read_text()
 MAKEFILE = (ROOT / "Makefile").read_text()
 INSTALL_GO = ROOT / "scripts/ci-install-go.sh"
 
@@ -32,60 +32,100 @@ def go_mod_version() -> str:
     return (toolchain or re.search(r"^go (\S+)$", mod, re.M)).group(1)
 
 
-def test_circleci_runs_the_four_required_checks():
-    workflow = CIRCLE.split("\nworkflows:\n", 1)[1]
-    names = re.findall(r"^\s+- (proto|go)$|^\s+name: (python-3\.\d+)$", workflow, re.M)
-    assert sorted(a or b for a, b in names) == ["go", "proto", "python-3.11", "python-3.13"]
+def test_circleci_runs_the_six_required_checks():
+    workflow = CONT.split("\nworkflows:\n", 1)[1]
+    names = re.findall(
+        r"^\s+- (proto|go|lint|mapping-coverage)$|^\s+name: (python-3\.\d+)$", workflow, re.M
+    )
+    assert sorted(a or b for a, b in names) == [
+        "go",
+        "lint",
+        "mapping-coverage",
+        "proto",
+        "python-3.11",
+        "python-3.13",
+    ]
 
 
 def test_circleci_calls_the_make_targets():
     for command in (
         "make proto-check PYTHON=python PROTO_FETCH=false",
         "make go-lint go-test py-e2e PYTHON=python",
-        "make py-lint md-lint py-test PYTHON=python",
+        "make py-lint py-test PYTHON=python",
+        "make md-lint PYTHON=python",
         "make tools",
     ):
-        assert command in CIRCLE
+        assert command in CONT
     # The compatibility check needs a fresh origin/main and must not skip.
-    assert "git fetch --quiet origin +refs/heads/main:refs/remotes/origin/main" in CIRCLE
+    assert "git fetch --quiet origin +refs/heads/main:refs/remotes/origin/main" in CONT
     # buf breaking clones the checkout, which a blobless partial clone breaks.
-    proto = CIRCLE.split("\n  proto:\n", 1)[1].split("\n  go:\n", 1)[0]
+    proto = CONT.split("\n  proto:\n", 1)[1].split("\n  go:\n", 1)[0]
     assert re.search(r"- checkout:\n\s+method: full\n", proto)
 
 
 def test_circleci_stays_on_the_free_plan():
-    assert "setup_remote_docker" not in CIRCLE
-    assert "docker_layer_caching" not in CIRCLE
-    assert set(re.findall(r"resource_class: (\S+)", CIRCLE)) <= {"small", "medium"}
-    assert "machine:" not in CIRCLE
+    for text in (CIRCLE, CONT):
+        assert "setup_remote_docker" not in text
+        assert "docker_layer_caching" not in text
+        assert set(re.findall(r"resource_class: (\S+)", text)) <= {"small", "medium"}
+        assert "machine:" not in text
+
+
+def test_setup_config_only_selects_and_continues():
+    """The setup config only routes (ADR 0020): one job, no test logic."""
+    assert "setup: true" in CIRCLE
+    # The path-filtering orb lists a moved file only at its new path.
+    assert "path-filtering@" not in CIRCLE
+    assert re.search(r"^  continuation: circleci/continuation@\d+\.\d+\.\d+$", CIRCLE, re.M)
+    assert "command: python3 scripts/ci-params.py | tee /tmp/ci-params.json" in CIRCLE
+    assert "configuration_path: .circleci/continue-config.yml" in CIRCLE
+    assert "parameters: /tmp/ci-params.json" in CIRCLE
+    assert re.findall(
+        r"^  (\S+):$", CIRCLE.split("\njobs:\n", 1)[1].split("\nworkflows:", 1)[0], re.M
+    ) == ["select"]
+
+
+def test_main_pushes_run_no_ci_jobs():
+    """A push to main finishes at the setup job (ADR 0021): the merged tree
+    already passed the six checks on its PR. Every other branch continues."""
+    steps = CIRCLE.split("\n    steps:\n", 1)[1].split("\nworkflows:", 1)[0]
+    unless, when = steps.split("\n      - when:\n", 1)
+    on_main = "equal: [main, << pipeline.git.branch >>]"
+    assert unless.startswith("      - unless:\n") and on_main in unless and on_main in when
+    for step in ("- checkout", "scripts/ci-params.py", "- continuation/continue:"):
+        assert step in unless and step not in when
+    assert "- continuation/finish" in when and "continuation/finish" not in unless
+
+
+def test_mapping_coverage_checks_what_the_jobs_received():
+    job = CONT.split("\n  mapping-coverage:\n", 1)[1].split("\nworkflows:", 1)[0]
+    assert "python3 scripts/ci-params.py --check" in job
+    received = re.search(r"MR_CI_PARAMS: '(.+)'", job).group(1)
+    for name in ("run-all", "run-go", "run-go-python", "run-python", "run-proto", "run-lint"):
+        assert f'"{name}": << pipeline.parameters.{name} >>' in received
+    # Rendered with booleans, it is the JSON the script reads.
+    assert json.loads(re.sub(r"<< pipeline\.parameters\.[a-z-]+ >>", "true", received))
+    assert "when:" not in job and "unless:" not in job
 
 
 def test_golangci_lint_has_one_pin():
     vm = re.search(
         r"^GOLANGCI_VERSION=(\S+)$", (ROOT / "scripts/vm-setup.sh").read_text(), re.M
     ).group(1)
-    assert re.findall(r"golangci-lint@(v[\d.]+)", ACTIONS) == [vm]
     # CircleCI reads the pin from the script rather than repeating it.
-    assert "scripts/vm-setup.sh" in CIRCLE and vm not in CIRCLE
+    assert "scripts/vm-setup.sh" in CONT and vm not in CONT
     assert vm in (ROOT / "docs/ci.md").read_text()
 
 
-def test_actions_runs_only_by_hand():
-    # CircleCI is the CI; the Actions workflow is kept for a manual run only.
-    on = ACTIONS.split("\non:\n", 1)[1].split("\n\n", 1)[0]
-    assert on.split() == ["workflow_dispatch:"]
-
-
-def test_actions_go_job_can_run_the_python_golden_tests():
-    go_job = ACTIONS.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
-    assert "python-version: " in go_job and 'pip install -e "python[dev]"' in go_job
-    assert "make go-lint go-test py-e2e PYTHON=python" in go_job
+def test_circleci_is_the_only_ci():
+    # No GitHub Actions workflow: CircleCI runs every check (docs/ci.md).
+    assert not (ROOT / ".github/workflows").exists()
 
 
 def test_ci_runs_the_python_coordinator_with_go_workers():
     """The Python jobs have no Go, so they skip test_coordinator_e2e.py; the
     go job runs it with make py-e2e, which fails instead of skipping."""
-    go_job = CIRCLE.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
+    go_job = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
     assert "make go-lint go-test py-e2e PYTHON=python" in go_job
     target = MAKEFILE.split("\npy-e2e:\n", 1)[1].split("\n\n", 1)[0]
     assert "MR_REQUIRE_GO=1" in target and "tests/test_coordinator_e2e.py" in target
@@ -105,11 +145,10 @@ def test_ci_runs_shellcheck():
     """CI installs shellcheck from the vm-setup.sh pin and runs sh-lint with
     MR_REQUIRE_SHELLCHECK, so a missing shellcheck fails the go job rather
     than skipping."""
-    go_job = CIRCLE.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
+    go_job = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
     assert "scripts/vm-setup.sh --shellcheck" in go_job
     assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in go_job
-    assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in ACTIONS
-    assert "SHELLCHECK_VERSION" not in CIRCLE  # one pin, in vm-setup.sh
+    assert "SHELLCHECK_VERSION" not in CONT  # one pin, in vm-setup.sh
 
 
 def test_install_go_reads_the_version_from_go_mod():
@@ -252,3 +291,17 @@ def test_codeant_instructions_apply_to_pull_requests():
     rules = json.loads((ROOT / ".codeant/instructions.json").read_text())["instructions"]
     assert rules and all("pr" in r.get("scope", ["ide"]) for r in rules)
     assert len({r["id"] for r in rules}) == len(rules)
+
+
+def test_main_runs_every_job_unfiltered():
+    # A push to main stops at the setup job (ADR 0021), but should a main
+    # pipeline ever continue, each gated condition also holds for the branch,
+    # so it runs everything.
+    conditions = CONT.count("- << pipeline.parameters.run-all >>")
+    # proto, go, python, lint: each a when and an unless, plus the go job's
+    # narrow mode, which must not run on main (main runs the full mode).
+    assert conditions == 9
+    assert CONT.count("- equal: [main, << pipeline.git.branch >>]") == conditions
+    go = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
+    narrow = go.split("- not:\n", 1)[1].split("steps:", 1)[0]
+    assert "run-all" in narrow and "equal: [main," in narrow and "run-go >>" in narrow

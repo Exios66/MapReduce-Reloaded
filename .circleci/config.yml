@@ -1,233 +1,53 @@
-# Hosted CI on CircleCI's Free plan (docs/ci.md, ADR 0014). It runs the same
-# make targets as `make check`, split into four jobs, so every PR shows a
-# result that does not depend on GitHub Actions. The make targets are the
-# source of truth: this file installs tools and calls them, and holds none of
-# their lint, test or coverage logic.
+# Hosted CI on CircleCI's Free plan (docs/ci.md, ADR 0014, ADR 0020).
+# This file is the SETUP config only: it decides which jobs run, from the
+# files the PR changes, and then continues with .circleci/continue-config.yml.
+# It holds no test logic.
 #
-# The core gate needs no Docker daemon, no Compose cluster, no paid runner
-# and no secrets. Do not add remote Docker or Docker layer caching: they
-# cost credits (docs/ci.md, Free-plan limits).
+# The select job runs scripts/ci-params.py, which reads
+# .circleci/mapping.txt and prints the pipeline parameters, and continues
+# with them. A docs-only PR then costs this job, lint, mapping-coverage and
+# four echo-only jobs instead of the full suite. Nothing is dropped: a job
+# is skipped only when none of its inputs changed, a deleted or unmapped
+# file runs everything, and the mapping-coverage job re-runs the selection
+# and fails if a file is unmapped or the jobs received other parameters.
+#
+# The selection is our own script, not the path-filtering orb: the orb's
+# diff lists a moved file only at its new path, so moving a file out of a
+# job's directory skipped that job, and it cannot see deletions. The
+# script needs only the image's python3 and git; the continuation orb
+# posts its output to CircleCI.
+#
+# A push to main runs no CI jobs (ADR 0021): branch protection merges only
+# a PR whose six checks passed on a branch up to date with main, so main's
+# new commit was already tested. On main the select job only finishes the
+# pipeline, with the orb's finish command, and continues with nothing.
 version: 2.1
-
-# Docker executors only, on the Free plan. Python jobs are small; the Go and
-# protobuf jobs compile and run the race detector, so they are medium.
-# cimg/python includes the C compiler that `go test -race` (cgo) needs.
-executors:
-  small:
-    parameters:
-      python:
-        type: string
-    docker:
-      - image: cimg/python:<< parameters.python >>
-    resource_class: small
-  medium:
-    parameters:
-      python:
-        type: string
-    docker:
-      - image: cimg/python:<< parameters.python >>
-    resource_class: medium
-    environment:
-      CGO_ENABLED: "1"
-      # Fail instead of silently downloading another Go release: the toolchain
-      # is the one scripts/ci-install-go.sh installed from go/go.mod.
-      GOTOOLCHAIN: local
-
-commands:
-  # Installs python[dev]. The cache holds pip's downloads only: the install
-  # always runs, so a restored cache cannot stand in for it.
-  python-deps:
-    parameters:
-      python:
-        type: string
-    steps:
-      - restore_cache:
-          keys:
-            - pip-v1-{{ arch }}-py<< parameters.python >>-{{ checksum "python/pyproject.toml" }}
-            - pip-v1-{{ arch }}-py<< parameters.python >>-
-      - run:
-          name: Install python[dev]
-          command: python -m pip install -e "python[dev]"
-      - save_cache:
-          key: pip-v1-{{ arch }}-py<< parameters.python >>-{{ checksum "python/pyproject.toml" }}
-          paths:
-            - ~/.cache/pip
-
-  # Puts the Go release named by go/go.mod on the PATH. The script verifies the
-  # SHA-256 of a fresh download, and reuses a cached directory only if it
-  # reports exactly that version.
-  go-toolchain:
-    steps:
-      - run:
-          name: Read the Go version from go/go.mod
-          command: scripts/ci-install-go.sh --version | tee /tmp/go-version
-      - restore_cache:
-          keys:
-            - go-toolchain-v1-{{ arch }}-{{ checksum "/tmp/go-version" }}
-      - run:
-          name: Install Go
-          command: |
-            bin=$(scripts/ci-install-go.sh)
-            echo "export PATH=\"$bin:\$HOME/go/bin:\$PWD/.tools/bin:\$HOME/.cache/golangci-bin:\$PATH\"" >> "$BASH_ENV"
-            "$bin/go" version
-      - save_cache:
-          key: go-toolchain-v1-{{ arch }}-{{ checksum "/tmp/go-version" }}
-          paths:
-            - ~/.cache/go-toolchain
-      - restore_cache:
-          keys:
-            - go-mod-v1-{{ arch }}-{{ checksum "go/go.sum" }}
-            - go-mod-v1-{{ arch }}-
-      - run:
-          name: Download Go modules
-          command: cd go && go mod download
-      - save_cache:
-          key: go-mod-v1-{{ arch }}-{{ checksum "go/go.sum" }}
-          paths:
-            - ~/go/pkg/mod
-
-  # The code generators pinned in the Makefile. `make tools` always runs: go
-  # install leaves an up-to-date binary alone, so a cached .tools/bin only
-  # saves the build.
-  proto-tools:
-    steps:
-      - run:
-          name: Read the generator pins
-          command: grep -h '@v' Makefile | cat - /tmp/go-version > /tmp/tool-pins
-      - restore_cache:
-          keys:
-            - proto-tools-v1-{{ arch }}-{{ checksum "/tmp/tool-pins" }}
-      - run:
-          name: Install the generators
-          # Some pins need a newer Go than go.mod's (buf v1.74.0 needs
-          # 1.26.7); as in scripts/vm-setup.sh, the go command fetches that
-          # toolchain itself, checked against the Go checksum database. Lint
-          # and tests still run on the toolchain installed above.
-          environment:
-            GOTOOLCHAIN: auto
-          command: make tools
-      - save_cache:
-          key: proto-tools-v1-{{ arch }}-{{ checksum "/tmp/tool-pins" }}
-          paths:
-            - .tools/bin
-
-  # golangci-lint, built by the Go toolchain above at the version pinned in
-  # scripts/vm-setup.sh. A cached binary is kept only if it reports that
-  # version and was built by this Go release; otherwise it is rebuilt.
-  golangci-lint:
-    steps:
-      - run:
-          name: Read the golangci-lint pin
-          command: |
-            sed -n 's/^GOLANGCI_VERSION=//p' scripts/vm-setup.sh > /tmp/golangci-version
-            test -s /tmp/golangci-version
-            cat /tmp/golangci-version /tmp/go-version > /tmp/golangci-pins
-      - restore_cache:
-          keys:
-            - golangci-v1-{{ arch }}-{{ checksum "/tmp/golangci-pins" }}
-      - run:
-          name: Install golangci-lint
-          command: |
-            want=$(cat /tmp/golangci-version)
-            have=$(golangci-lint version 2>&1 || true)
-            if ! { echo "$have" | grep -qF "${want#v}" && echo "$have" | grep -qF "built with $(go env GOVERSION)"; }; then
-              GOBIN=$HOME/.cache/golangci-bin go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$want"
-            fi
-            golangci-lint version
-      - save_cache:
-          key: golangci-v1-{{ arch }}-{{ checksum "/tmp/golangci-pins" }}
-          paths:
-            - ~/.cache/golangci-bin
-
+setup: true
+orbs:
+  continuation: circleci/continuation@1.0.0
 jobs:
-  # Generated-code freshness and protobuf compatibility against a freshly
-  # fetched origin/main. A failed fetch fails the job: the compatibility
-  # check is never skipped.
-  proto:
-    executor:
-      name: medium
-      python: "3.13"
+  select:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: small
     steps:
-      # A full clone: buf breaking clones this repository to read main, and
-      # the default blobless checkout lacks objects that clone needs.
-      - checkout:
-          method: full
-      - go-toolchain
-      - python-deps:
-          python: "3.13"
-      - proto-tools
-      - run:
-          name: Fetch origin/main
-          # The checkout's remote needs the project's deploy key. A fork's
-          # build has none, so fall back to the public HTTPS URL.
-          command: |
-            git fetch --quiet origin +refs/heads/main:refs/remotes/origin/main ||
-              git fetch --quiet "https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" +refs/heads/main:refs/remotes/origin/main
-      - run:
-          name: make proto-check
-          command: make proto-check PYTHON=python PROTO_FETCH=false
-
-  # Formatting, vet, golangci-lint, then the race-detector tests, the paper
-  # mapping check and the coverage floors. python[dev] is installed here too:
-  # the Go golden tests run the Python reference implementation, and
-  # py-e2e runs the Python coordinator with the Go commands, which the
-  # Python jobs, without Go, skip.
-  go:
-    executor:
-      name: medium
-      python: "3.13"
-    steps:
-      - checkout
-      - go-toolchain
-      - python-deps:
-          python: "3.13"
-      - golangci-lint
-      # make check skips shellcheck where it is missing; CI must not.
-      - run:
-          name: Install shellcheck
-          command: |
-            scripts/vm-setup.sh --shellcheck
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
-      - run:
-          name: make sh-lint
-          command: MR_REQUIRE_SHELLCHECK=1 make sh-lint
-      - run:
-          name: make go-lint go-test py-e2e
-          command: make go-lint go-test py-e2e PYTHON=python
-          no_output_timeout: 30m
-      - store_artifacts:
-          path: go/cover.out
-
-  # Ruff formatting and lint, the Python tests and the coverage floors, once
-  # per supported version.
-  python:
-    parameters:
-      version:
-        type: string
-    executor:
-      name: small
-      python: << parameters.version >>
-    steps:
-      - checkout
-      - python-deps:
-          python: << parameters.version >>
-      - run:
-          name: make py-lint md-lint py-test
-          command: make py-lint md-lint py-test PYTHON=python
-      - store_artifacts:
-          path: python/cover.json
-
-# Jobs run in parallel, each in its own checkout, so proto generation cannot
-# change files another job is testing. These four names are the checks that
-# branch protection requires (docs/ci.md).
+      - unless:
+          condition:
+            equal: [main, << pipeline.git.branch >>]
+          steps:
+            - checkout
+            - run:
+                name: Select the implicated jobs
+                command: python3 scripts/ci-params.py | tee /tmp/ci-params.json
+            - continuation/continue:
+                configuration_path: .circleci/continue-config.yml
+                parameters: /tmp/ci-params.json
+      - when:
+          condition:
+            equal: [main, << pipeline.git.branch >>]
+          steps:
+            - continuation/finish
 workflows:
-  ci:
+  setup:
     jobs:
-      - proto
-      - go
-      - python:
-          name: python-3.11
-          version: "3.11"
-      - python:
-          name: python-3.13
-          version: "3.13"
+      - select
