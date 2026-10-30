@@ -62,6 +62,7 @@ tmp=$(mktemp -d)
 sampler=
 ready=
 fresh_at= # when fresh last began, for the logs of the run that follows it
+results_dir= # the running experiment's directory, set by begin
 slow= # the workers E2 and E7 throttle (container IDs), restored however the script exits
 cleanup() {
     local c
@@ -111,6 +112,10 @@ wait_workers() {
         sleep 0.5
     done
     echo "experiments: expected $1 workers, the coordinator has ${n:-none}" >&2
+    # Without these logs nothing explains the failed registration once the
+    # next start recreates the containers.
+    [ -z "$results_dir" ] ||
+        save_logs "$results_dir/logs-registration-timeout.log" "${fresh_at:-1970-01-01T00:00:00Z}"
     exit 1
 }
 
@@ -310,6 +315,7 @@ begin() { # EXPERIMENT
     fi
     prune_volume "$1"
     mkdir -p "$dir"
+    results_dir=$dir
     echo "experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job" > "$dir/runs.csv"
     python3 - "$(git rev-parse HEAD)" "$(git status --porcelain | wc -l)" "$(docker version --format '{{.Server.Version}}')" > "$dir/machine.json" <<'EOF'
 import json, os, platform, sys

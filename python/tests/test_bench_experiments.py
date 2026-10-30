@@ -867,3 +867,27 @@ def test_every_compose_override_the_script_uses_exists_and_sets_the_speculation(
         assert command[:5] == ["coordinator", "-addr", ":7070", "-http", ":8080"], name
         assert command[command.index("-data-dir") + 1] == "/out/wal", name
         assert command[-1] == flags[name], name
+
+
+def test_registration_timeout_saves_the_logs_since_the_restart(experiment, tmp_path):
+    invoke, log = experiment
+    result = invoke(
+        """
+        sleep() { :; }
+        curl() { echo 'mr_workers 2'; }
+        compose_stub() { printf 'compose:%s\\n' "$*" >> "$CALL_LOG"; }
+        compose=(compose_stub)
+        metrics=http://unused
+        results_dir=bench/results/E1
+        fresh_at=2026-10-30T00:00:00.000000000Z
+        mkdir -p "$results_dir"
+        wait_workers 4
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "expected 4 workers, the coordinator has 2" in result.stderr
+    assert log.read_text().splitlines() == [
+        "compose:logs --no-color --timestamps --since 2026-10-30T00:00:00.000000000Z"
+    ]
+    assert (tmp_path / "bench/results/E1/logs-registration-timeout.log").exists()
