@@ -92,9 +92,10 @@ def test_main_pushes_run_no_ci_jobs():
     unless, when = steps.split("\n      - when:\n", 1)
     on_main = "equal: [main, << pipeline.git.branch >>]"
     assert unless.startswith("      - unless:\n") and on_main in unless and on_main in when
-    # The older OAuth connection of the repository (project.type "github")
-    # builds every push too; only the GitHub App's run does the work.
-    legacy = "equal: [github, << pipeline.project.type >>]"
+    # The repository's second CircleCI project, made by the GitHub App
+    # (project.type "circleci"), builds every push too; only the OAuth
+    # project gh/Exios66/MapReduce-Reloaded does the work.
+    legacy = "equal: [circleci, << pipeline.project.type >>]"
     assert legacy in unless and legacy in when
     for step in ("scripts/ci-params.py", "configuration_path: .circleci/continue-config.yml"):
         assert step in unless and step not in when

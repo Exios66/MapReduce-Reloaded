@@ -23,11 +23,12 @@
 # pipeline, continuing with an empty config (the orb's finish command sends
 # "version: 2", which CircleCI now rejects).
 #
-# This repository is connected to CircleCI twice: through the GitHub App
-# (pipeline.project.type is "circleci") and through the older OAuth
-# connection ("github"). Both build every push, and branch protection takes
-# the App's results only, so the OAuth connection continues with the empty
-# config too and spends nothing. Remove it in CircleCI when convenient.
+# This repository is connected to CircleCI twice: through the OAuth project
+# gh/Exios66/MapReduce-Reloaded (pipeline.project.type is "github"), which
+# is the one in use, and through a second project created by the GitHub App
+# ("circleci"). Both build every push, so the App's project continues with
+# the empty config too and spends nothing. Remove it in CircleCI when
+# convenient.
 version: 2.1
 setup: true
 orbs:
@@ -42,7 +43,7 @@ jobs:
           condition:
             or:
               - equal: [main, << pipeline.git.branch >>]
-              - equal: [github, << pipeline.project.type >>]
+              - equal: [circleci, << pipeline.project.type >>]
           steps:
             - checkout
             - run:
@@ -55,7 +56,7 @@ jobs:
           condition:
             or:
               - equal: [main, << pipeline.git.branch >>]
-              - equal: [github, << pipeline.project.type >>]
+              - equal: [circleci, << pipeline.project.type >>]
           steps:
             - checkout
             - continuation/continue:
