@@ -15,9 +15,12 @@ cut a release.
 
 ### Added
 
-- Python coordinator: LATE speculation (Zaharia et al., ADR 0019) as an
-  alternative to the paper's backups, with task progress reported in
+- Python and Go coordinators: LATE speculation (Zaharia et al., ADR 0019) as
+  an alternative to the paper's backups, selected with `-speculation=late`
+  on the Go coordinator; the Python coordinator reports task progress in
   heartbeats (#284).
+- Job and task event logging in the coordinator and worker, with a
+  `-log-level` flag (#302).
 - The demo notebook, `examples/demo.ipynb`, and a test that every cell
   compiles (#252); the five-minute demo script and README badges (#255).
 - The soak run, `make soak`: 1 GiB with the combiner off at a 256 MB worker
@@ -50,6 +53,8 @@ cut a release.
 - Docs: the README streamlined for a reviewer (#263), the status page and
   its README GIFs modernized (#262), coverage numbers refreshed (#257), and
   corpus and dataset descriptions corrected (#253).
+- The demo notebook runs from any directory, with a job file and a worker
+  kill step (#303).
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed
