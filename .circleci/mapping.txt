@@ -58,6 +58,8 @@
 
 # Files outside python/ that the Python tests read.
 ^README\.md$ run-python
+^docs/assets/(setup-terminal|status-vm)-(dark|light)\.gif$ run-python
+^docs/assets/(setup-terminal|status-vm)-provenance\.json$ run-python
 ^design\.md$ run-python
 ^docs/README\.md$ run-python
 ^docs/design/0001-languages-and-shared-contract\.md$ run-python

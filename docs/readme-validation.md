@@ -56,3 +56,9 @@ and refusal to create non-UTF-8 filenames. The Python suite's failing exit
 means the overall quality gate did not pass. Linux validation remains
 required before pushing. A syntax or configuration check alone is not an
 end-to-end execution result.
+
+An isolated CS544 worktree subsequently passed every Go test and all 1,107
+Python tests (one skip). Its overall gate correctly failed because the six
+new media/provenance files were missing Python-test routing. Additive rules
+in `.circleci/mapping.txt` now cover both GIF themes and their provenance;
+the complete gate must be rerun on that corrected commit before pushing.
