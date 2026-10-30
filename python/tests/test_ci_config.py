@@ -85,6 +85,18 @@ def test_setup_config_only_selects_and_continues():
     ) == ["select"]
 
 
+def test_main_pushes_run_no_ci_jobs():
+    """A push to main finishes at the setup job (ADR 0021): the merged tree
+    already passed the six checks on its PR. Every other branch continues."""
+    steps = CIRCLE.split("\n    steps:\n", 1)[1].split("\nworkflows:", 1)[0]
+    unless, when = steps.split("\n      - when:\n", 1)
+    on_main = "equal: [main, << pipeline.git.branch >>]"
+    assert unless.startswith("      - unless:\n") and on_main in unless and on_main in when
+    for step in ("- checkout", "scripts/ci-params.py", "- continuation/continue:"):
+        assert step in unless and step not in when
+    assert "- continuation/finish" in when and "continuation/finish" not in unless
+
+
 def test_mapping_coverage_checks_what_the_jobs_received():
     job = CONT.split("\n  mapping-coverage:\n", 1)[1].split("\nworkflows:", 1)[0]
     assert "python3 scripts/ci-params.py --check" in job
@@ -282,8 +294,9 @@ def test_codeant_instructions_apply_to_pull_requests():
 
 
 def test_main_runs_every_job_unfiltered():
-    # Filtering saves credits on PRs only; on main each gated condition must
-    # also hold for the branch, so main keeps full coverage.
+    # A push to main stops at the setup job (ADR 0021), but should a main
+    # pipeline ever continue, each gated condition also holds for the branch,
+    # so it runs everything.
     conditions = CONT.count("- << pipeline.parameters.run-all >>")
     # proto, go, python, lint: each a when and an unless, plus the go job's
     # narrow mode, which must not run on main (main runs the full mode).

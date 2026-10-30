@@ -45,11 +45,14 @@ the merge base, turns the changed files into six boolean pipeline
 parameters, and continues with `.circleci/continue-config.yml`, which holds
 the jobs.
 
-Filtering applies to PR branches only. On `main` every job runs in full,
-whatever the push changed: the script selects `run-all` there, and each
-job's condition also holds when `pipeline.git.branch` is `main`, so `main`
-keeps the coverage it had before filtering, and the credits are saved on PR
-pushes, where most runs happen.
+Filtering applies to PR branches only. A push to `main` runs no CI jobs
+(ADR 0021): there the `select` job runs the continuation orb's `finish`
+command instead of selecting, so the pipeline ends after that one small job.
+Branch protection merges a PR only when its six checks passed on a branch up
+to date with `main`, so the merged tree was already tested. Should a `main`
+pipeline ever continue, the script selects `run-all` there and each job's
+condition also holds when `pipeline.git.branch` is `main`, so it would run
+everything.
 
 [`.circleci/mapping.txt`](../.circleci/mapping.txt) is the mapping: each
 line is `<regex> <parameter>`, and a changed file sets every parameter whose
@@ -173,15 +176,17 @@ Bump a `-v1-` in a key to throw a cache away.
 
 ## Triggers
 
-The workflow runs when a PR is opened, on each new commit to a PR branch, and
-on pushes to `main`. It needs no secrets, so a build triggered by a fork's PR
+The workflow runs when a PR is opened and on each new commit to a PR branch.
+A push to `main` runs only the `select` job, which ends the pipeline
+(ADR 0021). It needs no secrets, so a build triggered by a fork's PR
 does not see any. Whether CircleCI builds fork PRs at all is a project
 setting (Project Settings, Advanced, "Build fork pull requests"). Leave it on
 only while no secret is added to the project. The checks need none.
 
 "Auto-cancel redundant workflows" is on (Project Settings, Advanced): a new
 push to a PR branch cancels that branch's run still in progress, which saves
-Free-plan credits. CircleCI never auto-cancels on `main`.
+Free-plan credits. CircleCI never auto-cancels on `main`, which is why
+`main` is skipped in the config instead.
 
 Branch protection requires a PR to be up to date with `main`. A PR that
 passed before another one merged must merge `main` in (a merge commit, not
