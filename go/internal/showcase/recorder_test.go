@@ -171,6 +171,52 @@ func TestReadRecordingKeepsALongLine(t *testing.T) {
 	}
 }
 
+// frameLine is the recording line for seq, as the recorder writes it.
+func frameLine(t *testing.T, seq uint64) string {
+	t.Helper()
+	b, err := json.Marshal(seqFrame(seq))
+	if err != nil {
+		t.Fatalf("marshal frame %d: %v", seq, err)
+	}
+	return string(b) + "\n"
+}
+
+func TestReadRecordingSkipsBlankLinesUncounted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rec.jsonl")
+	body := frameLine(t, 1) + "\n" + "  \t\n" + frameLine(t, 2)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write recording: %v", err)
+	}
+	frames, skipped, err := showcase.ReadRecording(path)
+	if err != nil {
+		t.Fatalf("ReadRecording: %v", err)
+	}
+	if skipped != 0 {
+		t.Errorf("skipped = %d, want 0: blank lines are not counted", skipped)
+	}
+	if !sameSeqs(seqs(frames), []uint64{1, 2}) {
+		t.Errorf("frames = %v, want seqs 1 and 2", seqs(frames))
+	}
+}
+
+func TestReadRecordingCountsNullAndZeroSeqLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rec.jsonl")
+	body := frameLine(t, 1) + "null\n" + `{"seq":0}` + "\n" + frameLine(t, 2)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write recording: %v", err)
+	}
+	frames, skipped, err := showcase.ReadRecording(path)
+	if err != nil {
+		t.Fatalf("ReadRecording: %v", err)
+	}
+	if skipped != 2 {
+		t.Errorf("skipped = %d, want 2: one null line and one Seq 0 line", skipped)
+	}
+	if !sameSeqs(seqs(frames), []uint64{1, 2}) {
+		t.Errorf("frames = %v, want seqs 1 and 2", seqs(frames))
+	}
+}
+
 func TestReadRecordingMissingFileIsAnError(t *testing.T) {
 	if _, _, err := showcase.ReadRecording(filepath.Join(t.TempDir(), "nope.jsonl")); err == nil {
 		t.Fatal("ReadRecording of a missing file succeeded, want an error")

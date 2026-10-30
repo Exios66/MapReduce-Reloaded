@@ -2,6 +2,7 @@ package showcase
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -92,9 +93,10 @@ func (r *Recorder) State() RecorderState {
 	return RecorderState{Path: r.path, Bytes: r.bytes, Stopped: r.stopped, Reason: r.reason}
 }
 
-// ReadRecording reads the frames in a recording, in file order. A line that
-// does not parse, such as one cut off by a crash, is skipped and counted. A
-// line of any length is read.
+// ReadRecording reads the frames in a recording, in file order. A blank line
+// is skipped and not counted. A line that does not parse, such as one cut off
+// by a crash, or that decodes to null or to a frame with Seq 0, is skipped
+// and counted in skipped. A line of any length is read.
 func ReadRecording(path string) (frames []Frame, skipped int, err error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -106,9 +108,9 @@ func ReadRecording(path string) (frames []Frame, skipped int, err error) {
 	br := bufio.NewReader(f)
 	for {
 		line, readErr := br.ReadBytes('\n')
-		if len(line) > 0 {
+		if text := bytes.TrimSpace(line); len(text) > 0 {
 			var fr Frame
-			if err := json.Unmarshal(line, &fr); err != nil {
+			if string(text) == "null" || json.Unmarshal(text, &fr) != nil || fr.Seq == 0 {
 				skipped++
 			} else {
 				frames = append(frames, fr)

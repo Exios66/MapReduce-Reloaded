@@ -109,9 +109,45 @@ func TestRingReportsResyncWhenTheFrameIsGone(t *testing.T) {
 
 func TestRingAfterOnAnEmptyRing(t *testing.T) {
 	r := showcase.NewRing(3)
-	frames, resync := r.After(7, 10)
+	frames, resync := r.After(0, 10)
 	if len(frames) != 0 || resync {
-		t.Errorf("After on an empty ring = %v, resync %v; want no frames and no resync", seqs(frames), resync)
+		t.Errorf("After(0) on an empty ring = %v, resync %v; want no frames and no resync", seqs(frames), resync)
+	}
+	// A client that has seen frames, against a ring with none, is from an
+	// earlier run of the sampler: it must resync.
+	frames, resync = r.After(7, 10)
+	if len(frames) != 0 || !resync {
+		t.Errorf("After(7) on an empty ring = %v, resync %v; want no frames and resync true", seqs(frames), resync)
+	}
+}
+
+func TestRingAfterAheadOfTheNewestResyncs(t *testing.T) {
+	// The sampler restarted: the client's seq 9 is above every frame kept.
+	r := showcase.NewRing(10)
+	for seq := uint64(1); seq <= 5; seq++ {
+		r.Add(seqFrame(seq))
+	}
+	frames, resync := r.After(9, 100)
+	if !resync {
+		t.Errorf("After(9) resync = false, want true: seq is ahead of the ring")
+	}
+	if got, want := seqs(frames), []uint64{1, 2, 3, 4, 5}; !sameSeqs(got, want) {
+		t.Errorf("After(9) seqs = %v, want the oldest frames kept %v", got, want)
+	}
+	frames, resync = r.After(9, 2)
+	if !resync || !sameSeqs(seqs(frames), []uint64{1, 2}) {
+		t.Errorf("After(9, 2) = %v, resync %v; want [1 2] and resync true", seqs(frames), resync)
+	}
+}
+
+func TestRingAfterTheNewestFrameIsNotAResync(t *testing.T) {
+	r := showcase.NewRing(10)
+	for seq := uint64(1); seq <= 5; seq++ {
+		r.Add(seqFrame(seq))
+	}
+	frames, resync := r.After(5, 100)
+	if resync || len(frames) != 0 {
+		t.Errorf("After(newest) = %v, resync %v; want no frames and no resync", seqs(frames), resync)
 	}
 }
 
