@@ -70,6 +70,8 @@ cut a release.
 ### Fixed
 
 - The CircleCI badge URL (#261).
+- Bench: `wait_workers` retries when the coordinator is unreachable, instead of
+  exiting silently, and saves the logs on a registration timeout (#307).
 
 ## [0.3.0] - 2026-10-29
 
