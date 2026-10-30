@@ -95,6 +95,11 @@ cut a release.
   5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
   longer makes a worker re-register and fail `TestClusterWorkerMetrics`
   (#310).
+- CI: the repository's second CircleCI project, made by the GitHub App, no
+  longer runs the suite. Both projects built every push, doubling credit use
+  and posting statuses that could disagree; the setup job now continues
+  with the empty config when `pipeline.project.type` is `circleci`, so only
+  `gh/Exios66/MapReduce-Reloaded` runs it (#318).
 - CI: a push to `main` no longer ends in a config error. The continuation
   orb's `finish` command sends `version: 2`, which CircleCI no longer
   accepts, so `.circleci/config.yml` continues with the empty 2.1
