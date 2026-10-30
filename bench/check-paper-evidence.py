@@ -1,6 +1,7 @@
 """Reject trials whose collectors survived but missed terminal measurements."""
 
 import csv
+import itertools
 import json
 import math
 import sys
@@ -22,7 +23,7 @@ def coverage(times, start, end, max_gap, label, interruption=None):
     window = [max(t for t in times if t <= start)]
     window.extend(t for t in times if start < t < end)
     window.append(min(t for t in times if t >= end))
-    for left, right in zip(window, window[1:], strict=False):
+    for left, right in itertools.pairwise(window):
         if right - left <= max_gap:
             continue
         if interruption is not None:
