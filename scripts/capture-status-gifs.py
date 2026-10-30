@@ -57,19 +57,34 @@ def chrome_bin() -> str:
     sys.exit("no Chrome found: set CHROME=/path/to/chrome")
 
 
-def shot(chrome: str, url: str, theme: str, path: str, profile: str, window: str) -> None:
+def shot(
+    chrome: str, url: str, theme: str, path: str, profile: str, window: str
+) -> None:
     subprocess.run(
-        [chrome, "--headless", "--hide-scrollbars", "--force-color-profile=srgb",
-         "--no-first-run", "--disable-extensions", "--disable-gpu",
-         "--user-data-dir=" + profile, "--window-size=" + window,
-         "--screenshot=" + path, url + "?" + theme],
-        check=True, capture_output=True)
+        [
+            chrome,
+            "--headless",
+            "--hide-scrollbars",
+            "--force-color-profile=srgb",
+            "--no-first-run",
+            "--disable-extensions",
+            "--disable-gpu",
+            "--user-data-dir=" + profile,
+            "--window-size=" + window,
+            "--screenshot=" + path,
+            url + "?" + theme,
+        ],
+        check=True,
+        capture_output=True,
+    )
 
 
 def _local(spec: str) -> str:
     """The host path of a shared-storage spec: /data/... under MR_DATA_DIR."""
     if spec.startswith("/data"):
-        return os.path.join(os.environ.get("MR_DATA_DIR", "data"), spec[len("/data"):].lstrip("/"))
+        return os.path.join(
+            os.environ.get("MR_DATA_DIR", "data"), spec[len("/data") :].lstrip("/")
+        )
     return spec
 
 
@@ -105,8 +120,9 @@ def capture(args, work: str, submit: list[str] | None) -> list[tuple[str, str]]:
     proc = None
     if submit:
         print("submit:", shlex.join(submit), flush=True)
-        proc = subprocess.Popen(submit, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.Popen(
+            submit, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
 
     n = 0
     hold = 0
@@ -116,10 +132,22 @@ def capture(args, work: str, submit: list[str] | None) -> list[tuple[str, str]]:
         base = os.path.join(frames_dir, f"{n:04d}")
         print(f"  frame {n:3d} at +{time.monotonic() - started:6.1f}s", flush=True)
         # Same tick for both variants; the page picks dark via ?theme=dark.
-        shot(chrome, args.status_url, "theme=dark", base + "-dark.png",
-             os.path.join(work, "d"), args.window)
-        shot(chrome, args.status_url, "", base + "-light.png",
-             os.path.join(work, "l"), args.window)
+        shot(
+            chrome,
+            args.status_url,
+            "theme=dark",
+            base + "-dark.png",
+            os.path.join(work, "d"),
+            args.window,
+        )
+        shot(
+            chrome,
+            args.status_url,
+            "",
+            base + "-light.png",
+            os.path.join(work, "l"),
+            args.window,
+        )
         frames[n] = (base + "-dark.png", base + "-light.png")
         if proc is None:
             if n >= 3:
@@ -132,8 +160,10 @@ def capture(args, work: str, submit: list[str] | None) -> list[tuple[str, str]]:
                 break
         time.sleep(args.interval)
     if len(frames) < 3:
-        sys.exit(f"only {len(frames)} frames captured: that reads as a looped "
-                 "fragment; choose --interval to cover the whole job")
+        sys.exit(
+            f"only {len(frames)} frames captured: that reads as a looped "
+            "fragment; choose --interval to cover the whole job"
+        )
     return list(frames.values())
 
 
@@ -144,23 +174,71 @@ def assemble(frames: list[str], dur: float, out: str, work: str) -> dict:
             f.write(f"file '{p}'\nduration {dur:g}\n")
         f.write(f"file '{frames[-1]}'\n")  # concat needs a final file line
     pa = os.path.join(work, "palette.png")
-    subprocess.run([FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", lst,
-                    "-vf", "palettegen=max_colors=128", pa],
-                   check=True, capture_output=True)
-    subprocess.run([FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", lst, "-i", pa,
-                    "-lavfi", "paletteuse=dither=bayer:bayer_scale=5", out],
-                   check=True, capture_output=True)
+    subprocess.run(
+        [
+            FFMPEG,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            lst,
+            "-vf",
+            "palettegen=max_colors=128",
+            pa,
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [
+            FFMPEG,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            lst,
+            "-i",
+            pa,
+            "-lavfi",
+            "paletteuse=dither=bayer:bayer_scale=5",
+            out,
+        ],
+        check=True,
+        capture_output=True,
+    )
     probe = subprocess.run(
-        [FFPROBE, "-v", "error", "-count_frames", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height,nb_read_frames",
-         "-show_entries", "format=duration", "-of", "json", out],
-        check=True, capture_output=True, text=True).stdout
+        [
+            FFPROBE,
+            "-v",
+            "error",
+            "-count_frames",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,nb_read_frames",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            out,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
     info = json.loads(probe)
     st = info["streams"][0]
-    return {"frames": int(st["nb_read_frames"]), "width": st["width"],
-            "height": st["height"],
-            "duration_s": round(float(info["format"]["duration"]), 2),
-            "bytes": os.path.getsize(out)}
+    return {
+        "frames": int(st["nb_read_frames"]),
+        "width": st["width"],
+        "height": st["height"],
+        "duration_s": round(float(info["format"]["duration"]), 2),
+        "bytes": os.path.getsize(out),
+    }
 
 
 def _workdir(prefix: str) -> str:
@@ -171,18 +249,24 @@ def _workdir(prefix: str) -> str:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--status-url", default="http://127.0.0.1:18780/")
-    ap.add_argument("--submit", default="",
-                    help="'bin/mr submit -wait' style prefix; empty needs --watch")
+    ap.add_argument(
+        "--submit",
+        default="",
+        help="'bin/mr submit -wait' style prefix; empty needs --watch",
+    )
     ap.add_argument("--program", default="")
     ap.add_argument("--inputs", nargs="+", default=[])
     ap.add_argument("--out", default="")
     ap.add_argument("-m", type=int, default=0)
     ap.add_argument("-r", type=int, default=0)
     ap.add_argument("--interval", type=float, default=5.0)
-    ap.add_argument("--gif-delay", type=int, default=12, help="GIF frame delay, 1/100 s")
+    ap.add_argument(
+        "--gif-delay", type=int, default=12, help="GIF frame delay, 1/100 s"
+    )
     ap.add_argument("--hold", type=int, default=4)
     ap.add_argument("--max-frames", type=int, default=200)
     ap.add_argument("--watch", action="store_true")
@@ -206,30 +290,41 @@ def main() -> None:
 
     prov = {
         "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "commit": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                                 text=True).stdout.strip(),
-        "machine": {"host": platform.node(), "arch": platform.machine(),
-                    "os": platform.platform()},
+        "commit": subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip(),
+        "machine": {
+            "host": platform.node(),
+            "arch": platform.machine(),
+            "os": platform.platform(),
+        },
         "status_url": args.status_url,
         "submit": shlex.join(submit) if submit else "watched a running job",
-        "program": args.program, "inputs": args.inputs, "out": args.out,
-        "map_tasks": args.m, "reduce_tasks": args.r,
+        "program": args.program,
+        "inputs": args.inputs,
+        "out": args.out,
+        "map_tasks": args.m,
+        "reduce_tasks": args.r,
         "capture_interval_s": args.interval,
         "gif_frame_delay_cs": args.gif_delay,
         "speed_factor": round(args.interval / (args.gif_delay / 100), 1),
         "window": args.window,
-        "chrome": subprocess.run([chrome_bin(), "--version"], capture_output=True,
-                                 text=True).stdout.strip(),
-        "ffmpeg": subprocess.run([FFMPEG, "-version"], capture_output=True,
-                                 text=True).stdout.splitlines()[0],
+        "chrome": subprocess.run(
+            [chrome_bin(), "--version"], capture_output=True, text=True
+        ).stdout.strip(),
+        "ffmpeg": subprocess.run(
+            [FFMPEG, "-version"], capture_output=True, text=True
+        ).stdout.splitlines()[0],
         "gifs": report,
     }
     prov_json = os.path.join(args.assets, f"{args.prefix}-provenance.json")
     with open(prov_json, "w") as f:
         json.dump(prov, f, indent=2)
     for theme, r in report.items():
-        print(f"{theme:5s}: {r['frames']} frames, {r['width']}x{r['height']}, "
-              f"{r['duration_s']} s, {r['bytes']:,} bytes")
+        print(
+            f"{theme:5s}: {r['frames']} frames, {r['width']}x{r['height']}, "
+            f"{r['duration_s']} s, {r['bytes']:,} bytes"
+        )
     print("provenance:", prov_json)
     shutil.rmtree(frames_dir, ignore_errors=True)
     shutil.rmtree(work, ignore_errors=True)
