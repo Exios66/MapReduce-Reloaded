@@ -1,6 +1,7 @@
 # ADR 0020: Implicated-only CI on pull requests
 
-Date: 2026-10-29. Status: accepted (lands with the dynamic-config PR).
+Date: 2026-10-29. Status: accepted; amended the same day (see
+[Amendment: our own selection](#amendment-our-own-selection)).
 
 ## Context
 
@@ -133,3 +134,55 @@ regexes; `re.search` semantics in the guard script.
   and runs the full suite under the old four-check protection, merging
   normally with no admin bypass. Protection gains `lint` and
   `mapping-coverage` only after merge, by a separate owner action.
+
+## Amendment: our own selection
+
+Date: 2026-10-29, after the first filtered runs on `main` and #292.
+
+An audit of the mapping, which traced every file the Go and Python test
+suites open and compared that with which jobs each file's line runs, found
+two kinds of gap. Each could let a PR skip a job whose result its change
+could alter. `main` was never at risk, because it always runs everything.
+
+- **The path-filtering orb's diff.** It lists a moved file only at its new
+  path, so moving a file out of `go/` ran lint alone. It cannot see
+  deletions either, so deleting a file that another directory names (the
+  paper-mapping table cites files the Go test checks exist; Markdown links
+  point at files) ran only the deleted file's own job.
+- **Mis-routed inputs.** Some files mapped to lint, or to nothing, are read
+  by a test job:
+  - `testdata/**` (Go and Python);
+  - `README.md`, `examples/wordcount.go` and `bench/jobs/**` (Go);
+  - `.coderabbit.yaml`, `.codeant/**`, `.github/workflows/ci.yml`,
+    `bench/*.sh`, `examples/demo.ipynb` and `docs/README.md` (Python);
+  - `buf.yaml` and the generated code in `go/gen/` and
+    `python/mapreduce_reloaded/gen/` (proto, whose freshness check is the
+    only check on hand edits there);
+  - `.githooks/pre-push` (sh-lint, in the go job).
+
+  The guard could not see these: it only checked that a file matched some
+  line.
+
+The decision changes in four ways:
+
+- **Our own selection replaces the orb.** The setup config's one `select` job
+  runs `scripts/ci-params.py`: it reads `.circleci/mapping.txt` and diffs
+  with `--no-renames`, so a move is a deletion and an addition. It selects
+  `run-all` for any deleted or unmapped file, and for `main`. The
+  continuation orb then posts the parameters. The script needs only the
+  image's `python3` and `git`, so the orb's `get-pip.py` download, which
+  failed the first setup run, is gone too.
+- **The mapping is corrected**, with each cross-directory input on its own
+  line.
+- **`mapping-coverage` checks the selection end to end.** It re-runs it, and
+  also fails if the parameters the pipeline received lack one the changes
+  need.
+- **The Python tests check their own inputs.** `python/tests/conftest.py`
+  fails the run if a test opens a tracked file outside `python/` that the
+  mapping does not route to the Python jobs. This makes under-mapping on the
+  Python side a test failure, not a review catch. The Go side's few such
+  inputs are listed in `python/tests/test_ci_params.py`.
+
+The cost is unchanged for a typical PR. A PR that deletes or moves a file
+now runs the full suite, which is the conservative choice for a change whose
+dependents the diff cannot see.

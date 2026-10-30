@@ -22,11 +22,10 @@
 # The four original jobs keep their exact make targets. The `lint` job holds
 # `md-lint`, which used to run inside the Python jobs, and
 # `mapping-coverage` always runs and fails the pipeline if any changed file
-# matches no mapping pattern in the setup config.
+# matches no line of .circleci/mapping.txt.
 #
-# Required checks after this lands (see docs/ci.md, Transition): proto, go,
-# python-3.11, python-3.13, lint, mapping-coverage. Until protection is
-# updated, lint and mapping-coverage report but are not required.
+# Required checks (docs/ci.md): proto, go, python-3.11, python-3.13, lint,
+# mapping-coverage.
 version: 2.1
 
 parameters:
@@ -43,6 +42,9 @@ parameters:
     type: boolean
     default: false
   run-lint:
+    type: boolean
+    default: false
+  run-go-python:
     type: boolean
     default: false
 
@@ -176,6 +178,32 @@ commands:
           paths:
             - ~/.cache/golangci-bin
 
+  # Go's build cache (compiled packages, including the race-instrumented
+  # standard library) and golangci-lint's analysis cache. Both are keyed by
+  # content, so a restored entry is only ever reused for identical input; the
+  # job's GOFLAGS=-count=1 keeps test results out of it. The key changes with
+  # the Go release, go.sum and the ISO week, so the cache is refreshed weekly
+  # and is saved once per key, not on every run.
+  go-build-cache-restore:
+    steps:
+      - run:
+          name: Key the Go build cache
+          command: |
+            { cat /tmp/go-version; date -u +%G-%V; } > /tmp/go-build-key
+            echo "GOCACHE=$(go env GOCACHE)"
+      - restore_cache:
+          keys:
+            - go-build-v1-{{ arch }}-{{ checksum "/tmp/go-build-key" }}-{{ checksum "go/go.sum" }}
+            - go-build-v1-{{ arch }}-{{ checksum "/tmp/go-build-key" }}-
+
+  go-build-cache-save:
+    steps:
+      - save_cache:
+          key: go-build-v1-{{ arch }}-{{ checksum "/tmp/go-build-key" }}-{{ checksum "go/go.sum" }}
+          paths:
+            - ~/.cache/go-build
+            - ~/.cache/golangci-lint
+
 jobs:
   # Generated-code freshness and protobuf compatibility against a freshly
   # fetched origin/main. A failed fetch fails the job: the compatibility
@@ -226,10 +254,20 @@ jobs:
   # the Go golden tests run the Python reference implementation, and
   # py-e2e runs the Python coordinator with the Go commands, which the
   # Python jobs, without Go, skip.
+  #
+  # A change to python/ alone runs the narrow mode, make go-python-test
+  # py-e2e: only cmd/mr (its golden tests compare with Python's output),
+  # papermap (it reads the Python test names) and py-e2e read python/.
+  # Every other Go package passes with python/ deleted and no Python on the
+  # PATH, so their result from main stands (docs/ci.md).
   go:
     executor:
       name: medium
       python: "3.13"
+    environment:
+      # The build cache is restored, but test results never are: every test
+      # runs on every run, as on a fresh machine.
+      GOFLAGS: -count=1
     steps:
       - unless:
           condition:
@@ -237,10 +275,30 @@ jobs:
               - << pipeline.parameters.run-all >>
               - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-go >>
+              - << pipeline.parameters.run-go-python >>
           steps:
             - run:
                 name: Not implicated — skipping
                 command: 'echo "go: no Go, Python (py-e2e), shell, build, or CI files changed; the go result from main stands (docs/ci.md)."'
+      - when:
+          condition:
+            and:
+              - << pipeline.parameters.run-go-python >>
+              - not:
+                  or:
+                    - << pipeline.parameters.run-all >>
+                    - equal: [main, << pipeline.git.branch >>]
+                    - << pipeline.parameters.run-go >>
+          steps:
+            - checkout
+            - go-toolchain
+            - python-deps:
+                python: "3.13"
+            - go-build-cache-restore
+            - run:
+                name: make go-python-test py-e2e (only python/ changed)
+                command: make go-python-test py-e2e PYTHON=python
+                no_output_timeout: 30m
       - when:
           condition:
             or:
@@ -252,6 +310,7 @@ jobs:
             - go-toolchain
             - python-deps:
                 python: "3.13"
+            - go-build-cache-restore
             - golangci-lint
             # make check skips shellcheck where it is missing; CI must not.
             - run:
@@ -266,6 +325,7 @@ jobs:
                 name: make go-lint go-test py-e2e
                 command: make go-lint go-test py-e2e PYTHON=python
                 no_output_timeout: 30m
+            - go-build-cache-save
             - store_artifacts:
                 path: go/cover.out
 
@@ -340,18 +400,21 @@ jobs:
                 name: make md-lint
                 command: make md-lint PYTHON=python
 
-  # Always runs, with no `when` gating: it fails the pipeline if any file the
-  # PR changes matches no mapping pattern in .circleci/config.yml, so an
-  # unmapped file can never silently skip every job. See that script.
+  # Always runs, with no `when` gating: it re-runs the selection and fails
+  # the pipeline if any file the PR changes matches no line of
+  # .circleci/mapping.txt, or if the parameters this pipeline received lack
+  # one the selection sets, so a job can never be skipped silently.
   mapping-coverage:
     executor:
       name: small
       python: "3.11"
+    environment:
+      MR_CI_PARAMS: '{"run-all": << pipeline.parameters.run-all >>, "run-go": << pipeline.parameters.run-go >>, "run-python": << pipeline.parameters.run-python >>, "run-proto": << pipeline.parameters.run-proto >>, "run-lint": << pipeline.parameters.run-lint >>, "run-go-python": << pipeline.parameters.run-go-python >>}'
     steps:
       - checkout
       - run:
-          name: Check every changed file is CI-mapped
-          command: python3 scripts/check-ci-mapping.py
+          name: Check the job selection
+          command: python3 scripts/ci-params.py --check
 
 # Jobs run in parallel, each in its own checkout, so proto generation cannot
 # change files another job is testing. All six jobs always exist in the

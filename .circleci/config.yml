@@ -1,70 +1,39 @@
 # Hosted CI on CircleCI's Free plan (docs/ci.md, ADR 0014, ADR 0020).
 # This file is the SETUP config only: it decides which jobs run, from the
 # files the PR changes, and then continues with .circleci/continue-config.yml.
-# It holds no job definitions and no test logic.
+# It holds no test logic.
 #
-# A setup workflow costs one small job per push; the jobs it skips are the
-# medium/small test jobs, so a docs-only PR costs the setup job, the lint
-# job, the mapping-coverage job and four echo-only jobs instead of the full
-# suite. Nothing is dropped: a job is skipped only when none of its inputs
-# changed, and scripts/check-ci-mapping.py fails the pipeline if any changed
-# file matches no mapping pattern below. Keep this mapping and that script
-# in sync: the script parses this block, so each line must stay in the form
-# `<regex> <parameter> true`, with no comments inside the block.
+# The select job runs scripts/ci-params.py, which reads
+# .circleci/mapping.txt and prints the pipeline parameters, and continues
+# with them. A docs-only PR then costs this job, lint, mapping-coverage and
+# four echo-only jobs instead of the full suite. Nothing is dropped: a job
+# is skipped only when none of its inputs changed, a deleted or unmapped
+# file runs everything, and the mapping-coverage job re-runs the selection
+# and fails if a file is unmapped or the jobs received other parameters.
 #
-# The filter job's image is pinned via its tag parameter below, not the
-# orb default: orb 1.1.0 defaults the tag to 3.8, and the get-pip.py
-# bootstrap its Set-parameters step downloads now requires Python 3.10 or
-# newer, so the first setup run failed on the default image (job #1111).
-# The pin is a major.minor tag, not rolling current, so the image cannot
-# silently regress; any 3.10+ tag works.
+# The selection is our own script, not the path-filtering orb: the orb's
+# diff lists a moved file only at its new path, so moving a file out of a
+# job's directory skipped that job, and it cannot see deletions. The
+# script needs only the image's python3 and git; the continuation orb
+# posts its output to CircleCI.
 version: 2.1
 setup: true
 orbs:
-  path-filtering: circleci/path-filtering@1.1.0
+  continuation: circleci/continuation@1.0.0
+jobs:
+  select:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Select the implicated jobs
+          command: python3 scripts/ci-params.py | tee /tmp/ci-params.json
+      - continuation/continue:
+          configuration_path: .circleci/continue-config.yml
+          parameters: /tmp/ci-params.json
 workflows:
   setup:
     jobs:
-      - path-filtering/filter:
-          tag: "3.12"
-          base-revision: main
-          config-path: .circleci/continue-config.yml
-          mapping: |
-            ^\.circleci/.* run-all true
-            ^Makefile$ run-all true
-            ^python/pyproject\.toml$ run-all true
-            ^scripts/.* run-all true
-            ^bin/.* run-all true
-            ^go/go\.mod$ run-all true
-            ^go/.* run-go true
-            ^python/.* run-python true
-            ^python/.* run-go true
-            ^proto/.* run-proto true
-            ^.*\.sh$ run-go true
-            ^.*\.md$ run-lint true
-            ^docs/.* run-lint true
-            ^bench/.* run-lint true
-            ^examples/.* run-lint true
-            ^deploy/.* run-lint true
-            ^\.github/.* run-lint true
-            ^LICENSE.* run-lint true
-            ^\.[^/]*$ run-lint true
-            ^README\.md$ run-python true
-            ^design\.md$ run-python true
-            ^docs/design/0001-languages-and-shared-contract\.md$ run-python true
-            ^docs/roadmap\.md$ run-python true
-            ^docs/roadmap-explained\.md$ run-python true
-            ^docs/report\.md$ run-python true
-            ^docs/ci\.md$ run-python true
-            ^docs/design/0014-ci-on-pull-requests\.md$ run-python true
-            ^docs/paper-mapping\.md$ run-go true
-            ^docs/paper-mapping\.md$ run-python true
-            ^docs/cluster-vm\.md$ run-python true
-            ^bench/README\.md$ run-python true
-            ^bench/.*\.py$ run-python true
-            ^deploy/compose/README\.md$ run-python true
-            ^deploy/compose/.*\.yaml$ run-python true
-            ^deploy/compose/monitoring/.*$ run-go true
-            ^deploy/compose/monitoring/.*$ run-python true
-            ^examples/README\.md$ run-python true
-            ^go/examples/.*$ run-python true
+      - select

@@ -42,10 +42,11 @@ from map to reduce tasks, and the rate at which reduce tasks write output
 - [`scrape-metrics.py`](scrape-metrics.py) `INTERVAL DURATION URL...`
   fetches each worker's `/metrics` every INTERVAL seconds and writes its byte
   counters to stdout as CSV.
-- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png]` sums the counters
+- [`plot-rates.py`](plot-rates.py) `SAMPLES.csv [OUT.png [TITLE]]` sums the counters
   over the workers and differentiates them between samples. It writes the
   input, shuffle and output rates in MB/s as CSV, or, given `OUT.png`, draws
-  them in three panels as the paper does. Drawing needs matplotlib.
+  them in three panels as the paper does, with TITLE (program, size, M, R,
+  commit) as an identification line. Drawing needs matplotlib.
 
 Workers count input and output bytes as each task ends, so those two rates
 rise in steps of whole tasks. The shuffle is counted as it is fetched.
@@ -168,6 +169,12 @@ succeeded, and every run's output matched the normal run's checksum.
 ```sh
 python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 ```
+
+That also draws `E2-comparison.png` (and `-dark`) from two directories: the
+no-straggler rows from `E2-pairs/` and the straggler rows from `E2/`; the
+image's subtitle says so. The two rates plots in `evaluation/paper/` were drawn
+from their `samples.csv` with `plot-rates.py`, whose third argument is the
+identification line in the image.
 
 Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1 and E4 ran at commit `4b5a235`, and E2 again at `ca082a3` and `162be31` (below); E3 ran again at `9a3cd42`, after
 its rate plot was found to mark the kill about 8 s too early (the workers
