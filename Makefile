@@ -55,6 +55,16 @@ mr:
 		-v "$(CURDIR)/go:/src:ro" -v "$(CURDIR)/bin:/bin-out" -w /src \
 		golang:1.26-alpine go build -buildvcs=false -o /bin-out/mr ./cmd/mr; fi
 
+# Host tools for the fixed-VM paper campaign; no cluster is changed here.
+.PHONY: paper-tools
+paper-tools:
+	test -z "$$(git status --porcelain --untracked-files=all -- . ':!.tools')"
+	$(MAKE) mr
+	cd go && go build -o ../bin/paper-data ./tools/paper-data
+	docker build --iidfile bin/paper-image.id --label org.opencontainers.image.revision=$$(git rev-parse HEAD) -t mapreduce-paper:$$(git rev-parse HEAD) -f deploy/docker/Dockerfile go
+	test -z "$$(git status --porcelain --untracked-files=all -- . ':!.tools')"
+	$(PYTHON) -c 'import hashlib,json,pathlib,subprocess; json.dump(dict(commit=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),image=pathlib.Path("bin/paper-image.id").read_text().strip(),tools={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in ("bin/mr","bin/paper-data")}),open("bin/paper-build.json","w"),indent=2)'
+
 # Example input in shared storage: the test corpus at /data/input/corpus and
 # a 10 MB web log at /data/input/weblog/access.log.
 upload-example: data mr
@@ -276,5 +286,11 @@ cover: test
 py-e2e:
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
+# One root per invocation: with paths outside python/ in the same call, ruff
+# resolves its config from the common ancestor (the repository root, which
+# has none) and falls back to defaults, flagging files the pinned config
+# accepts. Each root therefore gets its own call and config.
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format --check . && $(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff format --check --config python/pyproject.toml scripts bench
+	$(PYTHON) -m ruff check --config python/pyproject.toml scripts bench

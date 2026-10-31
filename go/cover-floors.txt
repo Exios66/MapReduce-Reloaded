@@ -10,6 +10,7 @@ examples/distsort 99
 examples/grep 89
 examples/internal/run -  # run by every example's tests
 examples/invertedindex 88
+examples/papersort 99
 examples/reverselinks 99
 examples/termvector 92
 examples/urlfreq 99
@@ -38,3 +39,4 @@ internal/wire 93
 internal/worker 92
 pkg/api 97
 tools/mutate 27  # the rest runs go test on each mutant: make mutate
+tools/paper-data 88  # VM measurement: 89.7% on 2026-10-29

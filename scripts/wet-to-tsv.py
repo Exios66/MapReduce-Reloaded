@@ -14,16 +14,32 @@ import sys
 
 def records(f):
     """Yields (headers, body) for each WARC record in f."""
-    while line := f.readline():
+    while line := f.readline(65537):
+        if len(line) > 65536:
+            raise ValueError("wet-to-tsv: record header line exceeds 64 KiB")
         if not line.strip():
             continue
         if not line.startswith(b"WARC/"):
             raise ValueError(f"wet-to-tsv: expected a WARC record, got {line[:40]!r}")
         headers = {}
-        while (line := f.readline().rstrip(b"\r\n")) != b"":
+        for _ in range(256):
+            line = f.readline(65537)
+            if not line or len(line) > 65536:
+                raise ValueError("wet-to-tsv: truncated or oversized headers")
+            line = line.rstrip(b"\r\n")
+            if not line:
+                break
             name, _, value = line.partition(b":")
             headers[name.strip().lower()] = value.strip()
-        yield headers, f.read(int(headers[b"content-length"]))
+        else:
+            raise ValueError("wet-to-tsv: too many headers")
+        length = int(headers[b"content-length"])
+        if not 0 <= length <= 16 << 20:
+            raise ValueError("wet-to-tsv: record body outside 0–16 MiB")
+        body = f.read(length)
+        if len(body) != length:
+            raise ValueError("wet-to-tsv: truncated record body")
+        yield headers, body
 
 
 def main() -> int:

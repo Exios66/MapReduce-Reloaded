@@ -25,12 +25,18 @@ line (program, input size, M, R, commit), so the image is readable apart
 from the page that embeds it. Only the annotation changes: the plotted
 rates are the same with or without it.
 
-Usage: python3 bench/plot-rates.py SAMPLES.csv [OUT.png [TITLE]]
+The campaign's recorded restart resets its worker's series even when the
+first observed new counter exceeds the last old counter.
+
+Usage: python3 bench/plot-rates.py SAMPLES.csv [OUT.png [TITLE]] [--restart-dir RUN_DIR]
 """
 
+import argparse
 import csv
+import json
 import sys
 import textwrap
+from pathlib import Path
 
 METRICS = {
     "input": "mr_worker_map_input_bytes_total",
@@ -39,7 +45,7 @@ METRICS = {
 }
 
 
-def rates(rows):
+def rates(rows, restart=None):
     """Returns (seconds, {rate: [MB/s, ...]}) from scrape-metrics.py rows:
     the times of the rounds, and the rates over the intervals between them,
     one fewer. Each worker's counters count from its first sample, so one
@@ -48,6 +54,7 @@ def rates(rows):
     worker restarts, counts from zero again."""
     by_metric = {metric: rate for rate, metric in METRICS.items()}
     rounds, last = {}, {}
+    reset = set()
     for row in rows:
         if row["metric"] in by_metric:  # a metric that is never plotted keeps no state
             rounds.setdefault(float(row["seconds"]), []).append(row)
@@ -57,7 +64,16 @@ def rates(rows):
         for row in rounds[t]:
             key, value = (row["url"], row["metric"]), int(row["value"])
             if key in last:
-                sums[by_metric[key[1]]] += value - last[key] if value >= last[key] else value
+                restarted = (
+                    restart is not None
+                    and key[0] == restart[0]
+                    and t >= restart[1]
+                    and key not in reset
+                )
+                delta = value if restarted or value < last[key] else value - last[key]
+                sums[by_metric[key[1]]] += delta
+                if restarted:
+                    reset.add(key)
             last[key] = value
         totals.append(dict(sums))
     series = {rate: [] for rate in METRICS}
@@ -121,10 +137,24 @@ def plot(seconds, series, path, title=None):
 
 
 def main():
-    with open(sys.argv[1], newline="") as f:
-        seconds, series = rates(csv.DictReader(f))
-    if len(sys.argv) > 2:
-        plot(seconds, series, sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("samples")
+    parser.add_argument("output", nargs="?")
+    parser.add_argument("title", nargs="?")
+    parser.add_argument("--restart-dir", type=Path)
+    args = parser.parse_args()
+    restart = None
+    if args.restart_dir is not None:
+        directory = args.restart_dir
+        url = json.loads((directory / "restart.json").read_text())["url"]
+        origin = json.loads((directory / "clock.json").read_text())["epoch"]
+        with (directory / "events.csv").open() as stream:
+            events = {r["event"]: float(r["epoch"]) for r in csv.DictReader(stream)}
+        restart = (url, events["killed"] - origin)
+    with open(args.samples, newline="") as f:
+        seconds, series = rates(csv.DictReader(f), restart)
+    if args.output is not None:
+        plot(seconds, series, args.output, args.title)
         return
     out = csv.writer(sys.stdout, lineterminator="\n")
     out.writerow(["seconds", *METRICS])

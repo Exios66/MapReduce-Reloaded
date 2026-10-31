@@ -325,6 +325,13 @@ jobs:
                 name: make go-lint go-test py-e2e
                 command: make go-lint go-test py-e2e PYTHON=python
                 no_output_timeout: 30m
+            # Seed-only fuzzing runs inside go-test; this explores new inputs
+            # for every target on the same container (ten seconds each, about
+            # two minutes per run-all PR, no new job or runner).
+            - run:
+                name: make fuzz FUZZTIME=10s
+                command: make fuzz FUZZTIME=10s
+                no_output_timeout: 15m
             - go-build-cache-save
             - store_artifacts:
                 path: go/cover.out

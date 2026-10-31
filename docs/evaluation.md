@@ -34,6 +34,21 @@ That block does not say which host it was. That these two runs were on the
 course VM comes from the context of the runs, not from a record. No
 `machine.json` was added for them afterwards.
 
+A separate [decimal-10-GB campaign](../bench/evaluation/10gb/README.md)
+started on 2026-10-30: the E0–E5 controls at approximately ten times the
+1 GiB evaluation, each setting repeated three times on the same generated
+formats and Zipf skew. Complete: nine grep trials at exactly 100M
+records/10,000,000,000 bytes and the 39-trial whole-line sort matrix
+(medians 636.7 s at 1 worker, 336.2 s at 2 and 190.6 s at 4; straggler
+275.8 s with backups against 302.1 s without; permanent worker loss
+236.8/239.6/268.7 s at 25/50/75% against a 208.8 s normal). Nine
+paper-format (`papersort`) trials complete: 204.2 s normal, 182.9 s without
+backups, 221.1 s with an immediate worker restart. The 36-trial word-count
+cohort is running. Native uncompressed sort is capacity-blocked on the
+VM's one 35 GB disk; admitted sort is the explicitly labeled zstd-KV
+input/intermediate/output variant. A later campaign table replaces none of
+the historical rows above.
+
 E6 repeats §4.3's combiner measurement on real text at 1 GiB. On crawled
 English the combiner cut the bytes shuffled 5.2× and the job time 14%; on
 crawled pages in every language, 3.2× and 7%; on the book, 33× and 22%.

@@ -25,6 +25,6 @@ example programs (those live in `go/examples/`).
 To run either, start with the commands in the README's
 [quick start](../README.md#quick-start).
 
-The compiled example programs — `grep`, `distsort`, `wordcount`,
+The compiled example programs — `grep`, `distsort`, `papersort`, `wordcount`,
 `invertedindex`, `reverselinks`, `termvector`, `urlfreq` — are registered
 programs in `go/examples/` and run with `mr run` or on the cluster by name.

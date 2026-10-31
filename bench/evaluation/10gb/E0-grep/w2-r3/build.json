@@ -1,0 +1,8 @@
+{
+  "commit": "70fcbd424672ec4405e6c0325ddf326ff509ef6a",
+  "image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+  "tools": {
+    "bin/mr": "55481e0d5f87cc007ebb0ae12ea4d57543c7e4059b03162a72daa5dafb4179d0",
+    "bin/paper-data": "a254f047532174e11d5abd48ecd28592da866278882ca4ea5dfa4627c9419868"
+  }
+}
