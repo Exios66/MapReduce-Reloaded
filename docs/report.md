@@ -110,7 +110,7 @@ short: unit tests in both languages, golden vectors shared by Go and
 Python for the file format, the hash and the messages, in-process cluster
 tests, a seeded chaos test that kills workers and restarts the
 coordinator, fuzzing of the decoders, a model-based test of the
-coordinator's RPCs, coverage floors per package (Go 89.8%, Python 100%),
+coordinator's RPCs, coverage floors per package (Go 83–99%, Python 99%),
 and mutation testing of the core packages. `make check` runs the fast set
 locally and CircleCI runs it on every pull request.
 
@@ -147,7 +147,7 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests.** 157 merged pull requests (as of October 2026).
+- **Small pull requests.** 180 merged pull requests (as of 30 October 2026).
   The documented process calls for AI review and CI before merging; several
   real bugs were found in review, not by tests.
 

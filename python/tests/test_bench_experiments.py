@@ -2,8 +2,10 @@
 
 import csv
 import io
+import json
 import re
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -285,7 +287,10 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
         """,
         check=False,
     )
-    calls = log.read_text().splitlines()
+    # The time a run's logs start from varies; the rest of the call does not.
+    calls = [
+        c.split(" 20")[0] if c.startswith("logs ") else c for c in log.read_text().splitlines()
+    ]
     if free_kib < 5 << 20:
         assert result.returncode == 1
         assert "under 5 GB free on /; stopping" in result.stderr
@@ -306,6 +311,7 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
                 "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"{flag}wordcount /out/exp-E1-s{exponent}-{combiner}-1 "
                 f"/out/exp-input-wordcount-100-{exponent}.txt",
+                "logs --no-color --timestamps --since",
             ]
         )
     assert calls == expected
@@ -328,6 +334,126 @@ def test_run_restarts_workers_checks_disk_and_forwards_combiner_flags(
         ]
         assert float(row[11]) >= 0
         assert row[12:] == ["0", "0", "123", "1", "job-1"]
+
+
+def test_run_saves_the_clusters_logs_from_before_the_run(experiment, tmp_path):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        compose_stub() {
+            printf '%s\n' "$*" >> "$CALL_LOG"
+            case $1 in
+            logs) echo "coordinator-1  | 2026-10-30T00:00:00Z msg=hello" ;;
+            restart) ;;
+            *) echo job-1 ;;
+            esac
+        }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+            printf 'disk 10000000 0 9000000 0%% /\n'
+        }
+        status_stub() { printf 'job-1\tSUCCEEDED\nseconds\t2\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E1
+        run E1 base wordcount 2 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    saved = (tmp_path / "bench/results/E1/logs-base-wordcount-2.log").read_text()
+    assert saved == "coordinator-1  | 2026-10-30T00:00:00Z msg=hello\n"
+    # Taken before the workers restart, so their registrations are in it.
+    calls = log.read_text().splitlines()
+    (logs,) = (i for i, c in enumerate(calls) if c.startswith("logs "))
+    assert calls[0] == "restart worker" and logs > 0
+    assert re.fullmatch(
+        r"logs --no-color --timestamps --since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", calls[logs]
+    )
+
+
+def test_sampled_run_saves_logs_from_before_its_workers_restarted(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/input.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        save_logs() { printf 'save|%s|%s\\n' "$1" "$2" >> "$CALL_LOG"; }
+        python3() { :; }
+        compose_stub() { [ "$1" = restart ] || echo job-1; }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\\n'
+            printf 'disk 10000000 0 9000000 0%% /\\n'
+        }
+        status_stub() { printf 'job-1\\tSUCCEEDED\\nseconds\\t2\\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E3
+        start_sampler tasks bench/sample.csv
+        wait "$sampler"; sampler=
+        run E3 normal distsort 1 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    (saved,) = (c for c in log.read_text().splitlines() if c.startswith("save|"))
+    _, path, since = saved.split("|")
+    assert path == "bench/results/E3/logs-normal-distsort-1.log"
+    # The time start_sampler's restart began, not the time run began.
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z", since)
+
+
+def test_run_reports_why_submit_failed_and_still_saves_the_logs(experiment, tmp_path, monkeypatch):
+    invoke, _ = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        fresh() { :; }
+        compose_stub() {
+            case $1 in
+            logs) echo "coordinator-1  | msg=refused" ;;
+            *)
+                echo "rpc error: code = FailedPrecondition desc = job-3 is still running" >&2
+                return 1 ;;
+            esac
+        }
+        compose=(compose_stub)
+        mkdir -p bench/results/E1
+        run E1 base wordcount 1 4 ""
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "mr submit failed for E1 base run 1" in result.stderr
+    assert "job-3 is still running" in result.stderr
+    assert "msg=refused" in (tmp_path / "bench/results/E1/logs-base-wordcount-1.log").read_text()
+    rows = (tmp_path / "bench/results/E1/cache.jsonl").read_text().splitlines()
+    assert [json.loads(row)["phase"] for row in rows] == ["start"]
+
+
+def test_save_logs_reports_a_failure_without_stopping(experiment, tmp_path):
+    invoke, _ = experiment
+    result = invoke(
+        """
+        compose_stub() { echo "no such service" >&2; return 1; }
+        compose=(compose_stub)
+        save_logs out.log 2026-10-30T00:00:00Z
+        echo continued
+        """
+    )
+    assert result.stdout == "continued\n"
+    assert "could not save the cluster's logs to out.log" in result.stderr
 
 
 @pytest.mark.parametrize("failure", ["restart", "registration"])
@@ -467,6 +593,10 @@ def test_begin_keeps_three_previous_results_and_prunes_the_volume(experiment):
         "run 4",
         "run 5",
     ]
+    assert result.stderr.splitlines() == [
+        "experiments: deleting bench/results/previous/E1-20260101-000001: "
+        "only the last three runs of E1 are kept; results worth keeping go in bench/evaluation/"
+    ]
     calls = log.read_text().splitlines()
     assert sum(c.startswith("volume:sh -c cd /out") for c in calls) == 5
     assert sum(c.endswith(" sh 100 E1") for c in calls) == 5
@@ -534,9 +664,14 @@ def test_each_sampled_run_refreshes_workers_before_discovery_and_sampling(
                 f"-v {tmp_path}/bench/jobs:/jobs:ro "
                 "mr submit -coordinator coordinator:7070 -m 2 -r 3 "
                 f"distsort /out/exp-E3-normal-{n} /out/input.txt",
+                "compose:logs --no-color --timestamps --since",
             ]
         )
-    assert log.read_text().splitlines() == expected
+    calls = [
+        c.split(" 20")[0] if c.startswith("compose:logs ") else c
+        for c in log.read_text().splitlines()
+    ]
+    assert calls == expected
     rows = list(csv.reader(io.StringIO(result.stdout)))
     assert [row[4] for row in rows] == ["1", "2"]
     assert all(row[15] == "1" for row in rows)
@@ -741,3 +876,376 @@ def test_every_compose_override_the_script_uses_exists_and_sets_the_speculation(
         assert command[:5] == ["coordinator", "-addr", ":7070", "-http", ":8080"], name
         assert command[command.index("-data-dir") + 1] == "/out/wal", name
         assert command[-1] == flags[name], name
+
+
+@pytest.mark.parametrize(
+    ("curl", "reported"),
+    [("echo 'mr_workers 2'", "has 2"), ("return 22", "has none")],
+    ids=["wrong-count", "coordinator-unreachable"],
+)
+def test_registration_timeout_saves_the_logs_since_the_restart(
+    experiment, tmp_path, curl, reported
+):
+    invoke, log = experiment
+    result = invoke(
+        f"""
+        sleep() {{ :; }}
+        curl() {{ {curl}; }}
+        compose_stub() {{ printf 'compose:%s\\n' "$*" >> "$CALL_LOG"; }}
+        compose=(compose_stub)
+        metrics=http://unused
+        results_dir=bench/results/E1
+        fresh_at=2026-10-30T00:00:00.000000000Z
+        mkdir -p "$results_dir"
+        wait_workers 4
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"expected 4 workers, the coordinator {reported}" in result.stderr
+    assert log.read_text().splitlines() == [
+        "compose:logs --no-color --timestamps --since 2026-10-30T00:00:00.000000000Z"
+    ]
+    assert (tmp_path / "bench/results/E1/logs-registration-timeout.log").exists()
+
+
+def test_cache_prepare_records_the_page_cache_state_without_dropping_it(
+    experiment, tmp_path, monkeypatch
+):
+    invoke, log = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    invoke(
+        """
+        sudo() { echo "sudo:$*" >> "$CALL_LOG"; }
+        cache_prepare bench/results/E1 E1 s1.0-on wordcount 2
+        cache_finish bench/results/E1 E1 s1.0-on wordcount 2
+        """
+    )
+    start, end = (
+        json.loads(line)
+        for line in (tmp_path / "bench/results/E1/cache.jsonl").read_text().splitlines()
+    )
+    assert (start["phase"], end["phase"]) == ("start", "end")
+    assert start["dropped"] is False and end["dropped"] is None
+    assert (start["experiment"], start["setting"], start["program"], start["run"]) == (
+        "E1",
+        "s1.0-on",
+        "wordcount",
+        2,
+    )
+    assert start["input_bytes"] == 100
+    fields = ("mem_free_kib", "cached_kib", "dirty_kib", "ram_kib", "disk_read_sectors")
+    for row in (start, end):
+        for field in fields:
+            assert row[field] is None or isinstance(row[field], int)
+    if sys.platform.startswith("linux"):
+        assert all(isinstance(start[f], int) for f in fields[:4])
+    assert log.read_text() == ""  # nothing was dropped
+
+
+def test_cache_row_reports_null_for_what_the_host_cannot_say(experiment, tmp_path, monkeypatch):
+    invoke, _ = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    invoke(
+        """
+        awk() { return 1; }
+        cache_prepare bench/results/E1 E1 base grep 1
+        """
+    )
+    row = json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())
+    for field in ("mem_free_kib", "cached_kib", "dirty_kib", "ram_kib", "disk_read_sectors"):
+        assert row[field] is None
+
+
+@pytest.mark.parametrize(
+    ("diskstats", "expected"),
+    [
+        (
+            "8 0 sda 0 0 11\n8 1 sda1 0 0 90\n"
+            "252 0 vda 0 0 12\n202 0 xvda 0 0 13\n"
+            "259 0 nvme0n1 0 0 14\n259 1 nvme0n1p1 0 0 90\n"
+            "179 0 mmcblk0 0 0 15\n179 1 mmcblk0p1 0 0 90\n",
+            65,
+        ),
+        ("179 0 mmcblk0 0 0 0\n", 0),
+        ("7 0 loop0 0 0 42\n179 1 mmcblk0p1 0 0 90\n", None),
+        ("", None),
+    ],
+)
+def test_cache_row_counts_recognized_whole_disks(
+    experiment, tmp_path, monkeypatch, diskstats, expected
+):
+    invoke, _ = experiment
+    fixture = tmp_path / "diskstats"
+    fixture.write_text(diskstats)
+    monkeypatch.setenv("DISKSTATS_FIXTURE", str(fixture))
+    invoke(
+        """
+        awk() {
+            if [ "$2" = /proc/diskstats ]; then
+                command awk "$1" "$DISKSTATS_FIXTURE"
+            else
+                command awk "$@"
+            fi
+        }
+        cache_prepare bench/results/E1 E1 base grep 1
+        """
+    )
+    row = json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())
+    assert row["disk_read_sectors"] == expected
+
+
+def test_cache_prepare_drops_the_caches_when_asked(experiment, tmp_path, monkeypatch):
+    invoke, log = experiment
+    monkeypatch.setenv("DROP_CACHES", "1")
+    invoke(
+        """
+        id() { echo 1000; }
+        sync() { echo sync >> "$CALL_LOG"; }
+        sudo() {
+            echo "sudo:$*" >> "$CALL_LOG"
+            IFS= read -r value
+            echo "value:$value" >> "$CALL_LOG"
+        }
+        cache_prepare bench/results/E1 E1 s1.0-on wordcount 1
+        """
+    )
+    assert json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())["dropped"] is True
+    assert log.read_text().splitlines() == [
+        "sync",
+        "sudo:-n tee /proc/sys/vm/drop_caches",
+        "value:3",
+    ]
+
+
+def test_cache_prepare_stops_rather_than_record_a_cold_run_it_could_not_make(
+    experiment, tmp_path, monkeypatch
+):
+    invoke, _ = experiment
+    monkeypatch.setenv("DROP_CACHES", "1")
+    result = invoke(
+        """
+        id() { echo 1000; }
+        sync() { :; }
+        sudo() { return 1; }
+        cache_prepare bench/results/E1 E1 s1.0-on wordcount 1
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "page cache could not be dropped" in result.stderr
+    assert not (tmp_path / "bench/results/E1/cache.jsonl").exists()
+
+
+def test_run_records_the_cache_after_the_restart_and_around_the_job(experiment):
+    invoke, log = experiment
+    result = invoke(
+        """
+        input() { echo /out/exp-input-wordcount-100.txt; }
+        in_volume() { :; }
+        log() { :; }
+        sleep() { :; }
+        checksum() { echo sum; }
+        cache_prepare() { echo "cache:start:$*" >> "$CALL_LOG"; }
+        cache_finish() { echo "cache:end:$*" >> "$CALL_LOG"; }
+        date() {
+            [ "$1" != +%s.%N ] || echo clock >> "$CALL_LOG"
+            command date "$@"
+        }
+        save_logs() { :; }
+        compose_stub() {
+            printf '%s\n' "$*" >> "$CALL_LOG"
+            case $1 in
+            restart) ;;
+            *) echo job-1 ;;
+            esac
+        }
+        wait_workers() { :; }
+        df() {
+            printf 'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+            printf 'disk 10000000 0 9000000 0%% /\n'
+        }
+        status_stub() {
+            echo status >> "$CALL_LOG"
+            printf 'job-1\tSUCCEEDED\nseconds\t2\n'
+        }
+        compose=(compose_stub)
+        mr=status_stub
+        mkdir -p bench/results/E1
+        run E1 base wordcount 1 4 ""
+        """
+    )
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text().splitlines()
+    restart = calls.index("restart worker")
+    start = calls.index("cache:start:bench/results/E1 E1 base wordcount 1")
+    submit = next(i for i, c in enumerate(calls) if c.startswith("run "))
+    clock_start, clock_end = (i for i, call in enumerate(calls) if call == "clock")
+    status = calls.index("status")
+    end = calls.index("cache:end:bench/results/E1 E1 base wordcount 1")
+    assert restart < start < submit < clock_start < status < clock_end < end
+
+
+def test_cache_rows_measure_whole_disks_and_append_each_trial(experiment, tmp_path, monkeypatch):
+    invoke, _ = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    (tmp_path / "meminfo").write_text(
+        "MemTotal: 1000 kB\nMemFree: 200 kB\nCached: 300 kB\nDirty: 4 kB\n"
+    )
+    (tmp_path / "diskstats").write_text(
+        "   8 0 sda 1 2 11 4\n"
+        "   8 1 sda1 1 2 1000 4\n"
+        "   8 16 sdb 1 2 17 4\n"
+        "   8 32 sdaa 1 2 23 4\n"
+        " 252 0 vda 1 2 29 4\n"
+        " 202 0 xvda 1 2 31 4\n"
+        " 259 0 nvme0n1 1 2 37 4\n"
+        " 259 1 nvme0n1p1 1 2 1000 4\n"
+        "   7 0 loop0 1 2 1000 4\n"
+        " 253 0 dm-0 1 2 1000 4\n"
+    )
+    invoke(
+        """
+        awk() {
+            case "$2" in
+                /proc/meminfo) command awk "$1" meminfo ;;
+                /proc/diskstats) command awk "$1" diskstats ;;
+                *) command awk "$@" ;;
+            esac
+        }
+        date() { printf '2026-10-30T12:34:56Z\\n'; }
+        cache_prepare bench/results/E1 E1 base grep 1
+        printf '   8 0 sda 1 2 200 4\\n' > diskstats
+        cache_finish bench/results/E1 E1 base grep 1
+        cache_prepare bench/results/E1 E1 alternate distsort 2
+        printf '   7 0 loop0 1 2 999 4\\n' > diskstats
+        cache_finish bench/results/E1 E1 alternate distsort 2
+        """
+    )
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "bench/results/E1/cache.jsonl").read_text().splitlines()
+    ]
+    assert [(row["phase"], row["setting"], row["program"], row["run"]) for row in rows] == [
+        ("start", "base", "grep", 1),
+        ("end", "base", "grep", 1),
+        ("start", "alternate", "distsort", 2),
+        ("end", "alternate", "distsort", 2),
+    ]
+    assert [row["disk_read_sectors"] for row in rows] == [148, 200, 200, None]
+    assert [row["dropped"] for row in rows] == [False, None, False, None]
+    for row in rows:
+        assert row["experiment"] == "E1"
+        assert row["at"] == "2026-10-30T12:34:56Z"
+        assert row["input_bytes"] == 100
+        assert [row[field] for field in ("mem_free_kib", "cached_kib", "dirty_kib", "ram_kib")] == [
+            200,
+            300,
+            4,
+            1000,
+        ]
+
+
+@pytest.mark.parametrize("missing", ["meminfo", "diskstats"])
+def test_cache_row_keeps_available_metrics_when_one_source_fails(
+    experiment, tmp_path, monkeypatch, missing
+):
+    invoke, _ = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    monkeypatch.setenv("MISSING_SOURCE", missing)
+    (tmp_path / "meminfo").write_text(
+        "MemFree: 20 kB\nCached: 30 kB\nDirty: 4 kB\nMemTotal: 100 kB\n"
+    )
+    (tmp_path / "diskstats").write_text("8 0 sda 1 2 55 4\n")
+    invoke(
+        """
+        awk() {
+            case "$2" in
+                /proc/meminfo|/proc/diskstats)
+                    file=${2##*/}
+                    [ "$file" != "$MISSING_SOURCE" ] || return 1
+                    command awk "$1" "$file" ;;
+                *) command awk "$@" ;;
+            esac
+        }
+        cache_prepare bench/results/E1 E1 base grep 1
+        """
+    )
+    row = json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())
+    memory = [row[field] for field in ("mem_free_kib", "cached_kib", "dirty_kib", "ram_kib")]
+    assert memory == ([None] * 4 if missing == "meminfo" else [20, 30, 4, 100])
+    assert row["disk_read_sectors"] == (None if missing == "diskstats" else 55)
+
+
+@pytest.mark.parametrize("value", ["0", "true", "yes"])
+def test_cache_prepare_drops_only_for_exact_opt_in(experiment, tmp_path, monkeypatch, value):
+    invoke, log = experiment
+    monkeypatch.setenv("DROP_CACHES", value)
+    invoke(
+        """
+        sync() { echo sync >> "$CALL_LOG"; }
+        sudo() { echo sudo >> "$CALL_LOG"; }
+        cache_prepare bench/results/E1 E1 base grep 1
+        """
+    )
+    assert json.loads((tmp_path / "bench/results/E1/cache.jsonl").read_text())["dropped"] is False
+    assert log.read_text() == ""
+
+
+def test_cache_drop_failure_stops_run_without_losing_earlier_rows(
+    experiment, tmp_path, monkeypatch
+):
+    invoke, log = experiment
+    monkeypatch.setenv("DROP_CACHES", "1")
+    cache_file = tmp_path / "bench/results/E1/cache.jsonl"
+    cache_file.parent.mkdir(parents=True)
+    cache_file.write_text('{"phase":"end","run":1}\n')
+    result = invoke(
+        """
+        input() { echo /out/input.txt; }
+        in_volume() { :; }
+        fresh() { echo restarted >> "$CALL_LOG"; }
+        log() { :; }
+        id() { echo 1000; }
+        sync() { echo sync >> "$CALL_LOG"; }
+        sudo() { cat > /dev/null; return 1; }
+        compose_stub() { echo submitted >> "$CALL_LOG"; }
+        compose=(compose_stub)
+        run E1 base grep 2 4 ""
+        """,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "page cache could not be dropped" in result.stderr
+    assert log.read_text().splitlines() == ["restarted", "sync"]
+    assert cache_file.read_text() == '{"phase":"end","run":1}\n'
+
+
+def test_failed_job_still_records_its_end_cache_row(experiment, tmp_path, monkeypatch):
+    invoke, _ = experiment
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    invoke(
+        """
+        input() { echo /out/input.txt; }
+        in_volume() { :; }
+        fresh() { :; }
+        log() { :; }
+        sleep() { :; }
+        save_logs() { :; }
+        compose_stub() { echo job-1; }
+        status_stub() { printf 'job-1\\tFAILED\\nseconds\\t2\\n'; }
+        compose=(compose_stub)
+        mr=status_stub
+        run E1 base grep 1 4 ""
+        """
+    )
+    result_dir = tmp_path / "bench/results/E1"
+    rows = [json.loads(line) for line in (result_dir / "cache.jsonl").read_text().splitlines()]
+    assert [(row["phase"], row["run"], row["dropped"]) for row in rows] == [
+        ("start", 1, False),
+        ("end", 1, None),
+    ]
+    with (result_dir / "runs.csv").open(newline="") as result_file:
+        (run,) = csv.reader(result_file)
+    assert run[9] == "FAILED"
+    assert run[-2:] == ["0", "job-1"]

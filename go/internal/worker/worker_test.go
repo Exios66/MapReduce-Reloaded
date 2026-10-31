@@ -2,6 +2,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -169,5 +171,28 @@ func TestReduceMeter(t *testing.T) {
 		if m != nil || m.wrap(r) != r {
 			t.Errorf("a meter with nothing to report: %v, want a nil one that passes reads through", m)
 		}
+	}
+}
+
+// An attempt's end is logged with how long it ran and whether it worked.
+func TestLogEnd(t *testing.T) {
+	var b bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&b, nil))
+	logEnd(log, time.Now().Add(-2*time.Second), nil)
+	logEnd(log, time.Now(), errors.New("boom"))
+	lines := strings.Split(strings.TrimSpace(b.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %d records, want 2: %s", len(lines), b.String())
+	}
+	var ok, failed struct {
+		Msg     string  `json:"msg"`
+		Seconds float64 `json:"seconds"`
+		OK      bool    `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &ok); err != nil || ok.Msg != "task ended" || ok.Seconds < 2 || !ok.OK {
+		t.Fatalf("got %s (%v)", lines[0], err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &failed); err != nil || failed.OK {
+		t.Fatalf("got %s (%v)", lines[1], err)
 	}
 }

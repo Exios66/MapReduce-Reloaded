@@ -164,7 +164,7 @@ tail -f bench/results/experiments.log        # about 2 hours for all seven
 python/.venv/bin/python bench/plot-experiments.py bench/results bench/plots
 ```
 
-`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6` runs one experiment of
+`bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7` runs one experiment (E7, #59, is not part of `all`) of
 [design.md](../design.md#performance-evaluation); `nohup` keeps it running if
 SSH drops. The command above draws a fresh run into `bench/plots/`
 (`E0.png` … `E6.png`, each with a `-dark` variant), so it does not touch the
@@ -172,10 +172,47 @@ plots committed in `bench/evaluation/`, which come from the saved runs there:
 `python/.venv/bin/python bench/plot-experiments.py bench/evaluation bench/evaluation` (see
 [bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
+
+Every trial appends two rows to `bench/results/EXPERIMENT/cache.jsonl`: a
+`start` row at submission (`MemFree`, `Cached`, `Dirty` and `MemTotal` in
+KiB, the input's size, and whether the cache was dropped) and an `end` row
+with the sectors the host's disks had read by then. `disk_read_sectors` is a
+host-wide counter that includes reads by other processes. The difference
+between the rows cannot determine whether this trial's input was in cache.
+
+Trials are warm by default. The input is written moments before the first
+trial and fits in RAM (1 GiB of 8 GB), so reads come from memory, and the
+read rates of these runs are not comparable with the 2004 paper's, which read
+from disk. Read them as relative comparisons (combiner on and off, a failure
+or a straggler). At 10 GB the input exceeds RAM and trials are cold in part
+by construction.
+
+`DROP_CACHES=1` flushes and drops the kernel's page, dentry and inode caches
+before each trial, after the workers restart and before submission, so it
+also costs the workers their own pages. "Cold" means that and nothing more;
+process memory and the coordinator's state are not reset. It acts on the
+whole machine, including any other user or campaign on it, so set it only
+for runs on the course VM that nothing else is using. It runs as root or
+through `sudo -n tee`, and the experiment stops if that fails. Every trial of
+one comparison must share a cache state (all dropped or none), so set it for
+all of E1 or none of it, and do not compare the `start` rows' `dropped`
+values across groups.
 E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
 `bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not
 part of `all` and has not been run; see
 [bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run).
+
+Each run also saves what the cluster logged, to
+`bench/results/EXPERIMENT/logs-SETTING-PROGRAM-RUN.log`: the coordinator's and every
+worker's lines from before the run's workers restarted until it ended, each
+with its container's name and a timestamp. (`make bench` saves
+`cluster.log` in the run's directory.) Containers are recreated between
+experiments, and Docker keeps only 3 × 10 MB per container, so these files
+are the only record of a run after that. When a run is `valid=0`, `FAILED`
+or slow, read its log first: `grep -E 'level=(WARN|ERROR)'` finds the
+failures, and the `job` column of `runs.csv` names the job to search for.
+`bench/results/` is ignored; copy the logs of runs worth keeping into
+`bench/evaluation/` with their CSVs.
 
 ### 5.7 Monitoring (optional)
 
@@ -187,8 +224,10 @@ Open <http://127.0.0.1:13000/> on your laptop for the Grafana dashboard.
 This adds 512 MB of memory limits.
 
 The same demo is in [`examples/demo.ipynb`](../examples/demo.ipynb), which
-runs it cell by cell in Jupyter: upload, submit, read, plot, a second
-program, the metrics, and a local-mode check.
+runs it cell by cell in Jupyter: upload, submit, read, plot, the job file,
+a second program, a worker killed mid-job, the metrics, and a local-mode
+check. Install its dependencies with
+`python/.venv/bin/pip install -e 'python[notebook]'`.
 
 ### 5.8 The soak run (#160)
 

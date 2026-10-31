@@ -76,10 +76,12 @@ directory, removed when it exits cleanly. A killed worker cannot remove it,
 and its restarted process makes another, so pruning, which looks only in
 its own directory, never sees the old one: on the course VM, nine E3 kills
 left 1.9 GB in one worker container. Each worker now holds a lock
-(`flock`) on a file in its directory while it runs; a starting worker
+(`flock`) on its directory while it runs; a starting worker
 deletes every `mr-worker-*` directory whose lock it can take, since the
-kernel drops a lock when its process dies. A directory without the lock
-file is kept: its worker may still be starting. Nothing reads a dead
+kernel drops a lock when its process dies. A worker locks its directory
+before writing the `.lock` marker there, and a sweep that wins the lock
+first deletes the directory, so its worker makes another. A directory
+without the marker is kept. Nothing reads a dead
 worker's output, since the coordinator reruns its map tasks (§3.3).
 
 **Experiments prune what they leave.** `bench/experiments.sh` moves an

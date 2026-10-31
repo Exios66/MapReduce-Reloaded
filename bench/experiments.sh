@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The performance evaluation (design.md, "Performance evaluation") on
-# the Compose cluster: experiments E0 to E5, each run REPEAT times
+# the Compose cluster: experiments E0 to E7 (E7 is not part of `all`), each run REPEAT times
 # (default 3) on SIZE bytes of input (default 1 GiB) with M (default 32)
 # and R (default 4) tasks.
 #
@@ -33,7 +33,9 @@
 # Each experiment writes bench/results/EXPERIMENT/: runs.csv, one row per
 # run; machine.json, the commit and the machine; and, for the plots over
 # time, tasks-LABEL.csv (scrape-tasks.py) or samples-LABEL.csv
-# (scrape-metrics.py) per run. bench/plot-experiments.py draws the plots.
+# (scrape-metrics.py) per run; and logs-SETTING-PROGRAM-RUN.log per run, what the
+# coordinator and workers logged from before the run's workers restarted
+# until it ended, one line per event with its container's name and time. bench/plot-experiments.py draws the plots.
 #
 # Every run's output is checksummed and compared with the first normal run
 # on the same input; a run that differs has valid=0 and is not plotted.
@@ -59,6 +61,8 @@ metrics=http://127.0.0.1:18780/metrics
 tmp=$(mktemp -d)
 sampler=
 ready=
+fresh_at= # when fresh last began, for the logs of the run that follows it
+results_dir= # the running experiment's directory, set by begin
 slow= # the workers E2 and E7 throttle (container IDs), restored however the script exits
 cleanup() {
     local c
@@ -77,6 +81,16 @@ mr=$tmp/mr
 in_volume() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine "$@"; }
 log() { echo "[$(date +%T)] $*" >&2; }
 
+# save_logs FILE SINCE: saves what the cluster's containers logged since
+# SINCE (an RFC 3339 time) to FILE, each line stamped and named for its
+# container. A run's logs are all that explains a failed, slow or invalid
+# run once the next run recreates the containers. A failure to save is
+# reported and does not stop the experiment.
+save_logs() {
+    "${compose[@]}" logs --no-color --timestamps --since "$2" > "$1" 2>&1 ||
+        echo "experiments: could not save the cluster's logs to $1" >&2
+}
+
 # configure WORKERS [OVERRIDE.yaml]: restarts the cluster with WORKERS
 # workers and a new coordinator, which reopens its log (E4 deletes the old
 # one first), and waits until that many workers are registered and no lost
@@ -93,12 +107,69 @@ configure() {
 wait_workers() {
     local n
     for _ in $(seq 120); do
-        n=$(curl -fsS "$metrics" 2>/dev/null | awk '$1 == "mr_workers" { print $2 }')
+        # An unreachable coordinator is the likeliest failure: it must count as
+        # no workers and be retried, not stop the script under `set -e`.
+        n=$(curl -fsS "$metrics" 2>/dev/null | awk '$1 == "mr_workers" { print $2 }') || n=
         [ "$n" = "$1" ] && return 0
         sleep 0.5
     done
     echo "experiments: expected $1 workers, the coordinator has ${n:-none}" >&2
+    # Without these logs nothing explains the failed registration once the
+    # next start recreates the containers.
+    [ -z "$results_dir" ] ||
+        save_logs "$results_dir/logs-registration-timeout.log" "${fresh_at:-1970-01-01T00:00:00Z}"
     exit 1
+}
+
+# cache_prepare DIR EXPERIMENT SETTING PROGRAM RUN: before submission,
+# appends a "start" snapshot to DIR/cache.jsonl; cache_finish records the
+# corresponding "end" snapshot. disk_read_sectors is a host-wide counter
+# including reads by other processes; it cannot determine whether this trial's
+# input was cached. Without DROP_CACHES=1, the input may remain cached. With
+# it, pending writes are synced and the kernel's page, dentry and inode caches
+# are dropped across the whole machine. This needs root or passwordless sudo
+# and a writable /proc/sys; failure to drop exits before recording the start
+# row. Every trial of one comparison must
+# share a cache state; docs/runbook.md says so.
+cache_prepare() {
+    local dropped=false
+    mkdir -p "$1"
+    if [ "${DROP_CACHES:-}" = 1 ]; then
+        sync
+        if [ "$(id -u)" = 0 ]; then
+            echo 3 > /proc/sys/vm/drop_caches || dropped=failed
+        else
+            echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null || dropped=failed
+        fi
+        if [ "$dropped" = failed ]; then
+            echo "experiments: DROP_CACHES=1, but the page cache could not be dropped (needs root or passwordless sudo, and a writable /proc/sys)" >&2
+            exit 1
+        fi
+        dropped=true
+    fi
+    cache_row "$1" start "$2" "$3" "$4" "$5" "$dropped"
+}
+
+# cache_finish DIR EXPERIMENT SETTING PROGRAM RUN: appends an "end" snapshot
+# to DIR/cache.jsonl with dropped set to null.
+cache_finish() {
+    cache_row "$1" end "$2" "$3" "$4" "$5" null
+}
+
+# cache_row DIR PHASE EXPERIMENT SETTING PROGRAM RUN DROPPED: appends a JSON
+# snapshot to DIR/cache.jsonl. DROPPED is the JSON literal true, false or
+# null; input_bytes comes from SIZE. Memory values are in KiB. An unavailable
+# metric is null when no value is read; missing memory fields in readable data
+# are zero. disk_read_sectors is a cumulative count for whole sd, vd, xvd,
+# nvme and mmcblk disks, excluding partitions and other device names. It is
+# null when no disk is recognized. An append error is returned to the caller.
+cache_row() {
+    local mem_free cached dirty ram sectors
+    read -r mem_free cached dirty ram < <(awk '$1 == "MemFree:" { f = $2 } $1 == "Cached:" { c = $2 } $1 == "Dirty:" { d = $2 } $1 == "MemTotal:" { t = $2 } END { print f + 0, c + 0, d + 0, t + 0 }' /proc/meminfo 2>/dev/null) || true
+    sectors=$(awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$/ { s += $6; found = 1 } END { if (found) print s + 0 }' /proc/diskstats 2>/dev/null) || sectors=
+    printf '{"phase":"%s","experiment":"%s","setting":"%s","program":"%s","run":%s,"at":"%s","dropped":%s,"input_bytes":%s,"mem_free_kib":%s,"cached_kib":%s,"dirty_kib":%s,"ram_kib":%s,"disk_read_sectors":%s}\n' \
+        "$2" "$3" "$4" "$5" "$6" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$7" "$size" \
+        "${mem_free:-null}" "${cached:-null}" "${dirty:-null}" "${ram:-null}" "${sectors:-null}" >> "$1/cache.jsonl"
 }
 
 # input PROGRAM: generates PROGRAM's input once and prints its path.
@@ -149,9 +220,11 @@ valid() {
 counter() { awk -v name="$1" '$1 == name { print $2 }' "$tmp/status"; }
 
 # fresh WORKERS: restarts workers to clear their temporary map output and
-# waits for WORKERS registrations before sampling. Exits if / has less
-# than 5 GiB free; marks the workers ready for the next run.
+# waits for WORKERS registrations before sampling. Records the restart time
+# for the next run's logs and marks the workers ready. Exits if restarting or
+# registration fails, or if / has less than 5 GiB free or cannot be checked.
 fresh() {
+    fresh_at=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
     if ! "${compose[@]}" restart worker >/dev/null; then
         echo "experiments: worker restart failed; stopping" >&2
         exit 1
@@ -201,23 +274,35 @@ stop_sampler() {
 # EVENT_AT seconds after the job is submitted. The job is polled with
 # mr status, which, unlike submit -wait, outlives a coordinator restart.
 # The job uses the current submit_flags; its output directory is removed
-# before and after the run.
+# before submission and after a completed run. Attempts to save cluster logs
+# from before the workers restarted to logs-SETTING-PROGRAM-RUN.log in the
+# experiment's directory. Records a cache start snapshot before submission
+# and an end snapshot after polling finishes, including on failure or timeout.
+# If cache dropping fails, exits before submission. If submission fails,
+# reports its error, attempts to save the logs and exits without an end row.
 run() {
     local exp=$1 setting=$2 program=$3 n=$4 workers=$5 at=$6 event=${7:-}
-    local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job
+    local dir=bench/results/$exp out=/out/exp-$1-$2-$4 in start end state job since
+    # Before the workers restart, so the log holds their registrations too:
+    # a sampled run's workers restarted in start_sampler, before run.
+    since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
+    [ -z "$ready" ] || since=${fresh_at:-$since}
     in=$(input "$program")
     in_volume rm -rf "$out"
     [ -n "$ready" ] || fresh "$workers"
     ready=
     log "$exp $setting $program run $n"
+    cache_prepare "$dir" "$exp" "$setting" "$program" "$n"
     # Timed from submission, after the mr container has started.
     # shellcheck disable=SC2046
     # A job file is read from the repository's examples/ or bench/jobs/,
     # mounted read-only.
     job=$("${compose[@]}" run --rm -q -v "$PWD/examples:/examples:ro" -v "$PWD/bench/jobs:/jobs:ro" mr submit -coordinator coordinator:7070 -m "$m" -r "$r" \
-        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>/dev/null | tail -1)
+        $(params "$program") ${submit_flags[@]+"${submit_flags[@]}"} "${jobfile:-$program}" "$out" "$in" 2>"$tmp/submit.err" | tail -1) || job= # not to stop silently under set -e
     if [ -z "$job" ]; then
         echo "experiments: mr submit failed for $exp $setting run $n" >&2
+        cat "$tmp/submit.err" >&2
+        save_logs "$dir/logs-$setting-$program-$n.log" "$since"
         exit 1
     fi
     start=$(date +%s.%N)
@@ -239,6 +324,7 @@ run() {
         state=$(awk 'NR == 1 { print $2 }' "$tmp/status")
     done
     end=$(date +%s.%N)
+    cache_finish "$dir" "$exp" "$setting" "$program" "$n"
     # An event still pending missed the job: cancel it, and do not count the run.
     local missed=0
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -247,6 +333,7 @@ run() {
         log "$exp $setting run $n finished before its event at ${at}s; marked invalid"
     fi
     [ -z "$pid" ] || wait "$pid" 2>/dev/null || true
+    save_logs "$dir/logs-$setting-$program-$n.log" "$since"
     echo "$exp,$setting,$program,$workers,$n,$size,$m,$r,$at,$state,$(counter seconds)," \
         "$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }'),$(counter backups),$(counter backups_won)," \
         "$(counter map.output.bytes),$(if [ "$state" = SUCCEEDED ] && [ "$missed" = 0 ]; then valid "$in" "$out"; else echo 0; fi),$job" |
@@ -271,7 +358,8 @@ prune_volume() {
 
 # begin EXPERIMENT: starts the experiment's results. Results of an earlier
 # run move to bench/results/previous/, which keeps the last three per
-# experiment; results worth keeping go in bench/evaluation/ (bench/README.md).
+# experiment and reports each older result before deleting it; results worth
+# keeping go in bench/evaluation/ (bench/README.md).
 begin() { # EXPERIMENT
     local dir=bench/results/$1 old=()
     if [ -f "$dir/runs.csv" ]; then
@@ -279,12 +367,14 @@ begin() { # EXPERIMENT
         mv "$dir" "bench/results/previous/$1-$(date +%Y%m%d-%H%M%S)"
         old=("bench/results/previous/$1-"*) # oldest first: the names sort by time
         while [ "${#old[@]}" -gt 3 ]; do
+            echo "experiments: deleting ${old[0]}: only the last three runs of $1 are kept; results worth keeping go in bench/evaluation/" >&2
             rm -rf "${old[0]}"
             old=("${old[@]:1}")
         done
     fi
     prune_volume "$1"
     mkdir -p "$dir"
+    results_dir=$dir
     echo "experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job" > "$dir/runs.csv"
     python3 - "$(git rev-parse HEAD)" "$(git status --porcelain | wc -l)" "$(docker version --format '{{.Server.Version}}')" > "$dir/machine.json" <<'EOF'
 import json, os, platform, sys

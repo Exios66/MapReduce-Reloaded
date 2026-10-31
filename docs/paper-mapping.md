@@ -57,10 +57,10 @@ Status: `planned` → `in progress` → `done`.
   page (§4.8). The paper does not specify per-task fractions. The
   coordinator also uses them for LATE speculation (Zaharia et al., OSDI
   2008), an opt-in mode with `-speculation=late` that is not in the paper
-  and has no F row; F13 is the paper's rule, unchanged (#45; ADR 0009,
+  and has no F row; F13 is the paper's rule, unchanged (PR #284, issue #45; ADR 0009,
   0010, 0019).
 - **F11.** The scheduler ranks tasks by host, then zone, and can wait for a
   local worker (`Config.Locate`, `LocalityWait`). Nothing in the shipped
   binaries labels splits yet: Compose workers share one volume, so there is
-  no locality to exploit until a store that knows where data lives (#41).
+  no locality to exploit until a store that knows where data lives (S3 shipped in #41, but no `Locate` source is wired).
 - **F24.** The benchmark harness is #57 and the §5 experiments #58; [evaluation](evaluation.md) compares each with the paper.

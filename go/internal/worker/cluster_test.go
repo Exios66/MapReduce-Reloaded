@@ -330,7 +330,9 @@ func (c *cluster) mapFiles(job string) []string {
 // runJob runs program on n workers, which join one after another.
 func runJob(t *testing.T, program string, n int) (*cluster, string, *pb.GetJobStatusResponse) {
 	t.Helper()
-	c := newCluster(t)
+	// A late heartbeat on a loaded CI runner must not lose the worker, or
+	// its re-registration changes the counts the tests assert.
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second })
 	job := c.submit(program)
 	for range n {
 		c.addWorker()
@@ -382,7 +384,9 @@ func TestClusterLocality(t *testing.T) {
 		t.Run(fmt.Sprint(workers, " workers"), func(t *testing.T) {
 			splits := 0
 			c := newCluster(t, func(cfg *coordinator.Config) {
-				cfg.LocalityWait = time.Second
+				// Long enough that a busy host's worker, not a timeout, takes
+				// its next split even when the whole module's tests run at once.
+				cfg.LocalityWait = 5 * time.Second
 				cfg.Locate = func(*pb.InputSplit) []string {
 					splits++
 					return []string{fmt.Sprint("host-", splits%8)}
@@ -623,7 +627,9 @@ func TestClusterSurvivesReportForUnknownJob(t *testing.T) {
 }
 
 func TestClusterReregistersAfterInternal(t *testing.T) {
-	c := newCluster(t)
+	// A 5 s timeout, so that a heartbeat delayed on a loaded runner does not
+	// make the coordinator forget the worker and cost it a third registration.
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second })
 	job := c.submit("wordcount")
 	c.addWorker()
 	c.gates[0].fail.Store(1)

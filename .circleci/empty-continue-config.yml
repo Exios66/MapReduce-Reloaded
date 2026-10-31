@@ -1,0 +1,6 @@
+# The configuration a push to main continues with: nothing to run (ADR 0021).
+# The continuation orb's own finish command sends "version: 2", which
+# CircleCI no longer accepts, so config.yml continues with this file instead.
+version: 2.1
+jobs: {}
+workflows: {}
