@@ -6,6 +6,9 @@
 # Needs GITHUB_TOKEN (or GH_TOKEN): a fine-grained token with "Commit
 # statuses: write" on this repository. Run it with `make ci-report`.
 # Set PYTHON=... as for `make check`; set CI_REPORT_DRY_RUN=1 to skip posting.
+# Without PYTHON, when python3 lacks the dev tools, the clean copy gets a
+# python/.venv of its own (`make venv`; BASE_PYTHON picks its interpreter), so
+# the run does not depend on this clone's venv.
 set -euo pipefail
 
 context="local-ci/make-check"
@@ -73,6 +76,11 @@ status=0
         mkdir -p "$work/src/.tools" && cp -R "$root/.tools/bin" "$work/src/.tools/bin"
     else
         make -C "$work/src" tools
+    fi
+    # The dev tools make check needs: the system python3 may lack them. The
+    # copy then builds its own venv, which its Makefile picks up by itself.
+    if [ -z "${PYTHON:-}" ] && ! python3 -c 'import grpc_tools, pytest, coverage' 2>/dev/null; then
+        make -C "$work/src" venv
     fi
     make -C "$work/src" check ${PYTHON:+PYTHON="$PYTHON"}
 } >"$log" 2>&1 || status=$?
