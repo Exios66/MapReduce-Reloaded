@@ -11,6 +11,7 @@
 | [`fuzz.sh`](fuzz.sh) | Runs every Go fuzz target for `FUZZTIME` (default 20s) each; `make fuzz` (#152). |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |
 | [`fetch-corpus.sh`](fetch-corpus.sh) | Fetches the public-domain texts of the golden corpus into `testdata/corpus/`. |
+| [`capture-status-gifs.py`](capture-status-gifs.py) | Captures the status page while one whole real job runs, into dark and light `docs/assets/status-*.gif` with a provenance sidecar per run (commit, machine, job, input, timings). Needs a Chrome-family browser and ffmpeg/ffprobe on `PATH` and a running cluster; see [docs/demo.md](../docs/demo.md). |
 | [`fetch-data.sh`](fetch-data.sh) | Fetches real datasets for the example programs (War and Peace and its chapters, NASA's 1995 web log, Google's 2002 web graph, a Common Crawl WET file) into `data/input/`, each pinned by SHA-256. `make real-data`; see [Data](../docs/data.md). |
 | [`check-real-data.py`](check-real-data.py) | Runs word count, urlfreq, reverselinks, invertedindex and termvector over those datasets in Go and Python and compares both with an independent oracle. |
 | [`make-corpus-expected.py`](make-corpus-expected.py) | Regenerates the corpus's expected word count with an independent oracle. |
