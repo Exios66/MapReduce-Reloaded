@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
+  Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
+  `Makefile`) with `store_test_results`, so CircleCI shows each test, its
+  time and its failures, and keep them as artifacts (#314).
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without
@@ -97,6 +101,8 @@ cut a release.
 
 ### Fixed
 
+- CI: preserve separate Go test reports and publish Python integration test
+  results on Python-only changes, including failures.
 - Go tests: the cluster tests that run a whole job (`runJob`) give workers a
   5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
   longer makes a worker re-register and fail `TestClusterWorkerMetrics`
