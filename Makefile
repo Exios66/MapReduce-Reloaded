@@ -30,8 +30,9 @@ ci-report:
 
 # One-time setup per clone: create python/.venv with the package and every
 # dev tool make check runs. The other targets then use it automatically.
+# --clear rebuilds an existing venv, so BASE_PYTHON always takes effect.
 venv:
-	$(BASE_PYTHON) -m venv $(VENV)
+	$(BASE_PYTHON) -m venv --clear $(VENV)
 	$(VENV)/bin/python -m pip install --upgrade pip
 	$(VENV)/bin/python -m pip install -e "python[dev]"
 
