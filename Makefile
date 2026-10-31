@@ -2,10 +2,17 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
-# Python interpreter; many systems only have python3. Override with PYTHON=...
-PYTHON ?= python3
+# Python interpreter. Use the project venv (make venv) when it exists, since
+# the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
+# The path is absolute because some recipes run from python/. Override with
+# PYTHON=...
+VENV := $(CURDIR)/python/.venv
+PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
+# The interpreter make venv builds the venv from; it must be 3.11 to 3.13
+# until grpcio-tools ships wheels for newer Pythons, e.g. BASE_PYTHON=python3.13.
+BASE_PYTHON ?= python3
 
 all: check
 
@@ -20,6 +27,13 @@ check:
 # commit status (needs GITHUB_TOKEN; docs/design/0014-ci-on-pull-requests.md).
 ci-report:
 	scripts/ci-report.sh
+
+# One-time setup per clone: create python/.venv with the package and every
+# dev tool make check runs. The other targets then use it automatically.
+venv:
+	$(BASE_PYTHON) -m venv $(VENV)
+	$(VENV)/bin/python -m pip install --upgrade pip
+	$(VENV)/bin/python -m pip install -e "python[dev]"
 
 # One-time setup per clone: tell git to use the hooks in .githooks/.
 hooks:
