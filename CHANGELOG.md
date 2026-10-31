@@ -108,6 +108,11 @@ cut a release.
 
 ### Fixed
 
+- Build: `make` uses `python/.venv` when it exists, `make venv` creates it
+  with the package and every dev tool, and `scripts/gen-proto.sh` says how to
+  fix a Python that lacks `grpcio-tools`, instead of failing in
+  `make check` on a system `python3` without the dev tools. `make ci-report`
+  builds the clean copy's own venv when `python3` lacks them (#335).
 - Go tests: the cluster tests that run a whole job (`runJob`) give workers a
   5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
   longer makes a worker re-register and fail `TestClusterWorkerMetrics`
