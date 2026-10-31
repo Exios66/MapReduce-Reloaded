@@ -15,8 +15,9 @@ ports are bound to `127.0.0.1` only.
   `-data-dir /out/wal` with 256 MB; each worker has 768 MB, `cpus: 1`, and
   a 2 GiB minimum-free-disk gate. Profiles, all off by default: `tools` (the
   `mr` tools container), `s3` (a local S3-compatible store), `monitoring`
-  (Prometheus and Grafana; see `monitoring/`). `make cluster-up`, `make e2e`,
-  `make e2e-s3` and `make monitoring-up` use it alone.
+  (Prometheus and Grafana; see `monitoring/`), and `showcase` (the read-only
+  page on `127.0.0.1:18781`, ADR 0023; `make showcase-up`). `make cluster-up`,
+  `make e2e`, `make e2e-s3` and `make monitoring-up` use it alone.
 - [`soak.yaml`](soak.yaml): override for the soak run (#160, `make soak`).
   It lowers each worker to 256 MB to prove a job whose intermediate data
   exceeds worker memory spills to disk instead of being OOM-killed (#47).

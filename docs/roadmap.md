@@ -56,6 +56,23 @@ Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
 Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
 
+## Showcase dashboard
+
+A read-only service for the live demo and for recordings
+([ADR 0023](design/0023-showcase-service.md), proposed). It must be finished
+by the Nov 16 code deadline to be used in the demo, so the phases are in
+priority order: each one leaves something usable, and the later ones can be
+dropped. None of it is built yet.
+
+| Phase | Work | Done when |
+|---|---|---|
+| S0 | Finish the design: what the page shows, its presentation modes, failure handling and test plan | ADR 0023 is accepted |
+| S1 | Sampler and frames: `go/cmd/showcase`, `go/internal/showcase`, and tests that fix the fields it reads from both coordinators | Frames from a running cluster show every source, with gaps for sources that do not answer |
+| S2 | Recordings and replay: capped JSONL files and `showcase -replay` | A recorded run replays with no cluster |
+| S3 | Deployment: the Compose `showcase` profile, `make showcase-up`, and the page served on `127.0.0.1:18781` | The page loads through an SSH forward from the VM |
+| S4 | Live page: job progress, byte rates in the shape of the paper's Figures 2 and 3, and unreachable, lost and recovered workers | A worker kill and a coordinator crash both read clearly from the page, live and in replay |
+| S5 | Demo and captures: update [demo.md](demo.md), [runbook.md](runbook.md) and [cluster-vm.md](cluster-vm.md), and record the README captures from a replay | The five-minute demo runs from the new page |
+
 ## Context
 
 The goal is to rebuild the core of Google's MapReduce as described in Dean &

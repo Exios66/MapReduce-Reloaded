@@ -172,6 +172,8 @@ JOB_KEYS = (
 ).split()
 
 
+# The showcase (go/internal/showcase) reads these keys, so a rename there
+# needs a change in that package too.
 def test_status_json(get):
     """/status.json has the keys the Go server's has, and the page's numbers."""
     code, headers, body = get("/status.json")

@@ -15,6 +15,17 @@ cut a release.
 
 ### Added
 
+- Showcase: `go/cmd/showcase` samples the coordinator's `/status.json` and each
+  worker's `/metrics` every `-interval`, and serves one read-only page at `/`
+  with its frames at `/frames`, on `-http`. With `-out` it records each run to
+  `<UTC start time>.jsonl` up to `-max-record-bytes`, and `-replay <file>` serves
+  a recording with no cluster. `make showcase-up` starts it in the `showcase`
+  Compose profile on `127.0.0.1:18781`; ADR 0023 records the design (#333).
+- Worker: `/metrics` serves `mr_worker_info{host="..."} 1`, the host that
+  `/status.json` lists for the worker, so a scrape target matches its worker
+  whatever its address; ADR 0023 records why (#333).
+- Docs: ADR 0023 proposes a read-only showcase service that samples, records
+  and replays a run, and `docs/roadmap.md` lays out its phases (#333).
 - Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
   status-page GIFs from one real job's whole run, in the page's dark and
   light variants, with a provenance sidecar (commit, machine, job, input,

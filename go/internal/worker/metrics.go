@@ -51,9 +51,19 @@ func (w *Worker) MetricsHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /metrics", func(rw http.ResponseWriter, _ *http.Request) {
 		rw.Header().Set("Content-Type", promtext.ContentType)
-		_, _ = rw.Write(w.stats.metrics())
+		_, _ = rw.Write(w.metrics())
 	})
 	return mux
+}
+
+// metrics renders the worker's metrics: which worker this is, then its
+// stats.
+func (w *Worker) metrics() []byte {
+	var b bytes.Buffer
+	promtext.Family(&b, "mr_worker_info", "gauge", "The worker's host, as the coordinator's status lists it; the value is always 1.")
+	fmt.Fprintf(&b, "mr_worker_info{host=%s} 1\n", promtext.Label(w.info.GetHost()))
+	b.Write(w.stats.metrics())
+	return b.Bytes()
 }
 
 // metrics renders s in the Prometheus text format.

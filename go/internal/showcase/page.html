@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.4 system-ui, sans-serif; margin: 0 16px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<h1>Showcase</h1>
+<p id="state">Waiting for the first frame.</p>
+<pre id="out"></pre>
+<script>
+(function () {
+  "use strict";
+  var seq = 0;      // the Seq of the last frame kept; the next poll asks for frames after it
+  var runID = null; // the run the frames belong to; a new run starts seq numbers again
+  var frames = [];  // the frames kept, oldest first
+  var keep = 1000;  // the most frames this page holds
+  var state = document.getElementById("state");
+  var out = document.getElementById("out");
+
+  function render(info) {
+    var last = frames[frames.length - 1];
+    var rec = info.recorder || {};
+    var lines = [
+      "mode: " + info.mode,
+      "run: " + info.run_id,
+      "recording: " + (rec.path ? rec.path + " (" + rec.bytes + " bytes" + (rec.stopped ? ", stopped: " + rec.reason : "") + ")" : (rec.stopped ? "stopped: " + rec.reason : "off")),
+      "lines skipped: " + info.skipped
+    ];
+    if (last) {
+      lines.push("latest frame: " + last.seq + " at " + last.at);
+      lines.push("coordinator answered: " + (last.status_ok ? "yes" : "no"));
+      (last.workers || []).forEach(function (w) {
+        lines.push("worker " + w.address + " host " + (w.host || "-") + (w.ok ? " answered" : " did not answer"));
+      });
+    } else {
+      lines.push("no frames yet");
+    }
+    out.textContent = lines.join("\n");
+    state.textContent = "Showing " + frames.length + " frames, updated " + new Date().toLocaleTimeString() + ".";
+  }
+
+  function apply(body) {
+    var info = body.info || {};
+    if (runID !== null && info.run_id !== runID) {
+      // A new run: its frames do not follow the old ones. Start over from the oldest.
+      runID = info.run_id;
+      frames = [];
+      seq = 0;
+      return;
+    }
+    runID = info.run_id;
+    if (body.resync) {
+      // The service has no frames after seq: start over from the frames it returned.
+      frames = [];
+    }
+    frames = frames.concat(body.frames || []).slice(-keep);
+    seq = frames.length ? frames[frames.length - 1].seq : 0;
+    render(info);
+  }
+
+  function poll() {
+    fetch("/frames?after=" + seq + "&limit=500", { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      })
+      .then(apply)
+      .catch(function (err) {
+        state.textContent = "Cannot reach the service (" + err.message + "); retrying.";
+      })
+      .then(function () { setTimeout(poll, 500); });
+  }
+
+  poll();
+})();
+</script>
+</body>
+</html>

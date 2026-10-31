@@ -326,8 +326,9 @@ final stage's layers end up in the image: the compiler stays in `build`.
 | `make cluster-up` | `make data` (creates `data/input` and `data/out`, and makes `data/out` writable by all), then `docker compose -p mapreduce -f deploy/compose/compose.yaml up -d --build`. That builds the image, creates the network and the `output` volume, and starts the coordinator and four workers in the background |
 | `make e2e` | `cluster-up`, then `make mr` (builds the host client `bin/mr`), then `scripts/e2e.sh`. The script checks that the image runs as a non-root user and that `coordinator`, `worker` and `mr status` print usage; uploads the corpus; submits word count with `bin/mr` (M = 7, R = 4); checks that no container was OOM-killed; compares the output with the golden files and deletes it; checks the coordinator's `/metrics` for 4 completed reduce tasks; starts Prometheus and queries it for the job's series; then kills the coordinator with `docker kill`, starts it, and checks the job still reports `SUCCEEDED` |
 | `make monitoring-up` | `up -d prometheus grafana` with the `monitoring` profile on |
+| `make showcase-up` | `make data`, then `up -d showcase` with the `showcase` profile on: the read-only page on `127.0.0.1:18781`, which records each run to `data/showcase/` |
 | `make e2e-s3` | `cluster-up`, starts `s3` with `--wait`, runs `scripts/e2e.sh s3` (the job is submitted from the `mr` container, with `s3://` input and output), then a Go storage test against `127.0.0.1:18790` |
-| `make cluster-down` | `docker compose ... --profile monitoring --profile s3 down -v --remove-orphans`: removes this project's containers and network, and its named volumes. It keeps `data/` and the built image |
+| `make cluster-down` | `docker compose ... --profile monitoring --profile s3 --profile showcase down -v --remove-orphans`: removes this project's containers and network, and its named volumes. It keeps `data/` and the built image |
 
 The script and the Makefile are the source; read them before relying on a
 detail here.
