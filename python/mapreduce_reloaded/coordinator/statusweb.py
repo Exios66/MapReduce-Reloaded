@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from mapreduce_reloaded.coordinator.server import Status
-from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2
+from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2, types_pb2
 
 # The Content-Type of a /metrics response: the text format, version 0.0.4.
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
@@ -259,6 +259,18 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
 }
 .bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .stale { color: var(--red); font-weight: 600; }
+.timeline { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.timeline .row { display: grid; grid-template-columns: 11em 1fr 6em; gap: 6px; align-items: center;
+  padding-top: 3px; }
+.timeline .label { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.timeline .backup .label::after { content: " \\00b7 backup"; color: var(--amber); }
+.timeline .lane { position: relative; height: 12px; background: var(--track); border-radius: 3px; }
+.timeline .trace { position: absolute; top: 3px; height: 6px; border-radius: 3px; min-width: 2px; }
+.timeline .trace.map { background: var(--blue); }
+.timeline .trace.reduce { background: var(--purple); }
+.timeline .trace.failed { background: var(--track); border: 1px solid var(--red); }
+.timeline .trace.open { background: var(--track); border: 1px solid var(--text); }
 </style>
 </head>
 """
@@ -322,6 +334,11 @@ def _state(s: int) -> str:
     return coordinator_pb2.JobState.Name(s).removeprefix("JOB_STATE_").lower()
 
 
+def _kind(k: int) -> str:
+    """The task kind without its enum prefix, for the timeline: "map"."""
+    return types_pb2.TaskKind.Name(k).removeprefix("TASK_KIND_").lower()
+
+
 def _percent(done: int, total: int) -> str:
     """done as a rounded percentage of total, "0%" if there is none."""
     return "0%" if total == 0 else f"{(done * 100 + total // 2) // total}%"
@@ -337,6 +354,52 @@ def _heartbeat(at: float, last_seen: float) -> str:
 def _counter(j: coordinator_pb2.GetJobStatusResponse, name: str) -> int:
     """One job counter, or 0 if the job has none by that name."""
     return j.counters.values.get(name, 0)
+
+
+def _timeline(j: coordinator_pb2.GetJobStatusResponse, now: float, attempts) -> list[dict]:
+    """Lays the job's attempts out over the job's run, as
+    go/internal/statusweb.timeline: from its submission (or the first
+    attempt's start) to its finish, or to now. Bars keep their proportions,
+    so the drawn timeline is to scale. One dict per bar: label, left and
+    width in percent, backup, its trace classes and the seconds text."""
+    if not attempts:
+        return []
+
+    def stamp(ts):
+        return ts.ToNanoseconds() / 1e9 if ts is not None else None
+
+    window_start = stamp(j.submitted_at) if j.HasField("submitted_at") else None
+    if window_start is None or attempts[0].started < window_start:
+        window_start = attempts[0].started
+    window_stop = stamp(j.finished_at) if j.HasField("finished_at") else None
+    if window_stop is None or not window_stop > window_start:
+        window_stop = now
+    if window_stop is None or not window_stop > window_start:
+        window_stop = window_start + 1.0  # no window at all
+    span = window_stop - window_start
+    bars = []
+    for a in attempts:
+        ended, open = a.ended, a.ended is None
+        if open:
+            ended = window_stop
+        left, width = (a.started - window_start) / span * 100, (ended - a.started) / span * 100
+        kind = _kind(a.kind)
+        trace = kind
+        if open:
+            trace += " open"
+        elif not a.ok:
+            trace += " failed"
+        bars.append(
+            {
+                "label": f"{kind} {a.index} #{a.attempt} {a.worker}",
+                "left": max(0.0, min(left, 100.0)),
+                "width": max(0.0, min(width, 100.0)),
+                "backup": a.backup,
+                "trace": trace,
+                "seconds": f"{ended - a.started:.1f} s",
+            }
+        )
+    return bars
 
 
 def page(st: Status, dark: bool = False) -> str:
@@ -387,7 +450,20 @@ def page(st: Status, dark: bool = False) -> str:
         if j.error:
             out.append(f'<span class="error">{e(j.error)}</span>\n')
         out.append("</div>\n<details>\n<summary>all counters</summary>\n")
-        out.append(f'<div class="counters">{counters}</div>\n</details>\n</article>\n')
+        out.append(f'<div class="counters">{counters}</div>\n</details>\n')
+        bars = _timeline(j, st.at, st.attempts.get(j.job_id, ()))
+        if bars:
+            out.append('<details class="timeline">\n<summary>task timeline</summary>\n')
+            for b in bars:
+                extra = " backup" if b["backup"] else ""
+                out.append(
+                    f'<div class="row"><span class="label{extra}">{e(b["label"])}</span>'
+                    f'<span class="lane"><i class="trace {e(b["trace"])}"'
+                    f' style="left:{b["left"]:.2f}%;width:{b["width"]:.2f}%"></i></span>'
+                    f'<span class="secs">{e(b["seconds"])}</span></div>\n'
+                )
+            out.append("</details>\n")
+        out.append("</article>\n")
     if not st.jobs:
         out.append('<p class="empty">No jobs yet.</p>\n')
     out.append('</section>\n\n<h2>Workers</h2>\n<div class="table-wrap">\n<table>\n<thead><tr>')
@@ -457,6 +533,19 @@ def status_json(st: Status) -> bytes:
                 if j.HasField("finished_at")
                 else None,
                 "duration_seconds": None if d is None else d / 1e9,
+                "attempts": [
+                    {
+                        "kind": _kind(a.kind),
+                        "index": a.index,
+                        "attempt": a.attempt,
+                        "worker": a.worker,
+                        "started": a.started,
+                        "ended": a.ended,
+                        "backup": a.backup,
+                        "ok": a.ok,
+                    }
+                    for a in st.attempts.get(j.job_id, ())
+                ],
             }
         )
     workers = [
