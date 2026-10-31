@@ -15,6 +15,10 @@ type Status struct {
 	Jobs    []*pb.GetJobStatusResponse // every job, in the order submitted
 	Workers []WorkerStatus             // the live workers, in the order they registered
 	Lost    []LostWorker               // the last maxLost workers lost since the process started, oldest first
+	// Attempts is each job's try, up to maxAttempts. History comes from the
+	// running server's memory: a coordinator restart loses what its write-ahead
+	// log held for assignments, on which history would be rebuilt.
+	Attempts map[string][]AttemptRange
 }
 
 // WorkerStatus is a live worker and the tasks it is running, with the
@@ -38,8 +42,10 @@ func (s *Server) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := Status{At: s.now(), Lost: append([]LostWorker(nil), s.lost...)}
+	st.Attempts = map[string][]AttemptRange{}
 	for _, j := range s.order {
 		st.Jobs = append(st.Jobs, j.status())
+		st.Attempts[j.id] = append([]AttemptRange(nil), j.attempts...)
 	}
 	var running map[string][]Task
 	if s.active != nil {
