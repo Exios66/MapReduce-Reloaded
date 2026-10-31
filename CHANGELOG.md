@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
+  status-page GIFs from one real job's whole run, in the page's dark and
+  light variants, with a provenance sidecar (commit, machine, job, input,
+  timings) and honest time-lapse support for minutes-long jobs (#279).
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without
