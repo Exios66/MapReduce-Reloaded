@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
+  Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
+  `Makefile`) with `store_test_results`, so CircleCI shows each test, its
+  time and its failures, and keep them as artifacts (#314).
 - Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
   status-page GIFs from one real job's whole run, in the page's dark and
   light variants, with a provenance sidecar (commit, machine, job, input,
@@ -104,6 +108,8 @@ cut a release.
 
 ### Fixed
 
+- CI: preserve separate Go test reports and publish Python integration test
+  results on Python-only changes, including failures.
 - Build: `make` uses `python/.venv` when it exists, `make venv` creates it
   with the package and every dev tool, and `scripts/gen-proto.sh` says how to
   fix a Python that lacks `grpcio-tools`, instead of failing in
