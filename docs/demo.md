@@ -118,8 +118,9 @@ via `make cluster-up` on the course VM or Compose.
 python3 bench/gen-weblog.py 1073741824 > data/input/capture-1g/access.log
 make upload-example   # or: bin/mr upload data/input/capture-1g /data/input/capture-1g
 scripts/capture-status-gifs.py \
+  --submit 'bin/mr submit -wait' \
   --program examples/wordcount.go -m 32 -r 4 \
-  --out data/out/gif-wordcount-1g \
+  --out /data/out/gif-wordcount-1g \
   --inputs /data/input/capture-1g/access.log \
   --prefix status-wordcount-1g --assets docs/assets
 ```

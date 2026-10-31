@@ -21,9 +21,10 @@ duration, dimensions and file size per variant.
 
 Example (cluster up, then):
   scripts/capture-status-gifs.py --status-url http://127.0.0.1:18780/ \
+    --submit 'bin/mr submit -wait' \
     --program examples/wordcount.go -m 32 -r 4 \
-    --out data/out/gif-wordcount-1g \
-    --inputs data/input/capture-1g/access.log \
+    --out /data/out/gif-wordcount-1g \
+    --inputs /data/input/capture-1g/access.log \
     --prefix status-wordcount-1g --assets docs/assets
 """
 
@@ -82,6 +83,13 @@ def _local(spec: str) -> str:
     return spec
 
 
+def _for_mr(spec: str) -> str:
+    """Path to pass to mr: keep /data/... so containers can open it."""
+    if spec.startswith("/data"):
+        return spec
+    return os.path.abspath(spec)
+
+
 def submit_cmd(args) -> list[str] | None:
     if not args.submit:
         return None
@@ -92,8 +100,12 @@ def submit_cmd(args) -> list[str] | None:
         hits = sorted(glob.glob(os.path.expanduser(_local(spec))))
         if not hits:  # not a local glob: pass the spec through to mr
             hits = [spec]
+        elif spec.startswith("/data"):
+            # Existence checked via the host mapping; keep the shared-storage
+            # form (including globs) for the container-side job.
+            hits = [spec]
         for p in hits:
-            p = os.path.abspath(p)
+            p = _for_mr(p)
             if p not in paths:
                 paths.append(p)
     if not paths:
@@ -101,7 +113,7 @@ def submit_cmd(args) -> list[str] | None:
     cmd = shlex.split(args.submit)
     cmd += ["-m", str(args.m)] if args.m else []
     cmd += ["-r", str(args.r)] if args.r else []
-    cmd += [os.path.abspath(args.program), os.path.abspath(args.out)] + paths
+    cmd += [os.path.abspath(args.program), _for_mr(args.out)] + paths
     return cmd
 
 
@@ -151,6 +163,11 @@ def capture(args, work: str, submit: list[str] | None) -> list[tuple[str, str]]:
             if hold >= args.hold:
                 break
         time.sleep(args.interval)
+    if proc is not None and proc.poll() is None:
+        sys.exit(
+            f"job still running after --max-frames={args.max_frames}; "
+            "raise --max-frames or --interval to cover the whole run"
+        )
     if len(frames) < 3:
         sys.exit(
             f"only {len(frames)} frames captured: that reads as a looped "
