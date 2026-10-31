@@ -19,6 +19,10 @@ cut a release.
   Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
   `Makefile`) with `store_test_results`, so CircleCI shows each test, its
   time and its failures, and keep them as artifacts (#314).
+- Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
+  status-page GIFs from one real job's whole run, in the page's dark and
+  light variants, with a provenance sidecar (commit, machine, job, input,
+  timings) and honest time-lapse support for minutes-long jobs (#279).
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without
@@ -96,6 +100,9 @@ cut a release.
 
 ### Removed
 
+- The generated coverage counters and profiles under `go/.cover/` are no
+  longer tracked in the repository; `make go-test` regenerates them locally
+  and `.gitignore` already keeps the directory ignored (#331).
 - The GitHub Actions workflow; CircleCI is the only CI, and a test fails if
   `.github/workflows/` comes back (#294).
 
@@ -103,6 +110,11 @@ cut a release.
 
 - CI: preserve separate Go test reports and publish Python integration test
   results on Python-only changes, including failures.
+- Build: `make` uses `python/.venv` when it exists, `make venv` creates it
+  with the package and every dev tool, and `scripts/gen-proto.sh` says how to
+  fix a Python that lacks `grpcio-tools`, instead of failing in
+  `make check` on a system `python3` without the dev tools. `make ci-report`
+  builds the clean copy's own venv when `python3` lacks them (#335).
 - Go tests: the cluster tests that run a whole job (`runJob`) give workers a
   5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
   longer makes a worker re-register and fail `TestClusterWorkerMetrics`
