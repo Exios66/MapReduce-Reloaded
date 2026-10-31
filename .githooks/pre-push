@@ -33,4 +33,8 @@ if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
 fi
 
 echo "pre-push: running 'make check'..."
+# Tests create other repositories; Git's hook environment must not redirect them here.
+for name in $(git rev-parse --local-env-vars); do
+    unset "$name"
+done
 make check

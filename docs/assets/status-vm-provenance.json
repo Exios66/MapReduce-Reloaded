@@ -1,0 +1,159 @@
+{
+  "source": "CS544 Docker deployment; screenshots through a read-only SSH forward",
+  "vm_revision": "6d82d1ea5840752e2609efa622507c61a736f522",
+  "forward": "ssh -N -L 127.0.0.1:18789:127.0.0.1:18780 cs544",
+  "status_url": "http://127.0.0.1:18789/",
+  "scope": "Excerpt of an existing campaign, not a full job or a benchmark; no job was submitted or stopped.",
+  "sampling": "Dark/light browser captures run concurrently; individual timestamps below are actual, not nominal intervals.",
+  "chrome": "Google Chrome 156.0.8078.76",
+  "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+  "capture_host": "macOS-15.3.2-arm64-arm-64bit-Mach-O",
+  "samples": [
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-000.png",
+        "started_at": "2026-10-30T13:46:21.154322+00:00",
+        "finished_at": "2026-10-30T13:46:24.916436+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-000.png",
+        "started_at": "2026-10-30T13:46:21.159482+00:00",
+        "finished_at": "2026-10-30T13:46:24.919206+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-001.png",
+        "started_at": "2026-10-30T13:46:27.925934+00:00",
+        "finished_at": "2026-10-30T13:46:30.252436+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-001.png",
+        "started_at": "2026-10-30T13:46:27.926607+00:00",
+        "finished_at": "2026-10-30T13:46:30.220734+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-002.png",
+        "started_at": "2026-10-30T13:46:33.256892+00:00",
+        "finished_at": "2026-10-30T13:46:35.632308+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-002.png",
+        "started_at": "2026-10-30T13:46:33.257322+00:00",
+        "finished_at": "2026-10-30T13:46:35.648107+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-003.png",
+        "started_at": "2026-10-30T13:46:38.652659+00:00",
+        "finished_at": "2026-10-30T13:46:41.173149+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-003.png",
+        "started_at": "2026-10-30T13:46:38.655835+00:00",
+        "finished_at": "2026-10-30T13:46:41.152289+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-004.png",
+        "started_at": "2026-10-30T13:46:44.178730+00:00",
+        "finished_at": "2026-10-30T13:46:45.790272+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-004.png",
+        "started_at": "2026-10-30T13:46:44.179180+00:00",
+        "finished_at": "2026-10-30T13:46:45.922362+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-005.png",
+        "started_at": "2026-10-30T13:46:48.927314+00:00",
+        "finished_at": "2026-10-30T13:46:50.992827+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-005.png",
+        "started_at": "2026-10-30T13:46:48.928291+00:00",
+        "finished_at": "2026-10-30T13:46:50.994606+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-006.png",
+        "started_at": "2026-10-30T13:46:53.995987+00:00",
+        "finished_at": "2026-10-30T13:46:55.897507+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-006.png",
+        "started_at": "2026-10-30T13:46:53.996358+00:00",
+        "finished_at": "2026-10-30T13:46:55.897743+00:00"
+      }
+    ],
+    [
+      {
+        "theme": "dark",
+        "path": "/private/tmp/opencode/readme-vm-capture/dark-007.png",
+        "started_at": "2026-10-30T13:46:58.903448+00:00",
+        "finished_at": "2026-10-30T13:47:00.559742+00:00"
+      },
+      {
+        "theme": "light",
+        "path": "/private/tmp/opencode/readme-vm-capture/light-007.png",
+        "started_at": "2026-10-30T13:46:58.903818+00:00",
+        "finished_at": "2026-10-30T13:47:00.559917+00:00"
+      }
+    ]
+  ],
+  "gifs": {
+    "dark": {
+      "bytes": 86733,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "width": 1100,
+            "height": 760
+          }
+        ],
+        "format": {
+          "duration": "9.280000"
+        }
+      }
+    },
+    "light": {
+      "bytes": 90268,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "width": 1100,
+            "height": 760
+          }
+        ],
+        "format": {
+          "duration": "9.280000"
+        }
+      }
+    }
+  }
+}

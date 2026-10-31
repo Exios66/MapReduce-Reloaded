@@ -11,21 +11,31 @@ containers, gRPC, observability and user job files. Go runs the cluster;
 Python is the reference implementation of the API, the file format and local
 mode and a coordinator server, and gives the same bytes for the same uncompressed job.
 
+[VM quick start](#quick-start) · [Dashboard](#open-the-dashboard) ·
+[Local setup + terminal GIF](#local-mode) · [Results](#results) ·
+[Development](#development) · [Documentation](#documentation)
+
 ## Quick start
 
-Needs Docker with Compose, GNU `make`, and Python 3.11+ (for the example
-data). Go is optional: `make mr` builds the client in Docker without it.
+Needs a running Docker Engine with Compose v2 or later, GNU `make`, Git, and Python
+3.11+ (for the example data). Go is optional: `make mr` builds the client
+in Docker without it. **The Docker deployment target is the CS544 Linux VM,
+not the laptop.** Connect to the VM first (`ssh cs544` with the course SSH
+alias, or `ssh USER@VM`), then run this block there. For a laptop-only run
+without Docker, use [Local mode](#local-mode).
 The cluster needs 4 vCPUs, about 3.3 GB of memory and a few GB of disk;
 [Cluster VM](docs/cluster-vm.md) has the budgets and the setup.
 
 ```sh
 git clone https://github.com/Exios66/MapReduce-Reloaded.git
 cd MapReduce-Reloaded
+docker info               # confirm the Docker daemon is ready
+docker compose version    # confirm Compose v2 is installed
 make cluster-up            # build the image; start the coordinator and 4 workers
 make mr                    # build the host client into bin/mr
 make upload-example        # the 4-book corpus and a 10 MB web log
 bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/corpus/*.txt'
-bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -5
+bin/mr cat /data/out/wc | sort -k2,2nr | head -n 5
 ```
 
 `mr submit` prints the job's id and status:
@@ -43,12 +53,40 @@ workers and their running tasks; `bin/mr status <id>` prints it again.
 `make monitoring-up` adds Prometheus and Grafana; `make cluster-down`
 removes the containers and keeps `data/`.
 
+The output directory must be new: submitting the same `/data/out/wc` again
+is rejected rather than overwriting the previous result. Choose another
+output name when repeating the example. Run the commands from the repository
+root; `mr upload` and `mr cat` use its `data/` directory by default.
+
+### Open the dashboard
+
+Open <http://127.0.0.1:18780/> in a browser while a job runs. No dashboard
+installation or external network connection is needed after the cluster is
+installed. Current builds have Pause/Resume; an older VM deployment may use
+full-page refresh instead. For the VM, run this on your laptop
+and keep the SSH session open:
+
+```sh
+ssh -N -L 18780:127.0.0.1:18780 cs544
+```
+
+Use `USER@VM` instead of `cs544` if you have no course SSH alias, then open
+the same localhost URL.
+If that local port is occupied, use `-L 18782:127.0.0.1:18780` and open
+<http://127.0.0.1:18782/> instead. The coordinator and dashboard are bound
+to loopback by default; do not expose them to the public internet.
+
 <picture>
-  <source srcset="docs/assets/status-wordcount-1g-dark.gif" media="(prefers-color-scheme: dark)">
-  <img src="docs/assets/status-wordcount-1g-light.gif" alt="The status page during a whole 1 GiB word count (32 map tasks, 4 reduce tasks, four workers): each job's map and reduce progress bars filling with a percentage, backup attempts, key counters, and every worker's running tasks with its progress. The frames are 9 seconds of real time apart, so the loop is a time-lapse of the unchanged page.">
+  <source srcset="docs/assets/status-vm-dark.gif" media="(prefers-color-scheme: dark)">
+  <img src="docs/assets/status-vm-light.gif" alt="The actual CS544 Docker cluster viewed through a localhost SSH tunnel: a running job with 160 map tasks, 8 reducers, and four workers reporting progress.">
 </picture>
 
-<sub>The status page during one whole 1 GiB word count, M = 32, R = 4, in the reader's light or dark color scheme, from its first map task to the final state (job complete, counters, workers idle), which holds at the loop's end. The page refreshes every two seconds and the recording kept its own refresh frames. It shows each job's map and reduce progress with a percentage, backup attempts, key counters, and every worker's running tasks; consecutive frames are 9 seconds of real time apart, and the page's duration clock is the job's elapsed time. `docs/assets/status-wordcount-1g-provenance.json` records the commit, machine, job and capture settings.</sub>
+<sub>A read-only excerpt of the running CS544 campaign, not a complete job or
+a performance benchmark. The page's clock shows actual elapsed job time;
+the GIF compresses sampling time and holds the last captured frame.
+Light and dark variants show the deployed viewer, not the upcoming showcase UI.</sub>
+
+[Dashboard capture provenance](docs/assets/status-vm-provenance.json).
 
 ## Capabilities
 
@@ -184,16 +222,36 @@ compares the Go benchmarks with the baseline. See
 Local mode runs every task in one process (§4.7); it is the oracle that
 cluster runs are checked against.
 
-```sh
-cd go
-go run ./cmd/mr run -local -m 3 -r 4 ../examples/wordcount.go /tmp/wc '../testdata/corpus/*.txt'
-head -3 /tmp/wc/part-r-00000
+Needs Go 1.26+ and Python 3.11+, but no Docker. Run from the repository root.
+A virtual environment avoids modifying your system Python; a fresh temporary
+directory makes the example safe to repeat without deleting previous output.
 
-cd ../python
-pip install -e .
-python3 -m mapreduce_reloaded run --local -m 3 -r 4 wordcount /tmp/wc-py '../testdata/corpus/*.txt'
-diff -r /tmp/wc /tmp/wc-py && echo identical
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e python
+make mr
+demo_dir=$(mktemp -d)
+bin/mr run -local -m 3 -r 4 examples/wordcount.go "$demo_dir/go" 'testdata/corpus/*.txt'
+head -n 3 "$demo_dir/go/part-r-00000"
+python -m mapreduce_reloaded run --local -m 3 -r 4 wordcount "$demo_dir/python" 'testdata/corpus/*.txt'
+diff -r "$demo_dir/go" "$demo_dir/python" && echo identical
 ```
+
+Both runs must print the same counters and the comparison must print
+`identical`. Output stays in `$demo_dir` for inspection. The Go command
+interprets the job file; Python runs its matching built-in `wordcount`.
+
+<picture>
+  <source srcset="docs/assets/setup-terminal-dark.gif" media="(prefers-color-scheme: dark)">
+  <img src="docs/assets/setup-terminal-light.gif" alt="Actual local setup command output: activate a Python virtual environment, install the package, build mr, run Go and Python word count, and compare identical output.">
+</picture>
+
+<sub>The local-mode commands above, actually executed and rendered as a terminal
+animation. Installation and execution time are compressed; the final comparison
+is held for readability. This is not a recording of Docker deployment.</sub>
+
+[Setup commands and captured output](docs/assets/setup-terminal-provenance.json).
 
 ## Repository layout
 
@@ -210,8 +268,18 @@ docs/      design, roadmap, paper mapping, file format, ADRs, explainers
 
 ## Development
 
+Needs Go 1.26+, Python 3.11+, GNU `make`, a C compiler for Go's race detector,
+and `shellcheck` on `PATH`. The block below also installs `golangci-lint`
+at the version used by the VM setup script.
+Use a Linux environment for the full suite: some filesystem and shell tests
+require Linux/GNU behavior. From the repository root:
+
 ```sh
-pip install -e "python[dev]"   # the Python package and dev tools
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e "python[dev]"  # the Python package and dev tools
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+export PATH="$(go env GOPATH)/bin:$PATH"
 make tools                     # pinned code generators into .tools/bin
 make hooks                     # once per clone: run `make check` before every push
 make check                     # all linters and tests (the quality gate)
@@ -225,6 +293,22 @@ CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
 `python-3.13`, `lint`, `mapping-coverage`); work reaches `main` only through pull requests. See
 [CI](docs/ci.md) and [ADR 0014](docs/design/0014-ci-on-pull-requests.md).
 `make` runs Python as `python3`; pass `PYTHON=...` to use another interpreter.
+Keep the virtual environment active for `git push`, because the pre-push
+hook runs the same `make check`. If pushing from another terminal, use
+`PYTHON="$PWD/.venv/bin/python" git push` after installing the dev dependencies
+in that clone. Missing `grpc_tools.protoc` means that interpreter has not had
+`python[dev]` installed; do not bypass the hook.
+
+### Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| Cannot connect to the Docker daemon | Run the cluster commands on the CS544 VM, not the laptop; check `docker info` there |
+| `docker: 'compose' is not a docker command` | Install the Compose v2 plugin, then rerun `docker compose version` |
+| Connection refused on submit or dashboard | Wait for `make cluster-up` to finish; inspect `docker compose -p mapreduce -f deploy/compose/compose.yaml logs coordinator` |
+| Output directory already exists | Choose a new job output directory; do not delete another run's results |
+| Python says externally managed environment | Activate `.venv` before installing; do not use `sudo pip` |
+| `make check` cannot find `.tools/bin/buf` | Run `make tools` in this clone before the quality gate |
 
 ## Documentation
 
