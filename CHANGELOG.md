@@ -96,6 +96,9 @@ cut a release.
 
 ### Removed
 
+- The generated coverage counters and profiles under `go/.cover/` are no
+  longer tracked in the repository; `make go-test` regenerates them locally
+  and `.gitignore` already keeps the directory ignored (#331).
 - The GitHub Actions workflow; CircleCI is the only CI, and a test fails if
   `.github/workflows/` comes back (#294).
 
