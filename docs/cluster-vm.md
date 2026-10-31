@@ -50,7 +50,7 @@ CPU per container.
 |---|---|---|
 | worker (× 4) | 1 CPU each | One worker per vCPU: a job that keeps all four busy uses the whole VM, and one that runs on fewer workers is measurably slower |
 | coordinator | none | It only schedules and stores locations (§3.2), and it is idle most of the time |
-| mr, s3, prometheus, grafana | none | Short-lived or optional; the benchmarks record whether they ran |
+| mr, s3, prometheus, grafana, showcase | none | Short-lived or optional; the benchmarks record whether they ran |
 
 - A worker runs one task at a time, so one CPU per worker means one task per
   CPU. Go's runtime reads the quota (`GOMAXPROCS` follows the container's CPU
@@ -73,9 +73,10 @@ slowing down the whole VM.
 | mr (on demand) | 128 MB | Submits jobs and polls status; workers process the data |
 | s3 (#41, profile `s3`) | 256 MB | [VersityGW](https://github.com/versity/versitygw), an S3-compatible store for input and output |
 | prometheus, grafana (profile `monitoring`) | 256 MB each | Optional metrics and dashboards |
+| showcase (profile `showcase`) | 128 MB | Optional read-only page of the cluster, with its recordings (ADR 0023) |
 | **Core: coordinator + 4 workers** | **3,328 MB (≈ 3.3 GB)** | Always running |
 | **Core + mr + s3** | **3,712 MB (≈ 3.7 GB)** | A job run against the S3 store |
-| **Everything, including monitoring** | **4,224 MB (≈ 4.2 GB)** | Leaves about 3.8 GB of the 8 GB for the OS, Docker and anything else |
+| **Everything, including monitoring and the showcase** | **4,352 MB (≈ 4.4 GB)** | Leaves about 3.6 GB of the 8 GB for the OS, Docker and anything else |
 
 These are ceilings: a container may use less. The optional `s3` and
 `monitoring` profiles both fit, but with all of them running only about half
@@ -108,6 +109,10 @@ Workers delete a job's map output once it ends and stop taking tasks under
 requires explicit completed directories, e.g.
 `make clean-output CLEAN_OUTPUTS='sort-kill-123'`, and prints `df` and
 `docker system df`. Keep active job outputs unselected.
+
+The showcase (profile `showcase`) keeps one recording per start in
+`data/showcase/`, each stopped at 256 MB (`-max-record-bytes`), so it adds
+at most that much for each time it starts. Delete old recordings by hand.
 
 ## One-time setup
 

@@ -86,7 +86,7 @@ def test_compose_guide_profiles_match_configuration(services):
     configured = {
         profile for service in services.values() for profile in service.get("profiles", [])
     }
-    assert documented == configured == {"tools", "s3", "monitoring"}
+    assert documented == configured == {"tools", "s3", "monitoring", "showcase"}
     # The tools container must not accidentally become a default cluster service.
     assert services["mr"]["profiles"] == ["tools"]
 
