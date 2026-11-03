@@ -298,7 +298,12 @@ jobs:
             - run:
                 name: make go-python-test py-e2e (only python/ changed)
                 command: make go-python-test py-e2e PYTHON=python
+                environment:
+                  JUNIT_DIR: /tmp/test-results
                 no_output_timeout: 30m
+            - store_test_results:
+                path: /tmp/test-results
+                when: always
       - when:
           condition:
             or:
@@ -322,10 +327,24 @@ jobs:
                 name: make sh-lint
                 command: MR_REQUIRE_SHELLCHECK=1 make sh-lint
             - run:
+                name: Install gotestsum
+                # v1.12.0's x/tools v0.19.0 does not build on the pinned Go
+                # 1.26 (`invalid array length -delta * delta`); v1.13.0 does.
+                command: go install gotest.tools/gotestsum@v1.13.0
+            - run:
                 name: make go-lint go-test py-e2e
                 command: make go-lint go-test py-e2e PYTHON=python
+                environment:
+                  JUNIT_DIR: /tmp/test-results
                 no_output_timeout: 30m
             - go-build-cache-save
+            - store_test_results:
+                path: /tmp/test-results
+                when: always
+            - store_artifacts:
+                path: /tmp/test-results
+                destination: test-results
+                when: always
             - store_artifacts:
                 path: go/cover.out
 
@@ -363,6 +382,15 @@ jobs:
             - run:
                 name: make py-lint py-test
                 command: make py-lint py-test PYTHON=python
+                environment:
+                  JUNIT_DIR: /tmp/test-results
+            - store_test_results:
+                path: /tmp/test-results
+                when: always
+            - store_artifacts:
+                path: /tmp/test-results
+                destination: test-results
+                when: always
             - store_artifacts:
                 path: python/cover.json
 

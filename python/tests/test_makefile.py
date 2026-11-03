@@ -256,3 +256,63 @@ def test_clean_output_rejects_protected_or_unsafe_names_before_deleting(cleanup_
     result = make("clean-output", f"CLEAN_OUTPUTS=done-1 {name}", check=False)
     assert result.returncode != 0
     assert (volume / "done-1/part-r-00000").read_text() == "done-1"
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_junit_reports_use_one_directory_and_separate_go_passes(make_project, absolute):
+    project, make, log = make_project
+    (project / "go").mkdir()
+    (project / "python").mkdir()
+    for name, script in {
+        "gotestsum": """#!/bin/sh
+set -eu
+printf 'gotestsum %s\\n' "$*" >> "$CALL_LOG"
+test "$1" = --junitfile
+printf 'report\\n' > "$2"
+""",
+        "python": """#!/bin/sh
+set -eu
+printf 'python %s\\n' "$*" >> "$CALL_LOG"
+for arg in "$@"; do
+    case "$arg" in --junitxml=*) printf 'report\\n' > "${arg#--junitxml=}" ;; esac
+done
+""",
+    }.items():
+        tool = project / "bin" / name
+        tool.write_text(script)
+        tool.chmod(0o755)
+
+    destination = project / "results"
+    directory = str(destination) if absolute else "results"
+    make("go-test", "py-test", "py-e2e", f"JUNIT_DIR={directory}", "PYTHON=python")
+
+    assert {p.relative_to(destination).as_posix() for p in destination.rglob("*.xml")} == {
+        "go/go-test-race.xml",
+        "go/go-test-coverage.xml",
+        "go/go-test-uncached.xml",
+        "python/py-test.xml",
+        "python/py-e2e.xml",
+    }
+    calls = log.read_text().splitlines()
+    assert any("-race -shuffle=on ./..." in call for call in calls)
+    assert any("-coverpkg=./... -coverprofile=cover.out ./..." in call for call in calls)
+    assert any("-count=1 ./internal/papermap ./internal/statusweb" in call for call in calls)
+
+
+def test_go_tests_without_junit_use_the_original_go_commands(make_project, monkeypatch):
+    project, make, log = make_project
+    (project / "go").mkdir()
+    for name in ("go", "python"):
+        tool = project / "bin" / name
+        tool.write_text(f'#!/bin/sh\nprintf "{name} %s\\n" "$*" >> "$CALL_LOG"\n')
+        tool.chmod(0o755)
+    monkeypatch.delenv("JUNIT_DIR", raising=False)
+
+    make("go-test", "PYTHON=python")
+
+    calls = log.read_text().splitlines()
+    assert [call for call in calls if call.startswith("go ")] == [
+        "go test -race -shuffle=on ./...",
+        "go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./...",
+        "go test -count=1 ./internal/papermap ./internal/statusweb",
+    ]

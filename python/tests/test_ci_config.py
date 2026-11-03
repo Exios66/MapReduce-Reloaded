@@ -17,6 +17,7 @@ import tarfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CIRCLE = (ROOT / ".circleci/config.yml").read_text()
@@ -140,6 +141,26 @@ def test_ci_runs_the_python_coordinator_with_go_workers():
     assert "make go-lint go-test py-e2e PYTHON=python" in go_job
     target = MAKEFILE.split("\npy-e2e:\n", 1)[1].split("\n\n", 1)[0]
     assert "MR_REQUIRE_GO=1" in target and "tests/test_coordinator_e2e.py" in target
+
+
+def test_narrow_go_job_publishes_python_integration_results_on_failure():
+    go_steps = yaml.safe_load(CONT)["jobs"]["go"]["steps"]
+    branches = [step["when"]["steps"] for step in go_steps if "when" in step]
+    steps = next(
+        branch
+        for branch in branches
+        if any(
+            isinstance(step, dict)
+            and step.get("run", {}).get("command") == "make go-python-test py-e2e PYTHON=python"
+            for step in branch
+        )
+    )
+    run_index = next(i for i, step in enumerate(steps) if isinstance(step, dict) and "run" in step)
+    assert steps[run_index]["run"]["environment"]["JUNIT_DIR"] == "/tmp/test-results"
+    assert steps[run_index + 1]["store_test_results"] == {
+        "path": "/tmp/test-results",
+        "when": "always",
+    }
 
 
 def test_make_lint_runs_shellcheck_on_every_script():
