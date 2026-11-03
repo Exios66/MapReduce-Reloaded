@@ -166,6 +166,8 @@ func TestStatusJSON(t *testing.T) {
 		slices.Sort(ks)
 		return strings.Join(ks, " ")
 	}
+	// The showcase (go/internal/showcase) reads these keys, so a rename
+	// there needs a change in that package too.
 	// The Python server's test lists the same keys.
 	if got, want := keys(doc.Jobs[0]), "backup_attempts backup_wins counters duration_seconds error finished_at id map_completed map_host_local map_total map_zone_local reduce_completed reduce_total state submitted_at"; got != want {
 		t.Errorf("job keys\n got %s\nwant %s", got, want)
