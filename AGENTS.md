@@ -2,12 +2,6 @@
 
 Rules for any coding agent working in this repository.
 
-## Commits and PRs: the owner's name only
-
-Every commit is authored and committed as the repository owner,
-`Jack J Burleson // LJM <exios4@protonmail.com>`. Never commit under an
-agent's or a tool's identity, except for the accepted contributor below.
-
 ### Accepted contributor: CodeRabbit
 
 CodeRabbit (`coderabbitai[bot]`) is a listed contributor. The commits it
@@ -17,12 +11,6 @@ commits are held to the same bar as any other: they must pass `make check`
 and the full CI run on the PR's final head, and they carry no
 `Co-Authored-By` or `Generated with` lines. No other agent or tool is
 accepted this way.
-
-- No `Co-Authored-By` lines, `Generated with` lines, or other agent or tool
-  footers in commit messages, PR titles, or PR descriptions.
-- No agent attribution or signatures in code, comments, or docs.
-- Avoid posting GitHub comments. Fix review findings in code, and resolve
-  threads without replying unless a reply is needed.
 
 ## Changelog: every PR adds its entry
 
@@ -117,3 +105,9 @@ into `main`.
 Pushes to `main` run no CI jobs (ADR 0021): a PR merges only after its six
 checks pass on a branch up to date with `main`, so the merged tree was
 already tested. Do not add CI work to `main` pushes.
+
+## Commits and PRs
+
+Every commit is authored and committed as the repository owner,
+`Jack J Burleson`. Never commit under an
+agent's or a tool's identity, except for the accepted contributor listed.
