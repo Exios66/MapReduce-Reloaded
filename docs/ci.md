@@ -24,7 +24,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
-| `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
+| `go` | `make go-lint go-test py-e2e`, then `make fuzz FUZZTIME=10s` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, the Python coordinator with the Go commands, then ten seconds of input exploration per fuzz target) | `cimg/python:3.13`, medium |
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
 | `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
@@ -223,9 +223,12 @@ for a public open-source project on Linux). The plans change, so check
 Plan page before relying on a figure. A job that has used up the credits
 fails to start; that shows on the PR as a CircleCI failure, and the
 fallbacks below still apply. The Compose end-to-end test, the S3 gateway
-test, the long chaos, fuzz and flaky runs, and the benchmarks are not in CircleCI: they need a Docker daemon or
-many minutes, and stay on `make e2e`, `make e2e-s3`, `make chaos`,
-`make fuzz`, `make flaky` and `make perf` (see [Testing](testing.md)).
+test, the long chaos and flaky runs, and the benchmarks are not in CircleCI:
+they need a Docker daemon or many minutes, and stay on `make e2e`,
+`make e2e-s3`, `make chaos`, `make flaky` and `make perf` (see
+[Testing](testing.md)). Fuzzing is in CI only as a bounded smoke: ten seconds
+per target inside the `go` job. Long `make fuzz FUZZTIME=...` runs stay on
+the VM.
 
 ## Setup by the owner
 

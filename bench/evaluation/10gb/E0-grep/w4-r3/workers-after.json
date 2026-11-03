@@ -1,0 +1,38 @@
+[
+  {
+    "Name": "/worker-1",
+    "Image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+    "State": {
+      "Running": false,
+      "OOMKilled": false,
+      "ExitCode": 0
+    }
+  },
+  {
+    "Name": "/worker-2",
+    "Image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+    "State": {
+      "Running": false,
+      "OOMKilled": false,
+      "ExitCode": 0
+    }
+  },
+  {
+    "Name": "/worker-3",
+    "Image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+    "State": {
+      "Running": false,
+      "OOMKilled": false,
+      "ExitCode": 0
+    }
+  },
+  {
+    "Name": "/worker-4",
+    "Image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+    "State": {
+      "Running": false,
+      "OOMKilled": false,
+      "ExitCode": 0
+    }
+  }
+]

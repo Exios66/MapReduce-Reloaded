@@ -5,6 +5,72 @@ writes its raw results to `bench/results/`, which git ignores. The numbers
 below are copied from a run, with the machine it ran on. Rule: every results
 table names its machine, in the text above it or in its caption.
 
+The [10 GB campaign plan](10gb-paper-run.md) records scope, VM handover and
+storage prerequisites. Its [evidence](evaluation/10gb/README.md) is published
+separately from the historical 1 GiB evaluation and grows as each cohort
+passes independent validation.
+
+## Fixed-VM campaign commands
+
+After explicit handover, `make paper-tools` builds the host tools and labeled
+worker image from the same clean revision, including an untracked-file check;
+it does not start containers. The `.tools` tool-directory symlink is the only
+untracked-path exception. Builds use a revision-specific `mapreduce-paper`
+tag and record the build's own immutable image ID, not the shared image tag.
+`bench/paper.sh prepare grep native` prepares input, and
+`bench/paper.sh run grep native normal` runs and independently validates one
+trial. Use `sort zstdkv` for the explicitly named compressed-KV-input,
+intermediate and output variant; `sort native` remains capacity-gated.
+Sort settings are `normal`, `no-backups`, and `restart`; the last requires
+`EVENT_AFTER` seconds, calibrated from a normal run. `SIZE` is decimal bytes,
+default 10000000000, and `M` defaults to 160. Smaller calibration jobs use
+the same commands. `SPACE_BUDGET_BYTES` sets the required free space **after
+input preparation**, from measured intermediate/output peaks plus reserve;
+never lower it simply to admit an unsafe job.
+
+Each trial writes `bench/results/paper-*/` with validation, input manifest,
+effective Compose configuration, tool/image provenance, resource samples,
+events, counters, rate plots and logs. The existing rate curves count split
+bytes, fetched shuffle bytes and pre-encoding output payload respectively;
+they are not three equivalent physical disk-throughput measurements. Only
+stopped, successfully verified output is removed. Failed output and the
+run-specific WAL stay for diagnosis; future trials use a fresh WAL. One
+account-wide lock excludes overlapping campaign commands.
+
+Before service replacement, the runner verifies source/tool/image provenance
+and input shard sizes. Both services are pinned to the recorded image with
+builds and pulls disabled. Accepted task counters must match the manifest's
+input bytes and records; grep's output alone cannot prove the full input ran.
+Collectors stay alive until joined, independently of the job timeout.
+Evidence checks use explicit errors (also under `PYTHONOPTIMIZE`) and require
+baseline, terminal and in-job coverage. Maximum gaps are three sample
+intervals, with a one-second floor for counters and a six-second floor for
+resources;
+only the recorded worker's restart window is exempted. Resource calls have
+a timeout, a delay between calls, and child-process cleanup. Recorded
+restart events also reset that worker's rate series, even without an
+observed counter drop. Memory and free-space extrema are **sampled**, not
+guaranteed instantaneous peaks.
+
+See the [full-size resume checklist](10gb-paper-run.md#full-size-resume-checklist)
+before admitting 10 GB runs. The owner confirmed exclusive VM access and
+authorized execution. Quality and capacity gates still apply.
+
+The [expanded E0–E5 suite](10gb-paper-run.md#expanded-e0e5-campaign-owner-clarification-2026-10-30)
+keeps the original formats, seeds, skew and controls at approximately 10 GB:
+84 trials plus nine paper-format supplements, three per setting. Run
+`python3 bench/large-suite.py plan` to list them without changing services.
+Input groups run sequentially; the scheduler stops on any failed validation.
+`WORKERS=1|2|4` controls scaling, and `SORT_PROGRAM=papersort|distsort`
+distinguishes the paper-key and whole-line sort representations. Word count
+uses native text input/output and the named `zstd` intermediate variant;
+`TEXT_SOURCE` selects its seeded input. Independent expected counts come
+from `text-data.py`, not the first distributed output.
+
+War and Peace, NASA-HTTP, SNAP web-Google and pinned Common Crawl remain
+separate real-data extensions for their matching programs. They do not
+replace the generated paper-format records or delay the primary campaign.
+
 ## Data generators (#57)
 
 Each generator writes reproducible input to stdout from a size in bytes and
@@ -154,6 +220,27 @@ The cluster runs above need Docker and a person to read them. These run in
   intermediate data against the measured ratios plus 0.05: word-count
   records 0.368 with zstd and 0.532 with Snappy, line records 0.446 and
   0.673.
+
+## Decimal-10-GB campaign
+
+The current campaign reruns the E0–E5 controls at approximately ten times
+the 1 GiB evaluation, preserving generated formats, seeds, Zipf skew and
+paired settings. Each setting has three trials. These are new, separately
+labeled results; they do not replace the historical runs below.
+
+The first completed cohort is **E0 grep** at exactly 100,000,000 records and
+10,000,000,000 bytes, M = 160, R = 1. Every trial reproduced all 923 matches.
+Median job time was **50.366 s** on one worker, **23.537 s** on two and
+**16.016 s** on four, a 3.15× scaling from one to four. The earlier same-size
+grep took 18.3 s on four workers; the current-runtime median is 16.0 s, but
+the revisions and uncontrolled cache state differ, so this is not a
+controlled speedup claim.
+
+[The evidence directory](evaluation/10gb/README.md) has the raw trials,
+sanitized per-run status, event, sample, rate and resource data, and
+validation summaries. Private absolute paths and raw host identifiers stay
+out of the repository. Sort, backups, failure/recovery and word-count cohorts
+are added only after their own validation gates pass.
 
 ## Evaluation (E0–E6)
 

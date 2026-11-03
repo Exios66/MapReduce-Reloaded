@@ -1,0 +1,16 @@
+{
+  "epoch": 1793330457.6539142,
+  "cpus": 4,
+  "kernel": "6.8.0-139-generic",
+  "docker": "29.8.1",
+  "cache_policy": "uncontrolled page cache; no drop-caches; host cache totals are not file residency",
+  "memory": {
+    "MemTotal_bytes": 8325894144,
+    "MemAvailable_bytes": 7466307584,
+    "Buffers_bytes": 238354432,
+    "Cached_bytes": 6668664832,
+    "SwapTotal_bytes": 0,
+    "Dirty_bytes": 1253376,
+    "SReclaimable_bytes": 610099200
+  }
+}

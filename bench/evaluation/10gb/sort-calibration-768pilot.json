@@ -1,0 +1,42 @@
+{
+  "label": "768 MiB pilot calibration; excluded from final evidence",
+  "scenario": "sort",
+  "program": "distsort",
+  "variant": "zstdkv",
+  "commit": "70fcbd424672ec4405e6c0325ddf326ff509ef6a",
+  "image": "sha256:41d5bacf3835fce4479ed95fa06048b65defedd103129b435439e5a4b28b9bad",
+  "workers": 4,
+  "m": 160,
+  "r": 8,
+  "logical_bytes": 10000000000,
+  "physical_input_bytes": 5612159103,
+  "job_seconds": 262.453,
+  "wall_seconds": 262.9372664000839,
+  "status": {
+    "map": "160/160",
+    "reduce": "8/8",
+    "backups": 6,
+    "backups_won": 1,
+    "map_input_records": 100000000,
+    "map_input_bytes": 5612159103,
+    "map_output_bytes": 5525237679,
+    "reduce_input_records": 100000000,
+    "reduce_output_bytes": 9900000000,
+    "reduce_output_records": 100000000
+  },
+  "validation": {
+    "verified": true,
+    "records": 100000000,
+    "physical_output_bytes": 5424640027
+  },
+  "storage": {
+    "space_budget_bytes": 15032385536,
+    "first_free_bytes": 20603711488,
+    "minimum_free_bytes": 8845246464,
+    "observed_growth_bytes": 11758465024
+  },
+  "cache_policy": "uncontrolled page cache; no cold-cache claim",
+  "notes": "Worker OOM at 765 MiB on a later sort trial invalidated the 768 MiB cohort. Final sort uses 1024 MiB and must be recalibrated.",
+  "pilot": true,
+  "excluded_from_final": true
+}
