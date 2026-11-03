@@ -18,6 +18,14 @@ GO_OUT="$ROOT/go/gen"
 PY_OUT="$ROOT/python/mapreduce_reloaded/gen"
 PROTOS=$(find proto -name '*.proto' | sort)
 
+if ! "$PYTHON" -c 'import grpc_tools.protoc' >/dev/null 2>&1; then
+  echo "gen-proto: $PYTHON cannot import grpc_tools (the grpcio-tools package)." >&2
+  echo "Run 'make venv' once, which creates python/.venv with the dev tools;" >&2
+  echo "make then uses it automatically. If your python3 is newer than 3.13," >&2
+  echo "run 'make venv BASE_PYTHON=python3.13' instead." >&2
+  exit 1
+fi
+
 # Generate into a temporary directory and only replace the real output
 # directories at the end, so a failed run leaves the committed code intact.
 TMP=$(mktemp -d)

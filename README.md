@@ -211,7 +211,7 @@ docs/      design, roadmap, paper mapping, file format, ADRs, explainers
 ## Development
 
 ```sh
-pip install -e "python[dev]"   # the Python package and dev tools
+make venv                      # python/.venv with the package and dev tools; make uses it automatically
 make tools                     # pinned code generators into .tools/bin
 make hooks                     # once per clone: run `make check` before every push
 make check                     # all linters and tests (the quality gate)
@@ -224,7 +224,8 @@ including a short chaos run that kills workers and restarts the coordinator.
 CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
 `python-3.13`, `lint`, `mapping-coverage`); work reaches `main` only through pull requests. See
 [CI](docs/ci.md) and [ADR 0014](docs/design/0014-ci-on-pull-requests.md).
-`make` runs Python as `python3`; pass `PYTHON=...` to use another interpreter.
+`make` runs Python from `python/.venv` when `make venv` has created it, and as
+`python3` otherwise; pass `PYTHON=...` to use another interpreter.
 
 ## Documentation
 
