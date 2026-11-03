@@ -13,7 +13,14 @@ import pytest
 from test_coordinator_server import Aborted, Coordinator, write
 
 from mapreduce_reloaded.coordinator import Task, Worker, statusweb
-from mapreduce_reloaded.coordinator.server import Config, LostWorker, Server, Status, WorkerStatus
+from mapreduce_reloaded.coordinator.server import (
+    AttemptRange,
+    Config,
+    LostWorker,
+    Server,
+    Status,
+    WorkerStatus,
+)
 from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2, types_pb2
 
 MAP = types_pb2.TASK_KIND_MAP
@@ -75,6 +82,39 @@ STATUS = Status(
         WorkerStatus(Worker("w3", types_pb2.WorkerInfo(), 0.0), [], {}),
     ],
     lost=[LostWorker("w1", AT, [M0])],
+    attempts={
+        "job-1": [
+            AttemptRange(
+                kind=types_pb2.TASK_KIND_MAP,
+                index=0,
+                attempt=0,
+                worker="w1",
+                started=AT - 2.5,
+                ended=AT - 1.0,
+                ok=True,
+            ),
+            AttemptRange(
+                kind=types_pb2.TASK_KIND_MAP,
+                index=1,
+                attempt=0,
+                worker="w2",
+                started=AT - 2.0,
+                ended=None,
+                backup=False,
+                ok=False,
+            ),
+            AttemptRange(
+                kind=types_pb2.TASK_KIND_REDUCE,
+                index=0,
+                attempt=0,
+                worker="w1",
+                started=AT - 1.5,
+                ended=AT - 1.2,
+                backup=False,
+                ok=False,
+            ),
+        ]
+    },
 )
 
 
@@ -125,6 +165,20 @@ def test_page(get):
         "zone-x",
         "1/4",
         "3s ago",
+        'id="job-job-1"',
+        "task timeline",
+        ">map 0 #0 w1<",
+        ">map 1 #0 w2<",
+        ">reduce 0 #0 w1<",
+        'class="trace map"',
+        'class="trace map open"',
+        'class="trace reduce failed"',
+        'style="left:0.00%;width:60.00%"',
+        'style="left:20.00%;width:80.00%"',
+        'style="left:40.00%;width:12.00%"',
+        ">1.5 s<",
+        ">2.0 s<",
+        ">0.3 s<",
     ]:
         assert want in body, want
     assert body.count("<script") == 1, "only the page's own script, not the job's error"
@@ -168,7 +222,7 @@ def test_script_matches_go_page(get):
 JOB_KEYS = (
     "id state error map_completed map_total reduce_completed reduce_total backup_attempts "
     "backup_wins map_host_local map_zone_local counters submitted_at finished_at "
-    "duration_seconds"
+    "duration_seconds attempts"
 ).split()
 
 
@@ -179,6 +233,13 @@ def test_status_json(get):
     doc = json.loads(body)
     assert sorted(doc) == ["at", "jobs", "lost", "workers"]
     assert sorted(doc["jobs"][0]) == sorted(JOB_KEYS)
+    # The timeline rides the job: the fixture's three attempts are the labels
+    # its Go test's TestTimeline also renders.
+    attempts = doc["jobs"][0]["attempts"]
+    assert [a["worker"] for a in attempts] == ["w1", "w2", "w1"]
+    assert [a["kind"] for a in attempts] == ["map", "map", "reduce"]
+    assert attempts[1]["ended"] is None and attempts[0]["ended"] is not None
+    assert attempts[2]["ok"] is False
     assert sorted(doc["workers"][0]) == sorted(
         ["id", "host", "zone", "slots", "last_seen", "running"]
     )
@@ -288,7 +349,7 @@ def test_stalled_client_is_dropped(monkeypatch):
 
 def test_empty_page():
     """The page says there are no jobs or workers."""
-    body = statusweb.page(Status(AT, [], [], []))
+    body = statusweb.page(Status(AT, [], [], [], {}))
     for want in ["No jobs yet.", "No workers.", "None."]:
         assert want in body
 
@@ -370,7 +431,7 @@ def test_server_status(tmp_path):
     tasks and when they were last seen by the wall clock, and lost workers."""
     wall, tick = [AT], [100.0]
     c = Coordinator(Server(Config(now=lambda: wall[0], clock=lambda: tick[0], worker_timeout=5)))
-    assert c.s.status() == Status(AT, [], [], [])
+    assert c.s.status() == Status(AT, [], [], [], {})
     w1, w2 = c.register(host="h1"), c.register(host="h2")
     job = c.submit(
         program="wordcount",

@@ -15,6 +15,13 @@ cut a release.
 
 ### Added
 
+- Status page (Go and Python): each job card shows a task timeline, one
+  row per attempt the coordinator saw, to scale over the job's run, with
+  a bar for map (blue) and reduce (purple), a marker for backup
+  attempts, a red outline for attempts that failed and an outline for
+  the ones still running; `/status.json` carries the same data as each
+  job's `attempts`. The history lives in memory: a coordinator restart
+  does not rebuild it from the write-ahead log (#332).
 - Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
   status-page GIFs from one real job's whole run, in the page's dark and
   light variants, with a provenance sidecar (commit, machine, job, input,

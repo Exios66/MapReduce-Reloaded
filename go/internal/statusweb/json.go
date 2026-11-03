@@ -1,8 +1,10 @@
 package statusweb
 
 import (
+	"strings"
 	"time"
 
+	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 	"github.com/exios66/mapreduce-reloaded/go/internal/coordinator"
 )
 
@@ -31,6 +33,27 @@ type jsonJob struct {
 	SubmittedAt     *float64         `json:"submitted_at"`
 	FinishedAt      *float64         `json:"finished_at"`
 	DurationSeconds *float64         `json:"duration_seconds"`
+	Attempts        []jsonAttempt    `json:"attempts"`
+}
+
+// jsonAttempt is one ranged attempt for the timeline: its kind and index,
+// what worker ran it, when it started and ended (both Unix seconds;
+// ended absent while the attempt runs), and whether the coordinator
+// accepted its completion.
+type jsonAttempt struct {
+	Kind    string   `json:"kind"`
+	Index   uint32   `json:"index"`
+	Attempt uint32   `json:"attempt"`
+	Worker  string   `json:"worker"`
+	Started float64  `json:"started"`
+	Ended   *float64 `json:"ended"`
+	Backup  bool     `json:"backup"`
+	Ok      bool     `json:"ok"`
+}
+
+// kindName is a task kind without its enum prefix: "map".
+func kindName(k pb.TaskKind) string {
+	return strings.ToLower(strings.TrimPrefix(k.String(), "TASK_KIND_"))
 }
 
 type jsonWorker struct {
@@ -72,7 +95,7 @@ func toJSON(st coordinator.Status) jsonStatus {
 			ReduceCompleted: j.GetReduceTasksCompleted(), ReduceTotal: j.GetReduceTasksTotal(),
 			BackupAttempts: j.GetBackupAttempts(), BackupWins: j.GetBackupWins(),
 			MapHostLocal: j.GetMapTasksHostLocal(), MapZoneLocal: j.GetMapTasksZoneLocal(),
-			Counters: map[string]int64{},
+			Counters: map[string]int64{}, Attempts: []jsonAttempt{},
 		}
 		for k, v := range j.GetCounters().GetValues() {
 			jj.Counters[k] = v
@@ -86,6 +109,13 @@ func toJSON(st coordinator.Status) jsonStatus {
 		if d, ok := duration(j, st.At); ok {
 			s := d.Seconds()
 			jj.DurationSeconds = &s
+		}
+		for _, a := range st.Attempts[j.GetJobId()] {
+			jj.Attempts = append(jj.Attempts, jsonAttempt{
+				Kind: kindName(a.Kind), Index: a.Index, Attempt: a.Attempt,
+				Worker: a.Worker, Started: *unix(a.Started), Ended: unix(a.Ended),
+				Backup: a.Backup, Ok: a.Ok,
+			})
 		}
 		out.Jobs = append(out.Jobs, jj)
 	}
