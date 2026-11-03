@@ -21,7 +21,11 @@ SETUP_CONFIG = Path(".circleci/config.yml")
 
 
 def load_patterns(config_text):
-    """Return the mapping regexes from the setup config's mapping block."""
+    """Return the first token of each nonblank line in the first mapping block.
+
+    Return an empty list if no mapping block is found. The first nonblank
+    line after the marker establishes the block's indentation.
+    """
     lines = config_text.splitlines()
     patterns = []
     in_block = False
@@ -43,17 +47,29 @@ def load_patterns(config_text):
 
 
 def unmatched_files(files, patterns):
-    """Return the files that no mapping pattern matches (re.search)."""
+    """Return the files that no mapping pattern matches (re.search).
+
+    Raise re.error if a pattern is invalid.
+    """
     compiled = [re.compile(p) for p in patterns]
     return [f for f in files if not any(rx.search(f) for rx in compiled)]
 
 
 def _run(cmd, check=True):
+    """Run a command with captured text output and return its completed process.
+
+    A nonzero exit raises subprocess.CalledProcessError unless check is false;
+    errors starting the process propagate.
+    """
     return subprocess.run(cmd, check=check, text=True, capture_output=True)
 
 
 def fetch_main():
-    """Fetch origin/main, falling back to the public URL (proto job pattern)."""
+    """Fetch origin/main, falling back to an HTTPS GitHub URL for the remote.
+
+    A failed origin fetch triggers the fallback; a failed fallback raises
+    subprocess.CalledProcessError. Errors starting a command also propagate.
+    """
     try:
         _run(
             [
@@ -88,13 +104,24 @@ def fetch_main():
 
 
 def changed_files():
-    """Return the files this branch changes against origin/main."""
+    """Return file names changed between HEAD and its merge base with origin/main.
+
+    Git command failures raise subprocess.CalledProcessError; errors starting
+    Git also propagate.
+    """
     base = _run(["git", "merge-base", "origin/main", "HEAD"]).stdout.strip()
     out = _run(["git", "diff", "--name-only", base, "HEAD"]).stdout
     return [line for line in out.splitlines() if line]
 
 
 def main():
+    """Check committed changes against CI mappings and return an exit status.
+
+    Return 1 and report to stderr if there are no patterns or any files are
+    unmatched; otherwise report the file count to stdout and return 0.
+    Config read errors and invalid regexes propagate. A failed origin fetch is
+    retried via HTTPS; a failed retry or Git comparison propagates its error.
+    """
     patterns = load_patterns(SETUP_CONFIG.read_text())
     if not patterns:
         print(
