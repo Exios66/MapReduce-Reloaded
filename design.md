@@ -12,8 +12,8 @@ evaluation plan for the special features. The rest follows one job from
 submission to completion, so a reviewer can go from the paper to the code,
 and lists where we differ from the paper and why.
 
-Items marked **(planned)** are decided here and due before the code
-deadline (Nov 16, 2026); everything else is built and tested.
+Everything described here is built and tested, except the LATE evaluation
+(E7), which is wired but not yet run (#59).
 
 ## Assignment requirements
 

@@ -27,8 +27,9 @@ uncompressed files, though the MRKV reader and writer handle every codec
 ## The coordinator
 
 `python -m mapreduce_reloaded.coordinator` serves a coordinator as
-`go/cmd/coordinator` does, with the same flags and defaults. Go workers and
-`mr` work with it unchanged:
+`go/cmd/coordinator` does, with the same flags and defaults except
+`-log-level`, which only the Go coordinator has. Go workers and `mr` work
+with it unchanged:
 
 ```sh
 python -m mapreduce_reloaded.coordinator [-addr :7070] [-http :8080]

@@ -32,19 +32,22 @@ A failing seeded test names its seed; `-chaos.seed=N -chaos.runs=1` or
 
 `make check` fails if a package's statement coverage falls under its floor
 in `go/cover-floors.txt` or `python/cover-floors.txt`
-(`scripts/cover.py`). A Go package counts only its own tests; a package
-with no floor fails too, so a new one must be given one. Each floor is one
+(`scripts/cover.py`). A Go package's coverage counts every test in the
+module and the commands that `internal/e2e` builds and runs, not only its
+own tests; a package with no floor fails too, so a new one must be given
+one. Each floor is one
 point under the value measured when it was set, rounded down. `make cover`
 runs the tests and prints each package's coverage beside its floor.
 
-Measured on 2026-10-29:
+Measured on 2026-11-07:
 
-- Go: 90.3% of 3,150 statements in 31 checked packages. The lowest are
-  `cmd/worker` (85.6%), `internal/wal` (86.0%), `cmd/coordinator` (86.8%)
-  and `cmd/mr` (87.7%). Unchecked: the generated protobuf code, the S3 test
+- Go: 91.7% of 3,234 statements in 31 checked packages. The lowest are
+  `tools/mutate` (28.7%; the rest of it runs `go test` on each mutant, in
+  `make mutate`), then `internal/wal` (86.9%), `cmd/mr` (88.2%),
+  `cmd/worker` (88.5%) and `examples/invertedindex` (89.5%). Unchecked: the generated protobuf code, the S3 test
   server, `examples/internal/run` (a test helper) and `examples/wordcount`,
   which the cluster, local and golden tests run as their reference.
-- Python: 99.8% of 2,172 statements in 5 checked packages, the generated
+- Python: 99.8% of 2,192 statements in 5 checked packages, the generated
   protobuf code left out. The four lines missed are the IPv6 listener in
   `coordinator/statusweb.py`, which `test_serve_ipv6` reaches only on a host
   with an IPv6 loopback address.
@@ -64,17 +67,23 @@ and prints the changes no test caught. A mutant that survives is either a
 missing test or a change that makes no difference. It takes several minutes
 a package; run it on the VM.
 
-Measured on 2026-10-28, on the course VM:
+Measured on 2026-11-07:
 
 | Package, files | Killed | Survived | Score |
 |---|---|---|---|
 | `internal/partition`, `hash.go` | 7 | 0 | 100% |
 | `internal/extsort`, `merge.go sorter.go` | 71 | 5 | 93.4% |
-| `internal/coordinator`, `tasktable.go` | 103 | 4 | 96.3% |
-| `internal/task`, `task.go` | 55 | 4 | 93.2% |
+| `internal/coordinator`, `tasktable.go` | 171 | 15 | 91.9% |
+| `internal/task`, `task.go` | 62 | 6 | 91.2% |
 
-The first run left 36 survivors (77.6% to 89.8%). Tests now kill all of
-them except the 13 below. These make no difference that a test could see:
+The first run, on 2026-10-28, left 36 survivors (77.6% to 89.8%), and tests
+were added until 13 were left, all of which made no difference that a
+test could see. Their counterparts are listed first. The survivors after
+them are in code added since, which the tests pin less tightly: the
+progress reports that `task.go` sends and LATE speculation in
+`tasktable.go` (ADR 0019).
+
+Survivors that make no difference a test could see:
 
 - `extsort`: the tuning constants `DefaultBudget` and `recordOverhead`
   (`sorter.go:30,33`); `s.arena[:1]` for `s.arena[:0]` after a spill
@@ -82,14 +91,23 @@ them except the 13 below. These make no difference that a test could see:
   `index <= index` for `<` in the merge's tie break (`merge.go:61`), since
   no two streams share an index.
 - `coordinator/tasktable.go`: -2 for the -1 that means "none yet"
-  (lines 96 and 125), and a starting best rank of 1 (125), which the first
-  candidate overwrites; `stopped := true` (406), which matters only for a
+  (lines 114, 209 and 274), and a starting best rank of 1 (274), which the
+  first candidate overwrites; `stopped := true` (619), which matters only for a
   task in progress with no attempt, a state the table never leaves a task
   in.
-- `task/task.go`: `writeKV`'s size on an error (lines 219, 225, 229), which
+- `task/task.go`: `writeKV`'s size on an error (lines 241, 247, 251), which
   its caller discards; and each partition's sort budget,
-  `DefaultBudget * R` for `/ R` (85), which changes only memory use, and
+  `DefaultBudget * R` for `/ R` (100), which changes only memory use, and
   would need a map task of over 64 MB to see.
+
+Survivors that mark a missing test, all in the newer code:
+
+- `coordinator/tasktable.go`, in LATE speculation: the mean of a worker's
+  task speeds (88), the checks on a running attempt's age and progress
+  (196, 199, 200, 201), the percentile used for "slow" (247, 254), and the
+  speed recorded when an attempt ends (379, 396).
+- `task/task.go`: the condition under which a map task reports its
+  progress (129).
 
 `make mutate-py` does the same for the Python MRKV format and partition
 function with [mutmut](https://github.com/boxed/mutmut), installed by

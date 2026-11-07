@@ -28,7 +28,7 @@ bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/co
 bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -5
 ```
 
-`mr submit` prints the job's id and status:
+`mr submit -wait` prints the task count, then the job's status and counters; the first lines are:
 
 ```text
 mr: 8 map tasks (-m 8)
@@ -62,7 +62,7 @@ removes the containers and keeps `data/`.
 | Operations | Status page, Prometheus metrics, Grafana dashboard, chaos test with seeded worker kills and coordinator crashes |
 | Languages | Go cluster; Python reference implementation and a coordinator tested with Go workers; the same bytes for the same uncompressed job |
 
-Phases 0–4 and the first part of Phase 6 (#41, #42 and LATE speculation, #284) are done; Python workers and full Go↔Python
+Phases 0–4 and 7, and the first part of Phase 6 (#41, #42 and LATE speculation, #284), are done; Python workers and full Go↔Python
 interoperability (Phase 5) are stretch goals — the Python-coordinator/Go-worker
 combination is already tested (`make py-e2e`). See the [roadmap](docs/roadmap.md)
 and the [final report](docs/report.md).
@@ -171,7 +171,7 @@ imported. [`examples/wordcount.go`](examples/wordcount.go) is a complete one.
 
 ## Benchmarks
 
-`make bench SCENARIO=grep` (also `sort` and `zipf`) runs one of the paper's
+`make bench SCENARIO=grep` (also `sort`, `zipf` and `book`) runs one of the paper's
 benchmarks and writes the input, shuffle and output rates over time, the
 counters and the machine to `bench/results/`. `make bench-codecs` compares
 the compression codecs; `make soak` runs 1 GiB with the combiner off on two
