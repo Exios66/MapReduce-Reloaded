@@ -104,6 +104,17 @@ cut a release.
 
 ### Fixed
 
+<!-- pyml disable md033 -->
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:799b81130e48f9cd94b0adbbd0a0a99101cebc306996bb54bbae62494551351d -->
+
+- Docs: `python/README.md` explains that `-keep-jobs=010` means 10 in
+  Python and 8 in Go.
+
+<!-- /coderabbit-ai-generated:v1 -->
+<!-- pyml enable md033 -->
+
 - Docs: a second stale-claim sweep of the numbers. `bench/README.md` gave the
   E6 crawled-English bytes ratio as 5.2% (it is 19.3%; 5.2 is the factor);
   `docs/testing.md` now has today's coverage figures and mutation scores
