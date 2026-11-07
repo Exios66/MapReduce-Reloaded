@@ -61,7 +61,7 @@ Compose cluster, through [`run.sh`](run.sh):
 | `grep` | `gen-grep.py` | `grep` for `XYZ` (§5.2) |
 | `sort` | `gen-sort.py` | `distsort` (§5.3) |
 | `zipf` | `gen-zipf.py` | `wordcount` |
-| `book` | `gen-book.py` | `wordcount`, the combiner's best case |
+| `book` | `gen-book.py`; run `scripts/fetch-data.sh warpeace` first | `wordcount`, the combiner's best case |
 
 - Settings come from the environment: `WORKERS` (default 4), `SIZE` in
   bytes (default 256 MiB), `M` (16), `R` (4), `SEED` (42) and `INTERVAL`,

@@ -171,7 +171,7 @@ imported. [`examples/wordcount.go`](examples/wordcount.go) is a complete one.
 
 ## Benchmarks
 
-`make bench SCENARIO=grep` (also `sort`, `zipf` and `book`) runs one of the paper's
+`make bench SCENARIO=grep` (also `sort`, `zipf` and `book`, which needs `scripts/fetch-data.sh warpeace` first) runs one of the paper's
 benchmarks and writes the input, shuffle and output rates over time, the
 counters and the machine to `bench/results/`. `make bench-codecs` compares
 the compression codecs; `make soak` runs 1 GiB with the combiner off on two
