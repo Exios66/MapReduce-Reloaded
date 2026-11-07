@@ -10,7 +10,7 @@
 | [`cover.py`](cover.py) | Checks each Go and Python package's statement coverage against its floor in `go/cover-floors.txt` or `python/cover-floors.txt`; `make check` runs it after the tests, and `make cover` prints the table (#161, [testing](../docs/testing.md)). |
 | [`fuzz.sh`](fuzz.sh) | Runs every Go fuzz target for `FUZZTIME` (default 20s) each; `make fuzz` (#152). |
 | [`soak.sh`](soak.sh) | The soak run: 1 GiB with the combiner off on two workers limited to 256 MB, which must finish with no container killed for memory (#160, #47). `make soak`; `SIZE` and `WORKERS` override the defaults. |
-| [`perf.sh`](perf.sh), [`perf-compare.py`](perf-compare.py) | Run the Go benchmarks and compare their median time per operation with `bench/baseline.txt`, failing on a slowdown over `THRESHOLD` percent (default 20). `make perf`; `PERF_UPDATE=1` rewrites the baseline. |
+| [`perf.sh`](perf.sh), [`perf-compare.py`](perf-compare.py) | Run the Go benchmarks and compare their median time per operation with `bench/baseline.txt`, failing on a slowdown over `THRESHOLD` percent (default 20) when the CPU lines match; on a different CPU the comparison is printed but cannot fail. `make perf`; `PERF_UPDATE=1` rewrites the baseline. |
 | [`check-links.py`](check-links.py) | Checks that every relative link and anchor in the tracked Markdown files resolves. Run by `make md-lint` (#159). |
 | [`ci-params.py`](ci-params.py) | Selects the CI jobs a branch's changed files implicate, from `.circleci/mapping.txt`, and checks that selection. See [CI](../docs/ci.md) and ADR 0020. |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |

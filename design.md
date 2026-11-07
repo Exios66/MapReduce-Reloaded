@@ -247,7 +247,7 @@ each, on 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory and a 35 GB
 disk (33 GB root, shared; [the VM](docs/cluster-vm.md#the-vm), the source of
 truth for the VM's specification). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
-the machine in `result.json`. Every point is the median of three runs, with
+the machine in `result.json`. Every point is the median of three runs (E2's no-straggler setting is ten alternating pairs), with
 the range shown as an error bar. Each plot's caption states the input size,
 M, R and the commit.
 

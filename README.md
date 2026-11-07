@@ -28,7 +28,7 @@ bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/co
 bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -5
 ```
 
-`mr submit -wait` prints the task count, then the job's status and counters; the first lines are:
+With `-m` set, `mr submit` prints the map task count to stderr; `-wait` then prints the job's status and counters. The first lines are:
 
 ```text
 mr: 8 map tasks (-m 8)

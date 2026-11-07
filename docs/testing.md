@@ -77,10 +77,11 @@ Measured on 2026-11-07:
 | `internal/task`, `task.go` | 62 | 6 | 91.2% |
 
 The first run, on 2026-10-28, left 36 survivors (77.6% to 89.8%), and tests
-were added until 13 were left, all of which made no difference that a
-test could see. Their counterparts are listed first. The survivors after
-them are in code added since, which the tests pin less tightly: the
-progress reports that `task.go` sends and LATE speculation in
+were added until 13 were left, which were judged to make no difference
+that a test could see. Their counterparts are listed first; one of them,
+the sort budget, is observable and is listed with the missing tests. The
+other missing tests are in code added since, which the tests pin less
+tightly: the progress reports that `task.go` sends and LATE speculation in
 `tasktable.go` (ADR 0019).
 
 Survivors that make no difference a test could see:
@@ -96,18 +97,19 @@ Survivors that make no difference a test could see:
   task in progress with no attempt, a state the table never leaves a task
   in.
 - `task/task.go`: `writeKV`'s size on an error (lines 241, 247, 251), which
-  its caller discards; and each partition's sort budget,
-  `DefaultBudget * R` for `/ R` (100), which changes only memory use, and
-  would need a map task of over 64 MB to see.
+  its caller discards.
 
-Survivors that mark a missing test, all in the newer code:
+Survivors that mark a missing test:
 
 - `coordinator/tasktable.go`, in LATE speculation: the mean of a worker's
   task speeds (88), the checks on a running attempt's age and progress
   (196, 199, 200, 201), the percentile used for "slow" (247, 254), and the
   speed recorded when an attempt ends (379, 396).
 - `task/task.go`: the condition under which a map task reports its
-  progress (129).
+  progress (129), and each partition's sort budget, `DefaultBudget * R` for
+  `/ R` (100). The mutant changes memory use, and also when a map task
+  spills: with R = 2 and two partitions, a partition holding 40 MiB spills
+  under the real 32 MiB budget but not under the mutant's 128 MiB.
 
 `make mutate-py` does the same for the Python MRKV format and partition
 function with [mutmut](https://github.com/boxed/mutmut), installed by
