@@ -2,7 +2,7 @@
 
 Rules for any coding agent working in this repository.
 
-### Accepted contributor: CodeRabbit
+## Accepted contributor: CodeRabbit
 
 CodeRabbit (`coderabbitai[bot]`) is a listed contributor. The commits it
 pushes to a PR branch under its own identity, such as its docstring and

@@ -145,7 +145,7 @@ map output was lost with it, so those map tasks ran again elsewhere
 ### 5.5 A benchmark with data rates over time
 
 ```sh
-SIZE=67108864 make bench SCENARIO=grep       # 64 MiB; also sort and zipf
+SIZE=67108864 make bench SCENARIO=grep       # 64 MiB; also sort and zipf, and book after `scripts/fetch-data.sh warpeace`
 ls bench/results/
 ```
 
