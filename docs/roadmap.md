@@ -252,20 +252,24 @@ MapReduce-Reloaded/
 │   ├── internal/shuffle/        # FetchPartition server and client
 │   ├── internal/wal/            # append-only, checksummed log
 │   ├── internal/{split,partition,extsort,combine,formats,local}/
+│   ├── internal/{storage,jobfile}/           # local and S3 files; user job files
 │   ├── internal/{statusweb,promtext,logs}/   # status page, /metrics, slog
-│   ├── internal/{wire,contract,papermap}/    # proto conversion and doc checks
+│   ├── internal/{memlimit,rpcguard}/         # container memory limit; handler panic guard
+│   ├── internal/{wire,contract,papermap,e2e}/ # proto conversion, doc and process checks
 │   └── examples/                # wordcount, grep, urlfreq, reverselinks, termvector, invertedindex, distsort
 ├── python/
 │   ├── pyproject.toml           # package: mapreduce_reloaded
-│   ├── mapreduce_reloaded/      # api, split, partition, formats, extsort, combine, local, examples
+│   ├── mapreduce_reloaded/      # api, split, partition, formats, extsort, combine, local, wal, coordinator, examples
 │   └── tests/
 ├── deploy/{docker,compose}/     # images; 1 coordinator + 4 workers, monitoring profile
+├── bench/                       # data generators, benchmark harness, evaluation results
+├── examples/                    # the job file and the demo notebook
 ├── scripts/                     # proto generation, e2e, VM check
 ├── testdata/                    # golden outputs and hash vectors
 └── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
 
-`tests/interop/` (Phase 5) does not exist yet; the Python-coordinator interop coverage that does exist lives in `python/tests/test_coordinator_e2e.py` (`make py-e2e`). `bench/` came with #57.
+`tests/interop/` (Phase 5) does not exist yet; the Python-coordinator interop coverage that does exist lives in `python/tests/test_coordinator_e2e.py` (`make py-e2e`).
 
 ---
 
@@ -324,7 +328,7 @@ Each phase ends in a runnable, tested state.
 ## 6. Key technical choices
 
 - **Go libraries:** `google.golang.org/grpc`, `google.golang.org/protobuf`, `aws-sdk-go-v2` for the s3 backend (with `gofakes3` as its test server), `klauspost/compress` for the zstd and Snappy codecs (#42), and the standard library. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `hashicorp/raft` or `etcd/client/v3` (Tier B).
-- **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `zstandard`, `pyarrow`.
+- **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. `zstandard` and `python-snappy` are its optional `compression` extra. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `pyarrow`.
 - **Determinism:** the hash partitioner uses a fixed, language-independent hash (FNV-1a 64 over key bytes), so Go and Python place the same key in the same partition.
 - **Exactly-once output:** a task attempt ID goes into temp filenames. The coordinator accepts only the first `ReportTask(COMPLETED)` per task; later attempts are discarded.
 

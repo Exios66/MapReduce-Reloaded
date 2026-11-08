@@ -115,8 +115,8 @@ via `make cluster-up` on the course VM or Compose.
 
 ```sh
 # words: a 1 GiB web log, word count with 32 maps and 4 reduces (E0-like)
+mkdir -p data/input/capture-1g
 python3 bench/gen-weblog.py 1073741824 > data/input/capture-1g/access.log
-make upload-example   # or: bin/mr upload data/input/capture-1g /data/input/capture-1g
 scripts/capture-status-gifs.py \
   --submit 'bin/mr submit -wait' \
   --program examples/wordcount.go -m 32 -r 4 \

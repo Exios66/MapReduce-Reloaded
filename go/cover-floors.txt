@@ -1,6 +1,6 @@
 # Coverage floors for make check (scripts/cover.py, #161): each package's
-# statements covered by its own tests, one point under the value measured
-# on 2026-10-27, rounded down. Raise a floor when a package's coverage
+# statements covered by every test in the module, one point under the value
+# measured on 2026-10-27, rounded down. Raise a floor when a package's coverage
 # rises; lowering one needs a reason in the commit. "-" leaves a package
 # unchecked.
 cmd/coordinator 85

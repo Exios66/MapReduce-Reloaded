@@ -69,7 +69,7 @@ differently ([the full table](../design.md#differences-from-the-2004-paper)).
   the benchmark harness, which is shell and Python scripts. A test
   (`go/internal/papermap`) fails if a path or test the mapping names does not
   exist.
-- **Tests.** Statement coverage is about 90% of the Go
+- **Tests.** Statement coverage is about 92% of the Go
   statements in 31 checked packages (`make cover` prints the current figure;
   [testing](testing.md#coverage)).
   Each package has a floor in [`go/cover-floors.txt`](../go/cover-floors.txt),

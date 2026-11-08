@@ -40,7 +40,7 @@ and the job continues.
 - [Design](../design.md): the assignment's design questions, one job from
   submission to completion, and sequence diagrams for scheduling, the
   shuffle, failure recovery and the commit.
-- [Design records](README.md#design-records): nineteen ADRs, one per
+- [Design records](README.md#design-records): 22 ADRs, one per
   decision.
 - [Explainers](README.md#explainers): one page per component.
 
@@ -110,7 +110,7 @@ short: unit tests in both languages, golden vectors shared by Go and
 Python for the file format, the hash and the messages, in-process cluster
 tests, a seeded chaos test that kills workers and restarts the
 coordinator, fuzzing of the decoders, a model-based test of the
-coordinator's RPCs, coverage floors per package (Go 83–99%, Python 99%),
+coordinator's RPCs, coverage floors per package (Go 83–99% outside `tools/mutate`, Python 99%),
 and mutation testing of the core packages. `make check` runs the fast set
 locally and CircleCI runs it on every pull request.
 
@@ -147,7 +147,7 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests.** 180 merged pull requests (as of 30 October 2026).
+- **Small pull requests.** 198 merged pull requests (as of 7 November 2026).
   The documented process calls for AI review and CI before merging; several
   real bugs were found in review, not by tests.
 
