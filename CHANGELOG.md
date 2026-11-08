@@ -111,6 +111,33 @@ cut a release.
 
 ### Fixed
 
+<!-- pyml disable md033 -->
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:799b81130e48f9cd94b0adbbd0a0a99101cebc306996bb54bbae62494551351d -->
+
+- Docs: `python/README.md` explains that `-keep-jobs=010` means 10 in
+  Python and 8 in Go.
+
+<!-- /coderabbit-ai-generated:v1 -->
+<!-- pyml enable md033 -->
+
+- Docs: a second stale-claim sweep of the numbers. `bench/README.md` gave the
+  E6 crawled-English bytes ratio as 5.2% (it is 19.3%; 5.2 is the factor);
+  `docs/testing.md` now has today's coverage figures and mutation scores
+  (`tasktable.go` 91.9%, `task.go` 91.2%, down from 96.3% and 93.2% as
+  LATE speculation and progress reports were added) and says that a Go
+  package's coverage counts every test in the module and the e2e commands;
+  `docs/report.md` counts 22 ADRs and 198 merged pull requests;
+  `docs/evaluation.md` says E0 to E6 are the course evaluation; `design.md`
+  no longer promises items marked "planned" (#341).
+- Docs: commands and lists that no longer matched the code. `make bench`
+  also takes `SCENARIO=book`; the Python coordinator has no `-log-level`;
+  `scripts/README.md`, `go/README.md` and the roadmap's layout list the
+  scripts and Go packages they omitted; the capture-GIF commands in
+  `docs/demo.md` create the input directory; `README.md` shows what
+  `mr submit -wait` prints and counts Phase 7 as done; `AGENTS.md`'s heading
+  levels pass `make md-lint` again (#341).
 - Build: `make` uses `python/.venv` when it exists, `make venv` creates it
   with the package and every dev tool, and `scripts/gen-proto.sh` says how to
   fix a Python that lacks `grpcio-tools`, instead of failing in
