@@ -50,9 +50,12 @@ for what each takes and gives.
 | `formats`, `formats/kv` | Input and output formats; the MRKV block format with its codecs |
 | `partition`, `split` | The partition hash; division of input into splits |
 | `storage` | Local and S3 files behind one interface |
+| `jobfile` | Loads user job files, interpreted by Yaegi (ADR 0015) |
+| `memlimit`, `rpcguard` | The container's memory limit, for the Go runtime; a recovered panic in one gRPC handler does not stop the process |
 | `wal`, `wire` | The write-ahead log; conversion between RPC messages and Go types |
 | `statusweb`, `promtext`, `logs` | Status page and `/metrics`; the Prometheus text format; structured logging |
 | `papermap` | Checks that every code path and test that `docs/paper-mapping.md` names exists |
+| `contract`, `e2e` | Test-only: the generated code against `proto/` and the Python wire format; the built commands run as separate processes on localhost |
 
 `gen/` holds the Go code generated from [`proto/`](../proto/). It is committed,
 so building needs no code generators; `make proto` regenerates it.

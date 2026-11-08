@@ -330,7 +330,9 @@ func (c *cluster) mapFiles(job string) []string {
 // runJob runs program on n workers, which join one after another.
 func runJob(t *testing.T, program string, n int) (*cluster, string, *pb.GetJobStatusResponse) {
 	t.Helper()
-	c := newCluster(t)
+	// A late heartbeat on a loaded CI runner must not lose the worker, or
+	// its re-registration changes the counts the tests assert.
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second })
 	job := c.submit(program)
 	for range n {
 		c.addWorker()

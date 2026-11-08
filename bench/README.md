@@ -127,6 +127,7 @@ Compose cluster, through [`run.sh`](run.sh):
 | `grep` | `gen-grep.py` | `grep` for `XYZ` (§5.2) |
 | `sort` | `gen-sort.py` | `distsort` (§5.3) |
 | `zipf` | `gen-zipf.py` | `wordcount` |
+| `book` | `gen-book.py`; run `scripts/fetch-data.sh warpeace` first | `wordcount`, the combiner's best case |
 
 - Settings come from the environment: `WORKERS` (default 4), `SIZE` in
   bytes (default 256 MiB), `M` (16), `R` (4), `SEED` (42) and `INTERVAL`,
@@ -427,7 +428,7 @@ record the offset between those two clocks.
 
 | Input | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
 |---|---:|---:|---:|---|---|---:|
-| Crawled English | 265,983,823 | 1,374,954,686 | 5.2% | 43.05 (42.82–43.69) | 50.06 (49.84–50.53) | 14% |
+| Crawled English | 265,983,823 | 1,374,954,686 | 19.3% | 43.05 (42.82–43.69) | 50.06 (49.84–50.53) | 14% |
 | Crawled, every language | 417,952,270 | 1,320,092,762 | 31.7% | 41.19 (40.08–41.73) | 44.33 (43.84–44.68) | 7% |
 | Book (War and Peace lines) | 43,372,796 | 1,452,704,780 | 3.0% | 45.89 (45.80–46.27) | 59.08 (58.18–59.52) | 22% |
 

@@ -1,0 +1,40 @@
+{
+  "recorded_at": "2026-10-30T07:00:00-05:00",
+  "commit": "5486d9e952faeb253075c9e751ac0908ac0202c3",
+  "note": "first version, recorded locally; re-record on the course VM at the freeze commit (#277)",
+  "machine": {
+    "host": "Luciuss-MacBook-Air.local",
+    "arch": "arm64",
+    "os": "macOS 26.1 (arm64)"
+  },
+  "status_url": "http://127.0.0.1:18786/",
+  "submit": "bin/mr submit -wait -coordinator 127.0.0.1:7070",
+  "program": "examples/wordcount.go",
+  "inputs": ["/data/input/capture-1g/access.log"],
+  "out": "data/out/gif-wordcount-1g",
+  "map_tasks": 32,
+  "reduce_tasks": 4,
+  "job": {
+    "id": "job-2",
+    "state": "SUCCEEDED",
+    "seconds": 51.046,
+    "map_input_bytes": 1074372493,
+    "map_tasks_total": 32,
+    "reduce_tasks_total": 4,
+    "backups_started": 6,
+    "backups_won": 0
+  },
+  "capture": {
+    "frames": 10,
+    "capture_interval_s": 8.8,
+    "gif_frame_delay_cs": 35,
+    "speed_factor": 25.1,
+    "window": "900x640",
+    "chrome": "Google Chrome 156.0.8078.48 (arm64)",
+    "ffmpeg": "ffmpeg version 7.1.1"
+  },
+  "gifs": {
+    "dark": { "frames": 13, "width": 900, "height": 640, "duration_s": 4.24, "bytes": 158410 },
+    "light": { "frames": 13, "width": 900, "height": 640, "duration_s": 4.24, "bytes": 161742 }
+  }
+}

@@ -28,7 +28,7 @@ bin/mr submit -m 8 -r 4 -wait examples/wordcount.go /data/out/wc '/data/input/co
 bin/mr cat /data/out/wc | sort -t$'\t' -k2 -nr | head -5
 ```
 
-`mr submit` prints the job's id and status:
+With `-m` set, `mr submit` prints the map task count to stderr; `-wait` then prints the job's status and counters. The first lines are:
 
 ```text
 mr: 8 map tasks (-m 8)
@@ -44,11 +44,11 @@ workers and their running tasks; `bin/mr status <id>` prints it again.
 removes the containers and keeps `data/`.
 
 <picture>
-  <source srcset="docs/assets/status-chaos-dark.gif" media="(prefers-color-scheme: dark)">
-  <img src="docs/assets/status-chaos-light.gif" alt="The status page during a seeded chaos run: map progress with percentages, backup attempts, key counters, and the workers with their running map tasks.">
+  <source srcset="docs/assets/status-wordcount-1g-dark.gif" media="(prefers-color-scheme: dark)">
+  <img src="docs/assets/status-wordcount-1g-light.gif" alt="The status page during a whole 1 GiB word count (32 map tasks, 4 reduce tasks, four workers): each job's map and reduce progress bars filling with a percentage, backup attempts, key counters, and every worker's running tasks with its progress. The frames are 9 seconds of real time apart, so the loop is a time-lapse of the unchanged page.">
 </picture>
 
-<sub>The status page during a seeded chaos run, in the reader's light or dark color scheme. It refreshes every two seconds and shows each job's map and reduce progress with a percentage, backup attempts, key counters, and every worker's running tasks.</sub>
+<sub>The status page during one whole 1 GiB word count, M = 32, R = 4, in the reader's light or dark color scheme, from its first map task to the final state (job complete, counters, workers idle), which holds at the loop's end. The page refreshes every two seconds and the recording kept its own refresh frames. It shows each job's map and reduce progress with a percentage, backup attempts, key counters, and every worker's running tasks; consecutive frames are 9 seconds of real time apart, and the page's duration clock is the job's elapsed time. `docs/assets/status-wordcount-1g-provenance.json` records the commit, machine, job and capture settings.</sub>
 
 ## Capabilities
 
@@ -62,7 +62,7 @@ removes the containers and keeps `data/`.
 | Operations | Status page, Prometheus metrics, Grafana dashboard, chaos test with seeded worker kills and coordinator crashes |
 | Languages | Go cluster; Python reference implementation and a coordinator tested with Go workers; the same bytes for the same uncompressed job |
 
-Phases 0–4 and the first part of Phase 6 (#41, #42 and LATE speculation, #284) are done; Python workers and full Go↔Python
+Phases 0–4 and 7, and the first part of Phase 6 (#41, #42 and LATE speculation, #284), are done; Python workers and full Go↔Python
 interoperability (Phase 5) are stretch goals — the Python-coordinator/Go-worker
 combination is already tested (`make py-e2e`). See the [roadmap](docs/roadmap.md)
 and the [final report](docs/report.md).
@@ -171,7 +171,7 @@ imported. [`examples/wordcount.go`](examples/wordcount.go) is a complete one.
 
 ## Benchmarks
 
-`make bench SCENARIO=grep` (also `sort` and `zipf`) runs one of the paper's
+`make bench SCENARIO=grep` (also `sort`, `zipf` and `book`, which needs `scripts/fetch-data.sh warpeace` first) runs one of the paper's
 benchmarks and writes the input, shuffle and output rates over time, the
 counters and the machine to `bench/results/`. `make bench-codecs` compares
 the compression codecs; `make soak` runs 1 GiB with the combiner off on two
@@ -211,7 +211,7 @@ docs/      design, roadmap, paper mapping, file format, ADRs, explainers
 ## Development
 
 ```sh
-pip install -e "python[dev]"   # the Python package and dev tools
+make venv                      # python/.venv with the package and dev tools; make uses it automatically
 make tools                     # pinned code generators into .tools/bin
 make hooks                     # once per clone: run `make check` before every push
 make check                     # all linters and tests (the quality gate)
@@ -224,7 +224,8 @@ including a short chaos run that kills workers and restarts the coordinator.
 CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
 `python-3.13`, `lint`, `mapping-coverage`); work reaches `main` only through pull requests. See
 [CI](docs/ci.md) and [ADR 0014](docs/design/0014-ci-on-pull-requests.md).
-`make` runs Python as `python3`; pass `PYTHON=...` to use another interpreter.
+`make` runs Python from `python/.venv` when `make venv` has created it, and as
+`python3` otherwise; pass `PYTHON=...` to use another interpreter.
 
 ## Documentation
 

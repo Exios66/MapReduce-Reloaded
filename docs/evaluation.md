@@ -20,10 +20,9 @@ had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 | 5.5 Machine failures | 200 of 1,746 killed: +5% (933 s) | 1 of 4 killed: +79% to +232% | E3 |
 
 The grep and sort rows ran with `bench/run.sh` at commit `2707160`; their
-directories hold the samples, the rates, the counters and the machine. E0,
-E2, E3 and E6 are the course evaluation in
+directories hold the samples, the rates, the counters and the machine. E0 to E6 are the course evaluation in
 [bench/README.md](../bench/README.md#evaluation-e0e6), each the median of
-three runs.
+three runs (E2's no-straggler rows are ten alternating pairs).
 
 Provenance of the machine. The E-series directories each hold a
 `machine.json`, written by `bench/experiments.sh`. The grep and sort

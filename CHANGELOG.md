@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
+  status-page GIFs from one real job's whole run, in the page's dark and
+  light variants, with a provenance sidecar (commit, machine, job, input,
+  timings) and honest time-lapse support for minutes-long jobs (#279).
 - Status page (Go and Python): `/status.json` serves the status as data,
   and the page updates itself every two seconds from an inline script, with
   a pause button and a notice when the coordinator stops answering. Without
@@ -58,6 +62,12 @@ cut a release.
 
 ### Changed
 
+- Docs: the README's status-page GIFs (`docs/assets/status-*.gif`) show one
+  whole 1 GiB word count, M = 32, R = 4, on four workers, from its first map
+  task to the end state, replacing the 8-second seeded chaos loop; a
+  provenance sidecar next to them records the commit, machine, job, input
+  and capture settings, and the caption describes the recording honestly as
+  a time-lapse (#277).
 - CI: CircleCI runs only the jobs a PR implicates, through a setup config
   and a continuation config (#288, ADR 0020), selected by our own script
   with the mapping gaps closed (#293). Pushes to `main` run no jobs (#295,
@@ -79,15 +89,57 @@ cut a release.
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
   LATE speculation cites #284, and E0 to E7 ranges are corrected.
+- Bench: each trial records the page cache's state in `cache.jsonl`, an
+  optional `DROP_CACHES=1` makes trials cold, and `begin` says which older
+  results it deletes (#310).
 - `.gitignore` covers local secrets, scratch files and tool caches (#300).
 
 ### Removed
 
+- The generated coverage counters and profiles under `go/.cover/` are no
+  longer tracked in the repository; `make go-test` regenerates them locally
+  and `.gitignore` already keeps the directory ignored (#331).
 - The GitHub Actions workflow; CircleCI is the only CI, and a test fails if
   `.github/workflows/` comes back (#294).
 
 ### Fixed
 
+<!-- pyml disable md033 -->
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:799b81130e48f9cd94b0adbbd0a0a99101cebc306996bb54bbae62494551351d -->
+
+- Docs: `python/README.md` explains that `-keep-jobs=010` means 10 in
+  Python and 8 in Go.
+
+<!-- /coderabbit-ai-generated:v1 -->
+<!-- pyml enable md033 -->
+
+- Docs: a second stale-claim sweep of the numbers. `bench/README.md` gave the
+  E6 crawled-English bytes ratio as 5.2% (it is 19.3%; 5.2 is the factor);
+  `docs/testing.md` now has today's coverage figures and mutation scores
+  (`tasktable.go` 91.9%, `task.go` 91.2%, down from 96.3% and 93.2% as
+  LATE speculation and progress reports were added) and says that a Go
+  package's coverage counts every test in the module and the e2e commands;
+  `docs/report.md` counts 22 ADRs and 198 merged pull requests;
+  `docs/evaluation.md` says E0 to E6 are the course evaluation; `design.md`
+  no longer promises items marked "planned" (#341).
+- Docs: commands and lists that no longer matched the code. `make bench`
+  also takes `SCENARIO=book`; the Python coordinator has no `-log-level`;
+  `scripts/README.md`, `go/README.md` and the roadmap's layout list the
+  scripts and Go packages they omitted; the capture-GIF commands in
+  `docs/demo.md` create the input directory; `README.md` shows what
+  `mr submit -wait` prints and counts Phase 7 as done; `AGENTS.md`'s heading
+  levels pass `make md-lint` again (#341).
+- Build: `make` uses `python/.venv` when it exists, `make venv` creates it
+  with the package and every dev tool, and `scripts/gen-proto.sh` says how to
+  fix a Python that lacks `grpcio-tools`, instead of failing in
+  `make check` on a system `python3` without the dev tools. `make ci-report`
+  builds the clean copy's own venv when `python3` lacks them (#335).
+- Go tests: the cluster tests that run a whole job (`runJob`) give workers a
+  5 s timeout, not 100 ms, so a late heartbeat on a loaded CI runner no
+  longer makes a worker re-register and fail `TestClusterWorkerMetrics`
+  (#310).
 - CI: the repository's second CircleCI project, made by the GitHub App, no
   longer runs the suite. Both projects built every push, doubling credit use
   and posting statuses that could disagree; the setup job now continues
