@@ -26,10 +26,14 @@ evaluation figures. Timings are for the course VM.
 - [ ] `make upload-example`, and generate the sort input once, so the demo
       does not wait 20 seconds for it:
       `python3 bench/gen-sort.py 1073741824 42 > data/input/sort-1g.txt`.
-- [ ] `df -h /` shows at least 4 GB free: the two sorts write 1 GiB each.
+- [ ] `df -h /` shows at least 6 GB free. The first sort's 1.1 GB of output
+      stays while the second sort peaks at 2.75 GB, and a worker takes no
+      task with under 2 GiB free
+      ([ADR 0017](design/0017-disk-and-memory-bounds.md)).
 - [ ] Rehearse the whole script once, start to finish, with a timer.
-- [ ] Run the notebook top to bottom (*Kernel → Restart & Run All*); every
-      cell's `assert` passes.
+- [ ] After the rehearsal's `make cluster-down`, run `make cluster-up` again,
+      then run the notebook top to bottom (*Kernel → Restart & Run All*);
+      every cell's `assert` passes.
 - [ ] Open the status page, <http://127.0.0.1:18780/>, through the SSH
       forward, and this page, the README's results, and
       [`bench/evaluation/faults.png`](../bench/evaluation/faults.png) in tabs.
@@ -87,11 +91,12 @@ saving is 15× to 78× the bytes and 18–44% of the job time (E1), and 3× to
 ```sh
 bin/mr cat "$OUT" | sort -t$'\t' -k2 -nr | head -5
 bin/mr run -local -m 8 -r 4 examples/wordcount.go /tmp/demo-local 'testdata/corpus/*.txt'
-diff <(cat testdata/corpus/expected/part-r-*) <(cat /tmp/demo-local/part-r-*) && echo same output
+diff <(bin/mr cat "$OUT") <(cat /tmp/demo-local/part-r-*) && echo cluster matches local
+diff <(cat testdata/corpus/expected/part-r-*) <(cat /tmp/demo-local/part-r-*) && echo local matches golden
 ```
 
 The cluster's output is byte for byte what local mode, the single-process
-oracle, writes. `make e2e` checks the same equality on every run.
+oracle, writes, and both match the committed golden output. `make e2e` checks the same equality on every run.
 
 ## 2:45 — Kill a worker in the middle of a job
 
@@ -122,17 +127,22 @@ replies, so a restarted coordinator replays it and carries on.
 ```sh
 RESTARTED=/data/out/sort-restart-$(date +%s)
 JOB=$(bin/mr submit -m 64 -r 4 distsort "$RESTARTED" /data/input/sort-1g.txt)
-sleep 6; docker restart mapreduce-coordinator-1
+sleep 6; bin/mr status "$JOB" | head -1
+docker kill mapreduce-coordinator-1 && docker start mapreduce-coordinator-1
 until bin/mr status "$JOB" 2>/dev/null | grep -qE 'SUCCEEDED|FAILED'; do sleep 2; done
 bin/mr status "$JOB" | head -4
 cat data/out/${KILLED#/data/out/}/part-r-* | md5sum
 cat data/out/${RESTARTED#/data/out/}/part-r-* | md5sum
 ```
 
-Submit without `-wait`: the client's connection ends when the coordinator
-does, so poll `mr status` instead. The job ends `SUCCEEDED`, about 1.6 s
-slower than an undisturbed run (E4), and both checksums match: a lost
-worker and a lost coordinator give the same output as each other.
+The first status line must say `MAPPING` or `REDUCING`; if the job already
+finished, there was nothing to recover. `docker kill` crashes the
+coordinator, as `make e2e` does; a `docker restart` would stop it cleanly,
+and a clean stop tells idle workers to exit. Submit without `-wait`: the
+client's connection ends when the coordinator does, so poll `mr status`
+instead. The job ends `SUCCEEDED`, about 1.6 s slower than an undisturbed
+run (E4), and both checksums match: a lost worker and a lost coordinator
+give the same output as each other.
 
 ## 5:15 — The results
 
@@ -145,7 +155,8 @@ the jobs just run.
 ## 5:45 — Close
 
 ```sh
-rm -r data/out/demo-* data/out/sort-kill-* data/out/sort-restart-* /tmp/demo-local
+rm -r "data/out/${OUT#/data/out/}" "data/out/${OUT#/data/out/}-nocombiner" \
+  "data/out/${KILLED#/data/out/}" "data/out/${RESTARTED#/data/out/}" /tmp/demo-local
 make cluster-down
 ```
 

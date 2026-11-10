@@ -36,10 +36,17 @@ def test_the_notebook_shows_the_combiner_and_both_recoveries():
     for step in (
         '"-combiner=false"',
         '"docker", "kill", "mapreduce-worker-4"',
-        '"docker", "restart", "mapreduce-coordinator-1"',
+        '"docker", "kill", "mapreduce-coordinator-1"',
+        '"docker", "start", "mapreduce-coordinator-1"',
         "digest(RESTARTED) == digest(SORT)",
+        # Each recovery must happen mid-job, and the worker's loss must be logged.
+        "assert job.poll() is None",
+        '"the job ended before the restart"',
+        '"tasks_reset="',
     ):
         assert step in source, step
+    # A clean stop tells idle workers to exit, so the coordinator is crashed instead.
+    assert '"docker", "restart"' not in source
 
 
 def test_sections_are_numbered_in_order_and_listed_in_the_introduction():

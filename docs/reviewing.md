@@ -45,11 +45,11 @@ test for each of the paper's features F1–F24.
 
 | Claim | How to check it |
 |---|---|
-| The tests pass | `make check`: protobuf, lint, Go and Python tests, coverage floors. CI runs the same six jobs on each pull request ([CI](ci.md)) |
+| The tests pass | `make check`: protobuf, lint, Go and Python tests, coverage floors. On a pull request, CI runs the jobs whose inputs it touches; the other required jobs pass after a skip note ([CI](ci.md)) |
 | The cluster's output is correct | `make e2e`: word count on the Compose cluster, compared byte for byte with `testdata/corpus/expected` |
 | Failures do not change the output | `make chaos RUNS=5 SEED=1`: seeded worker kills, pauses and coordinator crashes; a failing seed replays with `scripts/chaos.sh 1 SEED` |
 | Go and Python agree | [`testdata/`](../testdata/README.md): the file format, hash, message and example-output vectors both test suites read; `make py-e2e` runs the Python coordinator with Go workers |
-| Every paper feature is built | `go test ./internal/papermap` fails if the mapping names a file or test that does not exist |
+| The paper mapping is accurate | `(cd go && go test -count=1 ./internal/papermap)` checks each feature's status and fails if the mapping names a file or test that does not exist; the named code and tests are the evidence that a feature is built |
 | The evaluation's numbers | `bench/evaluation/*/` holds each run's CSVs, `machine.json` with the commit, and logs; `python3 bench/plot-experiments.py bench/evaluation OUT` redraws every figure and prints every table |
 | The tests check results, not only run code | `make mutate` mutates core packages (the partition hash, the external sort, and more) and reports the survivors ([Testing](testing.md)) |
 

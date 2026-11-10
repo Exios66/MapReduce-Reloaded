@@ -684,14 +684,21 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     figure.savefig.assert_called_once_with(tmp_path / "faults.png")
 
 
-def test_faults_claims_correct_output_only_when_every_disturbed_run_is_valid(plotter, tmp_path):
+@pytest.mark.parametrize("all_failed", [False, True], ids=["one-run-failed", "every-run-failed"])
+def test_faults_claims_correct_output_only_when_every_disturbed_run_is_valid(
+    plotter, tmp_path, all_failed
+):
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
-    axis.barh.return_value = [Mock() for _ in range(6)]
+    axis.barh.return_value = [Mock() for _ in range(5 if all_failed else 6)]
     pyplot.subplots.return_value = figure, axis
     e2, e3, e4 = fault_rows()
+    if all_failed:  # the setting has no median, so no bar, but its failure still counts
+        e3 = [r for r in e3 if r["setting"] != "kill-50"]
     e3.append(row("kill-50", valid="0") | {"wall_seconds": "90"})
     module.faults(e2, e3, e4, tmp_path / "faults.png", light(module))
+    if all_failed:
+        assert "worker killed at 50%" not in axis.set_yticks.call_args.args[1]
     assert titles(figure)[0] == "Fault tolerance: what each disturbance costs"
 
 

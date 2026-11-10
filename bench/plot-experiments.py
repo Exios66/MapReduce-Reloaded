@@ -1020,10 +1020,11 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     one axis. Bars are slot 2 (a disturbed run); the run with backups off,
     the paper's mechanism disabled, is hatched. Each bar is labeled with
     both medians. The title claims correct output only if every disturbed
-    run is valid. Disturbances without valid runs, or experiments without
+    run is valid, drawn or not. Disturbances without valid runs, or experiments without
     an undisturbed median, are left out. Missing fields, invalid numbers
     and plotting or file errors propagate."""
-    cases = []  # (label, baseline, disturbed, hatched, rows of the disturbed setting)
+    cases = []  # (label, baseline, disturbed, hatched)
+    disturbed = []  # every run of every disturbance, drawn or not
     for rows, field, base, items in (
         (
             e2_rows,
@@ -1049,19 +1050,19 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     ):
         b = median_of(rows, base, field)
         for label, setting, hatched in items:
+            disturbed += [r for r in rows if r["setting"] == setting]
             d = median_of(rows, setting, field)
             if b and d:
-                runs_of = [r for r in rows if r["setting"] == setting]
-                cases.append((label, b, d, hatched, runs_of))
+                cases.append((label, b, d, hatched))
     fig, ax = plt.subplots(figsize=(9, 4.4))
     ys = list(range(len(cases)))[::-1]  # the first case on top
-    added = [100 * (d / b - 1) for _, b, d, _, _ in cases]
+    added = [100 * (d / b - 1) for _, b, d, _ in cases]
     color = t["series"][1]
     bars = ax.barh(ys, added, height=0.56, color=color, edgecolor=t["surface"], linewidth=2)
-    for bar, (_, _, _, hatched, _) in zip(bars, cases, strict=True):
+    for bar, (_, _, _, hatched) in zip(bars, cases, strict=True):
         if hatched:
             bar.set(facecolor=t["surface"], edgecolor=color, hatch="///", linewidth=1.5)
-    for y, a, (_, b, d, _, _) in zip(ys, added, cases, strict=True):
+    for y, a, (_, b, d, _) in zip(ys, added, cases, strict=True):
         ax.annotate(
             f"+{a:.0f}%   {d:.1f} s vs {b:.1f} s",
             (max(a, 0), y),
@@ -1077,8 +1078,8 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     ax.xaxis.set_major_formatter("+{x:.0f}%")
     ax.set_xlabel("Job time added, against the same job undisturbed (median of the valid runs)")
     ax.grid(axis="y", visible=False)
-    every = [r for *_, rs in cases for r in rs]
-    correct = bool(every) and all(r["valid"] == "1" for r in every)
+    # A disturbance whose runs all failed has no bar, but still fails the claim.
+    correct = bool(cases) and all(r["valid"] == "1" for r in disturbed)
     title = "Fault tolerance: what each disturbance costs"
     if correct:
         title = "Every disturbance still finished with the correct output"
