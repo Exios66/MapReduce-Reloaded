@@ -16,9 +16,9 @@ cut a release.
 ### Added
 
 - Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
-  disturbance in E2, E3 and E4 added, on one axis; its title claims correct
-  output only when every disturbed run was valid. The README's results lead
-  with it (#342).
+  disturbance in E2, E3 and E4 added, on one axis; its title says every
+  disturbed run gave an undisturbed run's output only when every one was
+  valid. The README's results lead with it (#342).
 - Notebook: `examples/demo.ipynb` shows the combiner (the same output with
   `-combiner=false`, and the bytes shuffled), the 1 GiB sort surviving a
   coordinator restart with output identical to the worker-kill run, and the

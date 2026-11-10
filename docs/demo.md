@@ -148,7 +148,7 @@ give the same output as each other.
 
 Show [`bench/evaluation/faults.png`](../bench/evaluation/faults.png): the
 job time each disturbance added, measured three times each on this VM, and
-every disturbed run's output correct. Then the README's E0 (word count runs
+every disturbed run's output identical to an undisturbed run's. Then the README's E0 (word count runs
 3.8× faster on four workers) and E1 figures. Point at the status page for
 the jobs just run.
 

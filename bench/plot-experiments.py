@@ -865,7 +865,7 @@ def e3(rows, results, out, t):
         title = f"E3: losing one of four workers costs {span(cost, lambda x: f'{x:.0f}')} s more"
         killed = [r for r in rows if r["setting"].startswith("kill-")]
         if killed and all(r["valid"] == "1" for r in killed):
-            title += ", and every run's output is correct"
+            title += ", and every run's output matches the undisturbed run's"
     heading(
         fig,
         t,
@@ -1019,7 +1019,7 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     the same experiment's undisturbed median, one horizontal bar each, on
     one axis. Bars are slot 2 (a disturbed run); the run with backups off,
     the paper's mechanism disabled, is hatched. Each bar is labeled with
-    both medians. The title claims correct output only if every disturbed
+    both medians. The title claims the undisturbed output only if every disturbed
     run is valid, drawn or not. Disturbances without valid runs, or experiments without
     an undisturbed median, are left out. Missing fields, invalid numbers
     and plotting or file errors propagate."""
@@ -1082,7 +1082,7 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     correct = bool(cases) and all(r["valid"] == "1" for r in disturbed)
     title = "Fault tolerance: what each disturbance costs"
     if correct:
-        title = "Every disturbance still finished with the correct output"
+        title = "Every disturbance still gave the same output as an undisturbed run"
     heading(
         fig,
         t,

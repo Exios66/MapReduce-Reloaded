@@ -193,8 +193,10 @@ type follows the comparison:
 
 It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
 and E4, each the job time it added against the same experiment's
-undisturbed median; its title claims correct output only if every disturbed
-run was valid.
+undisturbed median; its title claims the undisturbed output only if every
+disturbed run was valid. Valid means the output's checksum matches the
+first run on that input, an undisturbed one; `make e2e` checks word count
+against the committed golden output independently.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/faults-dark.png">
