@@ -127,7 +127,8 @@ How each job meets its requirements:
   `CGO_ENABLED=1`; `cimg/python` images include a C compiler.
 - **golangci-lint.** Built from source by the job's Go, at the version in
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
-  and the VM setup use the same pin, and a test fails if they drift.
+  and the VM setup use the same pin, and a test fails if they drift. Locally,
+  `make go-lint` applies the same rule through `scripts/golangci-lint.sh`.
 - **shellcheck.** The `go` job installs the release pinned in
   `scripts/vm-setup.sh` (`--shellcheck`, which checks its SHA-256 sum) and
   runs `make sh-lint` with `MR_REQUIRE_SHELLCHECK=1`. Locally, `make lint`
@@ -284,9 +285,14 @@ that does not depend on any hosted service.
   check, and open an issue.
 - **`go` fails with a Go version mismatch.** A cache or the image supplied a
   different Go. Bump `go-toolchain-v1` in `.circleci/continue-config.yml`.
-- **`go` fails in `golangci-lint`.** Run `make go-lint` locally with
-  golangci-lint built by the Go in `go/go.mod`. A linter built by an older Go
-  cannot lint newer code.
+- **`go` fails in `golangci-lint`.** Run `make go-lint` locally. It runs
+  `scripts/golangci-lint.sh`, which uses the golangci-lint on `PATH` only if
+  it is the pinned version built by a Go no older than `go/go.mod`'s, and
+  otherwise builds the pin into `.tools/bin` once. A linter built by an older
+  Go cannot lint newer code, so `make check` and the pre-push hook need no
+  `PATH` setup. The hook also appends `~/.local/go/bin`, `/usr/local/go/bin`,
+  `~/go/bin`, `.tools/bin` and `~/.local/bin` to `PATH` when they exist, for
+  git clients that run hooks without a login shell's `PATH`.
 - **Race detector missing.** `CGO_ENABLED=1` and a C compiler are required;
   the `medium` executor sets the first, the image has the second.
 - **A job fails to start with a credits message.** The monthly allowance is

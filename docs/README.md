@@ -24,8 +24,11 @@ Where to start depends on the question.
 - **What was built, how does it compare, and what was learned?** The
   [final report](report.md): the summary of everything below, with the
   demo.
+- **I am reviewing the code: where do I start?** [Reviewing the code](reviewing.md):
+  a reading order, where each part lives, how to check each claim, and the
+  known limits.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
-  The five-minute walkthrough for a review is [the demo](demo.md). A notebook
+  The six-minute walkthrough for a review is [the demo](demo.md). A notebook
   version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.

@@ -116,16 +116,38 @@ locally and CircleCI runs it on every pull request.
 
 ## The demo
 
-About five minutes, following the [runbook](runbook.md#5-the-demo):
+About six minutes, following the [demo script](demo.md); the
+[notebook](../examples/demo.ipynb) runs the same steps, each checked by an
+`assert`:
 
-1. Show the four workers limited to one CPU each (§5.1).
-2. Upload the example data, submit `examples/wordcount.go` with `mr
-   submit`, and read the output (§5.3).
-3. Submit a sort and kill a worker in the middle; show the status page
-   marking it dead, the lost tasks running again, and the output matching
-   (§5.4).
-4. Show a benchmark's rates over time and the evaluation plots (§5.5,
-   §5.6).
+1. Show the four workers limited to one CPU each and the status page.
+2. Submit `examples/wordcount.go`, a job file the workers interpret, with
+   `mr submit`, then again with `-combiner=false`: the same output, 2.6×
+   more bytes shuffled.
+3. Read the output and show it is byte for byte the local oracle's.
+4. Sort 1 GiB and kill a worker in the middle: the job succeeds, and the
+   coordinator's log says how many tasks ran again.
+5. Sort again and restart the coordinator in the middle: the job resumes
+   from the write-ahead log and writes the same output as step 4.
+6. Show the fault-tolerance summary and the evaluation figures.
+
+## Process and review
+
+The assignment grades the engineering process as well as the code. Solo,
+an AI agent plays the teammate, as the assignment allows
+([design.md](../design.md#process)).
+
+| Practice | How it is enforced | Evidence |
+|---|---|---|
+| Never push to `main` | Branch protection on `main`: a pull request is required, the branch must be up to date, and the CircleCI checks must pass | Rule verified on 2026-10-29 (#267, #269) |
+| CI runs tests on pull requests | Six CircleCI checks are required to merge: `proto`, `go`, `python-3.11`, `python-3.13`, `lint` and `mapping-coverage`. Each runs its tests when the pull request touches its inputs; otherwise it passes after a skip note (ADR 0020). Running CI once, on each PR's final head, is the project's policy (AGENTS.md), not something CircleCI enforces. `make check` runs the protobuf, lint, Go and Python checks locally and in the pre-push hook, on one Python version and without the mapping-selection check | [CI](ci.md), [ADR 0014](design/0014-ci-on-pull-requests.md), [ADR 0020](design/0020-implicated-only-ci.md) |
+| Many small pull requests | One concern each, from the templates in `.github/`, each with its changelog entry | 199 merged pull requests by 10 November 2026; [changelog](../CHANGELOG.md) |
+| Feedback sought | CodeRabbit and CodeAnt review every pull request I open, with inline comments; each thread gets a fix or a reason before merging | Resolved CodeRabbit thread on #264, CodeAnt thread on #263 |
+| Feedback given | I review pull requests written by an AI agent and comment on them | Comments on the agent-written #185 and #219, each closed with the reason it was superseded (#213, #216, #217). A review with inline comments before an agent-written PR merges is still open in #269 |
+
+Several real bugs were found in review rather than by the tests; the
+"Coverage is not test strength" lesson below came from the same habit of
+checking claims instead of trusting them.
 
 ## Lessons learned
 
@@ -147,9 +169,10 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests.** 198 merged pull requests (as of 7 November 2026).
-  The documented process calls for AI review and CI before merging; several
-  real bugs were found in review, not by tests.
+- **Small pull requests.** 199 merged pull requests by 10 November 2026,
+  each reviewed by an AI agent and tested in CI before merging
+  ([Process and review](#process-and-review)); several real bugs were found
+  in review, not by tests.
 
 ## Future work
 

@@ -78,10 +78,15 @@ three runs, and every run's output matched the normal run's.
 | E0: scaling over workers | Word count runs 3.8× faster on 4 workers than on 1, distributed sort 2.9×, grep 2.3× |
 | E1: the combiner | 15× to 78× fewer bytes shuffled, 18–44% less job time, more as the keys get more skewed |
 | E2: backup tasks | With one worker at 0.2 CPU, backups cut 17.6 s to 11.2 s; with no straggler they cost nothing measurable |
-| E3: losing a worker | Every job finishes with the right output; the cost is the 10 s timeout plus the lost work (+9 s to +27 s) |
+| E3: losing a worker | Every job finishes with the undisturbed run's output; the cost is the 10 s timeout plus the lost work (+9 s to +27 s) |
 | E4: a coordinator restart | Recovery from the log costs 1.6 s (13%) and keeps every finished task |
 | E5: an interpreted job file | 2.4× slower than compiled with the helpers `api.Words`/`api.Sum`, 10.5× without them |
 | E6: the combiner on real text | 5.2× fewer bytes and 14% faster on crawled English, 3.2×/7% in every language, 33×/22% on the book (a best case) |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/faults-dark.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart; every run's output matched an undisturbed run's" src="bench/evaluation/faults.png">
+</picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
@@ -90,15 +95,19 @@ three runs, and every run's output matched the normal run's.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E1-dark.png">
-  <img alt="E1: bytes shuffled and job time with the combiner on and off" src="bench/evaluation/E1.png">
+  <img alt="E1: bytes shuffled (log scale) and job time with the combiner on and off, one row per Zipf exponent, each pair of medians joined by a line labeled with the saving" src="bench/evaluation/E1.png">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E6-dark.png">
-  <img alt="E6: bytes shuffled and job time with the combiner on and off, on crawled English, crawled pages in every language, and the book" src="bench/evaluation/E6.png">
+  <img alt="E6: bytes shuffled (log scale) and job time with the combiner on and off, one row each for crawled English, crawled pages in every language, and the book, each pair joined by a line labeled with the saving" src="bench/evaluation/E6.png">
 </picture>
 
-The other plots (E2–E5), the raw CSVs, the machine and the commands are in
+In every plot, blue is the system as it ships and orange the changed or
+disturbed setting. E1 and E6 are dumbbells: each row joins the combiner-on
+and combiner-off medians, and bytes use a log axis, so a row's length is
+the factor the combiner saves. The per-experiment plots (E2–E5), the raw CSVs, the
+machine and the commands are in
 [`bench/README.md`](bench/README.md#evaluation-e0e6).
 
 ## How a job runs
@@ -231,6 +240,8 @@ CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
 
 [`docs/README.md`](docs/README.md) is the index. The short list:
 
+- [Reviewing the code](docs/reviewing.md): where to start, where each part
+  lives, and how to check each claim.
 - [Final report](docs/report.md): what was built, the comparison with the
   paper, the demo and what was learned.
 - [Design](design.md) and the [design records](docs/design/): how it works
