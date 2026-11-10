@@ -125,6 +125,11 @@ cut a release.
 
 ### Fixed
 
+- Tooling: `make go-lint`, and so `make check` and the pre-push hook, no
+  longer fail when the `golangci-lint` on `PATH` was built by an older Go
+  than `go/go.mod` needs. `scripts/golangci-lint.sh` uses the pinned version
+  from `PATH` only if a new enough Go built it, and otherwise builds it into
+  `.tools/bin` once, as CI does (#342).
 - Notebook: the worker-kill cell no longer reads an unset reply when the
   kill fails; it stops the client and restores the worker (#342).
 

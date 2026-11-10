@@ -272,8 +272,11 @@ mutate:
 mutate-py:
 	cd python && $(PYTHON) -m mutmut run && $(PYTHON) -m mutmut results
 
+# golangci-lint at the pinned version, built by this module's Go release;
+# scripts/golangci-lint.sh builds it into .tools/bin when PATH has no such
+# binary, as CI does, so the pre-push hook needs no PATH setup.
 go-lint:
-	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
+	cd go && test -z "$$(gofmt -l .)" && go vet ./... && ../scripts/golangci-lint.sh run ./...
 
 py-test:
 	cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
