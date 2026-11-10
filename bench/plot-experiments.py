@@ -360,108 +360,139 @@ def e0(rows, out, t):
     finish(fig, out, top=0.76)
 
 
-def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
-    """Combiner-on and -off bars per group, with a 2px surface gap.
+def dumbbell(ax, t, labels, stats_on, stats_off, runs_on, runs_off, scale, log=False):
+    """One row per group, the first on top: the combiner-on median (slot 1)
+    and the combiner-off median (slot 2), joined by a hairline, each run a
+    hollow ring behind its median, and each median labeled outside the pair.
 
-    stats_on and stats_off align with groups and contain (median, low, high)
-    triples or None to omit a bar. Values and range bars are divided by scale.
-    Nonempty ticks supply group labels; otherwise labels use "S = " followed
-    by each group name without its first character. A nonempty xlabel sets
-    the x-axis label; otherwise the existing label is retained.
+    stats_on and stats_off align with labels and hold (median, low, high)
+    triples, or None to omit that end; runs_on and runs_off hold each
+    group's run values. Values are divided by scale. On a log axis, where
+    equal ratios have equal lengths, values of zero or less cannot be
+    placed and are omitted. Returns the rows' y positions.
     """
-    width = 0.32
-    for offset, stats, color, label in (
-        (-width / 2, stats_on, t["series"][0], "combiner on"),
-        (width / 2, stats_off, t["series"][1], "combiner off"),
+    ys = list(range(len(labels)))[::-1]
+    for stats, each, color, label in (
+        (stats_on, runs_on, t["series"][0], "combiner on"),
+        (stats_off, runs_off, t["series"][1], "combiner off"),
     ):
-        kept = [(j + offset, st) for j, st in enumerate(stats) if st]
-        xs, med = [x for x, _ in kept], [st[0] / scale for _, st in kept]
-        ax.bar(
-            xs,
+        kept = [(y, st) for y, st in zip(ys, stats, strict=True) if st and (st[0] > 0 or not log)]
+        yk, med = [y for y, _ in kept], [st[0] / scale for _, st in kept]
+        for y, values in zip(ys, each, strict=True):
+            values = [v / scale for v in values if v > 0 or not log]
+            runs(ax, t, values, [y] * len(values), color)
+        ax.plot(
             med,
-            width=width,
+            yk,
+            "o",
+            markersize=9,
             color=color,
-            edgecolor=t["surface"],
-            linewidth=2,
+            markeredgecolor=t["surface"],
+            markeredgewidth=2,
+            linestyle="none",
             label=label,
-            zorder=2,
+            zorder=4,
         )
-        ranges(
-            ax,
-            t,
-            xs,
-            med,
-            [st[1] / scale for _, st in kept],
-            [st[2] / scale for _, st in kept],
-        )
-    ax.set_xticks(range(len(groups)), ticks or [f"S = {g[1:]}" for g in groups])
-    if xlabel:
-        ax.set_xlabel(xlabel)
-    ax.grid(axis="x", visible=False)
-    ax.set_ylim(bottom=0)
+    for y, a, b in zip(ys, stats_on, stats_off, strict=True):
+        ends = [st for st in (a, b) if st and (st[0] > 0 or not log)]
+        if len(ends) == 2:
+            ax.hlines(
+                y,
+                a[0] / scale,
+                b[0] / scale,
+                color=t["muted"],
+                linewidth=2,
+                zorder=1,
+            )
+        for st in ends:  # the smaller value to the left of its dot, the larger to the right
+            low = st is min(ends, key=lambda e: e[0]) and len(ends) == 2
+            ax.annotate(
+                f"{st[0] / scale:,.0f}",
+                (st[1 if low else 2] / scale, y),
+                xytext=(-8 if low else 8, 0),
+                textcoords="offset points",
+                ha="right" if low else "left",
+                va="center",
+                color=t["ink2"],
+                fontsize=9,
+            )
+    ax.set_yticks(ys, labels)
+    ax.set_ylim(-0.6, len(labels) - 0.4)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="y", visible=False)
+    if log:
+        ax.set_xscale("log")
+    ax.xaxis.set_major_formatter("{x:,.0f}")
+    return ys
 
 
-def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
-    """Saves a combiner comparison to out, in theme t: bytes shuffled and
-    job time, combiner on and off, per group.
+def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
+    """Saves a combiner comparison to out, in theme t: for each group, bytes
+    shuffled and job time with the combiner off and on, as a dumbbell.
 
+    Bytes use a log axis, so each row's length is the factor the combiner
+    saves and rows compare directly; job time uses a linear axis from zero.
     groups gives setting prefixes matched as GROUP-on and GROUP-off, in
-    display order; ticks supplies their labels. Bars show valid="1" medians
-    and minimum-to-maximum ranges, in decimal MB and coordinator seconds.
-    Missing valid runs omit a bar; savings require both medians to be positive.
+    display order, top to bottom; ticks supplies their labels and ylabel
+    names them. Dots are valid="1" medians and rings their runs, in decimal
+    MB and coordinator seconds. A group without a valid
+    run on one side omits that dot; savings need both medians positive.
     Rows must be nonempty. Saves to out and closes the figure on success.
     Missing fields, invalid numbers, and plotting or file errors propagate.
     """
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
+    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.4), sharey=True)
     found = {"bytes": [], "time": []}  # off/on byte ratios, and job-time savings
-    for ax, field, scale, axis_title, saving in (
+    for ax, field, scale, log, axis_title, saving in (
         (
             left,
             "map_output_bytes",
             1e6,
-            "Bytes shuffled (MB)",
+            True,
+            "Bytes shuffled (MB, log scale)",
             lambda on, off: f"{off / on:.0f}× fewer",
         ),
         (
             right,
             "seconds",
             1,
+            False,
             "Job time (s)",
             lambda on, off: f"{1 - on / off:.0%} faster",
         ),
     ):
         on = [spread(valid(rows, setting=f"{g}-on"), field) for g in groups]
         off = [spread(valid(rows, setting=f"{g}-off"), field) for g in groups]
-        grouped(ax, t, groups, on, off, scale, ticks=ticks, xlabel=xlabel)
-        # With no valid run, or only zeros, the axis still needs a height.
-        top = max((st[2] for st in on + off if st), default=0) / scale or 1
-        for j, (a, b) in enumerate(zip(on, off, strict=True)):
+        each = {
+            side: [[float(r[field]) for r in valid(rows, setting=f"{g}-{side}")] for g in groups]
+            for side in ("on", "off")
+        }
+        ys = dumbbell(ax, t, ticks, on, off, each["on"], each["off"], scale, log=log)
+        ends = [st for st in on + off if st and (st[0] > 0 or not log)]
+        lo = min((st[1] for st in ends), default=0) / scale
+        hi = max((st[2] for st in ends), default=0) / scale
+        if log:  # room for the labels at both ends, a factor of four each way
+            ax.set_xlim(lo / 4, hi * 4) if lo > 0 else ax.set_xlim(0.1, 10)
+        else:
+            ax.set_xlim(0, (hi or 1) * 1.25)  # with no valid run, the axis still needs a width
+        for y, a, b in zip(ys, on, off, strict=True):
             if a and b and a[0] > 0 and b[0] > 0:
-                if ax is left:
+                if log:
                     found["bytes"].append(b[0] / a[0])
+                    mid = (a[0] * b[0]) ** 0.5 / scale  # the middle of the line on a log axis
                 else:
                     found["time"].append(1 - a[0] / b[0])
-                ax.text(
-                    j,
-                    top * 1.06,
+                    mid = (a[0] + b[0]) / 2 / scale
+                ax.annotate(
                     saving(a[0], b[0]),
+                    (mid, y),
+                    xytext=(0, 9),
+                    textcoords="offset points",
                     ha="center",
                     color=t["ink"],
                     fontsize=9.5,
                 )
-            if a and ax is left:  # the combiner's bars are too short to read off the axis
-                ax.annotate(
-                    f"{a[0] / scale:,.0f}",
-                    (j - 0.16, a[2] / scale),
-                    xytext=(0, 4),
-                    textcoords="offset points",
-                    ha="center",
-                    color=t["ink2"],
-                    fontsize=9,
-                )
-        ax.set_ylim(0, top * 1.18)
         ax.set_title(axis_title)
-        ax.yaxis.set_major_formatter("{x:,.0f}")
+    left.set_ylabel(ylabel)
     fig.legend(
         *left.get_legend_handles_labels(),
         loc="upper right",
@@ -475,7 +506,7 @@ def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
         )
     else:
         title = title.split(":", 1)[0] + ": the combiner on and off"
-    heading(fig, t, title, label_note(rows) + ".")
+    heading(fig, t, title, label_note(rows, ranges=False) + "; rings are single runs.")
     finish(fig, out)
 
 
@@ -489,13 +520,13 @@ def e1(rows, out, t):
     and plotting or file errors propagate.
     """
     exponents = sorted({r["setting"].rsplit("-", 1)[0] for r in rows}, key=lambda e: float(e[1:]))
-    combiner_bars(
+    combiner_dumbbells(
         rows,
         out,
         t,
         exponents,
         [f"S = {e[1:]}" for e in exponents],
-        "Zipf exponent of the word frequencies (higher: more skew)",
+        "Zipf exponent (higher: more skew)",
         "E1: the combiner shuffles {bytes} fewer bytes and saves {time} of job time",
     )
 
@@ -511,12 +542,12 @@ def e6(rows, out, t):
     plotting or file errors propagate.
     """
     inputs = ["crawl-eng", "crawl", "book"]
-    combiner_bars(
+    combiner_dumbbells(
         rows,
         out,
         t,
         inputs,
-        ["crawled\nEnglish", "crawled, every\nlanguage", "book"],
+        ["crawled\nEnglish", "crawled,\nevery language", "book"],
         "Word count's input",
         "E6: on real text the combiner shuffles {bytes} fewer bytes and saves {time}",
     )
@@ -761,8 +792,11 @@ def e3(rows, results, out, t):
         )
     if pcts:
         med = [s[0] for s in stats]
-        left.plot(pcts, med, color=color, zorder=3)
-        ranges(left, t, pcts, med, [s[1] for s in stats], [s[2] for s in stats])
+        if normal:  # each kill point is its own setting: a stem from the baseline, no line between
+            left.vlines(pcts, normal[0], med, color=color, linewidth=2, zorder=2)
+        for p in pcts:
+            each = [float(r["wall_seconds"]) for r in valid(rows, setting=f"kill-{p}")]
+            runs(left, t, [p] * len(each), each, color)
         dots(left, t, pcts, med, color)
         if normal:
             for p, m in zip(pcts, med, strict=True):
@@ -832,7 +866,13 @@ def e3(rows, results, out, t):
         killed = [r for r in rows if r["setting"].startswith("kill-")]
         if killed and all(r["valid"] == "1" for r in killed):
             title += ", and every run's output is correct"
-    heading(fig, t, title, label_note(rows, ranges=False) + ".")
+    heading(
+        fig,
+        t,
+        title,
+        label_note(rows, ranges=False)
+        + "; each stem is the time a failure adds to the run without one.",
+    )
     finish(fig, out)
 
 

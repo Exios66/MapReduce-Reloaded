@@ -174,9 +174,22 @@ python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 Every figure uses the same colors: blue is the system as it ships
 (combiner on, backups on, no failure, compiled) and orange the changed or
 disturbed setting; a third series, where there is one, is green and labeled
-directly. Each title states the finding, computed from the CSVs. Where the
-range of three runs would mislead, E0 draws each run as a ring instead of a
-range bar.
+directly. Each title states the finding, computed from the CSVs. The chart
+type follows the comparison:
+
+- E0 is a line against the ideal diagonal, because workers are an ordered
+  scale. It draws each run as a ring instead of a range bar that one cold
+  run would stretch.
+- E1 and E6 compare two settings per group, so they are dumbbells: one row
+  per group joining the combiner-on and combiner-off medians, each run a
+  ring. Bytes use a log axis, where a row's length is the factor saved and
+  15× and 78× can share one axis; job time uses a linear axis from zero.
+- E3's kill points are separate settings, not a series, so each is a stem
+  from the no-failure baseline, with no line joining them; the stem's
+  length is the time the failure added.
+- E2 and E4 show completed tasks over time as steps, beside bars of each
+  setting's job time; E5 and `faults.png` compare magnitudes, so they are
+  bars from zero.
 
 It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
 and E4, each the job time it added against the same experiment's
@@ -228,7 +241,7 @@ E5 ran at `6b6c7be`; its harness log is
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E1-dark.png">
-  <img alt="E1: bytes shuffled and job time, combiner on and off" src="evaluation/E1.png">
+  <img alt="E1: bytes shuffled (log scale) and job time, combiner on and off, one row per Zipf exponent, each pair of medians joined by a line labeled with the saving" src="evaluation/E1.png">
 </picture>
 
 | Zipf exponent | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
@@ -281,7 +294,7 @@ dashed line and a hatched bar mark the runs without a straggler.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E3-dark.png">
-  <img alt="E3: job time with a worker killed, and data rates" src="evaluation/E3.png">
+  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the normal job time, each a stem from the no-failure baseline, and the data rates of the median run killed at 50%" src="evaluation/E3.png">
 </picture>
 
 The rate panel uses seconds since sampling began. Its shaded band marks
@@ -353,7 +366,7 @@ record the offset between those two clocks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E6-dark.png">
-  <img alt="E6: bytes shuffled and job time, combiner on and off, on crawled English, crawled pages in every language, and the book" src="evaluation/E6.png">
+  <img alt="E6: bytes shuffled (log scale) and job time, combiner on and off, one row each for crawled English, crawled pages in every language, and the book" src="evaluation/E6.png">
 </picture>
 
 | Input | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |

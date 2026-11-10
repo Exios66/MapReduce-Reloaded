@@ -52,7 +52,29 @@ def row(setting, seconds=1, shuffled=1_000_000, valid="1"):
     }
 
 
-def test_e1_grouped_bars_use_valid_medians_ranges_and_decimal_megabytes(plotter, tmp_path):
+def medians(axis, label):
+    """The (x, y) of the median dots drawn with label on axis."""
+    (call,) = [c for c in axis.plot.call_args_list if c.kwargs.get("label") == label]
+    return list(call.args[0]), list(call.args[1])
+
+
+def single_runs(axis, t, color):
+    """Each hollow ring of color on axis, as (x, y) pairs."""
+    return [
+        (x, y)
+        for c in axis.plot.call_args_list
+        if c.kwargs.get("markerfacecolor") == t["surface"] and c.kwargs["markeredgecolor"] == color
+        for x, y in zip(c.args[0], c.args[1], strict=True)
+    ]
+
+
+def notes(axis, *words):
+    """The texts annotated on axis that contain one of words."""
+    texts = [c.args[0] for c in axis.annotate.call_args_list]
+    return [x for x in texts if any(w in x for w in words)]
+
+
+def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_path):
     module, pyplot = plotter
     figure, shuffled, seconds = Mock(), Mock(), Mock()
     shuffled.get_legend_handles_labels.return_value = [], []
@@ -72,40 +94,32 @@ def test_e1_grouped_bars_use_valid_medians_ranges_and_decimal_megabytes(plotter,
 
     module.e1(rows, out, t)
 
-    for axis, medians, errors, title in (
-        (shuffled, ([4, 7], [13, 20]), ([[2, 0], [6, 0]], [[1, 0], [1, 0]]), "Bytes shuffled (MB)"),
-        (seconds, ([4, 3], [7, 9]), ([[2, 0], [6, 0]], [[1, 0], [1, 0]]), "Job time (s)"),
+    # The first group is the top row, at y = 1.
+    for axis, on, off, title in (
+        (shuffled, [4, 7], [13, 20], "Bytes shuffled (MB, log scale)"),
+        (seconds, [4, 3], [7, 9], "Job time (s)"),
     ):
-        assert axis.bar.call_count == 2
-        assert axis.errorbar.call_count == 2
-        for bar, err, positions, heights, yerr, label, color in zip(
-            axis.bar.call_args_list,
-            axis.errorbar.call_args_list,
-            ([-0.16, 0.84], [0.16, 1.16]),
-            medians,
-            errors,
-            ("combiner on", "combiner off"),
-            t["series"][:2],
-            strict=True,
-        ):
-            assert bar.args[0] == pytest.approx(positions)
-            assert bar.args[1] == pytest.approx(heights)
-            assert bar.kwargs["width"] == 0.32
-            assert bar.kwargs["label"] == label
-            assert bar.kwargs["color"] == color
-            assert bar.kwargs["edgecolor"] == t["surface"]
-            assert err.args[0] == pytest.approx(positions)
-            assert err.args[1] == pytest.approx(heights)
-            assert err.kwargs["yerr"] == yerr
-            assert err.kwargs["ecolor"] == t["ink2"]
-        ticks, labels = axis.set_xticks.call_args.args
-        assert list(ticks) == [0, 1]
+        assert medians(axis, "combiner on") == (pytest.approx(on), [1, 0])
+        assert medians(axis, "combiner off") == (pytest.approx(off), [1, 0])
+        # A line joins each pair, from the on median to the off median.
+        lines = [c.args for c in axis.hlines.call_args_list]
+        assert lines == [(1, on[0], off[0]), (0, on[1], off[1])]
+        ticks, labels = axis.set_yticks.call_args.args
+        assert list(ticks) == [1, 0]
         assert labels == ["S = 0.5", "S = 1.5"]
         axis.set_title.assert_called_once_with(title)
-    # Each group with both bars is labeled with the saving.
-    savings = [c.args[2] for c in shuffled.text.call_args_list]
-    assert savings == ["3× fewer", "3× fewer"]
-    assert [c.args[2] for c in seconds.text.call_args_list] == ["43% faster", "67% faster"]
+    # Every valid run is a ring; the invalid one is not drawn.
+    assert sorted(single_runs(shuffled, t, t["series"][0])) == [(2, 1), (4, 1), (7, 0), (10, 1)]
+    assert sorted(single_runs(seconds, t, t["series"][1])) == [(6, 1), (8, 1), (9, 0)]
+    # Bytes are on a log axis, so a row's length is the factor saved.
+    shuffled.set_xscale.assert_called_once_with("log")
+    seconds.set_xscale.assert_not_called()
+    assert seconds.set_xlim.call_args.args == (0, pytest.approx(10 * 1.25))
+    # Each median is labeled, and each row with both medians is labeled with the saving.
+    assert notes(shuffled, "fewer") == ["3× fewer", "3× fewer"]
+    assert notes(seconds, "faster") == ["43% faster", "67% faster"]
+    values = [c.args[0] for c in shuffled.annotate.call_args_list if c.args[0].isdigit()]
+    assert values == ["4", "13", "7", "20"]
     figure.savefig.assert_called_once_with(out)
     pyplot.close.assert_called_once_with(figure)
 
@@ -116,23 +130,24 @@ def test_e1_handles_missing_groups_invalid_runs_and_zero_measurements(
     plotter, tmp_path, combiner, valid
 ):
     module, pyplot = plotter
-    axes = Mock(), Mock()
-    axes[0].get_legend_handles_labels.return_value = [], []
-    pyplot.subplots.return_value = Mock(), axes
+    shuffled, seconds = Mock(), Mock()
+    shuffled.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = Mock(), (shuffled, seconds)
     # One group is absent, and the other either has no valid run or a real
-    # zero measurement. Neither may turn into a fabricated nonzero bar, a
-    # saving label, or a division by zero.
+    # zero measurement. Neither may turn into a fabricated nonzero dot, a
+    # saving label, or a division by zero; a log axis cannot place a zero.
     module.e1([row(f"s1.0-{combiner}", 0, 0, valid)], tmp_path / "E1.png", light(module))
 
-    for axis in axes:
-        for call, group in zip(axis.bar.call_args_list, ("on", "off"), strict=True):
-            kept = valid == "1" and group == combiner
-            assert call.args[0] == ([-0.16 if group == "on" else 0.16] if kept else [])
-            assert call.args[1] == ([0] if kept else [])
-        for call in axis.errorbar.call_args_list:
-            assert call.kwargs["yerr"] in ([[0], [0]], [[], []])
-        axis.text.assert_not_called()
-        assert axis.set_ylim.call_args.args == (0, pytest.approx(1.18))
+    kept = valid == "1"
+    for group in ("on", "off"):
+        assert medians(shuffled, f"combiner {group}") == ([], [])
+        expect = ([0], [0]) if kept and group == combiner else ([], [])
+        assert medians(seconds, f"combiner {group}") == expect
+    for axis in (shuffled, seconds):
+        axis.hlines.assert_not_called()
+        assert notes(axis, "fewer", "faster") == []
+    assert shuffled.set_xlim.call_args.args == (0.1, 10)
+    assert seconds.set_xlim.call_args.args == (0, pytest.approx(1.25))
 
 
 def test_e1_sorts_exponents_numerically(plotter, tmp_path):
@@ -142,10 +157,12 @@ def test_e1_sorts_exponents_numerically(plotter, tmp_path):
     pyplot.subplots.return_value = Mock(), axes
     module.e1([row("s10.0-on"), row("s2.0-on"), row("s0.5-on")], tmp_path / "E1.png", light(module))
     for axis in axes:
-        assert axis.set_xticks.call_args.args[1] == ["S = 0.5", "S = 2.0", "S = 10.0"]
+        ticks, labels = axis.set_yticks.call_args.args
+        assert list(ticks) == [2, 1, 0]
+        assert labels == ["S = 0.5", "S = 2.0", "S = 10.0"]
 
 
-def test_e6_groups_the_three_inputs_in_order(plotter, tmp_path):
+def test_e6_puts_the_three_inputs_in_order_top_to_bottom(plotter, tmp_path):
     """E6 draws the three inputs in order with their savings."""
     module, pyplot = plotter
     figure, shuffled, seconds = Mock(), Mock(), Mock()
@@ -162,16 +179,16 @@ def test_e6_groups_the_three_inputs_in_order(plotter, tmp_path):
 
     module.e6(rows, tmp_path / "E6.png", light(module))
 
-    ticks, labels = shuffled.set_xticks.call_args.args
-    assert list(ticks) == [0, 1, 2]
-    assert labels == ["crawled\nEnglish", "crawled, every\nlanguage", "book"]
+    ticks, labels = shuffled.set_yticks.call_args.args
+    assert list(ticks) == [2, 1, 0]
+    assert labels == ["crawled\nEnglish", "crawled,\nevery language", "book"]
     # Settings are matched by name, so the rows' order does not matter.
-    heights = [bar.args[1] for bar in shuffled.bar.call_args_list]
-    assert heights[0] == pytest.approx([3, 5, 1])
-    assert heights[1] == pytest.approx([12, 14, 10])
-    heights = [bar.args[1] for bar in seconds.bar.call_args_list]
-    assert heights[0] == pytest.approx([3, 5, 1])
-    assert heights[1] == pytest.approx([4, 6, 2])
+    assert medians(shuffled, "combiner on") == (pytest.approx([3, 5, 1]), [2, 1, 0])
+    assert medians(shuffled, "combiner off") == (pytest.approx([12, 14, 10]), [2, 1, 0])
+    assert medians(seconds, "combiner on") == (pytest.approx([3, 5, 1]), [2, 1, 0])
+    assert medians(seconds, "combiner off") == (pytest.approx([4, 6, 2]), [2, 1, 0])
+    assert notes(shuffled, "fewer") == ["4× fewer", "3× fewer", "10× fewer"]
+    assert notes(seconds, "faster") == ["25% faster", "17% faster", "50% faster"]
 
 
 def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsys):
@@ -220,7 +237,7 @@ def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, 
 
     assert out.is_dir()
     # One plot per theme, each drawn under that theme's style.
-    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (11, 4.6)})] * 2
+    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (11, 4.4), "sharey": True})] * 2
     assert [c.args[0] for c in figure.savefig.call_args_list] == [
         out / "E1.png",
         out / "E1-dark.png",
@@ -257,6 +274,25 @@ def test_e3_marks_worker_loss_on_the_sampling_clock(plotter, tmp_path):
         6.5, 7.0, color=t["muted"], alpha=0.35, linewidth=0, zorder=1
     )
     right.axvline.assert_not_called()
+
+
+def test_e3_draws_each_kill_point_as_a_stem_from_the_baseline_without_a_line(plotter, tmp_path):
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    pyplot.subplots.return_value = Mock(), (left, right)
+    rows = [row("normal") | {"wall_seconds": w} for w in ("10", "12", "11")]
+    rows += [row("kill-25") | {"wall_seconds": w} for w in ("20", "22", "21")]
+    rows += [row("kill-75") | {"wall_seconds": "40"}, row("kill-75", valid="0")]
+    t = light(module)
+    color = t["series"][1]
+
+    module.e3(rows, tmp_path, tmp_path / "E3.png", t)
+
+    left.vlines.assert_called_once_with([25, 75], 11, [21, 40], color=color, linewidth=2, zorder=2)
+    assert sorted(single_runs(left, t, color)) == [(25, 20), (25, 21), (25, 22), (75, 40)]
+    # The kill points are separate settings, so no line joins their medians.
+    assert left.plot.call_args_list and all(c.args[2:] == ("o",) for c in left.plot.call_args_list)
+    assert [c.args[0] for c in left.annotate.call_args_list][1:] == ["+10.0 s", "+29.0 s"]
 
 
 @pytest.mark.parametrize("counts", [(4, 4), (3, 3)])

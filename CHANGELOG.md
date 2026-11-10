@@ -79,6 +79,12 @@ cut a release.
   as it ships, orange the changed or disturbed setting. E0 draws each run
   as a ring instead of a range bar that one cold grep run stretched to
   0.35×, and names that run (#342).
+- Bench figures: E1 and E6 are dumbbells instead of grouped bars, one row
+  per group joining the combiner-on and combiner-off medians, with bytes on
+  a log axis so a row's length is the factor saved; E3 draws each kill point
+  as a stem from the no-failure baseline instead of a line joining separate
+  settings. `bench/README.md` gives the reason for each figure's chart type
+  (#342).
 - Docs: `docs/demo.md` restarts the coordinator live, shows the combiner,
   maps each moment to the requirement it meets, and adds a checklist for
   the day and answers for questions; `docs/report.md` gains a "Process and
@@ -129,7 +135,9 @@ cut a release.
   longer fail when the `golangci-lint` on `PATH` was built by an older Go
   than `go/go.mod` needs. `scripts/golangci-lint.sh` uses the pinned version
   from `PATH` only if a new enough Go built it, and otherwise builds it into
-  `.tools/bin` once, as CI does (#342).
+  `.tools/bin` once, as CI does. The pre-push hook also finds Go and the
+  tools in their usual install directories when a git client runs it
+  without a login shell's `PATH` (#342).
 - Notebook: the worker-kill cell no longer reads an unset reply when the
   kill fails; it stops the client and restores the worker (#342).
 

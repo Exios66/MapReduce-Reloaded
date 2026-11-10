@@ -95,16 +95,18 @@ three runs, and every run's output matched the normal run's.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E1-dark.png">
-  <img alt="E1: bytes shuffled and job time with the combiner on and off" src="bench/evaluation/E1.png">
+  <img alt="E1: bytes shuffled (log scale) and job time with the combiner on and off, one row per Zipf exponent, each pair of medians joined by a line labeled with the saving" src="bench/evaluation/E1.png">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E6-dark.png">
-  <img alt="E6: bytes shuffled and job time with the combiner on and off, on crawled English, crawled pages in every language, and the book" src="bench/evaluation/E6.png">
+  <img alt="E6: bytes shuffled (log scale) and job time with the combiner on and off, one row each for crawled English, crawled pages in every language, and the book, each pair joined by a line labeled with the saving" src="bench/evaluation/E6.png">
 </picture>
 
 In every plot, blue is the system as it ships and orange the changed or
-disturbed setting. The per-experiment plots (E2–E5), the raw CSVs, the
+disturbed setting. E1 and E6 are dumbbells: each row joins the combiner-on
+and combiner-off medians, and bytes use a log axis, so a row's length is
+the factor the combiner saves. The per-experiment plots (E2–E5), the raw CSVs, the
 machine and the commands are in
 [`bench/README.md`](bench/README.md#evaluation-e0e6).
 
