@@ -84,6 +84,11 @@ three runs, and every run's output matched the normal run's.
 | E6: the combiner on real text | 5.2× fewer bytes and 14% faster on crawled English, 3.2×/7% in every language, 33×/22% on the book (a best case) |
 
 <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/faults-dark.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart; every run's output was correct" src="bench/evaluation/faults.png">
+</picture>
+
+<picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
   <img alt="E0: speed-up over one worker for grep, distsort and word count on 1, 2 and 4 workers" src="bench/evaluation/E0.png">
 </picture>
@@ -98,7 +103,9 @@ three runs, and every run's output matched the normal run's.
   <img alt="E6: bytes shuffled and job time with the combiner on and off, on crawled English, crawled pages in every language, and the book" src="bench/evaluation/E6.png">
 </picture>
 
-The other plots (E2–E5), the raw CSVs, the machine and the commands are in
+In every plot, blue is the system as it ships and orange the changed or
+disturbed setting. The per-experiment plots (E2–E5), the raw CSVs, the
+machine and the commands are in
 [`bench/README.md`](bench/README.md#evaluation-e0e6).
 
 ## How a job runs

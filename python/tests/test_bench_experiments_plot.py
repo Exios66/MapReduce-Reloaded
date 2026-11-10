@@ -299,7 +299,7 @@ def test_timeline_with_no_valid_run_draws_empty_bars(plotter, tmp_path, exp):
     right.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
 
 
-def test_e2_draws_four_settings_in_two_colors(plotter, tmp_path):
+def test_e2_colors_backups_and_dashes_the_no_straggler_runs(plotter, tmp_path):
     module, pyplot = plotter
     left, right = Mock(), Mock()
     bars = [Mock() for _ in range(4)]
@@ -316,16 +316,16 @@ def test_e2_draws_four_settings_in_two_colors(plotter, tmp_path):
     assert left.step.call_count == 4
     for call, color, style in zip(
         left.step.call_args_list,
-        (blue, blue, orange, orange),
-        ("-", "--", "-", "--"),
+        (blue, orange, blue, orange),
+        ("--", "--", "-", "-"),
         strict=True,
     ):
         assert call.args == ([0, 1], [0, 4])
         assert call.kwargs["color"] == color
         assert call.kwargs["ls"] == style
-    assert right.barh.call_args.kwargs["color"] == [blue, blue, orange, orange]
+    assert right.barh.call_args.kwargs["color"] == [blue, orange, blue, orange]
     hatched = [b for b in bars if b.set.called]
-    assert hatched == [bars[1], bars[3]]
+    assert hatched == [bars[0], bars[1]]
     assert all(b.set.call_args.kwargs["hatch"] == "///" for b in hatched)
 
 
@@ -515,3 +515,155 @@ def test_e2_comparison_takes_each_setting_from_its_source_and_checks_valid_runs(
     module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
     times = right.barh.call_args.args[1]
     assert 99 not in times
+
+
+def titles(figure):
+    """The title and subtitle a figure was given, in that order."""
+    return [call.args[2] for call in figure.text.call_args_list]
+
+
+def test_span_collapses_ends_that_agree_after_formatting(plotter):
+    module, _ = plotter
+    assert module.span([15.2, 78.4, 17.0], lambda x: f"{x:.0f}") == "15–78"
+    assert module.span([5.04, 4.96], lambda x: f"{x:.0f}") == "5"
+
+
+def test_e0_titles_the_best_speed_up_and_names_a_run_far_below_its_median(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    times = {
+        ("grep", 1): (2.0, 2.0, 2.0),
+        ("grep", 4): (0.8, 0.9, 5.5),  # one cold run
+        ("wordcount", 1): (40.0, 40.0, 40.0),
+        ("wordcount", 4): (10.0, 10.0, 10.0),
+    }
+    rows = [
+        row("normal", seconds) | {"program": program, "workers": str(w)}
+        for (program, w), runs in times.items()
+        for seconds in runs
+    ]
+    module.e0(rows, tmp_path / "E0.png", light(module))
+    title, subtitle = titles(figure)
+    best = module.PROGRAMS["wordcount"]
+    assert title == f"E0: {best} runs 4.0× faster on four workers"
+    first, second, third = subtitle.split("\n")
+    assert first.startswith("Speed-up = job time on 1 worker")
+    assert second == "Grep takes 2.0 s on one worker, so fixed per-job costs cap its speed-up."
+    assert "bars span the range" not in third
+    labels = [call.args[0] for call in axis.annotate.call_args_list]
+    assert "one grep run: 5.5 s" in labels
+    assert sum("run:" in label for label in labels) == 1, "only the outlier is named"
+    # Every run is drawn as a hollow marker: two worker counts, three runs, two programs.
+    rings = [c for c in axis.plot.call_args_list if c.kwargs.get("linestyle") == "none"]
+    assert sorted(len(c.args[1]) for c in rings) == [3, 3, 3, 3]
+    assert all(c.kwargs["markerfacecolor"] == light(module)["surface"] for c in rings)
+
+
+def test_e2_title_states_the_straggler_times_and_falls_back(plotter):
+    module, _ = plotter
+    rows = [row("straggler-backups", 11.2), row("straggler-no-backups", 17.6)]
+    assert module.e2_title(rows) == (
+        "E2: with a straggler, backup tasks cut job time from 17.6 s to 11.2 s"
+    )
+    assert module.e2_title([row("straggler-backups", 11.2)]).startswith("E2: backup tasks")
+
+
+def test_e4_title_uses_wall_time_and_falls_back(plotter):
+    module, _ = plotter
+    rows = [
+        row("normal") | {"wall_seconds": "12.4"},
+        row("restart") | {"wall_seconds": "14.0"},
+    ]
+    assert module.e4_title(rows).startswith("E4: a coordinator restart costs 1.6 s;")
+    assert module.e4_title(rows[:1]) == "E4: a coordinator restart, recovered from its log"
+
+
+def test_e5_title_gives_each_multiple_and_skips_a_setting_without_valid_runs(plotter):
+    module, _ = plotter
+    rows = [row("compiled", 38), row("interpreted", 91), row("naive", 399)]
+    assert module.e5_title(rows, ["compiled", "interpreted", "naive"]) == (
+        "E5: a job file takes 2.4× the compiled time with the api helpers, 10.5× without"
+    )
+    rows[2]["valid"] = "0"
+    assert module.e5_title(rows, ["compiled", "interpreted", "naive"]) == (
+        "E5: a job file takes 2.4× the compiled time with the api helpers"
+    )
+
+
+def test_e1_title_states_the_byte_and_time_savings(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, left, right = Mock(), Mock(), Mock()
+    for axis in (left, right):
+        axis.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = figure, (left, right)
+    rows = [
+        row("s0.5-on", 30, 100_000_000),
+        row("s0.5-off", 40, 1_500_000_000),
+        row("s1.5-on", 20, 20_000_000),
+        row("s1.5-off", 40, 1_560_000_000),
+    ]
+    module.e1(rows, tmp_path / "E1.png", light(module))
+    assert titles(figure)[0] == (
+        "E1: the combiner shuffles 15–78× fewer bytes and saves 25–50% of job time"
+    )
+
+
+def fault_rows():
+    e2 = [row("normal", 9), row("straggler-backups", 11.25), row("straggler-no-backups", 18)]
+    e3 = [row("normal") | {"wall_seconds": "10"}] + [
+        row(f"kill-{p}") | {"wall_seconds": str(w)} for p, w in ((25, 20), (50, 25), (75, 40))
+    ]
+    e4 = [row("normal") | {"wall_seconds": "12.5"}, row("restart") | {"wall_seconds": "15"}]
+    return e2, e3, e4
+
+
+def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    bars = [Mock() for _ in range(6)]
+    axis.barh.return_value = bars
+    pyplot.subplots.return_value = figure, axis
+    t = light(module)
+    module.faults(*fault_rows(), tmp_path / "faults.png", t)
+    ys, added = axis.barh.call_args.args
+    assert ys == [5, 4, 3, 2, 1, 0], "the first disturbance is on top"
+    assert added == pytest.approx([25, 100, 100, 150, 300, 20])
+    assert axis.barh.call_args.kwargs["color"] == t["series"][1]
+    assert [b for b in bars if b.set.called] == [bars[1]], "only backups off is hatched"
+    assert axis.set_yticks.call_args.args[1] == [
+        "straggler, backups on",
+        "straggler, backups off",
+        "worker killed at 25%",
+        "worker killed at 50%",
+        "worker killed at 75%",
+        "coordinator restarted",
+    ]
+    labels = [call.args[0] for call in axis.annotate.call_args_list]
+    assert labels[0] == "+25%   11.2 s vs 9.0 s"
+    assert labels[-1] == "+20%   15.0 s vs 12.5 s"
+    title, subtitle = titles(figure)
+    assert title == "Every disturbance still finished with the correct output"
+    assert "bars span the range" not in subtitle
+    figure.savefig.assert_called_once_with(tmp_path / "faults.png")
+
+
+def test_faults_claims_correct_output_only_when_every_disturbed_run_is_valid(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    axis.barh.return_value = [Mock() for _ in range(6)]
+    pyplot.subplots.return_value = figure, axis
+    e2, e3, e4 = fault_rows()
+    e3.append(row("kill-50", valid="0") | {"wall_seconds": "90"})
+    module.faults(e2, e3, e4, tmp_path / "faults.png", light(module))
+    assert titles(figure)[0] == "Fault tolerance: what each disturbance costs"
+
+
+def test_faults_leaves_out_an_experiment_without_an_undisturbed_median(plotter, tmp_path):
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    axis.barh.return_value = [Mock() for _ in range(5)]
+    pyplot.subplots.return_value = figure, axis
+    e2, e3, e4 = fault_rows()
+    module.faults(e2, e3, e4[1:], tmp_path / "faults.png", light(module))
+    assert axis.barh.call_args.args[1] == pytest.approx([25, 100, 100, 150, 300])

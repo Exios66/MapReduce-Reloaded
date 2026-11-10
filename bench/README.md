@@ -171,6 +171,23 @@ succeeded, and every run's output matched the normal run's checksum.
 python3 bench/plot-experiments.py bench/evaluation bench/evaluation
 ```
 
+Every figure uses the same colors: blue is the system as it ships
+(combiner on, backups on, no failure, compiled) and orange the changed or
+disturbed setting; a third series, where there is one, is green and labeled
+directly. Each title states the finding, computed from the CSVs. Where the
+range of three runs would mislead, E0 draws each run as a ring instead of a
+range bar.
+
+It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
+and E4, each the job time it added against the same experiment's
+undisturbed median; its title claims correct output only if every disturbed
+run was valid.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/faults-dark.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart" src="evaluation/faults.png">
+</picture>
+
 That also draws `E2-comparison.png` (and `-dark`) from two directories: the
 no-straggler rows from `E2-pairs/` and the straggler rows from `E2/`; the
 image's subtitle says so. The two rates plots in `evaluation/paper/` were drawn
@@ -234,8 +251,8 @@ E5 ran at `6b6c7be`; its harness log is
 </picture>
 
 Run again at `ca082a3` with a fourth setting, no straggler and backups off,
-which the first run lacked. Color marks the straggler; a dashed line and a
-hatched bar, backups off.
+which the first run lacked. Color marks backups, blue on and orange off; a
+dashed line and a hatched bar mark the runs without a straggler.
 
 | Setting | Job time (s) | Backups run | Backups won |
 |---|---|---:|---:|

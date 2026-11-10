@@ -181,9 +181,25 @@ def rc(t):
 def heading(fig, t, title, subtitle):
     """A left-aligned title and a subtitle in secondary ink, which may run
     to two lines."""
-    fig.text(0.012, 0.975, title, ha="left", va="top", fontsize=13, weight="bold", color=t["ink"])
     fig.text(
-        0.012, 0.905, subtitle, ha="left", va="top", fontsize=9.5, color=t["ink2"], linespacing=1.5
+        0.012,
+        0.975,
+        title,
+        ha="left",
+        va="top",
+        fontsize=13,
+        weight="bold",
+        color=t["ink"],
+    )
+    fig.text(
+        0.012,
+        0.905,
+        subtitle,
+        ha="left",
+        va="top",
+        fontsize=9.5,
+        color=t["ink2"],
+        linespacing=1.5,
     )
 
 
@@ -208,24 +224,57 @@ def dots(ax, t, xs, ys, color):
     )
 
 
+def runs(ax, t, xs, ys, color):
+    """Single runs behind a median: small hollow markers in the series
+    color, so a reader sees each run (n is three) instead of a whisker that
+    one cold run can stretch."""
+    ax.plot(
+        xs,
+        ys,
+        "o",
+        markersize=5,
+        markerfacecolor=t["surface"],
+        markeredgecolor=color,
+        markeredgewidth=1.2,
+        linestyle="none",
+        zorder=2,
+    )
+
+
+def span(values, fmt):
+    """'lo–hi' with fmt applied to each end, or one value when they agree
+    after formatting."""
+    lo, hi = fmt(min(values)), fmt(max(values))
+    return lo if lo == hi else f"{lo}–{hi}"
+
+
 def ranges(ax, t, xs, med, lo, hi, horizontal=False):
     """Thin range bars (lowest to highest run) in secondary ink."""
     err = [
         [m - a for m, a in zip(med, lo, strict=True)],
         [b - m for m, b in zip(med, hi, strict=True)],
     ]
-    args = {"fmt": "none", "ecolor": t["ink2"], "elinewidth": 1, "capsize": 3, "zorder": 3}
+    args = {
+        "fmt": "none",
+        "ecolor": t["ink2"],
+        "elinewidth": 1,
+        "capsize": 3,
+        "zorder": 3,
+    }
     if horizontal:
         ax.errorbar(med, xs, xerr=err, **args)
     else:
         ax.errorbar(xs, med, yerr=err, **args)
 
 
-def label_note(rows):
+def label_note(rows, ranges=True):
+    """The run's setup and how to read the marks: "Input 1 GiB, M = 32,
+    R = 4; medians of the valid runs", and ", bars span the range" when
+    the figure draws range bars."""
     r = rows[0]
     return (
         f"Input {int(r['input_bytes']) / 2**30:g} GiB, M = {r['m']}, R = {r['r']}; "
-        "medians of the valid runs, bars span the range"
+        "medians of the valid runs" + (", bars span the range" if ranges else "")
     )
 
 
@@ -240,7 +289,19 @@ def e0(rows, out, t):
     """
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     ax.plot([1, 4], [1, 4], "--", color=t["muted"], linewidth=1, zorder=1)
-    ax.text(2.55, 2.75, "ideal (linear)", color=t["ink2"], rotation=33, fontsize=9, ha="center")
+    ax.text(
+        2.55,
+        2.75,
+        "ideal (linear)",
+        color=t["ink2"],
+        rotation=33,
+        fontsize=9,
+        ha="center",
+    )
+    best, shortest = (
+        None,
+        None,
+    )  # (speed-up, name) at most workers; (one-worker time, name)
     for (program, name), color in zip(PROGRAMS.items(), t["series"], strict=True):
         workers = sorted({int(r["workers"]) for r in valid(rows, program=program)})
         if not workers or workers[0] != 1:
@@ -251,8 +312,26 @@ def e0(rows, out, t):
         one = stats[0][0]
         speedup = [one / s[0] for s in stats]
         ax.plot(workers, speedup, color=color, label=name, zorder=3)
-        ranges(ax, t, workers, speedup, [one / s[2] for s in stats], [one / s[1] for s in stats])
+        for w, median in zip(workers, speedup, strict=True):
+            times = [float(r["seconds"]) for r in valid(rows, program=program, workers=str(w))]
+            each = [one / x for x in times]
+            runs(ax, t, [w] * len(each), each, color)
+            for x, y in zip(times, each, strict=True):
+                if (
+                    y < median / 2
+                ):  # name a run far below its median, so it is not read as the trend
+                    ax.annotate(
+                        f"one {name} run: {x:.1f} s",
+                        (w, y),
+                        xytext=(8, 0),
+                        textcoords="offset points",
+                        va="center",
+                        color=t["ink2"],
+                        fontsize=8,
+                    )
         dots(ax, t, workers, speedup, color)
+        best = max(best or (0, ""), (speedup[-1], name))
+        shortest = min(shortest or (float("inf"), ""), (one, name))
         ax.annotate(
             f"{name}  {speedup[-1]:.1f}×",
             (workers[-1], speedup[-1]),
@@ -268,13 +347,17 @@ def e0(rows, out, t):
     ax.set_ylabel("Speed-up over one worker (×)")
     ax.grid(axis="x", visible=False)
     ax.legend(loc="upper left")
-    heading(
-        fig,
-        t,
-        "E0: scaling over workers",
-        "Speed-up = job time on 1 worker ÷ job time on N.\n" + label_note(rows) + ".",
-    )
-    finish(fig, out, top=0.8)
+    title = "E0: scaling over workers"
+    if best:
+        title = f"E0: {best[1]} runs {best[0]:.1f}× faster on four workers"
+    note = "Speed-up = job time on 1 worker ÷ job time on N; lines join medians, rings are runs."
+    if shortest and shortest[0] < 5:
+        note += (
+            f"\n{shortest[1].capitalize()} takes {shortest[0]:.1f} s on one worker,"
+            " so fixed per-job costs cap its speed-up."
+        )
+    heading(fig, t, title, note + "\n" + label_note(rows, ranges=False) + ".")
+    finish(fig, out, top=0.76)
 
 
 def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
@@ -303,7 +386,14 @@ def grouped(ax, t, groups, stats_on, stats_off, scale, ticks=None, xlabel=None):
             label=label,
             zorder=2,
         )
-        ranges(ax, t, xs, med, [st[1] / scale for _, st in kept], [st[2] / scale for _, st in kept])
+        ranges(
+            ax,
+            t,
+            xs,
+            med,
+            [st[1] / scale for _, st in kept],
+            [st[2] / scale for _, st in kept],
+        )
     ax.set_xticks(range(len(groups)), ticks or [f"S = {g[1:]}" for g in groups])
     if xlabel:
         ax.set_xlabel(xlabel)
@@ -323,6 +413,7 @@ def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
     Missing fields, invalid numbers, and plotting or file errors propagate.
     """
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
+    found = {"bytes": [], "time": []}  # off/on byte ratios, and job-time savings
     for ax, field, scale, axis_title, saving in (
         (
             left,
@@ -331,7 +422,13 @@ def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
             "Bytes shuffled (MB)",
             lambda on, off: f"{off / on:.0f}× fewer",
         ),
-        (right, "seconds", 1, "Job time (s)", lambda on, off: f"{1 - on / off:.0%} faster"),
+        (
+            right,
+            "seconds",
+            1,
+            "Job time (s)",
+            lambda on, off: f"{1 - on / off:.0%} faster",
+        ),
     ):
         on = [spread(valid(rows, setting=f"{g}-on"), field) for g in groups]
         off = [spread(valid(rows, setting=f"{g}-off"), field) for g in groups]
@@ -340,8 +437,17 @@ def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
         top = max((st[2] for st in on + off if st), default=0) / scale or 1
         for j, (a, b) in enumerate(zip(on, off, strict=True)):
             if a and b and a[0] > 0 and b[0] > 0:
+                if ax is left:
+                    found["bytes"].append(b[0] / a[0])
+                else:
+                    found["time"].append(1 - a[0] / b[0])
                 ax.text(
-                    j, top * 1.06, saving(a[0], b[0]), ha="center", color=t["ink"], fontsize=9.5
+                    j,
+                    top * 1.06,
+                    saving(a[0], b[0]),
+                    ha="center",
+                    color=t["ink"],
+                    fontsize=9.5,
                 )
             if a and ax is left:  # the combiner's bars are too short to read off the axis
                 ax.annotate(
@@ -357,8 +463,18 @@ def combiner_bars(rows, out, t, groups, ticks, xlabel, title):
         ax.set_title(axis_title)
         ax.yaxis.set_major_formatter("{x:,.0f}")
     fig.legend(
-        *left.get_legend_handles_labels(), loc="upper right", ncols=2, bbox_to_anchor=(0.99, 0.985)
+        *left.get_legend_handles_labels(),
+        loc="upper right",
+        ncols=2,
+        bbox_to_anchor=(0.99, 0.985),
     )
+    if found["bytes"] and found["time"]:
+        title = title.format(
+            bytes=span(found["bytes"], lambda x: f"{x:.0f}") + "×",
+            time=span(found["time"], lambda x: f"{x:.0%}".rstrip("%")) + "%",
+        )
+    else:
+        title = title.split(":", 1)[0] + ": the combiner on and off"
     heading(fig, t, title, label_note(rows) + ".")
     finish(fig, out)
 
@@ -380,7 +496,7 @@ def e1(rows, out, t):
         exponents,
         [f"S = {e[1:]}" for e in exponents],
         "Zipf exponent of the word frequencies (higher: more skew)",
-        "E1: what the combiner saves in word count",
+        "E1: the combiner shuffles {bytes} fewer bytes and saves {time} of job time",
     )
 
 
@@ -402,7 +518,7 @@ def e6(rows, out, t):
         inputs,
         ["crawled\nEnglish", "crawled, every\nlanguage", "book"],
         "Word count's input",
-        "E6: what the combiner saves on real text",
+        "E6: on real text the combiner shuffles {bytes} fewer bytes and saves {time}",
     )
 
 
@@ -456,7 +572,15 @@ def timeline_and_bars(
             end = done.index(max(done)) + 1 if done else 0  # the curve stops when the job does
             xs = [x - t0 for x in times[:end]]
             style = "--" if dashed else "-"
-            left.step(xs, done[:end], where="post", color=color, ls=style, label=label, zorder=3)
+            left.step(
+                xs,
+                done[:end],
+                where="post",
+                color=color,
+                ls=style,
+                label=label,
+                zorder=3,
+            )
             if xs:
                 dots(left, t, [xs[-1]], [done[end - 1]], color)
         if event and run["event_at"] and not marked:
@@ -512,13 +636,29 @@ def timeline_and_bars(
     return fig
 
 
+def median_of(rows, setting, field):
+    """The median of field over setting's valid runs, or None."""
+    st = spread(valid(rows, setting=setting), field)
+    return st[0] if st else None
+
+
+def e2_title(rows):
+    """E2's finding: what backups do to a straggler's job time."""
+    on = median_of(rows, "straggler-backups", "seconds")
+    off = median_of(rows, "straggler-no-backups", "seconds")
+    if on and off:
+        return f"E2: with a straggler, backup tasks cut job time from {off:.1f} s to {on:.1f} s"
+    return "E2: backup tasks against a worker throttled to 0.2 CPU"
+
+
 def e2(rows, results, out, t):
     """Saves E2's backup-task comparison to out, in theme t, and closes it.
 
     Compares backups on and off, with and without a worker at 0.2 CPU.
-    Color marks the straggler; dashed lines and hatched bars mark backups
-    off. Only valid="1" runs count; coordinator seconds determine median-run
-    progress and median job times with minimum-to-maximum range bars.
+    Color marks backups on (slot 1) or off (slot 2); dashed lines and
+    hatched bars mark the runs without a straggler. Only valid="1" runs
+    count; coordinator seconds determine median-run progress and median
+    job times with minimum-to-maximum range bars.
     Task CSVs are read from results / "E2"; missing files omit only curves.
     Missing fields, invalid numbers, and file or plotting errors propagate.
     """
@@ -528,13 +668,14 @@ def e2(rows, results, out, t):
         "straggler-backups": "straggler, backups on",
         "straggler-no-backups": "straggler, backups off",
     }
-    # Four settings, two factors: the color says whether a worker straggles,
-    # a dashed line and a hatched bar that backups are off.
+    # Four settings, two factors: the color says whether backups are on
+    # (blue, as shipped) or off (orange), as color marks the combiner in E1
+    # and E6; a dashed line and a hatched bar mark the no-straggler reference.
     styles = {
-        "normal": (0, False),
-        "normal-no-backups": (0, True),
-        "straggler-backups": (1, False),
-        "straggler-no-backups": (1, True),
+        "normal": (0, True),
+        "normal-no-backups": (1, True),
+        "straggler-backups": (0, False),
+        "straggler-no-backups": (1, False),
     }
     fig = timeline_and_bars(
         rows,
@@ -543,7 +684,7 @@ def e2(rows, results, out, t):
         settings,
         "seconds",
         t,
-        "E2: backup tasks against a worker throttled to 0.2 CPU",
+        e2_title(rows),
         styles=styles,
     )
     finish(fig, out)
@@ -570,10 +711,10 @@ def e2_comparison(pairs, rows, results, out, t):
         "straggler-no-backups": "straggler, backups off",
     }
     styles = {
-        "normal": (0, False),
-        "normal-no-backups": (0, True),
-        "straggler-backups": (1, False),
-        "straggler-no-backups": (1, True),
+        "normal": (0, True),
+        "normal-no-backups": (1, True),
+        "straggler-backups": (0, False),
+        "straggler-no-backups": (1, False),
     }
     # Each setting comes only from its stated source, as the subtitle says.
     mixed = [
@@ -595,7 +736,7 @@ def e2_comparison(pairs, rows, results, out, t):
         settings,
         "seconds",
         t,
-        "E2: backup tasks against a worker throttled to 0.2 CPU",
+        e2_title(mixed),
         styles=styles,
         note="No-straggler rows: paired runs (E2-pairs); straggler rows: main E2 runs.",
     )
@@ -607,7 +748,7 @@ def e3(rows, results, out, t):
     normal = spread(valid(rows, setting="normal"), "wall_seconds")
     pcts = [p for p in (25, 50, 75) if valid(rows, setting=f"kill-{p}")]
     stats = [spread(valid(rows, setting=f"kill-{p}"), "wall_seconds") for p in pcts]
-    color = t["series"][0]
+    color = t["series"][1]  # a disturbed run, as in E2 and E4
     if normal:
         left.axhline(normal[0], color=t["muted"], linewidth=1, zorder=1)
         left.annotate(
@@ -661,7 +802,8 @@ def e3(rows, results, out, t):
             if any(float(r[k]) > 0 for k in ("input", "shuffle", "output"))
         ]
         for rate, c in zip(("input", "shuffle", "output"), t["series"], strict=True):
-            right.plot(times, [float(r[rate]) for r in rates], label=rate, color=c, linewidth=1.5)
+            ys = [float(r[rate]) for r in rates]
+            right.plot(times, ys, label=rate, color=c, linewidth=1.5)
         # event_at is relative to submission, which starts after sampling.
         # Historical runs lack that offset; mark the observed loss instead.
         interval = failure_interval(path, int(run["workers"]))
@@ -683,8 +825,27 @@ def e3(rows, results, out, t):
         right.set_ylim(bottom=0)
         right.legend(loc="upper left", bbox_to_anchor=(0.32, 0.92))  # clear of the data
         right.set_title("Data rates of the median run killed at 50%")
-    heading(fig, t, "E3: losing a worker during distributed sort", label_note(rows) + ".")
+    title = "E3: losing a worker during distributed sort"
+    if normal and pcts:
+        cost = [s[0] - normal[0] for s in stats]
+        title = f"E3: losing one of four workers costs {span(cost, lambda x: f'{x:.0f}')} s more"
+        killed = [r for r in rows if r["setting"].startswith("kill-")]
+        if killed and all(r["valid"] == "1" for r in killed):
+            title += ", and every run's output is correct"
+    heading(fig, t, title, label_note(rows, ranges=False) + ".")
     finish(fig, out)
+
+
+def e4_title(rows):
+    """E4's finding: what a coordinator restart costs."""
+    normal = median_of(rows, "normal", "wall_seconds")
+    restart = median_of(rows, "restart", "wall_seconds")
+    if normal and restart:
+        return (
+            f"E4: a coordinator restart costs {restart - normal:.1f} s;"
+            " the job resumes from its write-ahead log"
+        )
+    return "E4: a coordinator restart, recovered from its log"
 
 
 def e4(rows, results, out, t):
@@ -696,7 +857,7 @@ def e4(rows, results, out, t):
         settings,
         "wall_seconds",
         t,
-        "E4: a coordinator restart, recovered from its log",
+        e4_title(rows),
         "coordinator restarted",
     )
     finish(fig, out)
@@ -718,6 +879,21 @@ def map_phase(path, job):
                 done[t] = int(row["value"])
     end = next((t for t in sorted(done) if total and done[t] >= total), None)
     return None if end is None else end - t0
+
+
+def e5_title(rows, present):
+    """E5's finding: each job file's multiple of the compiled job time."""
+    base = median_of(rows, "compiled", "seconds")
+    names = {"interpreted": "with the api helpers", "naive": "without"}
+    times = {k: median_of(rows, k, "seconds") for k in present if k in names}
+    parts = [f"{x / base:.1f}× {names[k]}" for k, x in times.items() if x and base]
+    if parts:
+        return (
+            "E5: a job file takes "
+            + parts[0].replace("×", "× the compiled time", 1)
+            + (", " + ", ".join(parts[1:]) if parts[1:] else "")
+        )
+    return "E5: what an interpreted job file costs in word count"
 
 
 def e5(rows, results, out, t):
@@ -745,13 +921,26 @@ def e5(rows, results, out, t):
         phases[setting] = spread(times, "phase")
     fig, axes = plt.subplots(1, 2, figsize=(9, 4.4))
     for ax, title, stats in (
-        (axes[0], "Job time (s)", [spread(valid(rows, setting=k), "seconds") for k in present]),
+        (
+            axes[0],
+            "Job time (s)",
+            [spread(valid(rows, setting=k), "seconds") for k in present],
+        ),
         (axes[1], "Map phase (s)", [phases[k] for k in present]),
     ):
         kept = [(j, st) for j, st in enumerate(stats) if st]
         xs, med = [j for j, _ in kept], [st[0] for _, st in kept]
-        colors = [t["series"][list(settings).index(present[j])] for j in xs]
-        ax.bar(xs, med, width=0.55, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2)
+        # compiled, the shipped path, in slot 1; both job files in slot 2
+        colors = [t["series"][0 if present[j] == "compiled" else 1] for j in xs]
+        ax.bar(
+            xs,
+            med,
+            width=0.55,
+            color=colors,
+            edgecolor=t["surface"],
+            linewidth=2,
+            zorder=2,
+        )
         ranges(ax, t, xs, med, [st[1] for _, st in kept], [st[2] for _, st in kept])
         base = stats[0][0] if stats and stats[0] and present[0] == "compiled" else 0
         for j, st in kept:
@@ -776,10 +965,91 @@ def e5(rows, results, out, t):
     heading(
         fig,
         t,
-        "E5: what an interpreted job file costs in word count",
+        e5_title(rows, present),
         "The same program, compiled into the workers or sent as a job file the workers interpret.\n"
         + label_note(rows)
         + "; labels give the multiple of the compiled time.",
+    )
+    finish(fig, out, top=0.8)
+
+
+def faults(e2_rows, e3_rows, e4_rows, out, t):
+    """Saves the fault-tolerance summary to out, in theme t: for each
+    disturbance in E2, E3 and E4, the median job time as a share added to
+    the same experiment's undisturbed median, one horizontal bar each, on
+    one axis. Bars are slot 2 (a disturbed run); the run with backups off,
+    the paper's mechanism disabled, is hatched. Each bar is labeled with
+    both medians. The title claims correct output only if every disturbed
+    run is valid. Disturbances without valid runs, or experiments without
+    an undisturbed median, are left out. Missing fields, invalid numbers
+    and plotting or file errors propagate."""
+    cases = []  # (label, baseline, disturbed, hatched, rows of the disturbed setting)
+    for rows, field, base, items in (
+        (
+            e2_rows,
+            "seconds",
+            "normal",
+            [
+                ("straggler, backups on", "straggler-backups", False),
+                ("straggler, backups off", "straggler-no-backups", True),
+            ],
+        ),
+        (
+            e3_rows,
+            "wall_seconds",
+            "normal",
+            [(f"worker killed at {p}%", f"kill-{p}", False) for p in (25, 50, 75)],
+        ),
+        (
+            e4_rows,
+            "wall_seconds",
+            "normal",
+            [("coordinator restarted", "restart", False)],
+        ),
+    ):
+        b = median_of(rows, base, field)
+        for label, setting, hatched in items:
+            d = median_of(rows, setting, field)
+            if b and d:
+                runs_of = [r for r in rows if r["setting"] == setting]
+                cases.append((label, b, d, hatched, runs_of))
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    ys = list(range(len(cases)))[::-1]  # the first case on top
+    added = [100 * (d / b - 1) for _, b, d, _, _ in cases]
+    color = t["series"][1]
+    bars = ax.barh(ys, added, height=0.56, color=color, edgecolor=t["surface"], linewidth=2)
+    for bar, (_, _, _, hatched, _) in zip(bars, cases, strict=True):
+        if hatched:
+            bar.set(facecolor=t["surface"], edgecolor=color, hatch="///", linewidth=1.5)
+    for y, a, (_, b, d, _, _) in zip(ys, added, cases, strict=True):
+        ax.annotate(
+            f"+{a:.0f}%   {d:.1f} s vs {b:.1f} s",
+            (max(a, 0), y),
+            xytext=(6, 0),
+            textcoords="offset points",
+            va="center",
+            color=t["ink"],
+            fontsize=9.5,
+        )
+    ax.set_yticks(ys, [c[0] for c in cases])
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlim(0, (max(added, default=0) or 1) * 1.45)
+    ax.xaxis.set_major_formatter("+{x:.0f}%")
+    ax.set_xlabel("Job time added, against the same job undisturbed (median of the valid runs)")
+    ax.grid(axis="y", visible=False)
+    every = [r for *_, rs in cases for r in rs]
+    correct = bool(every) and all(r["valid"] == "1" for r in every)
+    title = "Fault tolerance: what each disturbance costs"
+    if correct:
+        title = "Every disturbance still finished with the correct output"
+    heading(
+        fig,
+        t,
+        title,
+        "Backups (E2), a worker killed mid-job (E3), and a coordinator restart (E4),"
+        " on four one-CPU workers.\n"
+        + label_note(e3_rows or e2_rows or e4_rows, ranges=False)
+        + ".",
     )
     finish(fig, out, top=0.8)
 
@@ -841,8 +1111,18 @@ def main():
         if rows:
             for name, t in THEMES.items():
                 with plt.rc_context(rc(t)):
-                    fn(rows, out / (f"{exp}.png" if name == "light" else f"{exp}-{name}.png"), t)
+                    fn(
+                        rows,
+                        out / (f"{exp}.png" if name == "light" else f"{exp}-{name}.png"),
+                        t,
+                    )
             table(exp, rows)
+    disturbed = [load(results, exp) for exp in ("E2", "E3", "E4")]
+    if all(disturbed):
+        for name, t in THEMES.items():
+            with plt.rc_context(rc(t)):
+                png = "faults.png" if name == "light" else f"faults-{name}.png"
+                faults(*disturbed, out / png, t)
     pairs = load(results, "E2-pairs")
     rows = load(results, "E2")
     if pairs and rows:
