@@ -290,7 +290,9 @@ that does not depend on any hosted service.
   it is the pinned version built by a Go no older than `go/go.mod`'s, and
   otherwise builds the pin into `.tools/bin` once. A linter built by an older
   Go cannot lint newer code, so `make check` and the pre-push hook need no
-  `PATH` setup.
+  `PATH` setup. The hook also appends `~/.local/go/bin`, `/usr/local/go/bin`,
+  `~/go/bin`, `.tools/bin` and `~/.local/bin` to `PATH` when they exist, for
+  git clients that run hooks without a login shell's `PATH`.
 - **Race detector missing.** `CGO_ENABLED=1` and a C compiler are required;
   the `medium` executor sets the first, the image has the second.
 - **A job fails to start with a credits message.** The monthly allowance is
