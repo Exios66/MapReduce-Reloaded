@@ -15,6 +15,17 @@ cut a release.
 
 ### Added
 
+- Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
+  disturbance in E2, E3 and E4 added, on one axis; its title claims correct
+  output only when every disturbed run was valid. The README's results lead
+  with it.
+- Notebook: `examples/demo.ipynb` shows the combiner (the same output with
+  `-combiner=false`, and the bytes shuffled), the 1 GiB sort surviving a
+  coordinator restart with output identical to the worker-kill run, and the
+  evaluation figures.
+- Docs: `docs/reviewing.md`, a reviewer's path through the code: a reading
+  order, where each part lives, how to check each claim, and the known
+  limits.
 - Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
   status-page GIFs from one real job's whole run, in the page's dark and
   light variants, with a provenance sidecar (commit, machine, job, input,
@@ -62,6 +73,16 @@ cut a release.
 
 ### Changed
 
+- Bench figures: every title states its finding, computed from the CSVs
+  (for example "E2: with a straggler, backup tasks cut job time from
+  17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
+  as it ships, orange the changed or disturbed setting. E0 draws each run
+  as a ring instead of a range bar that one cold grep run stretched to
+  0.35×, and names that run.
+- Docs: `docs/demo.md` restarts the coordinator live, shows the combiner,
+  maps each moment to the requirement it meets, and adds a checklist for
+  the day and answers for questions; `docs/report.md` gains a "Process and
+  review" section and follows the new demo.
 - Docs: the README's status-page GIFs (`docs/assets/status-*.gif`) show one
   whole 1 GiB word count, M = 32, R = 4, on four workers, from its first map
   task to the end state, replacing the 8-second seeded chaos loop; a
@@ -103,6 +124,9 @@ cut a release.
   `.github/workflows/` comes back (#294).
 
 ### Fixed
+
+- Notebook: the worker-kill cell no longer reads an unset reply when the
+  kill fails; it stops the client and restores the worker.
 
 <!-- pyml disable md033 -->
 <!-- coderabbit-ai-generated:v1 -->

@@ -238,6 +238,8 @@ CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
 
 [`docs/README.md`](docs/README.md) is the index. The short list:
 
+- [Reviewing the code](docs/reviewing.md): where to start, where each part
+  lives, and how to check each claim.
 - [Final report](docs/report.md): what was built, the comparison with the
   paper, the demo and what was learned.
 - [Design](design.md) and the [design records](docs/design/): how it works
