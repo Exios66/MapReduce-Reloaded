@@ -4,32 +4,38 @@ experiment's job times for bench/README.md.
 
 For each of E0 to E6 whose bench/results/EXPERIMENT/runs.csv
 exists, this writes OUT_DIR/EXPERIMENT.png on a light background and
-OUT_DIR/EXPERIMENT-dark.png on a dark one. Every point is the median of
-the valid runs, with the range as an error bar; runs whose output differed
-from the normal run's (valid=0) are left out and counted in the table.
+OUT_DIR/EXPERIMENT-dark.png on a dark one. Each title states the finding,
+computed from the data. Points are medians of the valid runs, drawn with
+each run as a ring or with the range as a bar, as each subtitle says; runs
+whose output differed from the undisturbed run's (valid=0) are left out and
+counted in the table.
 
-- E0: speed-up over one worker against workers, one line per program, with
-  ideal linear speed-up dashed.
-- E1: bytes shuffled and job time per Zipf exponent, combiner on and off,
-  as grouped bars labeled with the saving.
+- E0: speed-up over one worker against workers, one line per program, each
+  run a ring, with ideal linear speed-up dashed and a far outlier named.
+- E1: bytes shuffled (log axis) and job time per Zipf exponent as
+  dumbbells joining the combiner-on and combiner-off medians, each labeled
+  with the saving.
 - E2: tasks completed against time for the median run of each setting, as
-  in the paper's Figure 3, and job-time bars in the same colors.
+  in the paper's Figure 3, and job-time bars in the same colors: color marks
+  backups on or off, dashes and hatching the runs without a straggler.
 - E2-comparison: the same two panels, but of two datasets: the two
   no-straggler settings come from the ten paired runs in
   RESULTS_DIR/E2-pairs (the drift-controlled comparison), the two straggler
   settings from the main runs in RESULTS_DIR/E2 (the only straggler data).
   The image says so in its subtitle. It is drawn, as E2-comparison.png and
   E2-comparison-dark.png, only when both directories have a runs.csv.
-- E3: job time against kill time, with the no-failure time as a line and
-  each point labeled with its cost; and input, shuffle and output rates
-  against time for the median run killed at 50%, with the loss marked, as
-  Figure 3(c).
+- E3: job time at each kill point as a stem from the no-failure median,
+  labeled with its cost; and input, shuffle and output rates against time
+  for the median run killed at 50%, with the loss marked, as Figure 3(c).
 - E4: tasks completed against time with the restart marked, and job-time
   bars with and without the restart.
 - E5: job time and map-phase time for the compiled program and the two job
   files the workers interpret.
 - E6: bytes shuffled and job time per input (crawled English, crawled pages
   in every language, and the book), combiner on and off, as E1 does.
+- faults.png (and faults-dark.png), when E2, E3 and E4 all have results:
+  the job time each disturbance adds to its experiment's undisturbed
+  median, one bar per disturbance on one axis.
 
 E0, E1, E2 and E6 use the coordinator's job time (seconds); E3 and E4 use
 the time from submission until mr status saw the job finish
@@ -56,6 +62,8 @@ PROGRAMS = {"grep": "grep", "distsort": "sort", "wordcount": "Zipf word count"}
 
 
 def load(results, exp):
+    """Returns the rows of results/exp/runs.csv as dicts, or None if the
+    file does not exist."""
     path = results / exp / "runs.csv"
     if not path.exists():
         return None
@@ -64,6 +72,8 @@ def load(results, exp):
 
 
 def valid(rows, **match):
+    """The rows whose output matched the undisturbed run's (valid == "1")
+    and whose fields equal every keyword given, e.g. setting="normal"."""
     return [r for r in rows if r["valid"] == "1" and all(r[k] == v for k, v in match.items())]
 
 
@@ -204,6 +214,8 @@ def heading(fig, t, title, subtitle):
 
 
 def finish(fig, out, top=0.84):
+    """Lays the axes out below the heading, which takes the top 1 - top of
+    the figure, saves the figure to out, and closes it."""
     fig.tight_layout(rect=(0, 0, 1, top))
     fig.savefig(out)
     plt.close(fig)
@@ -301,7 +313,7 @@ def e0(rows, out, t):
     best, shortest = (
         None,
         None,
-    )  # (speed-up, name) at most workers; (one-worker time, name)
+    )  # (speed-up, name, workers) at most workers; (one-worker time, name)
     for (program, name), color in zip(PROGRAMS.items(), t["series"], strict=True):
         workers = sorted({int(r["workers"]) for r in valid(rows, program=program)})
         if not workers or workers[0] != 1:
@@ -330,7 +342,7 @@ def e0(rows, out, t):
                         fontsize=8,
                     )
         dots(ax, t, workers, speedup, color)
-        best = max(best or (0, ""), (speedup[-1], name))
+        best = max(best or (0, "", 0), (speedup[-1], name, workers[-1]))
         shortest = min(shortest or (float("inf"), ""), (one, name))
         ax.annotate(
             f"{name}  {speedup[-1]:.1f}×",
@@ -349,7 +361,7 @@ def e0(rows, out, t):
     ax.legend(loc="upper left")
     title = "E0: scaling over workers"
     if best:
-        title = f"E0: {best[1]} runs {best[0]:.1f}× faster on four workers"
+        title = f"E0: {best[1]} runs {best[0]:.1f}× faster on {best[2]} workers"
     note = "Speed-up = job time on 1 worker ÷ job time on N; lines join medians, rings are runs."
     if shortest and shortest[0] < 5:
         note += (
@@ -457,7 +469,7 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
             1,
             False,
             "Job time (s)",
-            lambda on, off: f"{1 - on / off:.0%} faster",
+            lambda on, off: f"{abs(1 - on / off):.0%} " + ("faster" if on <= off else "slower"),
         ),
     ):
         on = [spread(valid(rows, setting=f"{g}-on"), field) for g in groups]
@@ -504,6 +516,8 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
             bytes=span(found["bytes"], lambda x: f"{x:.0f}") + "×",
             time=span(found["time"], lambda x: f"{x:.0%}".rstrip("%")) + "%",
         )
+        if min(found["time"]) < 0:  # a saving below zero is not "faster"
+            title = title.split(",", 1)[0]
     else:
         title = title.split(":", 1)[0] + ": the combiner on and off"
     heading(fig, t, title, label_note(rows, ranges=False) + "; rings are single runs.")
@@ -527,7 +541,7 @@ def e1(rows, out, t):
         exponents,
         [f"S = {e[1:]}" for e in exponents],
         "Zipf exponent (higher: more skew)",
-        "E1: the combiner shuffles {bytes} fewer bytes and saves {time} of job time",
+        "E1: the combiner shuffles {bytes} fewer bytes, {time} faster",
     )
 
 
@@ -549,7 +563,7 @@ def e6(rows, out, t):
         inputs,
         ["crawled\nEnglish", "crawled,\nevery language", "book"],
         "Word count's input",
-        "E6: on real text the combiner shuffles {bytes} fewer bytes and saves {time}",
+        "E6: on real text, {bytes} fewer bytes, {time} faster",
     )
 
 
@@ -678,8 +692,8 @@ def e2_title(rows):
     on = median_of(rows, "straggler-backups", "seconds")
     off = median_of(rows, "straggler-no-backups", "seconds")
     if on and off:
-        return f"E2: with a straggler, backup tasks cut job time from {off:.1f} s to {on:.1f} s"
-    return "E2: backup tasks against a worker throttled to 0.2 CPU"
+        return f"E2: backups cut a straggler's job from {off:.1f} s to {on:.1f} s"
+    return "E2: backup tasks and a straggler"
 
 
 def e2(rows, results, out, t):
@@ -775,6 +789,18 @@ def e2_comparison(pairs, rows, results, out, t):
 
 
 def e3(rows, results, out, t):
+    """Saves E3's worker-kill comparison to out, in theme t, and closes it.
+
+    Left: the median wall time of each kill point (25, 50 and 75% of the
+    normal job time) as a stem from the no-failure median, each run a ring
+    and each stem labeled with the time it adds. Right: input, shuffle and
+    output rates of the median run killed at 50%, from its samples file
+    through plot-rates.py, with the observed worker loss shaded. Only
+    valid="1" runs count; a missing samples file leaves the right panel
+    empty. The title says every output matched the undisturbed run's only
+    if every kill run is valid. Missing fields, invalid numbers, and file,
+    subprocess or plotting errors propagate.
+    """
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
     normal = spread(valid(rows, setting="normal"), "wall_seconds")
     pcts = [p for p in (25, 50, 75) if valid(rows, setting=f"kill-{p}")]
@@ -862,16 +888,15 @@ def e3(rows, results, out, t):
     title = "E3: losing a worker during distributed sort"
     if normal and pcts:
         cost = [s[0] - normal[0] for s in stats]
-        title = f"E3: losing one of four workers costs {span(cost, lambda x: f'{x:.0f}')} s more"
+        title = f"E3: a lost worker adds {span(cost, lambda x: f'{x:.0f}')} s"
         killed = [r for r in rows if r["setting"].startswith("kill-")]
         if killed and all(r["valid"] == "1" for r in killed):
-            title += ", and every run's output matches the undisturbed run's"
+            title += "; output unchanged"
     heading(
         fig,
         t,
         title,
-        label_note(rows, ranges=False)
-        + "; each stem is the time a failure adds to the run without one.",
+        label_note(rows, ranges=False) + "; each stem is the time a failure adds.",
     )
     finish(fig, out)
 
@@ -881,14 +906,18 @@ def e4_title(rows):
     normal = median_of(rows, "normal", "wall_seconds")
     restart = median_of(rows, "restart", "wall_seconds")
     if normal and restart:
-        return (
-            f"E4: a coordinator restart costs {restart - normal:.1f} s;"
-            " the job resumes from its write-ahead log"
-        )
+        return f"E4: a coordinator restart adds {restart - normal:.1f} s; the job resumes"
     return "E4: a coordinator restart, recovered from its log"
 
 
 def e4(rows, results, out, t):
+    """Saves E4's restart comparison to out, in theme t, and closes it:
+    tasks completed over time for the median run with and without a
+    coordinator restart, the restart marked, and median wall times as bars.
+    Only valid="1" runs count. Task CSVs are read from results / "E4";
+    missing files omit only curves. Missing fields, invalid numbers, and
+    file or plotting errors propagate.
+    """
     settings = {"normal": "no restart", "restart": "coordinator restarted"}
     fig = timeline_and_bars(
         rows,
@@ -924,15 +953,17 @@ def map_phase(path, job):
 def e5_title(rows, present):
     """E5's finding: each job file's multiple of the compiled job time."""
     base = median_of(rows, "compiled", "seconds")
-    names = {"interpreted": "with the api helpers", "naive": "without"}
-    times = {k: median_of(rows, k, "seconds") for k in present if k in names}
-    parts = [f"{x / base:.1f}× {names[k]}" for k, x in times.items() if x and base]
-    if parts:
+    times = {k: median_of(rows, k, "seconds") for k in present if k in ("interpreted", "naive")}
+    found = {k: x / base for k, x in times.items() if x and base}
+    if "interpreted" in found and "naive" in found:
         return (
-            "E5: a job file takes "
-            + parts[0].replace("×", "× the compiled time", 1)
-            + (", " + ", ".join(parts[1:]) if parts[1:] else "")
+            f"E5: a job file runs {found['interpreted']:.1f}× slower,"
+            f" {found['naive']:.1f}× without helpers"
         )
+    if "interpreted" in found:
+        return f"E5: a job file runs {found['interpreted']:.1f}× slower than compiled"
+    if "naive" in found:
+        return f"E5: a job file without helpers runs {found['naive']:.1f}× slower"
     return "E5: what an interpreted job file costs in word count"
 
 
@@ -1064,7 +1095,7 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
             bar.set(facecolor=t["surface"], edgecolor=color, hatch="///", linewidth=1.5)
     for y, a, (_, b, d, _) in zip(ys, added, cases, strict=True):
         ax.annotate(
-            f"+{a:.0f}%   {d:.1f} s vs {b:.1f} s",
+            f"{a:+.0f}%   {d:.1f} s vs {b:.1f} s",
             (max(a, 0), y),
             xytext=(6, 0),
             textcoords="offset points",
@@ -1074,15 +1105,16 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
         )
     ax.set_yticks(ys, [c[0] for c in cases])
     ax.tick_params(axis="y", length=0)
-    ax.set_xlim(0, (max(added, default=0) or 1) * 1.45)
-    ax.xaxis.set_major_formatter("+{x:.0f}%")
-    ax.set_xlabel("Job time added, against the same job undisturbed (median of the valid runs)")
+    # A disturbance that sped a job up is drawn left of zero, not clipped.
+    ax.set_xlim(min(min(added, default=0), 0) * 1.45, (max(added, default=0) or 1) * 1.45)
+    ax.xaxis.set_major_formatter("{x:+.0f}%")
+    ax.set_xlabel("Job time added, against the same job undisturbed")
     ax.grid(axis="y", visible=False)
     # A disturbance whose runs all failed has no bar, but still fails the claim.
     correct = bool(cases) and all(r["valid"] == "1" for r in disturbed)
-    title = "Fault tolerance: what each disturbance costs"
+    title = "Fault tolerance: the time each disturbance adds"
     if correct:
-        title = "Every disturbance still gave the same output as an undisturbed run"
+        title = "Every disturbance gave the undisturbed run's output"
     heading(
         fig,
         t,

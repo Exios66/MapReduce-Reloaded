@@ -73,9 +73,9 @@ cut a release.
 
 ### Changed
 
-- Bench figures: every title states its finding, computed from the CSVs
-  (for example "E2: with a straggler, backup tasks cut job time from
-  17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
+- Bench figures: every title states its finding in one short line,
+  computed from the CSVs (for example "E2: backups cut a straggler's job
+  from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
   as it ships, orange the changed or disturbed setting. E0 draws each run
   as a ring instead of a range bar that one cold grep run stretched to
   0.35×, and names that run (#342).
@@ -140,6 +140,13 @@ cut a release.
   without a login shell's `PATH` (#342).
 - Notebook: the worker-kill cell no longer reads an unset reply when the
   kill fails; it stops the client and restores the worker (#342).
+- Notebook: the setup cell removes the outputs and corpus that an earlier,
+  interrupted run left in `data/out` and `data/input`, so retries after a
+  failing cell no longer fill the disk (#342).
+- Bench figures: E0's title names the largest worker count measured instead
+  of always "four"; E1 and E6 label a combiner that costs time "slower", not
+  "faster"; and `faults.png` draws a disturbance that sped a job up left of
+  zero instead of clipping it (#342).
 
 <!-- pyml disable md033 -->
 <!-- coderabbit-ai-generated:v1 -->

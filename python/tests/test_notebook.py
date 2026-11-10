@@ -83,3 +83,18 @@ def test_the_evaluation_figures_it_shows_exist():
     for name in figures:
         for theme in ("", "-dark"):
             assert (NOTEBOOK.parents[1] / "bench/evaluation" / f"{name}{theme}.png").is_file()
+
+
+def test_setup_clears_what_an_interrupted_run_left():
+    """A run stopped by a failing cell skips the last section's cleanup, so
+    the setup cell removes earlier runs' outputs and corpus before this run."""
+    code = [cell["source"] for cell in cells() if cell["cell_type"] == "code"]
+    setup = next(source for source in code if "RUN = " in source)
+    for pattern in ('glob("notebook-*")', 'glob("notebook-corpus-*")', "shutil.rmtree(old"):
+        assert pattern in setup, pattern
+    # Every output this run writes is named notebook-*, so the next run's setup finds it.
+    for name in ("WC", "JOBFILE", "NOCOMB", "URLS", "SORT", "RESTARTED", "LOCAL"):
+        assignment = next(
+            line for s in code for line in s.splitlines() if line.startswith(f"{name} = ")
+        )
+        assert "data/out/notebook-" in assignment, assignment

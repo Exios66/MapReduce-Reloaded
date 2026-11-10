@@ -17,6 +17,7 @@ PIN = "v2.14.0"
 
 
 def executable(path, text):
+    """Writes text as an executable shell script at path."""
     path.write_text("#!/bin/sh\n" + text)
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
@@ -62,6 +63,10 @@ def tree(tmp_path):
 
 
 def wrapper(tree):
+    """Runs the wrapper in tree with only tree/path and /usr/bin:/bin on PATH.
+
+    Returns the result and the installs the fake go logged.
+    """
     env = {"PATH": f"{tree / 'path'}:/usr/bin:/bin", "HOME": str(tree)}
     result = subprocess.run(
         [str(tree / "scripts/golangci-lint.sh"), "run", "./..."],
@@ -77,6 +82,7 @@ def wrapper(tree):
 @pytest.mark.skipif(os.name != "posix", reason="a POSIX shell script")
 @pytest.mark.parametrize("built", ["go1.26.0", "go1.26.11", "go1.27.1"])
 def test_uses_the_pinned_linter_on_path_built_by_this_go_or_newer(tree, built):
+    """A linter on PATH at the pin, built by this Go or newer, is used as is."""
     linter(tree / "path/golangci-lint", "2.14.0", built)
     result, installs = wrapper(tree)
     assert result.returncode == 0, result.stderr
@@ -91,6 +97,7 @@ def test_uses_the_pinned_linter_on_path_built_by_this_go_or_newer(tree, built):
     ids=["built-by-older-go", "other-version", "none-on-path"],
 )
 def test_builds_the_pin_into_tools_when_path_has_no_usable_linter(tree, version, built):
+    """With no usable linter on PATH the pin is built into .tools/bin once and reused."""
     if version:
         linter(tree / "path/golangci-lint", version, built)
     result, installs = wrapper(tree)
@@ -109,6 +116,7 @@ def test_builds_the_pin_into_tools_when_path_has_no_usable_linter(tree, version,
 
 @pytest.mark.skipif(os.name != "posix", reason="a POSIX shell script")
 def test_fails_when_the_build_does_not_report_the_pin(tree):
+    """A build that does not report the pin is an error, not silently used."""
     go = tree / "path/go"
     go.write_text(go.read_text().replace("version 2.14.0", "version 2.13.0"))
     result, _ = wrapper(tree)
