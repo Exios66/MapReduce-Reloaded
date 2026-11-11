@@ -3,9 +3,10 @@
 Usage: check-dark-charts.py [FILE.md ...]   default: every tracked *.md
 
 A chart sits in a <picture> whose <source media="(prefers-color-scheme:
-dark)"> names its dark variant; that file must exist. A chart from
-bench/evaluation/ shown outside a <picture>, as a bare <img> or a Markdown
-image, has no dark variant and is reported. It prints one line per problem
+dark)"> names its dark variant, its attributes in either order; that file
+must exist. A chart from bench/evaluation/ shown in a <picture> with no such
+source, or outside one as a bare <img> or a Markdown image, has no dark
+variant and is reported. It prints one line per problem
 and exits 1 if there are any.
 
 The lint job runs this rather than the Python tests, because it reads every
@@ -21,24 +22,40 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 PICTURE = re.compile(r"<picture>.*?</picture>", re.S)
-DARK = re.compile(r'<source media="\(prefers-color-scheme: dark\)" srcset="([^"]+)"')
+SOURCE = re.compile(r"<source\b[^>]*>")
+MEDIA = re.compile(r'media="\(prefers-color-scheme: dark\)"')
+SRCSET = re.compile(r'srcset="([^"]+)"')
 BARE_IMG = re.compile(r'<img [^>]*src="([^"]+\.png)"')
 BARE_MD = re.compile(r"!\[[^\]]*\]\(([^)]+\.png)\)")
 
 
+def is_evaluation(chart: str) -> bool:
+    """Whether chart is one of the bench charts under bench/evaluation/."""
+    return "/evaluation/" in chart or chart.startswith("evaluation/")
+
+
 def check(page: Path) -> tuple[list[str], int]:
     """Returns the page's problems and how many dark variants it names."""
-    text = page.read_text()
+    text = page.read_text(encoding="utf-8")
     problems, checked = [], 0
     for block in PICTURE.findall(text):
-        for dark in DARK.findall(block):
+        darks = [
+            m.group(1)
+            for tag in SOURCE.findall(block)
+            if MEDIA.search(tag) and (m := SRCSET.search(tag))
+        ]
+        for dark in darks:
             checked += 1
             if not (page.parent / dark).is_file():
                 problems.append(f"{page}: dark variant {dark} does not exist")
+        if not darks:
+            for chart in BARE_IMG.findall(block):
+                if is_evaluation(chart):
+                    problems.append(f"{page}: shows {chart} without a dark variant")
     rest = PICTURE.sub("", text)
     bare = BARE_IMG.findall(rest) + BARE_MD.findall(rest)
     for chart in bare:
-        if "/evaluation/" in chart or chart.startswith("evaluation/"):
+        if is_evaluation(chart):
             problems.append(f"{page}: shows {chart} without a dark variant")
     return problems, checked
 

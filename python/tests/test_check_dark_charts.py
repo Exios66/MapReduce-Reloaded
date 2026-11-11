@@ -62,6 +62,32 @@ def test_a_bare_chart_outside_a_picture_is_reported(write):
     ]
 
 
+def test_a_dark_source_with_srcset_first_counts(write):
+    write("bench/evaluation/E2-dark.png")
+    page = write(
+        "README.md",
+        "<picture>\n"
+        '  <source srcset="bench/evaluation/E2-dark.png" media="(prefers-color-scheme: dark)">\n'
+        '  <img src="bench/evaluation/E2.png" alt="E2">\n'
+        "</picture>\n",
+    )
+    assert charts.check(page) == ([], 1)
+
+
+def test_a_chart_in_a_picture_without_a_dark_source_is_reported(write):
+    page = write(
+        "README.md",
+        "<picture>\n"
+        '  <source media="(min-width: 600px)" srcset="bench/evaluation/E2-wide.png">\n'
+        '  <img src="bench/evaluation/E2.png" alt="E2">\n'
+        "</picture>\n",
+    )
+    assert charts.check(page) == (
+        [f"{page}: shows bench/evaluation/E2.png without a dark variant"],
+        0,
+    )
+
+
 def test_images_that_are_not_bench_charts_are_left_alone(write):
     page = write("docs/demo.md", "![status](assets/status.png)\n")
     assert charts.check(page) == ([], 0)

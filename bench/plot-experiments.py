@@ -382,10 +382,11 @@ def e0(rows, out, t, reads=None):
     with a time of zero, is skipped. Missing fields, invalid numbers, and
     file errors propagate. Warm-up runs (setting="warmup") are left out.
     reads, from disk_reads, marks each likely_cold run with a cross instead
-    of a ring.
+    of a ring; the typical read it is compared with is that of the valid
+    runs.
     """
     rows = [r for r in rows if r["setting"] != "warmup"]
-    cold = likely_cold(rows, reads or {})
+    cold = likely_cold(valid(rows), reads or {})
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     ax.plot([1, 4], [1, 4], "--", color=t["muted"], linewidth=1, zorder=1)
     ax.text(

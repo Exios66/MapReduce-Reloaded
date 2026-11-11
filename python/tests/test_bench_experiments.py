@@ -1399,17 +1399,29 @@ ISOLATE_STUBS = """
 note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
 input() { note "input|$1"; echo "/out/exp-input-$1-1024.txt"; }
 drop_cache() { note "drop|$*"; }
-in_volume() { note "volume:$*"; }
+in_volume() {
+    case $3 in
+    *exp-input-\**)
+        note "volume:list"
+        printf '%s\n' /out/exp-input-distsort-1024.txt /out/exp-input-grep-1024.txt \
+            /out/exp-input-wordcount-1024-book.txt /out/exp-input-wordcount-1024.txt
+        ;;
+    *) note "volume:$*" ;;
+    esac
+}
 """
 
 
 def test_isolate_drops_the_other_inputs_then_reads_its_own(experiment):
-    """isolate drops the two other E0 inputs from the page cache, then reads its own."""
+    """isolate drops every other input in the volume from the page cache, the
+    word count variants E1 and E6 left among them, then reads its own."""
     invoke, log = experiment
     invoke(ISOLATE_STUBS, after="isolate distsort")
     calls = [line for line in log.read_text().splitlines() if not line.startswith("input|")]
     assert calls == [
-        "drop|/out/exp-input-grep-1024.txt /out/exp-input-wordcount-1024.txt",
+        "volume:list",
+        "drop|/out/exp-input-grep-1024.txt /out/exp-input-wordcount-1024-book.txt"
+        " /out/exp-input-wordcount-1024.txt",
         "volume:sh -c cat '/out/exp-input-distsort-1024.txt' > /dev/null",
     ]
 
@@ -1420,7 +1432,7 @@ def test_isolate_generates_missing_inputs_first(experiment):
     invoke(ISOLATE_STUBS, after="isolate wordcount")
     lines = log.read_text().splitlines()
     assert lines[:3] == ["input|grep", "input|distsort", "input|wordcount"]
-    assert lines[3].startswith("drop|")
+    assert lines[3:5] == ["volume:list", lines[4]] and lines[4].startswith("drop|")
 
 
 def test_drop_cache_runs_the_script_on_the_volume(experiment, tmp_path):

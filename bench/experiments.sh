@@ -430,14 +430,22 @@ drop_cache() {
         python:3.13-alpine python /bench/drop-cache.py "$@"
 }
 
-# isolate PROGRAM: generates any missing E0 input, drops the inputs of the
-# other two programs from the page cache, then reads PROGRAM's input in.
+# isolate PROGRAM: generates any missing E0 input, drops every other input
+# in the volume from the page cache, then reads PROGRAM's input in. The
+# others are the two other E0 inputs and any word count inputs E1 and E6
+# left, which prune_volume keeps.
 isolate() {
     local p path own others=()
     for p in grep distsort wordcount; do
         path=$(input "$p")
-        if [ "$p" = "$1" ]; then own=$path; else others+=("$path"); fi
+        if [ "$p" = "$1" ]; then own=$path; fi
     done
+    # shellcheck disable=SC2016 # expanded by the container's shell
+    while IFS= read -r path; do
+        if [ "$path" != "$own" ]; then others+=("$path"); fi
+    done < <(in_volume sh -c 'for f in /out/exp-input-*; do
+        if [ -f "$f" ]; then echo "$f"; fi
+    done')
     log "E0 isolates $1's input"
     if ! drop_cache "${others[@]}"; then
         echo "experiments: could not drop the page cache; stopping" >&2

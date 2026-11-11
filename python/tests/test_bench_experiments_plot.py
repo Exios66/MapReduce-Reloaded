@@ -750,6 +750,25 @@ def test_e0_crosses_runs_that_read_far_more_from_disk_and_labels_them_together(p
     assert "cold" not in subtitle
 
 
+def test_e0_compares_disk_reads_among_valid_runs_only(plotter, tmp_path, monkeypatch):
+    """An invalid run's disk read neither sets the typical read nor gets a cross."""
+    module, pyplot = plotter
+    pyplot.subplots.return_value = Mock(), Mock()
+    rows = [
+        row(f"w{w}", 2.0 / w) | {"program": "grep", "workers": str(w), "run": str(n)}
+        for w in (1, 4)
+        for n in (1, 2, 3)
+    ]
+    rows[1]["valid"] = "0"
+    seen = []
+    real = module.likely_cold
+    monkeypatch.setattr(
+        module, "likely_cold", lambda rs, reads: seen.append(list(rs)) or real(rs, reads)
+    )
+    module.e0(rows, tmp_path / "E0.png", light(module), {})
+    assert seen == [[r for r in rows if r["valid"] == "1"]]
+
+
 def test_e2_title_states_the_straggler_times_and_falls_back(plotter):
     """E2's title gives the straggler's times, or a plain title without both medians."""
     module, _ = plotter

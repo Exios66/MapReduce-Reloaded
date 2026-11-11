@@ -181,8 +181,8 @@ do not:
 
 ```sh
 a=bench/evaluation/rerun-8f0ddb9/archives
-d=data/eval  # a fresh directory, so no older results are drawn
-rm -rf "$d" && mkdir -p "$d/iso"
+d=$(mktemp -d)  # a fresh directory, so no older results are drawn
+mkdir "$d/iso"
 for e in E1 E2 E2-pairs E3 E4 E5 E6 E7; do tar xzf "$a/$e.tar.gz" -C "$d"; done
 tar xzf "$a/E0-isolated.tar.gz" -C "$d/iso" && mv "$d/iso/E0" "$d/E0-isolated"
 python3 bench/plot-experiments.py "$d" bench/evaluation

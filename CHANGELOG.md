@@ -32,7 +32,8 @@ cut a release.
   campaign).
 - Bench: E0 starts every run with only its own program's input in the page
   cache. Before each warm-up and measured run, `bench/experiments.sh` drops
-  the other two inputs with the new `bench/drop-cache.py`
+  every other input in the output volume, the other two E0 inputs and any
+  word count inputs E1 and E6 left, with the new `bench/drop-cache.py`
   (`posix_fadvise`, run in a container, no root needed) and reads the
   run's own input. `E0_ISOLATE=0` restores the old order. In the reruns at
   `8f0ddb9`, E0's sort runs read 0.75–1.84 GiB (803–1,971 MB) from disk,
