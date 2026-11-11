@@ -163,8 +163,8 @@ class LostWorker(NamedTuple):
 
 
 # MAX_ATTEMPTS is the most attempts Status keeps for one job, as
-# go's maxAttempts: more than any job the commands submit creates, with
-# room for backups and failures.
+# go's maxAttempts. A job with more attempts shows only its most recent
+# ones, as the page says, so a status stays small for jobs of any size.
 MAX_ATTEMPTS = 512
 
 

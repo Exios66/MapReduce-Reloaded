@@ -6,8 +6,9 @@ import (
 	pb "github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1"
 )
 
-// maxAttempts is the most attempts Status keeps for one job: enough for any
-// job the commands can submit, with room for backups and failures.
+// maxAttempts is the most attempts Status keeps for one job. A job with more
+// attempts shows only its most recent ones, as the page says, so a status
+// stays small for jobs of any size.
 const maxAttempts = 512
 
 // AttemptRange is one attempt of one task of one job, for the status page's

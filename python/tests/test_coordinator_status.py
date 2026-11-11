@@ -249,6 +249,27 @@ def test_timeline_unknown_start():
     assert statusweb._timeline(_job(), AT, [a]) == []
 
 
+@pytest.mark.parametrize(
+    "finished,states",
+    [
+        (None, ["superseded", "completed", "running", "running"]),
+        (AT, ["superseded", "completed", "abandoned", "abandoned"]),
+    ],
+)
+def test_timeline_unreported_attempts(finished, states):
+    """A race's loser ends when the winner did; a job's end abandons the rest."""
+    m = types_pb2.TASK_KIND_MAP
+    attempts = [
+        AttemptRange(m, 0, 0, "w", AT - 8),  # lost the race
+        AttemptRange(m, 0, 1, "w", AT - 6, AT - 4, ok=True),  # won it
+        AttemptRange(m, 0, 2, "w", AT - 2),  # ran again later
+        AttemptRange(m, 1, 0, "w", AT - 8),  # never heard from
+    ]
+    bars = statusweb._timeline(_job(AT - 10, finished), AT, attempts)
+    assert [b["state"] for b in bars] == states
+    assert (bars[0]["width"], bars[0]["seconds"], bars[0]["trace"]) == (40, "4.0 s", "map")
+
+
 def test_timeline_backup_is_text():
     """Backup and outcome labels are readable without colours or generated CSS content."""
     a = STATUS.attempts["job-1"][0]._replace(backup=True)

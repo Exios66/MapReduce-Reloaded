@@ -367,7 +367,8 @@ def _timeline(j: coordinator_pb2.GetJobStatusResponse, now: float, attempts) -> 
     go/internal/statusweb.timeline: from its submission (or the first
     attempt's start) to its finish, or to now. Bars keep their proportions,
     so the drawn timeline is to scale. One dict per bar: label, left and
-    width in percent, backup, its trace classes and the seconds text."""
+    width in percent, backup, its trace classes, its state (completed,
+    failed, running, superseded or abandoned) and the seconds text."""
     if not attempts:
         return []
 
@@ -386,19 +387,38 @@ def _timeline(j: coordinator_pb2.GetJobStatusResponse, now: float, attempts) -> 
     if window_stop is None or not window_stop > window_start:
         window_stop = window_start + 1.0  # no window at all
     span = window_stop - window_start
+    # When each task's first accepted attempt ended. The coordinator stops
+    # tracking a task's other attempts then, and drops a lost worker's
+    # attempts without a report, so neither ever gets an end.
+    won: dict[tuple[int, int], float] = {}
+    for a in attempts:
+        k = (a.kind, a.index)
+        if a.ok and a.ended is not None and (k not in won or a.ended < won[k]):
+            won[k] = a.ended
+    finished = j.HasField("finished_at")
     bars = []
     for a in attempts:
         if a.started is None:
             continue  # An unknown assignment time cannot be positioned honestly.
         ended, open = a.ended, a.ended is None
-        if open:
+        w = won.get((a.kind, a.index))
+        superseded = open and w is not None and w >= a.started
+        if superseded:  # another attempt of its task won while it ran
+            ended, open = w, False
+        elif open and finished:  # its job ended without hearing from it
+            ended, open = window_stop, False
+        elif open:
             ended = window_stop
         left = max(0.0, min((a.started - window_start) / span * 100, 100.0))
         right = max(0.0, min((ended - window_start) / span * 100, 100.0))
         kind = _kind(a.kind)
         trace = kind
         state = "completed"
-        if open:
+        if superseded:
+            state = "superseded"
+        elif a.ended is None and not open:
+            state = "abandoned"
+        elif open:
             trace += " open"
             state = "running"
         elif not a.ok:

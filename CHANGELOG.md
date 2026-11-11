@@ -16,12 +16,13 @@ cut a release.
 ### Added
 
 - Status page (Go and Python): each job card shows a task timeline, one
-  row per attempt the coordinator saw, to scale over the job's run, with
-  a bar for map (blue) and reduce (purple), a red outline for attempts
-  that failed and an outline for the ones still running; `/status.json`
-  carries the same data as each job's `attempts`. Each row also says in
-  words whether the attempt was a backup and whether it completed, failed
-  or is still running, and open
+  row for each of the job's latest 512 attempts the coordinator saw, to
+  scale over the job's run, with a bar for map (blue) and reduce (purple),
+  a red outline for attempts that failed and an outline for the ones still
+  running; `/status.json` carries the same data as each job's `attempts`.
+  Each row also says in words whether the attempt was a backup and whether
+  it completed, failed or is still running, was overtaken by another
+  attempt of its task or was abandoned when the job ended, and open
   timelines and keyboard focus survive the page's refreshes. Attempts with
   no known start time are left out rather than drawn at a guessed place.
   The history lives in memory: a coordinator restart does not rebuild it
