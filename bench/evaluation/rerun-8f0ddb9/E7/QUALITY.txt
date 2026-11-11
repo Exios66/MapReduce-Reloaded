@@ -1,0 +1,11 @@
+== E7
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+mixed-paper              distsort    4   5     5  17.23 [16.65-19.60]          17.29       5   12        1085  707 [666-1026]
+mixed-late               distsort    4   5     5  17.04 [16.98-20.04]          17.07       1    5        1085  510 [476-659]
+mixed-off                distsort    4   5     5  25.16 [24.48-26.07]          25.18       0    0        1085  414 [366-448]
+ranges between measured settings (same program and worker count):
+  distsort w4: mixed-paper vs mixed-late: overlap: no clear difference
+  distsort w4: mixed-paper vs mixed-off: separate
+  distsort w4: mixed-late vs mixed-off: separate
+

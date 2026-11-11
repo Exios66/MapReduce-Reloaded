@@ -94,3 +94,13 @@ GATE PASS E3: 23 runs, archived ~/runs/8f0ddb9/E3.tar.gz (187 KiB), 10.5 GB free
 GATE PASS E4: 13 runs, archived ~/runs/8f0ddb9/E4.tar.gz (51 KiB), 10.5 GB free
 === 2026-11-11T08:21:25Z DONE E4
 === 2026-11-11T08:21:25Z START E7 (E7) 10 GB free
+  mixed-late/distsort              seconds      median    17.04  range 16.98-20.04  n=5
+  mixed-late/distsort              wall_seconds median    17.07  range 17.00-20.01  n=5
+  mixed-off/distsort               seconds      median    25.16  range 24.48-26.07  n=5
+  mixed-off/distsort               wall_seconds median    25.18  range 24.40-26.03  n=5
+  mixed-paper/distsort             seconds      median    17.23  range 16.65-19.60  n=5
+  mixed-paper/distsort             wall_seconds median    17.29  range 16.55-19.70  n=5
+GATE PASS E7: 15 runs, archived ~/runs/8f0ddb9/E7.tar.gz (129 KiB), 10.5 GB free
+=== 2026-11-11T08:32:36Z dropped inputs: distsort-1073741824
+=== 2026-11-11T08:32:36Z DONE E7
+=== 2026-11-11T08:32:36Z START E6 (E6) 11 GB free

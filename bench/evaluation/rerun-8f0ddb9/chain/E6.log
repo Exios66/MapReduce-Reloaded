@@ -1,0 +1,37 @@
+[02:32:41] generating 1073741824 bytes for wordcount
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+[02:33:40] E6 crawl-eng-on wordcount run 1
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[02:34:28] E6 crawl-eng-off wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[02:35:19] E6 crawl-eng-off wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+[02:36:08] E6 crawl-eng-on wordcount run 2
