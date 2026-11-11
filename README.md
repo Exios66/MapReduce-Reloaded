@@ -70,7 +70,8 @@ and the [final report](docs/report.md).
 ## Results
 
 The paper's experiments, rerun on the course VM (4 vCPUs, four one-CPU
-workers) on 1 GiB inputs with M = 32 and R = 4, all at commit `8f0ddb9`; each
+workers) on 1 GiB inputs with M = 32 and R = 4, at commit `8f0ddb9` (E0 at
+`3a907de`, which adds only input isolation); each
 number is the median of five runs, the settings taking turns within each
 repeat, and every run's output matched the normal run's.
 
@@ -79,7 +80,7 @@ repeat, and every run's output matched the normal run's.
 | E0: scaling over workers | Word count runs 3.7× faster on 4 workers than on 1, distributed sort 3.1×, grep 2.0× |
 | E1: the combiner | 15× to 78× fewer bytes shuffled, 16–42% less job time, more as the keys get more skewed |
 | E2: backup tasks | With one worker at 0.2 CPU, backups cut 17.9 s to 11.4 s; with no straggler they cost nothing measurable |
-| E3: losing a worker | Every job finishes with the undisturbed run's output; the cost is mostly the 10 s timeout plus the lost work (+8 s to +26 s) |
+| E3: losing a worker | Every job finishes with the undisturbed run's output; the cost is the 10 s timeout, partly overlapped by the other workers, plus the lost work (+8 s to +26 s) |
 | E4: a coordinator restart | Recovery from the log costs 1.2 s (15%) and keeps every finished task |
 | E5: an interpreted job file | 2.3× slower than compiled with the helpers `api.Words`/`api.Sum`, 10.2× without them |
 | E6: the combiner on real text | 5.2× fewer bytes and 11% faster on crawled English, 3.2×/8% in every language, 33×/24% on the book (a best case) |

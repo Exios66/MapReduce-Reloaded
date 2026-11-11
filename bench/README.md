@@ -161,10 +161,11 @@ The cluster runs above need Docker and a person to read them. These run in
 The performance evaluation in [design](../design.md#performance-evaluation),
 run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,
 Docker 29.8.1, four workers of one CPU and 768 MiB each. Every experiment ran
-the system at commit `8f0ddb9`, from a clean tree, on 1 GiB inputs with
+the system at commit `8f0ddb9` (E0 at `3a907de`, below), from a clean tree, on 1 GiB inputs with
 M = 32 and R = 4. Every number is the median of five runs, with the range;
 the settings of an experiment took turns within each repeat, reversed on
-even repeats, so drift on the VM falls on every setting alike. Every run
+even repeats (E5's three rotate instead), so drift on the VM falls on every
+setting alike. Every run
 succeeded, and every run's output matched the first undisturbed run's
 checksum.
 
@@ -212,8 +213,10 @@ It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
 and E4, each the job time it added against the same experiment's
 undisturbed median; its title claims the undisturbed output only if every
 disturbed run was valid. Valid means the output's checksum matches the
-first run on that input, an undisturbed one; `make e2e` checks word count
-against the committed golden output independently.
+first run on that input, an undisturbed one; the harness compares the
+checksums and deletes the output, so `runs.csv`'s `valid` column is the
+record, not the checksums. `make e2e` checks word count against the
+committed golden output independently.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/faults-dark.png">
@@ -254,7 +257,8 @@ before this rerun, at several commits with three runs each, are kept in
   heartbeats, one reduce wave) dominate. Its 2- and 4-worker ranges overlap:
   past two workers it gains nothing.
 - distsort (3.1×) moves its whole input through the shuffle. Its 4-worker
-  time agrees with the undisturbed sorts of E2–E4 (7.83, 7.86 and 7.95 s).
+  time agrees with the undisturbed sorts of E2–E4 (7.83, 7.79 and 8.00 s,
+  job time as here; E3 and E4 report wall time).
 - Each run started with only its own input in the page cache
   (`E0_ISOLATE=1`, the default). Sort still reads from disk, more on fewer
   workers: a median of 142 MiB per run on 4, 687 MiB on 2 and 952 MiB on 1,
@@ -282,7 +286,8 @@ before this rerun, at several commits with three runs each, are kept in
 - Unlike compression (see Codecs above), this saves time too, because it
   also saves the reduce tasks' sorting and reducing.
 - Some runs read from disk, up to 1.4 GB machine-wide, with the combiner on
-  and off alike; the time saved is far larger than the spread this adds.
+  and off, more often off; the time saved is far larger than the spread this
+  adds.
 
 ### E2: backup tasks and a straggler
 
