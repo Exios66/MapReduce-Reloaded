@@ -24,7 +24,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
-| `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
+| `go` | `make sh-lint go-lint go-test py-e2e` (shellcheck, gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, and the Python coordinator with the Go commands), split across three nodes (see [Pipeline time](#pipeline-time)) | `cimg/python:3.13`, medium, `parallelism: 3` |
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
 | `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
@@ -127,8 +127,9 @@ How each job meets its requirements:
   `CGO_ENABLED=1`; `cimg/python` images include a C compiler.
 - **golangci-lint.** Built from source by the job's Go, at the version in
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
-  and the VM setup use the same pin, and a test fails if they drift.
-- **shellcheck.** The `go` job installs the release pinned in
+  and the VM setup use the same pin, and a test fails if they drift. Locally,
+  `make go-lint` applies the same rule through `scripts/golangci-lint.sh`.
+- **shellcheck.** The `go` job's lint node installs the release pinned in
   `scripts/vm-setup.sh` (`--shellcheck`, which checks its SHA-256 sum) and
   runs `make sh-lint` with `MR_REQUIRE_SHELLCHECK=1`. Locally, `make lint`
   skips shellcheck with a message if it is not installed; in CI a missing
@@ -143,7 +144,8 @@ How each job meets its requirements:
   fails; the check is never skipped. A fork's build has no deploy key, so the
   job falls back to the public HTTPS URL.
 - **Narrow Go mode.** A PR whose Go-side inputs are only `python/` runs
-  `make go-python-test py-e2e` in the go job instead of the whole Go suite:
+  `make go-python-test py-e2e` in the go job instead of the whole Go suite
+  (node 0 runs `go-python-test`, node 2 `py-e2e`, node 1 nothing):
   `cmd/mr` (its golden tests compare the Go examples with Python's),
   `papermap` (it reads the Python test names) and `py-e2e`. Every other Go
   package passes with `python/` deleted and no Python on the PATH, so its
@@ -156,8 +158,47 @@ How each job meets its requirements:
   keyed by content, so an entry is reused only for identical input, and the
   job sets `GOFLAGS=-count=1`, so test results are never cached: every test
   runs every time. The key changes with the Go release, `go.sum` and the ISO
-  week, so the cache is saved about once a week, not on every run.
+  week, so the cache is saved about once a week, not on every run. Each of
+  the go job's three nodes compiles different things (race-instrumented
+  packages, coverage-instrumented packages, vet and lint), so each node
+  keeps its own cache, keyed by `CIRCLE_NODE_INDEX`, and a new week starts
+  from that node's last one.
 - **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
+
+## Pipeline time
+
+The six jobs start together, so a PR's pipeline takes as long as its slowest
+job ([ADR 0024](design/0024-faster-ci-pipeline.md)). Before ADR 0024 that
+was always `go`, which ran its parts in series in one step. Measured on
+#352's final run (head `db396e8`, CircleCI jobs 620-625, every job
+implicated):
+
+| Job | Before | Longest step |
+|---|---|---|
+| `go` | 395 s | `make go-lint go-test py-e2e`, 366 s |
+| `proto` | 180 s | `make tools` rebuilding buf, 151 s |
+| `python-3.13` | 103 s | `make py-lint py-test`, 69 s |
+| `python-3.11` | 98 s | `make py-lint py-test`, 79 s |
+| `lint` | 18 s | `make md-lint`, 9 s |
+| `mapping-coverage` | 7 s | |
+
+The go job's parts, timed on the course VM pinned to two CPUs (the medium
+class's count) with a warm build cache, two runs each: `go-test-race`
+149-151 s, `go-test-cover` 85-89 s, `py-e2e` 45-46 s, `go-lint` and
+`sh-lint` 1-2 s. In series that is about 290 s, against 366 s on CircleCI,
+so CircleCI ran about 1.27 times slower. Split across the three nodes, each
+with about 30 s of setup:
+
+| Go node | Runs | Estimated |
+|---|---|---|
+| 0 | `go-test-race` | about 220 s |
+| 1 | `go-test-cover` | about 140 s |
+| 2 | `sh-lint`, `go-lint`, `py-e2e` | about 100 s |
+
+So the estimate for the full pipeline is about 220 s instead of about 400 s,
+with `go` node 0 still the slowest, then the Python jobs. `proto` drops to
+about 30 s, since `make tools` keeps the cached generators. The PR that made
+the change records the first CircleCI run's times.
 
 ## Caching
 
@@ -168,7 +209,7 @@ Caches only save time; none of them replaces a check.
 | pip downloads | Python version, `python/pyproject.toml` | Downloads. `pip install` still runs. |
 | Go toolchain | architecture, Go version | The download. The script runs the restored `go` and rejects a wrong version. |
 | Go modules | `go/go.sum` | Downloads. `go mod download` still runs. |
-| Generators in `.tools/bin` | the `@v` pins in the `Makefile`, Go version | Compiling. `make tools` still runs. |
+| Generators in `.tools/bin` | the `@v` pins in the `Makefile`, Go version | Compiling. `make tools` still runs: `scripts/install-tool.sh` keeps a binary only if `go version -m` shows it was built from the pinned package and version, and installs any other. |
 | golangci-lint | the pin, Go version | Compiling. The job rebuilds a binary whose version or Go build differs. |
 
 Bump a `-v1-` in a key to throw a cache away.
@@ -212,7 +253,8 @@ combined, cannot both land.
 ## Free plan
 
 The setup uses only what the Free plan includes: Docker executors with the
-`small` and `medium` resource classes. It does not use remote Docker (`setup_remote_docker`), Docker
+`small` and `medium` resource classes, and job parallelism (the `go` job's
+three nodes). It does not use remote Docker (`setup_remote_docker`), Docker
 layer caching, machine executors, larger resource classes, or a paid plan, and
 there is no payment method on the account.
 
@@ -284,9 +326,14 @@ that does not depend on any hosted service.
   check, and open an issue.
 - **`go` fails with a Go version mismatch.** A cache or the image supplied a
   different Go. Bump `go-toolchain-v1` in `.circleci/continue-config.yml`.
-- **`go` fails in `golangci-lint`.** Run `make go-lint` locally with
-  golangci-lint built by the Go in `go/go.mod`. A linter built by an older Go
-  cannot lint newer code.
+- **`go` fails in `golangci-lint`.** Run `make go-lint` locally. It runs
+  `scripts/golangci-lint.sh`, which uses the golangci-lint on `PATH` only if
+  it is the pinned version built by a Go no older than `go/go.mod`'s, and
+  otherwise builds the pin into `.tools/bin` once. A linter built by an older
+  Go cannot lint newer code, so `make check` and the pre-push hook need no
+  `PATH` setup. The hook also appends `~/.local/go/bin`, `/usr/local/go/bin`,
+  `~/go/bin`, `.tools/bin` and `~/.local/bin` to `PATH` when they exist, for
+  git clients that run hooks without a login shell's `PATH`.
 - **Race detector missing.** `CGO_ENABLED=1` and a C compiler are required;
   the `medium` executor sets the first, the image has the second.
 - **A job fails to start with a credits message.** The monthly allowance is

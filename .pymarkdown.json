@@ -6,6 +6,13 @@
   // roadmap, so MD036 is off. Tabs inside fenced code blocks are correct Go
   // formatting, so MD010 ignores code blocks.
   // Note: allowed_elements takes a comma-separated string, not a list.
+  // Skills in .claude/skills/ start with YAML front matter (name, description),
+  // which the front-matter extension reads as metadata, not as Markdown.
+  "extensions": {
+    "front-matter": {
+      "enabled": true
+    }
+  },
   "plugins": {
     "md013": {
       "enabled": false

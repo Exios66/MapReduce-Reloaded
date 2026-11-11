@@ -22,7 +22,8 @@
 # - samples.csv: the samples, from scrape-metrics.py;
 # - rates.csv: the input, shuffle and output rates, from plot-rates.py;
 # - rates.png: the same in three panels, titled with the run's program, size,
-#   M, R and commit, if matplotlib is installed;
+#   M, R and workers, if matplotlib is installed (result.json records the
+#   commit; the chart leaves it out);
 # - status.txt: what mr submit -wait printed;
 # - cluster.log: what the coordinator and workers logged during the run;
 # - result.json: the run's settings, the job's counters and the machine.
@@ -110,7 +111,7 @@ scraper=
 python3 bench/plot-rates.py "$dir/samples.csv" > "$dir/rates.csv"
 if python3 -c "import matplotlib" 2>/dev/null; then
     python3 bench/plot-rates.py "$dir/samples.csv" "$dir/rates.png" \
-        "$program, $input_bytes bytes, M = $m, R = $r, workers = $workers, commit $(git rev-parse --short HEAD)" ||
+        "$program, $input_bytes bytes, M = $m, R = $r, workers = $workers" ||
         echo "run.sh: rates.png not drawn; result.json is still written" >&2
 fi
 

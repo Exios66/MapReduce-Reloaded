@@ -1,0 +1,2 @@
+{"phase":"start","experiment":"E2","setting":"normal","program":"distsort","run":0,"at":"2026-11-11T09:01:00Z","dropped":false,"input_bytes":67108864,"mem_free_kib":4006236,"cached_kib":2751416,"dirty_kib":56,"ram_kib":8130756,"disk_read_sectors":4228903511}
+{"phase":"end","experiment":"E2","setting":"normal","program":"distsort","run":0,"at":"2026-11-11T09:01:02Z","dropped":null,"input_bytes":67108864,"mem_free_kib":3481276,"cached_kib":2890304,"dirty_kib":139104,"ram_kib":8130756,"disk_read_sectors":4228903511}

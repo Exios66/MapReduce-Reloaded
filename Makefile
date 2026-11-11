@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -157,9 +157,10 @@ sh-lint:
 	fi
 
 # Every relative link and anchor in the tracked Markdown files resolves
-# (scripts/check-links.py, #159), and the Markdown style passes pymarkdown
-# (.pymarkdown.json: line length off, picture/sub HTML allowed). CI's
-# Python jobs run it; pymarkdown comes with python[dev]. Where it is not
+# (scripts/check-links.py, #159), every bench chart a page shows has its
+# dark variant (scripts/check-dark-charts.py, #349), and the Markdown style
+# passes pymarkdown (.pymarkdown.json: line length off, picture/sub HTML
+# allowed). CI's Python jobs run it; pymarkdown comes with python[dev]. Where it is not
 # installed, the style check is skipped unless MR_REQUIRE_PYMARKDOWN is set,
 # mirroring sh-lint's shellcheck handling.
 # PR templates live under .github and use HTML comments by design, so the
@@ -167,6 +168,7 @@ sh-lint:
 MD_FILES = $(shell git ls-files '*.md' | grep -v '^\.github/')
 md-lint:
 	$(PYTHON) scripts/check-links.py
+	$(PYTHON) scripts/check-dark-charts.py
 	@if $(PYTHON) -m pymarkdown --help >/dev/null 2>&1; then \
 		$(PYTHON) -m pymarkdown --config .pymarkdown.json scan $(MD_FILES); \
 	elif [ -n "$$MR_REQUIRE_PYMARKDOWN" ]; then \
@@ -175,16 +177,27 @@ md-lint:
 		echo "md-lint: pymarkdown is not installed; skipping style check (install python[dev])"; \
 	fi
 
+# Redraws the evaluation figures from bench/evaluation/rerun-8f0ddb9/archives
+# and compares each with the committed PNG (scripts/check-figures.py). It
+# needs matplotlib, which make venv does not install, so make check does not
+# run it: PLOT_PYTHON names a Python that has it, on the experiment VM.
+PLOT_PYTHON ?= python3
+figures-check:
+	$(PLOT_PYTHON) scripts/check-figures.py
+
 fmt:
 	cd go && gofmt -w .
-	cd python && $(PYTHON) -m ruff format . ../scripts ../bench && $(PYTHON) -m ruff check --fix . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format . ../scripts ../bench ../.claude && $(PYTHON) -m ruff check --fix . ../scripts ../bench ../.claude
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
+# scripts/install-tool.sh keeps a binary that `go version -m` shows was built
+# from the pin, and go installs any other, so CI's cached .tools/bin skips
+# the build.
 tools:
-	GOBIN=$(TOOLS) go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
-	GOBIN=$(TOOLS) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
-	GOBIN=$(TOOLS) go install github.com/bufbuild/buf/cmd/buf@v1.74.0
+	GOBIN=$(TOOLS) scripts/install-tool.sh google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+	GOBIN=$(TOOLS) scripts/install-tool.sh google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+	GOBIN=$(TOOLS) scripts/install-tool.sh github.com/bufbuild/buf/cmd/buf@v1.74.0
 
 # Regenerate Go and Python code from proto/.
 proto:
@@ -230,10 +243,18 @@ proto-check: proto-lint proto-breaking proto
 # GO_COVERDIR; go/cover.out holds both. The race detector runs in a pass of
 # its own: with -coverpkg it makes every package's counters atomic, which
 # slows the cluster tests past their deadlines on a 2-CPU runner.
+# go-test runs the two passes in turn, go-test-race then go-test-cover; CI's
+# go job runs them on separate nodes at the same time (docs/ci.md).
 GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
-	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
+	$(MAKE) go-test-race
+	$(MAKE) go-test-cover
+
+go-test-race:
 	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./...
+
+go-test-cover:
+	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
 	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
 	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
 		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
@@ -272,8 +293,11 @@ mutate:
 mutate-py:
 	cd python && $(PYTHON) -m mutmut run && $(PYTHON) -m mutmut results
 
+# golangci-lint at the pinned version, built by this module's Go release;
+# scripts/golangci-lint.sh builds it into .tools/bin when PATH has no such
+# binary, as CI does, so the pre-push hook needs no PATH setup.
 go-lint:
-	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
+	cd go && test -z "$$(gofmt -l .)" && go vet ./... && ../scripts/golangci-lint.sh run ./...
 
 py-test:
 	cd python && $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
@@ -292,4 +316,4 @@ py-e2e:
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench ../.claude && $(PYTHON) -m ruff check . ../scripts ../bench ../.claude

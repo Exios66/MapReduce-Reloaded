@@ -20,7 +20,7 @@ requirements come before the stretch phases of this roadmap.
 |---|---|---|
 | Nov 1 | Email Tyler that this is a solo team, with the repository link (the repository is public, so no invite is needed) | to confirm |
 | Nov 6 | [design.md](../design.md#key-decisions) answers the design questions | done |
-| Nov 16 | Final code merged to `main` through pull requests | in progress |
+| Nov 16 | Final code merged to `main` through pull requests | in progress; the demo checklist is in [demo.md](demo.md#before-the-day) |
 | Nov 17–20 | Demo with Tyler, scheduled by me | — |
 | After finishing | Submit the course's end-of-project form | — |
 
@@ -44,7 +44,7 @@ before it merges ([design.md](../design.md#process)):
 7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation
    (done).
 8. **Coordinator recovery in Compose:** `-data-dir` on a volume (done).
-9. **Evaluation:** experiments E0–E5 of
+9. **Evaluation:** experiments E0–E6 of
    [design.md](../design.md#performance-evaluation), with plots in
    `bench/README.md`.
 10. **README:** what to build, what to install, how to upload the example
@@ -54,7 +54,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179) and E6 in #247. Item 11 is open: comments on the agent-written #185 and #219 exist, and a review with inline comments before an agent-written PR merges is tracked in #269. Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
 
 ## Context
 
@@ -97,7 +97,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions. LATE (#284, tracked in #45) is built; its experiment
-    E7 is wired and has not been run.
+    E7 ran in #349: either backup rule cuts a mixed-speed sort by 32%, with no clear difference between them.
 - **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk with a 33 GB root, shared). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
@@ -168,7 +168,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 **Tier B — robustness and operations**
 
 - **Coordinator high availability**: leader election via an etcd lease, or embedded Raft (`hashicorp/raft`). This builds on the F9 WAL.
-- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); its evaluation is pending in #59 (experiment E7, not yet run).
+- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); E7 measured it against the paper's rule (#349): on mixed-speed workers the two times overlap, and LATE launches fewer backups.
 - **Skew handling**: sample-based range partitioner (TeraSort-style) and hot-key salting.
 - **Memory-aware spilling**: a bounded sort buffer that spills to disk under memory pressure.
 - **Observability**: Prometheus metrics, OpenTelemetry traces, structured JSON logs. A React or HTMX UI replaces the static status page.
@@ -296,7 +296,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
 
-- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
+- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; measured by E7, #349) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
 

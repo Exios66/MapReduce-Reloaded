@@ -31,9 +31,12 @@ only, because every release repeats the same categories; keep that pragma.
    words, not how it was done. Match the existing entries: start with the
    area (`Python coordinator:`, `CI:`, `Docs:`), name files and flags in
    backticks, and cite the ADR when there is one.
-3. End each bullet with the PR number, `(#NNN)`. You learn it when you open
-   the PR; add it in the next push, a review round's `[skip ci]` push or the
-   final push, so it never costs a pipeline of its own.
+3. End each bullet with the PR number, `(#NNN)`. Issues, PRs and discussions
+   share one sequence, so the next number is the newest one plus one, which
+   the preflight prints; cite it before opening the PR, and check it once the
+   PR is open. If another number was taken first, fix it in the next push, a
+   review round's `[skip ci]` push or the final push, so it never costs a
+   pipeline of its own.
 4. A change no user would notice (a typo, a comment, a test-only refactor)
    needs no entry. When unsure, add one.
 5. When merging `main` into the branch conflicts in `CHANGELOG.md`, keep
@@ -105,6 +108,23 @@ into `main`.
 Pushes to `main` run no CI jobs (ADR 0021): a PR merges only after its six
 checks pass on a branch up to date with `main`, so the merged tree was
 already tested. Do not add CI work to `main` pushes.
+
+## Agent tooling
+
+Skills in `.claude/skills/` hold checked scripts for recurring work. Claude
+Code loads them by name; any other agent runs the scripts directly. They
+read files, git and the experiment host, and change nothing; so does
+`make figures-check`, which writes only to a temporary directory.
+
+| Task | Run |
+| --- | --- |
+| Before a push: identity, CHANGELOG, `[skip ci]`, up to date with `main` | `bash .claude/skills/saving-ci-credits/preflight.sh [--final]` |
+| Read an experiment's results: medians, ranges, invalid and slow runs, overlaps | `python3 .claude/skills/interpreting-bench-results/summarize.py DIR...` |
+| Compare a new run with a published one | `python3 .claude/skills/analyzing-bench-results/compare.py OLD_DIR NEW_DIR` |
+| Snapshot a running campaign on the experiment host | `bash .claude/skills/checking-campaign-status/status.sh HOST` |
+| Redraw the evaluation figures from their archives and compare them with the committed ones (needs matplotlib; on the VM) | `make figures-check PLOT_PYTHON=...` |
+
+Each skill's `SKILL.md` gives the rules for reading the output.
 
 ## Commits and PRs
 

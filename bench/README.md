@@ -156,20 +156,81 @@ The cluster runs above need Docker and a person to read them. These run in
   records 0.368 with zstd and 0.532 with Snappy, line records 0.446 and
   0.673.
 
-## Evaluation (E0–E6)
+## Evaluation (E0–E7)
 
 The performance evaluation in [design](../design.md#performance-evaluation),
 run on the course VM: 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory,
-Docker 29.8.1, four workers of one CPU each. Each experiment ran as its own
-`bench/experiments.sh EN` invocation, on 1 GiB inputs with M = 32 and R = 4.
-Every number is the median of three runs, with the range; every run
-succeeded, and every run's output matched the normal run's checksum.
-[`evaluation/`](evaluation/) has the raw CSVs, each experiment's
-`machine.json` (with the commit) and the log; the plots were drawn with
+Docker 29.8.1, four workers of one CPU and 768 MiB each. Every experiment ran
+the system at commit `8f0ddb9` (E0 at `3a907de`, below), from a clean tree, on 1 GiB inputs with
+M = 32 and R = 4. Every number is the median of five runs, with the range;
+the settings of an experiment took turns within each repeat, reversed on
+even repeats (E5's three rotate instead), so drift on the VM falls on every
+setting alike. Every run
+succeeded, and every run's output matched the first undisturbed run's
+checksum.
+
+[`evaluation/rerun-8f0ddb9/`](evaluation/rerun-8f0ddb9/) has each
+experiment's `runs.csv`, `cache.jsonl` and `machine.json` (with the
+commit), the harness logs in `chain/`, and in `archives/` every run's
+samples and logs, with their SHA-256. E0 is
+[`E0-isolated/`](evaluation/rerun-8f0ddb9/E0-isolated/), rerun so each
+program runs with only its own input in the page cache (#347); its harness
+commit, `3a907de`, adds that to `8f0ddb9` and changes nothing else. The
+first E0 is kept beside it, and its `NOTE.md` says why it was replaced. The
+plots were drawn from the archives, which hold the rate samples the CSVs
+do not:
 
 ```sh
-python3 bench/plot-experiments.py bench/evaluation bench/evaluation
+a=bench/evaluation/rerun-8f0ddb9/archives
+d=$(mktemp -d)  # a fresh directory, so no older results are drawn
+mkdir "$d/iso"
+for e in E1 E2 E2-pairs E3 E4 E5 E6 E7; do tar xzf "$a/$e.tar.gz" -C "$d"; done
+tar xzf "$a/E0-isolated.tar.gz" -C "$d/iso" && mv "$d/iso/E0" "$d/E0-isolated"
+python3 bench/plot-experiments.py "$d" bench/evaluation
 ```
+
+Every figure uses the same colors: blue is the system as it ships
+(combiner on, backups on, no failure, compiled) and orange the changed or
+disturbed setting; a third series, where there is one, is green and labeled
+directly. Each title states the finding, computed from the CSVs. The chart
+type follows the comparison:
+
+- E0 is a line against the ideal diagonal, because workers are an ordered
+  scale. A whisker right of each dot spans its runs; the one-worker
+  baseline is 1× by definition and has none, and a range narrower than a
+  dot is not drawn.
+- E1 and E6 compare two settings per group, so they are dumbbells: one row
+  per group joining the combiner-on and combiner-off medians, labeled with
+  the saving. Bytes use a log axis, where a row's length is the factor
+  saved and 15× and 78× can share one axis; job time uses a linear axis
+  from zero.
+- E2, E3 and E4 compare each disturbance with the undisturbed run, so
+  their job times are dumbbells too, labeled with the time added (or saved,
+  for backups), or "no clear difference" when the run ranges overlap. Two
+  medians too close for two dots are drawn a little above and below the
+  row. Beside them is the reason: tasks finished over time for E2 and E4,
+  and the cluster's data rate for E3, with the lost worker shaded.
+- E5 and `faults.png` compare magnitudes, so they are bars from zero. E5's
+  runs all fall within a few percent of their medians, too close for a
+  whisker to show, so its subtitle gives that spread instead. E7 compares
+  three settings, so each is a median dot on a pale bar spanning its runs.
+
+Text is set in Atkinson Hyperlegible, shipped in `bench/fonts/` with its
+license, so the figures look the same whichever machine draws them.
+
+It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
+and E4, each the job time it added against the same experiment's
+undisturbed median; its title claims the undisturbed output only if every
+disturbed run was valid. Valid means the output's checksum matches the
+first run on that input, an undisturbed one; the harness compares the
+checksums and deletes the output, so `runs.csv`'s `valid` column is the
+record, not the checksums. `make e2e` checks word count against the
+committed golden output independently.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/faults-dark.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart" src="evaluation/faults.png">
+</picture>
 
 That also draws `E2-comparison.png` (and `-dark`) from two directories: the
 no-straggler rows from `E2-pairs/` and the straggler rows from `E2/`; the
@@ -177,14 +238,11 @@ image's subtitle says so. The two rates plots in `evaluation/paper/` were drawn
 from their `samples.csv` with `plot-rates.py`, whose third argument is the
 identification line in the image.
 
-Runs that were replaced are kept in [`evaluation/superseded/`](evaluation/superseded/). E0, E1 and E4 ran at commit `4b5a235`, and E2 again at `ca082a3` and `162be31` (below); E3 ran again at `9a3cd42`, after
-its rate plot was found to mark the kill about 8 s too early (the workers
-were restarted after the sampler started). The `dirty` flag in their
-`machine.json` was set by an untracked backup directory, not a code change.
-E5 ran at `6b6c7be`; its harness log is
-[`evaluation/experiments-E5.log`](evaluation/experiments-E5.log). E6 ran at
-`b9bb3f4`; its harness log is
-[`evaluation/experiments-E6.log`](evaluation/experiments-E6.log).
+E2 and E5 are timed by the coordinator, from the job's submission to its
+end. E3 and E4 are timed from when `mr submit` returned, which a killed
+worker or a restarted coordinator does not reset. The results published
+before this rerun, at several commits with three runs each, are kept in
+[`evaluation/superseded/before-8f0ddb9/`](evaluation/superseded/before-8f0ddb9/).
 
 ### E0: scaling over workers
 
@@ -195,95 +253,109 @@ E5 ran at `6b6c7be`; its harness log is
 
 | Program | 1 worker (s) | 2 workers (s) | 4 workers (s) | Speed-up at 4 |
 |---|---|---|---|---:|
-| grep | 1.96 (1.89–1.96) | 1.21 (1.21–1.67) | 0.84 (0.82–5.51) | 2.3× |
-| distsort | 36.74 (36.52–37.03) | 20.40 (19.79–20.62) | 12.54 (12.24–12.59) | 2.9× |
-| wordcount | 146.48 (145.53–148.70) | 74.18 (73.80–74.95) | 38.78 (38.37–39.16) | 3.8× |
+| grep | 2.58 (2.04–2.61) | 1.22 (1.18–1.23) | 1.28 (0.79–1.43) | 2.0× |
+| distsort | 25.04 (23.98–25.66) | 13.37 (12.86–14.12) | 8.06 (7.63–8.91) | 3.1× |
+| wordcount | 148.35 (148.01–150.24) | 75.16 (74.95–76.37) | 40.10 (38.52–40.27) | 3.7× |
 
-- Every job got faster with more workers. Word count, the most
-  CPU-bound, scales almost linearly (3.8× on 4).
+- Every job got faster from one worker to two, and sort and word count
+  again at four; grep's two- and four-worker ranges overlap, so it shows
+  no clear gain past two. Word count, the most CPU-bound, scales almost
+  linearly (3.7× on 4).
 - grep scales least, not most as design.md predicted: it finds few matches,
   so its job takes about a second and the fixed costs (task assignment,
-  heartbeats, one reduce wave) dominate. One 4-worker run took 5.5 s.
-- distsort (2.9×) moves its whole input through the shuffle, and the four
-  workers share one disk, which likely limits it more than CPU does.
+  heartbeats, one reduce wave) dominate. Its 2- and 4-worker ranges overlap:
+  past two workers it gains nothing.
+- distsort (3.1×) moves its whole input through the shuffle. Its 4-worker
+  time agrees with the undisturbed sorts of E2–E4 (7.83, 7.79 and 8.00 s,
+  job time as here; E3 and E4 report wall time).
+- Each run started with only its own input in the page cache
+  (`E0_ISOLATE=1`, the default). Sort still reads from disk, more on fewer
+  workers: a median of 142 MiB per run on 4, 687 MiB on 2 and 952 MiB on 1,
+  its own intermediate files evicted under each worker's 768 MiB limit. So
+  fewer workers also means less page cache. With the 1-worker limit raised
+  to 2 GiB, the reads fell to 81 MiB but the job only from 25.5 s to 24.8 s:
+  memory accounts for about 3% of sort's 1-worker time at most (#347).
 
 ### E1: what the combiner saves
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E1-dark.png">
-  <img alt="E1: bytes shuffled and job time, combiner on and off" src="evaluation/E1.png">
+  <img alt="E1: bytes shuffled (log scale) and job time, combiner on and off, one row per Zipf exponent, each pair of medians joined by a line labeled with the saving" src="evaluation/E1.png">
 </picture>
 
 | Zipf exponent | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
 |---|---:|---:|---:|---|---|---:|
-| 0.5 | 91,561,690 | 1,402,591,670 | 6.5% | 35.95 (35.88–38.60) | 43.85 (43.55–45.14) | 18% |
-| 1.0 | 88,755,466 | 1,512,014,251 | 5.9% | 39.03 (38.80–39.16) | 48.76 (48.56–48.90) | 20% |
-| 1.5 | 21,885,547 | 1,715,904,960 | 1.3% | 28.93 (28.61–30.64) | 51.64 (50.22–52.96) | 44% |
+| 0.5 | 91,561,690 | 1,402,591,670 | 6.5% | 36.49 (36.31–38.32) | 43.23 (42.97–44.15) | 16% |
+| 1.0 | 88,755,466 | 1,512,014,251 | 5.9% | 38.37 (37.99–39.22) | 48.64 (47.83–49.57) | 21% |
+| 1.5 | 21,885,547 | 1,715,904,960 | 1.3% | 29.93 (28.79–29.95) | 51.25 (50.64–51.74) | 42% |
 
 - The combiner cuts the bytes shuffled by 15× to 78×, and the saving grows
   with skew, as §4.3 says: the more often a word repeats within a map task,
   the more records it folds into one.
 - Unlike compression (see Codecs above), this saves time too, because it
   also saves the reduce tasks' sorting and reducing.
+- Some runs read from disk, up to 1.4 GB machine-wide, with the combiner on
+  and off, more often off; the time saved is far larger than the spread this
+  adds.
 
 ### E2: backup tasks and a straggler
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E2-dark.png">
-  <img alt="E2: tasks completed over time and job time, with and without a straggler and backups" src="evaluation/E2.png">
+  <img alt="E2: job time with backups on and off, without and with a straggler, and the straggler runs' tasks completed over time" src="evaluation/E2.png">
 </picture>
 
-Run again at `ca082a3` with a fourth setting, no straggler and backups off,
-which the first run lacked. Color marks the straggler; a dashed line and a
-hatched bar, backups off.
+Color marks backups, blue on and orange off. On the left, the upper row
+joins the two medians without a straggler and the lower row those with
+one; on the right are the straggler runs' tasks finished over time.
 
 | Setting | Job time (s) | Backups run | Backups won |
 |---|---|---:|---:|
-| no straggler, backups on | 9.10 (8.83–10.24) | 5–6 | 0 |
-| no straggler, backups off | 8.16 (8.06–9.29) | 0 | 0 |
-| straggler, backups on | 11.24 (10.98–12.48) | 4 | 1 |
-| straggler, backups off | 17.58 (16.89–18.31) | 0 | 0 |
+| no straggler, backups on | 7.83 (7.27–8.42) | 4–6 | 0 |
+| no straggler, backups off | 8.08 (7.99–8.33) | 0 | 0 |
+| straggler, backups on | 11.36 (10.82–11.84) | 4 | 1–2 |
+| straggler, backups off | 17.90 (17.05–18.20) | 0 | 0 |
 
-- With one worker at 0.2 CPU, backups make the job 36% faster (11.2 s
-  against 17.6 s), as in the paper's Figure 3(b).
+- With one worker at 0.2 CPU, backups make the job 37% faster (11.4 s
+  against 17.9 s), as in the paper's Figure 3(b).
 - It is still slower than with no straggler: the slow worker holds some
   tasks for the whole map phase, and a backup only starts when the phase
   is nearly done (§3.6).
-- With no straggler, backups run and never win. The table above suggests
-  they cost about a second, but that run took each setting's three runs in
-  a block, so drift on the VM fell on one setting. Ten pairs taken in turn
-  (`REPEAT=10 E2_SETTINGS="normal normal-no-backups"`, at `162be31`,
-  [`evaluation/E2-pairs/`](evaluation/E2-pairs/)) found no statistically
-  significant cost: 8.03 s
-  with backups and 8.20 s without, backups faster in 8 of 10 pairs; the
-  mean difference is -0.11 s, 95% interval -0.38 to +0.16 s (paired t,
-  p = 0.38; Wilcoxon signed-rank, p = 0.13). The interval allows a mean
-  cost of up to 0.16 s.
+- With no straggler, backups run and never win, and cost nothing
+  measurable. Ten pairs taken in turn
+  (`REPEAT=10 E2_SETTINGS="normal normal-no-backups"`,
+  [`E2-pairs/`](evaluation/rerun-8f0ddb9/E2-pairs/)) took 7.67 s with
+  backups and 7.90 s without, backups faster in 6 of 10 pairs; the mean
+  difference is −0.14 s, 95% interval −0.36 to +0.08 s (paired t,
+  p = 0.19; Wilcoxon signed-rank, p = 0.23). The interval allows a mean
+  cost of up to 0.08 s.
 
 ### E3: losing a worker
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E3-dark.png">
-  <img alt="E3: job time with a worker killed, and data rates" src="evaluation/E3.png">
+  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the normal job time, each a dumbbell from the no-failure median, and the data rate of the median run killed at 50%" src="evaluation/E3.png">
 </picture>
 
-The rate panel uses seconds since sampling began. Its shaded band marks
-the observed worker loss between 6.5 and 7.0 seconds on that clock. The
-table's kill times are measured from submission; the saved data does not
-record the offset between those two clocks.
+Three calibration runs come first; the kill times are 25, 50 and 75% of
+their median, 7.1 s. The rate panel uses seconds since sampling began, and
+its shaded band marks the observed worker loss on that clock. The table's
+kill times are measured from submission; the saved data does not record
+the offset between those two clocks.
 
 | Worker killed at | Job time (s) | Cost |
 |---|---|---:|
-| no failure | 11.62 (11.59–12.65) | |
-| 2.9 s (25%) | 20.78 (20.52–20.80) | +9.2 s |
-| 5.8 s (50%) | 23.50 (23.17–23.68) | +11.9 s |
-| 8.7 s (75%) | 38.56 (38.04–38.85) | +26.9 s |
+| no failure | 7.86 (7.03–7.88) | |
+| 1.8 s (25%) | 15.78 (13.88–16.11) | +7.9 s |
+| 3.6 s (50%) | 20.70 (19.71–23.22) | +12.8 s |
+| 5.4 s (75%) | 34.05 (32.49–34.37) | +26.2 s |
 
 - Every job finished on three workers, with its output checksum matching
   the first normal run's; this checks agreement, not independent correctness.
-- The cost is the 10 s it takes the coordinator to declare the worker dead
-  (three missed heartbeats), plus the work that is lost. Killed early, the
-  worker has finished little, so the cost is about the timeout.
+- Most of the cost is the 10 s it takes the coordinator to declare the
+  worker dead (three missed heartbeats), plus the work that is lost. Killed
+  early, the worker has finished little, and the other three keep working
+  while the coordinator waits, so the cost is a little under the timeout.
 - Killed at 75%, near the end of the map phase, the worker's finished map
   tasks are lost too: their output lived on its disk, so they run again
   (§3.3), and the reduce phase waits for them.
@@ -292,18 +364,20 @@ record the offset between those two clocks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E4-dark.png">
-  <img alt="E4: tasks completed over time and job time across a restart" src="evaluation/E4.png">
+  <img alt="E4: job time with and without a coordinator restart, and tasks completed over time across the restart" src="evaluation/E4.png">
 </picture>
 
 | Setting | Job time (s) |
 |---|---|
-| no restart | 12.37 (11.91–12.39) |
-| coordinator killed and restarted at 50% | 13.97 (13.72–13.99) |
+| no restart | 7.95 (7.58–8.13) |
+| coordinator killed and restarted at 3.8 s (50%) | 9.18 (8.90–9.74) |
 
-- A restart with the write-ahead log costs 1.6 s (13%). The restarted
+- A restart with the write-ahead log costs 1.2 s (15%). The restarted
   coordinator replays its log and keeps every task that had finished; the
   plot's flat step at the restart is the time the coordinator was down and
   the workers' reconnects.
+- Every run started on a fresh log, so a restart replays its own job only,
+  and the restart time is 50% of three calibration runs' median.
 
 ### E5: what an interpreted job file costs
 
@@ -314,14 +388,14 @@ record the offset between those two clocks.
 
 | Setting | Job time (s) | Map phase (s) |
 |---|---|---|
-| compiled `wordcount` | 38.12 (38.09–38.77) | 37.0 |
-| job file, `examples/wordcount.go` (`api.Words`, `api.Sum`) | 91.08 (90.69–91.28) | 84.0 |
-| job file, `bench/jobs/wordcount-naive.go` (its own word test) | 398.97 (395.71–399.10) | 391.5 |
+| compiled `wordcount` | 39.11 (37.75–39.19) | 37.5 |
+| job file, `examples/wordcount.go` (`api.Words`, `api.Sum`) | 89.67 (88.50–90.36) | 83.0 |
+| job file, `bench/jobs/wordcount-naive.go` (its own word test) | 400.43 (399.88–401.09) | 393.5 |
 
-- A job file costs 2.4× the compiled job when it uses the compiled helpers,
-  and 10.5× when it splits words itself. Nearly all of the difference is in
+- A job file costs 2.3× the compiled job when it uses the compiled helpers,
+  and 10.2× when it splits words itself. Nearly all of the difference is in
   the map phase (map and combine), where the interpreted code runs once per
-  line or per word; the reduce phase takes about 7 s instead of 1 s. All
+  line or per word; the reduce phase takes about 7 s instead of 1.6 s. All
   three give the same output, and the map output is the same 88.8 MB.
 - The job time is the coordinator's; the map phase runs from the first map
   task's start until every map task is done, from the coordinator's task
@@ -329,47 +403,59 @@ record the offset between those two clocks.
 - A profile of the map function (ADR 0015) found the cost was mostly the job
   file's own word test, which `bytes.FieldsFunc` called back into the
   interpreter for every byte, not the call into the job file. The compiled
-  helpers for that work (`api.Words`, `api.Sum`) cut the job from 399 s to
-  91 s.
+  helpers for that work (`api.Words`, `api.Sum`) cut the job from 400 s to
+  90 s.
 
 ### E6: what the combiner saves on real text
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E6-dark.png">
-  <img alt="E6: bytes shuffled and job time, combiner on and off, on crawled English, crawled pages in every language, and the book" src="evaluation/E6.png">
+  <img alt="E6: bytes shuffled (log scale) and job time, combiner on and off, one row each for crawled English, crawled pages in every language, and the book" src="evaluation/E6.png">
 </picture>
 
 | Input | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
 |---|---:|---:|---:|---|---|---:|
-| Crawled English | 265,983,823 | 1,374,954,686 | 19.3% | 43.05 (42.82–43.69) | 50.06 (49.84–50.53) | 14% |
-| Crawled, every language | 417,952,270 | 1,320,092,762 | 31.7% | 41.19 (40.08–41.73) | 44.33 (43.84–44.68) | 7% |
-| Book (War and Peace lines) | 43,372,796 | 1,452,704,780 | 3.0% | 45.89 (45.80–46.27) | 59.08 (58.18–59.52) | 22% |
+| Crawled English | 265,983,823 | 1,374,954,686 | 19.3% | 31.48 (30.52–32.78) | 35.41 (35.19–36.05) | 11% |
+| Crawled, every language | 417,952,270 | 1,320,092,762 | 31.7% | 30.94 (30.68–31.47) | 33.68 (31.92–34.05) | 8% |
+| Book (War and Peace lines) | 43,372,796 | 1,452,704,780 | 3.0% | 33.09 (32.96–34.27) | 43.30 (42.71–45.30) | 24% |
 
 - E1 varies the skew of a generated vocabulary; E6 uses real text. The
-  combiner cuts the bytes shuffled by 3.2× to 33×, and the job time by 7%
-  to 22%, as §4.3 predicts: the more often a key repeats within one map
+  combiner cuts the bytes shuffled by 3.2× to 33×, and the job time by 8%
+  to 24%, as §4.3 predicts: the more often a key repeats within one map
   task, the more records the combiner folds into one.
-- The book is the best case, and the earlier book-only E6 showed only it:
-  33× fewer bytes and 22% faster, because its 41,631-word vocabulary
-  repeats. Crawled English is the real-text answer: 5.2× fewer bytes and
-  14% faster.
-- Crawl in every language saves the least, 3.2× and 7%, because Chinese,
+- The book is the best case: 33× fewer bytes and 24% faster, because its
+  41,631-word vocabulary repeats. Crawled English is the real-text answer:
+  5.2× fewer bytes and 11% faster.
+- Crawl in every language saves the least, 3.2× and 8%, because Chinese,
   Japanese and Thai text has no spaces, so word count reads a whole run of
   it as one word, and a mix of languages has more distinct words. There is
   less for the combiner to fold per map task. It is also the fastest job in
-  both settings (41.2 s on), for the same reason: fewer words.
-- Every run is one 1 GiB input, M = 32, R = 4, and the median of three,
-  alternating the combiner on and off. `scripts/fetch-data.sh crawl`
-  downloads the ten pinned Common Crawl WET files; `bench/gen-crawl.py`
-  writes their English pages or every page. The book is War and Peace's
-  lines repeated (`bench/gen-book.py`).
+  both settings (30.9 s on), for the same reason: fewer words.
+- `scripts/fetch-data.sh crawl` downloads the ten pinned Common Crawl WET
+  files; `bench/gen-crawl.py` writes their English pages or every page. The
+  book is War and Peace's lines repeated (`bench/gen-book.py`).
 
-## E7: the paper's backups against LATE on mixed-speed workers (#59, not yet run)
+### E7: the paper's backups against LATE on mixed-speed workers (#59)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/E7-dark.png">
+  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median on a bar spanning its runs" src="evaluation/E7.png">
+</picture>
 
 E2 slows one worker. E7 slows all four, each to a different speed, which is
-what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for. It
-is wired but has not been run: there are no results here, and nothing in
-this repository says which setting is faster.
+what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for.
+
+| Setting | Job time (s) | Backups run | Backups won |
+|---|---|---:|---:|
+| no backups (`mixed-off`) | 25.16 (24.48–26.07) | 0 | 0 |
+| the paper's rule (`mixed-paper`) | 17.23 (16.65–19.60) | 4–5 | 1–3 |
+| LATE (`mixed-late`) | 17.04 (16.98–20.04) | 1–2 | 1 |
+
+- Either backup rule cuts the job by 32%, from 25.2 s to about 17 s.
+- The two rules' ranges overlap, so this does not show either one faster.
+  LATE reaches the same time with fewer backups: a median of 1, against 5
+  for the paper's rule, which backs up the oldest attempts once nothing is
+  idle, whatever their progress.
 
 | Setting | Coordinator | Compose files |
 |---|---|---|
@@ -389,21 +475,8 @@ this repository says which setting is faster.
   `tasks-SETTING-N.csv` (the coordinator's task counts over time, as E2's);
   and `machine.json`. Output is checksummed against the first run, and a
   run that differs has `valid` 0.
-- **Not in `all`,** and `plot-experiments.py` does not draw it yet. For the
-  job time, backups started and backups won of each valid run:
-
-  ```sh
-  bench/experiments.sh E7
-  awk -F, 'NR > 1 && $16 == 1 { print $2, $11, $13, $14 }' bench/results/E7/runs.csv | sort
-  ```
-
+- **Not in `all`;** run it with `bench/experiments.sh E7`.
 - **Knobs.** `E7_SETTINGS="mixed-late mixed-off"` runs some settings; an
   unknown one stops the script before it starts the cluster. `E7_CPUS`
   must hold four positive numbers. `SIZE`, `M`, `R` and `REPEAT` work as in
   the other experiments.
-- **What it can show.** With four workers LATE allows one running backup at
-  a time and refuses the slowest worker, so this tests a small cluster; it
-  says nothing about 1,800 machines. The LATE settings are the defaults of
-  ADR 0019, not tuned.
-- `python/tests/test_bench_experiments.py` checks the settings, the
-  overrides and the CPU limits with the cluster and Docker stubbed out.

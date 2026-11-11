@@ -55,8 +55,11 @@
 ^\.github/ run-lint
 ^LICENSE run-lint
 ^\.[^/]*$ run-lint
+^\.claude/ run-lint
 
 # Files outside python/ that the Python tests read.
+# A plot test reads the bundled fonts' licence.
+^bench/fonts/ run-python
 ^README\.md$ run-python
 ^design\.md$ run-python
 ^docs/README\.md$ run-python
@@ -72,6 +75,8 @@
 ^docs/paper-mapping\.md$ run-python
 ^bench/README\.md$ run-python
 ^bench/.*\.(py|sh)$ run-python
+# The agent skills' scripts: py-lint runs ruff on them (#351).
+^\.claude/.*\.py$ run-python
 ^deploy/compose/README\.md$ run-python
 ^deploy/compose/.*\.yaml$ run-python
 ^deploy/compose/monitoring/ run-python

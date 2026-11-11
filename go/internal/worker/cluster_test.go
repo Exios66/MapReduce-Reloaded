@@ -594,7 +594,10 @@ func TestClusterReportsProgress(t *testing.T) {
 // A worker that its coordinator declared dead hears so from its next
 // heartbeat, and registers again without waiting for its attempt to end.
 func TestClusterReregistersOnHeartbeat(t *testing.T) {
-	c := newCluster(t)
+	// A 1 s timeout, not the cluster's 100 ms, so that a heartbeat delayed on
+	// a loaded runner after the thaw does not make the coordinator forget the
+	// worker again and cost it a third registration.
+	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = time.Second })
 	job := c.submit("test.slow-map")
 	c.addWorker()
 	<-mapStuck
