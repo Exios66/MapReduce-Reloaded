@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs this CircleCI node's share of the go job (docs/ci.md, ADR 0023).
+# Runs this CircleCI node's share of the go job (docs/ci.md, ADR 0024).
 #
 # The go job runs with `parallelism: 3`: CircleCI starts three containers of
 # the one job, and the go check passes only if all three do. Each container

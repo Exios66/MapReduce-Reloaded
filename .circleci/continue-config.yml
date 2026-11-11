@@ -264,7 +264,7 @@ jobs:
   # Every other Go package passes with python/ deleted and no Python on the
   # PATH, so their result from main stands (docs/ci.md).
   #
-  # The job runs on three nodes at once (ADR 0023): CircleCI reports them as
+  # The job runs on three nodes at once (ADR 0024): CircleCI reports them as
   # the one go check, which passes only if every node passes.
   # scripts/ci-go-job.sh gives each node its part of the same make targets:
   # the race tests, the coverage tests, and sh-lint, go-lint and py-e2e.

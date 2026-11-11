@@ -24,7 +24,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
-| `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
+| `go` | `make sh-lint go-lint go-test py-e2e` (shellcheck, gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, and the Python coordinator with the Go commands), split across three nodes (see [Pipeline time](#pipeline-time)) | `cimg/python:3.13`, medium, `parallelism: 3` |
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
 | `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
@@ -129,7 +129,7 @@ How each job meets its requirements:
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
   and the VM setup use the same pin, and a test fails if they drift. Locally,
   `make go-lint` applies the same rule through `scripts/golangci-lint.sh`.
-- **shellcheck.** The `go` job installs the release pinned in
+- **shellcheck.** The `go` job's lint node installs the release pinned in
   `scripts/vm-setup.sh` (`--shellcheck`, which checks its SHA-256 sum) and
   runs `make sh-lint` with `MR_REQUIRE_SHELLCHECK=1`. Locally, `make lint`
   skips shellcheck with a message if it is not installed; in CI a missing
@@ -144,7 +144,8 @@ How each job meets its requirements:
   fails; the check is never skipped. A fork's build has no deploy key, so the
   job falls back to the public HTTPS URL.
 - **Narrow Go mode.** A PR whose Go-side inputs are only `python/` runs
-  `make go-python-test py-e2e` in the go job instead of the whole Go suite:
+  `make go-python-test py-e2e` in the go job instead of the whole Go suite
+  (node 0 runs `go-python-test`, node 2 `py-e2e`, node 1 nothing):
   `cmd/mr` (its golden tests compare the Go examples with Python's),
   `papermap` (it reads the Python test names) and `py-e2e`. Every other Go
   package passes with `python/` deleted and no Python on the PATH, so its
@@ -157,7 +158,11 @@ How each job meets its requirements:
   keyed by content, so an entry is reused only for identical input, and the
   job sets `GOFLAGS=-count=1`, so test results are never cached: every test
   runs every time. The key changes with the Go release, `go.sum` and the ISO
-  week, so the cache is saved about once a week, not on every run.
+  week, so the cache is saved about once a week, not on every run. Each of
+  the go job's three nodes compiles different things (race-instrumented
+  packages, coverage-instrumented packages, vet and lint), so each node
+  keeps its own cache, keyed by `CIRCLE_NODE_INDEX`, and a new week starts
+  from that node's last one.
 - **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
 
 ## Caching
@@ -169,7 +174,7 @@ Caches only save time; none of them replaces a check.
 | pip downloads | Python version, `python/pyproject.toml` | Downloads. `pip install` still runs. |
 | Go toolchain | architecture, Go version | The download. The script runs the restored `go` and rejects a wrong version. |
 | Go modules | `go/go.sum` | Downloads. `go mod download` still runs. |
-| Generators in `.tools/bin` | the `@v` pins in the `Makefile`, Go version | Compiling. `make tools` still runs. |
+| Generators in `.tools/bin` | the `@v` pins in the `Makefile`, Go version | Compiling. `make tools` still runs: `scripts/install-tool.sh` keeps a binary only if `go version -m` shows it was built from the pinned package and version, and installs any other. |
 | golangci-lint | the pin, Go version | Compiling. The job rebuilds a binary whose version or Go build differs. |
 
 Bump a `-v1-` in a key to throw a cache away.
@@ -213,7 +218,8 @@ combined, cannot both land.
 ## Free plan
 
 The setup uses only what the Free plan includes: Docker executors with the
-`small` and `medium` resource classes. It does not use remote Docker (`setup_remote_docker`), Docker
+`small` and `medium` resource classes, and job parallelism (the `go` job's
+three nodes). It does not use remote Docker (`setup_remote_docker`), Docker
 layer caching, machine executors, larger resource classes, or a paid plan, and
 there is no payment method on the account.
 

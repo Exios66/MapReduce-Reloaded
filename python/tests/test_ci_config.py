@@ -169,7 +169,7 @@ def test_ci_runs_shellcheck():
     assert ("sh-lint", "1") in lint_calls
 
 
-# --- the go job's nodes (scripts/ci-go-job.sh, ADR 0023) --------------------------
+# --- the go job's nodes (scripts/ci-go-job.sh, ADR 0024) --------------------------
 
 CI_GO_JOB = ROOT / "scripts/ci-go-job.sh"
 # What the go job ran in one step before it was split across nodes.
