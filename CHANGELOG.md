@@ -97,6 +97,14 @@ cut a release.
 
 ### Changed
 
+- CI: the `go` job runs on three nodes at once (`parallelism: 3`), still
+  one `go` check: `scripts/ci-go-job.sh` gives the race tests, the coverage
+  tests, and sh-lint, go-lint and py-e2e a node each, the same make targets
+  as before (`make go-test` is now `go-test-race` then `go-test-cover`).
+  `make tools` keeps a cached generator that `scripts/install-tool.sh`
+  finds was built from its pin, so `proto` no longer rebuilds buf on every
+  run. The full pipeline should drop from about 400 s to about 220 s with
+  no check removed; see docs/ci.md, Pipeline time, and ADR 0024 (#354).
 - Bench: E7 records its workers' CPU limits in `cpus.txt`, which
   `bench/plot-experiments.py` names in the E7 subtitle; `DROP_CACHES=1`
   turns E0's input isolation off by default, and E0 refuses an explicit
