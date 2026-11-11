@@ -7,7 +7,8 @@
 # Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers, after
-#   E0_WARMUP warm-up runs of each program.
+#   E0_WARMUP warm-up runs of each program; E0_PRIME=0 skips reading each
+#   program's input into the page cache before its first run in a repeat.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
 #   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU and with none, each
@@ -404,12 +405,29 @@ need_count() {
 # its own setting, warmup, which the plots leave out, so no measured run is
 # the first to read its input. Then every program on every number of workers
 # takes its turn within each repeat, in reverse order on even repeats, so
-# drift in the machine falls on no one setting (#282).
+# drift in the machine falls on no one setting (#282). The other programs'
+# runs can push a program's input out of the page cache, so with E0_PRIME=1
+# (the default) E0 reads the input once before each program's first run in
+# every repeat. E0_PRIME=0 gives the order the reruns at 8f0ddb9 used, where
+# the slow grep runs coincided with large disk reads (#347).
 e0_warmup=${E0_WARMUP:-1}
+e0_prime=${E0_PRIME:-1}
+
+# prime PROGRAM: reads PROGRAM's input into the page cache.
+prime() {
+    local in
+    in=$(input "$1")
+    log "E0 reads $in into the page cache"
+    in_volume sh -c "cat '$in' > /dev/null"
+}
 
 e0() {
-    local n cells cell order program workers
+    local n cells cell order program workers last
     need_count E0_WARMUP "$e0_warmup" 0
+    if [ "$e0_prime" != 0 ] && [ "$e0_prime" != 1 ]; then
+        echo "E0_PRIME: '$e0_prime' is not 0 or 1" >&2
+        exit 2
+    fi
     begin E0
     configure 4
     for program in grep distsort wordcount; do
@@ -425,8 +443,11 @@ e0() {
             order=
             for cell in $cells; do order="$cell $order"; done
         fi
+        last=
         for cell in $order; do
             program=${cell%:*} workers=${cell#*:}
+            [ "$e0_prime" = 0 ] || [ "$program" = "$last" ] || prime "$program"
+            last=$program
             configure "$workers"
             run E0 "w$workers" "$program" "$n" "$workers" ""
         done

@@ -91,6 +91,11 @@ cut a release.
   leaves out, so no measured run is the first to read its input. Then all
   nine program and worker-count settings take turns within each repeat,
   reversed on even repeats; before, each ran as a block (#282, #348).
+- Bench: E0 (`bench/experiments.sh E0`) reads each program's input into
+  the page cache before that program's first run in every repeat, because
+  the other programs' runs can evict it. In the reruns at `8f0ddb9`, the
+  slow grep runs each coincided with about 850 MB of disk reads.
+  `E0_PRIME=0` restores the order those reruns used (#347).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system

@@ -1355,18 +1355,25 @@ def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(experiment, mon
     assert log.read_text().splitlines() == expected
 
 
+@pytest.mark.parametrize("prime", ["1", "0"])
 @pytest.mark.parametrize("repeat", ["1", "2"])
 def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
-    experiment, monkeypatch, repeat
+    experiment, monkeypatch, repeat, prime
 ):
-    """E0 warms each program up, then interleaves every cell, reversed on even repeats (#282)."""
+    """E0 warms each program up, then interleaves every cell, reversed on even repeats (#282).
+
+    With E0_PRIME=1 it reads each program's input before that program's
+    first run in every repeat, after the other programs' runs.
+    """
     invoke, log = experiment
     monkeypatch.setenv("REPEAT", repeat)
+    monkeypatch.setenv("E0_PRIME", prime)
     result = invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
         begin() { note "begin|$1"; }
         configure() { note "configure|$1"; }
+        prime() { note "prime|$1"; }
         run() { note "run|$1|$2|$3|$4|$5"; }
         """,
         "E0",
@@ -1377,10 +1384,33 @@ def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
     expected += [f"run|E0|warmup|{p}|1|4" for p in programs]
     cells = [(p, w) for p in programs for w in (4, 2, 1)]
     for n in range(1, int(repeat) + 1):
+        last = None
         for p, w in cells if n % 2 else reversed(cells):
+            if prime == "1" and p != last:
+                expected.append(f"prime|{p}")
+            last = p
             expected += [f"configure|{w}", f"run|E0|w{w}|{p}|{n}|{w}"]
     expected.append("configure|4")
     assert log.read_text().splitlines() == expected
+
+
+def test_prime_reads_the_input_inside_the_volume(experiment):
+    """prime reads the generated input in the volume, so the host caches it."""
+    invoke, log = experiment
+    invoke(
+        """
+        input() { echo /out/exp-input-$1-1024.txt; }
+        in_volume() { printf 'volume:%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { :; }
+        run() { :; }
+        e0() { prime grep; }
+        """,
+        "E0",
+    )
+    assert log.read_text().splitlines() == [
+        "volume:sh -c cat '/out/exp-input-grep-1024.txt' > /dev/null"
+    ]
 
 
 @pytest.mark.parametrize("experiment_name", ["E3", "E4"])
@@ -1412,6 +1442,8 @@ def test_e3_e4_stop_without_a_valid_calibrate_run(experiment, experiment_name):
     [
         ("E0", "E0_WARMUP", "one"),
         ("E0", "E0_WARMUP", "-1"),
+        ("E0", "E0_PRIME", "2"),
+        ("E0", "E0_PRIME", "yes"),
         ("E3", "E3_CALIBRATE", "0"),
         ("E3", "E3_CALIBRATE", "2.5"),
         ("E4", "E4_CALIBRATE", "0"),
