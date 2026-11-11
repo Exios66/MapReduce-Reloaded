@@ -227,6 +227,35 @@ settings alternate within each repeat, so drift on the VM does not fall on
 one of them. With four workers LATE allows one backup at a time, so a
 result here is for a small cluster only.
 
+## The E0–E7 reruns (#344, #343) — in progress
+
+The results above come from five commits, three runs per setting, and
+blocks of settings in E2 and E3 (#282). They are being run again at **one
+commit**, recorded in every `machine.json`, with this protocol, fixed
+before any data was taken:
+
+- **Repeats.** Five runs per setting (ten pairs for E2-pairs), on the
+  course VM with the other course containers stopped.
+- **Order.** Every experiment's settings take turns within each repeat,
+  reversed on even repeats (#348). E0 first runs each program once as
+  `warmup`; E3 and E4 first run three `calibrate` runs, whose median sets
+  the kill and restart times. The figures leave `warmup` and `calibrate`
+  out.
+- **E4's log.** Every E4 run starts on a fresh write-ahead log, so a
+  restart replays its own job only. Its cost replaces the published
+  1.6 s; it is not compared with it.
+- **Chunks and gates.** Each experiment runs as a chunk. The next one
+  starts only once every setting has its runs, every run `SUCCEEDED` with
+  `valid=1`, `machine.json` names the commit with a clean tree, the workers
+  are back at one CPU and 6 GB of disk is free; the chunk is then
+  archived. Inputs are generated from fixed seeds, deleted after the last
+  chunk that reads them, and their SHA-256 recorded after every chunk, so
+  a regenerated input is shown to be the same.
+- **Order of chunks.** E0, E1, E5, E2, E2-pairs, E3, E4, E7, E6.
+- **Reporting.** Each figure and table is recomputed from the new
+  `runs.csv`. A finding whose ranges now overlap is reworded as no clear
+  difference. E7 is run for the first time.
+
 ## What scale changes
 
 - **Fixed costs dominate a small job.** The paper's startup, about a
