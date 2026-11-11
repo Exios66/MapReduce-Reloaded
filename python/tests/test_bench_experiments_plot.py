@@ -700,6 +700,23 @@ def test_disk_reads_pairs_start_and_end_and_skips_incomplete_runs(plotter, tmp_p
     assert module.disk_reads(tmp_path, "E9") == {}
 
 
+def test_e0_reads_the_isolated_rerun_in_place_of_the_e0_it_supersedes(plotter, tmp_path):
+    """E0-isolated, when present, is E0's data, its runs and its disk reads (#347)."""
+    module, _ = plotter
+    for name, seconds, reads in (("E0", "9", 1000 * 2**20), ("E0-isolated", "8", 100 * 2**20)):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "runs.csv").write_text(
+            f"setting,program,workers,run,seconds\nw4,distsort,4,1,{seconds}\n"
+        )
+        cache_rows(tmp_path / name / "cache.jsonl", {("w4", "distsort", 1): reads})
+    assert [r["seconds"] for r in module.load(tmp_path, "E0")] == ["8"]
+    assert module.disk_reads(tmp_path, "E0") == {("w4", "distsort", "1"): 100 * 2**20}
+    (tmp_path / "E0-isolated" / "runs.csv").unlink()
+    (tmp_path / "E0-isolated" / "cache.jsonl").unlink()
+    assert [r["seconds"] for r in module.load(tmp_path, "E0")] == ["9"]
+    assert module.disk_reads(tmp_path, "E0") == {("w4", "distsort", "1"): 1000 * 2**20}
+
+
 def test_e0_crosses_runs_that_read_far_more_from_disk_and_labels_them_together(plotter, tmp_path):
     """A run that read a quarter of the input more than its group's median is a cross.
 

@@ -120,6 +120,14 @@ cut a release.
   clock each experiment uses. Every figure is set in Inter, shipped in
   `bench/fonts/` under the SIL Open Font License, so they look the same
   whichever machine draws them (#349).
+- Bench results: every figure in `bench/evaluation/` is drawn from the
+  rerun at `8f0ddb9` in `bench/evaluation/rerun-8f0ddb9/`: E0–E7 at one
+  commit, five interleaved repeats each, with their archives and harness
+  logs. E0 comes from `E0-isolated/`, rerun so each program runs with only
+  its own input in the page cache; `bench/plot-experiments.py` reads it in
+  place of the first E0, which a `NOTE.md` marks superseded. The E0–E6
+  results published before move to
+  `bench/evaluation/superseded/before-8f0ddb9/` (#344, #347, #349).
 - Bench figures: `bench/plot-rates.py OUT.png` also writes `OUT-dark.png`,
   and `docs/evaluation.md` shows the dark variant of the grep and sort rate
   plots and of E3. A test checks that every chart a page shows has a dark

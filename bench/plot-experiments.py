@@ -79,10 +79,24 @@ BENCH = Path(__file__).resolve().parent
 PROGRAMS = {"grep": "grep", "distsort": "sort", "wordcount": "Zipf word count"}
 
 
+# An experiment rerun to replace its data: E0-isolated reran E0 with only the
+# running program's input in the page cache, so its runs are E0's (#347).
+REPLACED_BY = {"E0": "E0-isolated"}
+
+
+def source(results, exp):
+    """Returns the directory under results that holds exp's data: its
+    replacement in REPLACED_BY when that has a runs.csv, else results/exp."""
+    other = REPLACED_BY.get(exp)
+    if other and (results / other / "runs.csv").exists():
+        return results / other
+    return results / exp
+
+
 def load(results, exp):
-    """Returns the rows of results/exp/runs.csv as dicts, or None if the
-    file does not exist."""
-    path = results / exp / "runs.csv"
+    """Returns the rows of exp's runs.csv as dicts, read from source(), or
+    None if the file does not exist."""
+    path = source(results, exp) / "runs.csv"
     if not path.exists():
         return None
     with open(path, newline="") as f:
@@ -91,12 +105,12 @@ def load(results, exp):
 
 def disk_reads(results, exp):
     """Returns the bytes the whole machine read from disk during each run,
-    keyed by (setting, program, run), from results/exp/cache.jsonl, or {}
-    if the file does not exist. A run without both its start and end rows,
+    keyed by (setting, program, run), from exp's cache.jsonl in source(),
+    or {} if the file does not exist. A run without both its start and end rows,
     or with a null counter, is left out. The counter counts every process's
     reads, so a large value suggests, but cannot prove, that the run read
     its own input from disk."""
-    path = results / exp / "cache.jsonl"
+    path = source(results, exp) / "cache.jsonl"
     if not path.exists():
         return {}
     phases = {}
