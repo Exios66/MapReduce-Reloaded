@@ -256,6 +256,22 @@ before any data was taken:
   `runs.csv`. A finding whose ranges now overlap is reworded as no clear
   difference. E7 is run for the first time.
 
+Added after E0's data, not part of the protocol above:
+
+- **Likely cold reads in E0.** Three grep runs were slow: two 1-worker
+  runs of about 8.5 s (median 2.08 s) and one 4-worker run of 3.18 s
+  (median 1.37 s). During each, the VM read about 850 MB from disk, close
+  to grep's 1 GiB input. During the other twelve runs it read 0 to 53 MB.
+  Each slow run followed the other programs' runs, which can evict grep's
+  input from the page cache, so a cold input is the likely cause. It is
+  not proven, because `disk_read_sectors` counts the whole VM's reads. The
+  E0 figure draws such runs as crosses (`likely_cold` in
+  `bench/plot-experiments.py`), and the medians include them: without the
+  slow 4-worker run, grep's 4-worker median is 1.36 s and its speed-up
+  stays 1.5×. A follow-up reads each program's input before its first run
+  in every repeat (`E0_PRIME`) for future runs. These reruns keep the
+  recorded protocol.
+
 ## What scale changes
 
 - **Fixed costs dominate a small job.** The paper's startup, about a

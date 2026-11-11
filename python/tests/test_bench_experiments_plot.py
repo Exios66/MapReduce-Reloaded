@@ -2,6 +2,7 @@
 
 import csv
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -623,6 +624,106 @@ def test_e0_titles_the_best_speed_up_and_names_a_run_far_below_its_median(plotte
     rings = [c for c in axis.plot.call_args_list if c.kwargs.get("linestyle") == "none"]
     assert sorted(len(c.args[1]) for c in rings) == [3, 3, 3, 3]
     assert all(c.kwargs["markerfacecolor"] == light(module)["surface"] for c in rings)
+
+
+def cache_rows(path, reads):
+    """Writes cache.jsonl to path: a start and an end row per (setting, program,
+    run), whose disk_read_sectors differ by that run's bytes read / 512."""
+    lines = []
+    for (setting, program, run), read in reads.items():
+        for phase, sectors in (("start", 1000), ("end", 1000 + read // 512)):
+            lines.append(
+                json.dumps(
+                    {
+                        "phase": phase,
+                        "setting": setting,
+                        "program": program,
+                        "run": run,
+                        "disk_read_sectors": sectors,
+                    }
+                )
+            )
+    path.write_text("\n".join(lines) + "\n")
+
+
+def test_disk_reads_pairs_start_and_end_and_skips_incomplete_runs(plotter, tmp_path):
+    """Each run's reads are its end counter minus its start counter, in bytes."""
+    module, _ = plotter
+    (tmp_path / "E0").mkdir()
+    path = tmp_path / "E0" / "cache.jsonl"
+    cache_rows(path, {("w1", "grep", 1): 850 * 2**20, ("w4", "grep", 1): 0})
+    with open(path, "a") as f:
+        f.write(
+            json.dumps(
+                {
+                    "phase": "start",
+                    "setting": "w2",
+                    "program": "grep",
+                    "run": 1,
+                    "disk_read_sectors": 5,
+                }
+            )
+            + "\n"
+        )
+        f.write(
+            json.dumps(
+                {
+                    "phase": "start",
+                    "setting": "w2",
+                    "program": "grep",
+                    "run": 2,
+                    "disk_read_sectors": None,
+                }
+            )
+            + "\n"
+        )
+        f.write(
+            json.dumps(
+                {
+                    "phase": "end",
+                    "setting": "w2",
+                    "program": "grep",
+                    "run": 2,
+                    "disk_read_sectors": 9,
+                }
+            )
+            + "\n"
+        )
+    assert module.disk_reads(tmp_path, "E0") == {
+        ("w1", "grep", "1"): 850 * 2**20,
+        ("w4", "grep", "1"): 0,
+    }
+    assert module.disk_reads(tmp_path, "E9") == {}
+
+
+def test_e0_crosses_runs_that_read_far_more_from_disk_and_labels_them_together(plotter, tmp_path):
+    """A run that read a quarter of the input more than its group's median is a cross.
+
+    The two slow one-worker grep runs share one label; the other runs stay rings.
+    """
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    times = {1: (2.0, 8.5, 2.1, 8.6, 2.0), 4: (1.4, 1.3, 1.4, 1.3, 0.9)}
+    rows = [
+        row(f"w{w}", seconds) | {"program": "grep", "workers": str(w), "run": str(n)}
+        for w, runs in times.items()
+        for n, seconds in enumerate(runs, 1)
+    ]
+    reads = {(r["setting"], "grep", r["run"]): 0 for r in rows}
+    reads[("w1", "grep", "2")] = reads[("w1", "grep", "4")] = 850 * 2**20
+    reads[("w4", "grep", "5")] = 2**28 - 1  # just under a quarter of the input: a ring
+    module.e0(rows, tmp_path / "E0.png", light(module), reads)
+    t = light(module)
+    color = t["series"][0]
+    crosses = [c for c in axis.plot.call_args_list if c.args[2:] == ("x",)]
+    assert [(list(c.args[0]), list(c.args[1])) for c in crosses] == [
+        ([1, 1], [2.1 / 8.5, 2.1 / 8.6])
+    ]
+    assert len(single_runs(axis, t, color)) == 8
+    assert notes(axis, "run") == ["2 grep runs: 8.5–8.6 s"]
+    _, subtitle = titles(figure)
+    assert "Crosses: the VM read far more from disk than usual" in subtitle
 
 
 def test_e2_title_states_the_straggler_times_and_falls_back(plotter):

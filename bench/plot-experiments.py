@@ -47,6 +47,7 @@ Usage: python3 bench/plot-experiments.py [RESULTS_DIR [OUT_DIR]]
 """
 
 import csv
+import json
 import statistics
 import subprocess
 import sys
@@ -69,6 +70,49 @@ def load(results, exp):
         return None
     with open(path, newline="") as f:
         return list(csv.DictReader(f))
+
+
+def disk_reads(results, exp):
+    """Returns the bytes the whole machine read from disk during each run,
+    keyed by (setting, program, run), from results/exp/cache.jsonl, or {}
+    if the file does not exist. A run without both its start and end rows,
+    or with a null counter, is left out. The counter counts every process's
+    reads, so a large value suggests, but cannot prove, that the run read
+    its own input from disk."""
+    path = results / exp / "cache.jsonl"
+    if not path.exists():
+        return {}
+    phases = {}
+    with open(path) as f:
+        for line in f:
+            if line.strip():
+                r = json.loads(line)
+                key = (r["setting"], r["program"], str(r["run"]))
+                phases.setdefault(key, {})[r["phase"]] = r["disk_read_sectors"]
+    return {
+        key: (p["end"] - p["start"]) * 512
+        for key, p in phases.items()
+        if p.get("start") is not None and p.get("end") is not None
+    }
+
+
+def likely_cold(rows, reads):
+    """The (setting, program, run) keys of the rows during which the machine
+    read at least a quarter of the input more from disk than the median run
+    of the same program and worker count: runs that probably found their
+    input out of the page cache. Rows without a reading are never marked."""
+    groups = {}
+    for r in rows:
+        key = (r["setting"], r["program"], r.get("run"))
+        if key in reads:
+            groups.setdefault((r["program"], r["workers"]), []).append((key, r))
+    cold = set()
+    for members in groups.values():
+        typical = statistics.median(reads[key] for key, _ in members)
+        for key, r in members:
+            if reads[key] - typical >= int(r["input_bytes"]) / 4:
+                cold.add(key)
+    return cold
 
 
 def valid(rows, **match):
@@ -290,7 +334,7 @@ def label_note(rows, ranges=True):
     )
 
 
-def e0(rows, out, t):
+def e0(rows, out, t, reads=None):
     """Saves E0's speed-up against worker count to out, in theme t.
 
     Speed-up is the median one-worker job time over the median job time on
@@ -298,8 +342,11 @@ def e0(rows, out, t):
     Only valid="1" runs count; a program without a valid one-worker run, or
     with a time of zero, is skipped. Missing fields, invalid numbers, and
     file errors propagate. Warm-up runs (setting="warmup") are left out.
+    reads, from disk_reads, marks each likely_cold run with a cross instead
+    of a ring.
     """
     rows = [r for r in rows if r["setting"] != "warmup"]
+    cold = likely_cold(rows, reads or {})
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     ax.plot([1, 4], [1, 4], "--", color=t["muted"], linewidth=1, zorder=1)
     ax.text(
@@ -326,22 +373,42 @@ def e0(rows, out, t):
         speedup = [one / s[0] for s in stats]
         ax.plot(workers, speedup, color=color, label=name, zorder=3)
         for w, median in zip(workers, speedup, strict=True):
-            times = [float(r["seconds"]) for r in valid(rows, program=program, workers=str(w))]
+            group = valid(rows, program=program, workers=str(w))
+            times = [float(r["seconds"]) for r in group]
             each = [one / x for x in times]
-            runs(ax, t, [w] * len(each), each, color)
-            for x, y in zip(times, each, strict=True):
-                if (
-                    y < median / 2
-                ):  # name a run far below its median, so it is not read as the trend
-                    ax.annotate(
-                        f"one {name} run: {x:.1f} s",
-                        (w, y),
-                        xytext=(8, 0),
-                        textcoords="offset points",
-                        va="center",
-                        color=t["ink2"],
-                        fontsize=8,
+            marked = [(r["setting"], r["program"], r.get("run")) in cold for r in group]
+            warm = [y for y, m in zip(each, marked, strict=True) if not m]
+            runs(ax, t, [w] * len(warm), warm, color)
+            crossed = [y for y, m in zip(each, marked, strict=True) if m]
+            if crossed:
+                ax.plot(
+                    [w] * len(crossed),
+                    crossed,
+                    "x",
+                    markersize=6,
+                    markeredgecolor=color,
+                    markeredgewidth=1.4,
+                    linestyle="none",
+                    zorder=2,
+                )
+            # Name the runs far below their median, so they are not read as
+            # the trend; those at one worker count share one label.
+            far = [(x, y) for x, y in zip(times, each, strict=True) if y < median / 2]
+            if far:
+                label = f"one {name} run: {far[0][0]:.1f} s"
+                if len(far) > 1:
+                    label = (
+                        f"{len(far)} {name} runs: {span([x for x, _ in far], '{:.1f}'.format)} s"
                     )
+                ax.annotate(
+                    label,
+                    (w, min(y for _, y in far)),
+                    xytext=(8, 0),
+                    textcoords="offset points",
+                    va="center",
+                    color=t["ink2"],
+                    fontsize=8,
+                )
         dots(ax, t, workers, speedup, color)
         best = max(best or (0, "", 0), (speedup[-1], name, workers[-1]))
         shortest = min(shortest or (float("inf"), ""), (one, name))
@@ -364,6 +431,11 @@ def e0(rows, out, t):
     if best:
         title = f"E0: {best[1]} runs {best[0]:.1f}× faster on {best[2]} workers"
     note = "Speed-up = job time on 1 worker ÷ job time on N; lines join medians, rings are runs."
+    if cold:
+        note += (
+            "\nCrosses: the VM read far more from disk than usual during the run"
+            " (likely a cold input)."
+        )
     if shortest and shortest[0] < 5:
         note += (
             f"\n{shortest[1].capitalize()} takes {shortest[0]:.1f} s on one worker,"
@@ -1172,7 +1244,7 @@ def main():
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else results
     out.mkdir(parents=True, exist_ok=True)
     draw = {
-        "E0": lambda rows, png, t: e0(rows, png, t),
+        "E0": lambda rows, png, t: e0(rows, png, t, disk_reads(results, "E0")),
         "E1": lambda rows, png, t: e1(rows, png, t),
         "E2": lambda rows, png, t: e2(rows, results, png, t),
         "E3": lambda rows, png, t: e3(rows, results, png, t),

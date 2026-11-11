@@ -91,6 +91,11 @@ cut a release.
   leaves out, so no measured run is the first to read its input. Then all
   nine program and worker-count settings take turns within each repeat,
   reversed on even repeats; before, each ran as a block (#282, #348).
+- Bench figures: E0 draws a run as a cross instead of a ring when the
+  machine read at least a quarter of the input more from disk during it
+  than during the median run of its setting: a likely cold input. The
+  counter in `cache.jsonl` counts the whole machine's reads, so the
+  caption says "likely" (#349).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
