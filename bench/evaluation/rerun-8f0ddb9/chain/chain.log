@@ -24,7 +24,7 @@
   warmup/grep                      wall_seconds median     1.34  range 1.34-1.34  n=1
   warmup/wordcount                 seconds      median    37.65  range 37.65-37.65  n=1
   warmup/wordcount                 wall_seconds median    37.76  range 37.76-37.76  n=1
-GATE PASS E0: 48 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E0.tar.gz (160 KiB), 8.3 GB free
+GATE PASS E0: 48 runs, archived ~/runs/8f0ddb9/E0.tar.gz (160 KiB), 8.3 GB free
 === 2026-11-11T06:16:24Z dropped inputs: grep-1073741824 distsort-1073741824
 === 2026-11-11T06:16:24Z DONE E0
 === 2026-11-11T06:16:24Z START E1 (E1) 10 GB free
@@ -40,7 +40,7 @@ GATE PASS E0: 48 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E0.tar
   s1.5-off/wordcount               wall_seconds median    51.15  range 50.66-51.81  n=5
   s1.5-on/wordcount                seconds      median    29.93  range 28.79-29.95  n=5
   s1.5-on/wordcount                wall_seconds median    29.94  range 28.81-29.97  n=5
-GATE PASS E1: 30 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E1.tar.gz (114 KiB), 6.4 GB free
+GATE PASS E1: 30 runs, archived ~/runs/8f0ddb9/E1.tar.gz (114 KiB), 6.4 GB free
 === 2026-11-11T06:47:57Z dropped inputs: wordcount-1073741824-0.5 wordcount-1073741824-1.5
 === 2026-11-11T06:47:57Z DONE E1
 === 2026-11-11T06:47:57Z START E5 (E5) 10 GB free
@@ -50,7 +50,7 @@ GATE PASS E1: 30 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E1.tar
   interpreted/wordcount            wall_seconds median    89.75  range 88.56-90.39  n=5
   naive/wordcount                  seconds      median   400.43  range 399.88-401.09  n=5
   naive/wordcount                  wall_seconds median   400.40  range 399.89-401.02  n=5
-GATE PASS E5: 15 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E5.tar.gz (5609 KiB), 11.3 GB free
+GATE PASS E5: 15 runs, archived ~/runs/8f0ddb9/E5.tar.gz (5609 KiB), 11.3 GB free
 === 2026-11-11T07:35:59Z dropped inputs: wordcount-1073741824-1.0
 === 2026-11-11T07:35:59Z DONE E5
 === 2026-11-11T07:35:59Z START E2 (E2) 12 GB free
@@ -62,13 +62,13 @@ GATE PASS E5: 15 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E5.tar
   straggler-backups/distsort       wall_seconds median    11.27  range 10.96-11.77  n=5
   straggler-no-backups/distsort    seconds      median    17.90  range 17.05-18.20  n=5
   straggler-no-backups/distsort    wall_seconds median    17.89  range 17.04-18.19  n=5
-GATE PASS E2: 20 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E2.tar.gz (984 KiB), 10.5 GB free
+GATE PASS E2: 20 runs, archived ~/runs/8f0ddb9/E2.tar.gz (984 KiB), 10.5 GB free
 === 2026-11-11T07:48:35Z DONE E2
 === 2026-11-11T07:48:35Z START E2-pairs (E2) 10 GB free
   normal-no-backups/distsort       seconds      median     7.91  range 7.75-8.26  n=10
   normal-no-backups/distsort       wall_seconds median     7.84  range 7.79-8.39  n=10
   normal/distsort                  seconds      median     7.67  range 7.46-8.16  n=10
   normal/distsort                  wall_seconds median     7.64  range 7.45-8.14  n=10
-GATE PASS E2-pairs: 20 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E2-pairs.tar.gz (800 KiB), 10.5 GB free
+GATE PASS E2-pairs: 20 runs, archived ~/runs/8f0ddb9/E2-pairs.tar.gz (800 KiB), 10.5 GB free
 === 2026-11-11T07:59:13Z DONE E2-pairs
 === 2026-11-11T07:59:13Z START E3 (E3) 10 GB free
