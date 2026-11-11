@@ -159,6 +159,15 @@ cut a release.
 - CI: `.circleci/mapping.txt` maps `.claude/` to the lint job, so the
   agent skills' Python scripts no longer fail `mapping-coverage` and
   `make check` with "unmapped file" (#350).
+- CI: `make py-lint` and `make fmt` run ruff on the agent skills' Python
+  scripts under `.claude/` too, and `.circleci/mapping.txt` maps a change
+  to them to the Python jobs, which run `py-lint`. Before, a syntax error
+  in one of them passed CI (#351).
+- Go coordinator: deleting a job's `_temporary` directory no longer gives
+  up after 100 quick retries while attempts keep creating files in it. It
+  now retries for up to 10 seconds, pausing a millisecond between tries
+  after the first ten. On a loaded CI machine the old limit made
+  `TestLocalDeleteAllConcurrentCreates` fail now and then (#345, #348).
 - Go coordinator: a succeeded job's output no longer keeps a stray
   `_temporary` directory when a losing backup reduce attempt creates its
   file while the job is cleaning up. The local file system's delete now

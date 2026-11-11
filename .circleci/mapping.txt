@@ -73,6 +73,8 @@
 ^docs/paper-mapping\.md$ run-python
 ^bench/README\.md$ run-python
 ^bench/.*\.(py|sh)$ run-python
+# The agent skills' scripts: py-lint runs ruff on them (#351).
+^\.claude/.*\.py$ run-python
 ^deploy/compose/README\.md$ run-python
 ^deploy/compose/.*\.yaml$ run-python
 ^deploy/compose/monitoring/ run-python
