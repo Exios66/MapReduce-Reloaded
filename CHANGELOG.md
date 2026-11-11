@@ -15,6 +15,14 @@ cut a release.
 
 ### Added
 
+- Lint: `make md-lint` runs `scripts/check-dark-charts.py`, which fails if
+  a Markdown page shows a bench chart without its dark variant. It runs in
+  the lint job, not the Python tests, so a Markdown-only change still runs
+  only the lint job (#349).
+- Bench figures: E7 (`E7.png` and `E7-dark.png`): job time on workers of
+  mixed speeds with no backups, the paper's backup rule and LATE, each
+  run's ring beside its median, the backups each rule launched and won, and
+  the time each saves in the title (#343, #349).
 - Agent tooling: four skills in `.claude/skills/`, listed in AGENTS.md:
   `saving-ci-credits` (`preflight.sh` checks identity, CHANGELOG and
   `[skip ci]` before a push), `interpreting-bench-results` (`summarize.py`
@@ -22,6 +30,15 @@ cut a release.
   `analyzing-bench-results` (`compare.py` compares a run with a published
   one) and `checking-campaign-status` (`status.sh` snapshots a running
   campaign).
+- Bench: E0 starts every run with only its own program's input in the page
+  cache. Before each warm-up and measured run, `bench/experiments.sh` drops
+  every other input in the output volume, the other two E0 inputs and any
+  word count inputs E1 and E6 left, with the new `bench/drop-cache.py`
+  (`posix_fadvise`, run in a container, no root needed) and reads the
+  run's own input. `E0_ISOLATE=0` restores the old order. In the reruns at
+  `8f0ddb9`, E0's sort runs read 0.75–1.84 GiB (803–1,971 MB) from disk,
+  machine-wide, against about 0.1 GiB for the same job in E2–E4 (#347,
+  #349).
 - Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
   disturbance in E2, E3 and E4 added, on one axis; its title says every
   disturbed run gave an undisturbed run's output only when every one was
@@ -87,7 +104,13 @@ cut a release.
   `make tools` keeps a cached generator that `scripts/install-tool.sh`
   finds was built from its pin, so `proto` no longer rebuilds buf on every
   run. The full pipeline should drop from about 400 s to about 220 s with
-  no check removed; see docs/ci.md, Pipeline time, and ADR 0024.
+  no check removed; see docs/ci.md, Pipeline time, and ADR 0024 (#353).
+- Bench: E7 records its workers' CPU limits in `cpus.txt`, which
+  `bench/plot-experiments.py` names in the E7 subtitle; `DROP_CACHES=1`
+  turns E0's input isolation off by default, and E0 refuses an explicit
+  `E0_ISOLATE=1` with it, which the cache drop would undo;
+  `bench/drop-cache.py` flushes each input before dropping it. The
+  QUALITY tables label their columns `bk med` and `won sum` (#349).
 - Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
   `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
   the figures leave out, then runs `normal`, `kill-25`, `kill-50` and
@@ -106,6 +129,44 @@ cut a release.
   leaves out, so no measured run is the first to read its input. Then all
   nine program and worker-count settings take turns within each repeat,
   reversed on even repeats; before, each ran as a block (#282, #348).
+- Bench figures: E0 draws a run as a cross instead of a ring when the
+  machine read at least a quarter of the input more from disk during it
+  than during the median run of its program and worker count. The caption
+  states only that measurement, not a cause: the counter in `cache.jsonl`
+  counts the whole machine's reads, and sort's re-reads under the worker
+  memory limit are one cause besides a cold input (#347, #349).
+- Bench figures: one look across all of them. The fault-tolerance summary
+  (`faults.png`) groups its bars by experiment, as each has its own
+  undisturbed baseline, gives each bar its range, and colors backups on
+  and off as E2 does instead of hatching. E0's legend is a row above the
+  plot; E0, E1 and E6 draw each run's ring beside its median instead of
+  behind it; E1 and E6's log axes drop their minor ticks. E2's job-time
+  bars set the no-straggler runs apart with a gap instead of hatching, bars
+  are thinner, text is at least 9 points and figures at most 10 inches wide
+  so they stay legible scaled into a page, and the fault summary says which
+  clock each experiment uses. Every figure is set in Inter, shipped in
+  `bench/fonts/` under the SIL Open Font License, so they look the same
+  whichever machine draws them (#349).
+- Docs: every result in `README.md`, `bench/README.md` (now "Evaluation
+  (E0–E7)"), `docs/evaluation.md`, `docs/report.md`, `docs/demo.md`,
+  `design.md`, `docs/language-choice.md`, `docs/reviewing.md` and the demo
+  notebook comes from the rerun at `8f0ddb9`: five runs per setting, taken
+  in turn. E7's results replace "not yet run", the README and notebook show
+  the E5 and E7 figures, and `docs/evaluation.md` records the isolated E0
+  rerun and the worker memory limit's share of sort's disk reads (#343,
+  #344, #346, #347, #349).
+- Bench results: every figure in `bench/evaluation/` is drawn from the
+  rerun at `8f0ddb9` in `bench/evaluation/rerun-8f0ddb9/`: E0–E7 at one
+  commit, five interleaved repeats each, with their archives and harness
+  logs. E0 comes from `E0-isolated/`, rerun so each program runs with only
+  its own input in the page cache; `bench/plot-experiments.py` reads it in
+  place of the first E0, which a `NOTE.md` marks superseded. The E0–E6
+  results published before move to
+  `bench/evaluation/superseded/before-8f0ddb9/` (#344, #347, #349).
+- Bench figures: `bench/plot-rates.py OUT.png` also writes `OUT-dark.png`,
+  and `docs/evaluation.md` shows the dark variant of the grep and sort rate
+  plots and of E3. A test checks that every chart a page shows has a dark
+  variant (#349).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
@@ -164,6 +225,12 @@ cut a release.
 
 ### Fixed
 
+- Bench figures: the fault summary keeps zero in view when every
+  disturbance sped its job up, and E7's title claims a cut only when no
+  backup rule was slower (#349).
+- Tests: `TestClusterReregistersOnHeartbeat` uses a 1 s worker timeout, so
+  a heartbeat delayed on a loaded CI runner no longer costs the worker a
+  third registration (#349).
 - CI: `.circleci/mapping.txt` maps `.claude/` to the lint job, so the
   agent skills' Python scripts no longer fail `mapping-coverage` and
   `make check` with "unmapped file" (#352).

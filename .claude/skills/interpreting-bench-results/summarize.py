@@ -7,7 +7,8 @@ Each DIR is one experiment's results directory (bench/results/E2,
 bench/evaluation/E0, ...) holding runs.csv and, when present, cache.jsonl
 and machine.json. For each setting, program and worker count it prints the
 valid runs' median and range of the coordinator's job time (`seconds`), the
-wall clock, backups, bytes shuffled and the disk reads during the run. Then
+wall clock, median backups launched, total backups won across the valid
+runs, bytes shuffled and the disk reads during the run. Then
 it lists runs to look at (invalid, or far from their group's median) and,
 within each program and worker count, whether every pair of measured
 settings has separate or overlapping ranges.
@@ -69,7 +70,7 @@ def summarize(d):
         groups.setdefault((r["setting"], r["program"], r["workers"]), []).append(r)
     print(
         f"{'setting':24} {'program':10} {'w':>2} {'n':>3} {'valid':>5}  "
-        f"{'seconds med [range]':24} {'wall med':>9} {'backups':>7} {'won':>4} "
+        f"{'seconds med [range]':24} {'wall med':>9} {'bk med':>7} {'won sum':>7} "
         f"{'shuffle MB':>11}  disk MB (machine-wide)"
     )
     look = []
@@ -89,7 +90,7 @@ def summarize(d):
         print(
             f"{setting + mark:24} {program:10} {workers:>2} {len(group):>3} {len(ok):>5}  "
             f"{span(secs):24} {statistics.median(wall) if wall else 0:9.2f} "
-            f"{statistics.median(backups) if backups else 0:7g} {won:4} "
+            f"{statistics.median(backups) if backups else 0:7g} {won:7} "
             f"{'/'.join(map(str, sorted(shuffled))) or '-':>11}  {span(disk, '{:.0f}')}"
         )
         med = statistics.median(secs) if secs else None

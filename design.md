@@ -12,8 +12,7 @@ evaluation plan for the special features. The rest follows one job from
 submission to completion, so a reviewer can go from the paper to the code,
 and lists where we differ from the paper and why.
 
-Everything described here is built and tested, except the LATE evaluation
-(E7), which is wired but not yet run (#59).
+Everything described here is built and tested.
 
 ## Assignment requirements
 
@@ -27,7 +26,7 @@ Each requirement of the assignment, and where this repository meets it.
 | Client gives input location, output location, a file with map and reduce functions, M and R | `mr submit -m M -r R job.go <output> <inputs…>` | built |
 | README: what to build, what to install, how to upload the example data, how to write a job (a complete example for that data), how to submit it | [README](README.md#quick-start), rewritten for the host client | done |
 | Design doc: client interface, language, communication, shared storage, formats, tests, performance evaluation | The sections below | done |
-| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E6 run, [results](bench/README.md#evaluation-e0e6) |
+| At least one special feature, with measurements and plots showing it works | [Special features](#special-features), [Performance evaluation](#performance-evaluation), [`bench/experiments.sh`](bench/experiments.sh) | features built; E0–E7 run, [results](bench/README.md#evaluation-e0e7) |
 | Never push to `main`; small pull requests; CircleCI runs tests on PRs; feedback sought and given on PRs (an AI agent when solo) | [Process](#process), [ADR 0014](docs/design/0014-ci-on-pull-requests.md) | in place |
 | Timeline: team email (Nov 1), design.md (Nov 6), code on `main` (Nov 16), demo (Nov 17–20) | [Course deliverables](docs/roadmap.md#course-deliverables-honors-project-1) | see the roadmap |
 
@@ -247,7 +246,7 @@ each, on 4 vCPUs (Intel Xeon Silver 4516Y+), 8 GB of memory and a 35 GB
 disk (33 GB root, shared; [the VM](docs/cluster-vm.md#the-vm), the source of
 truth for the VM's specification). `make bench` already generates the inputs, samples every worker's
 `/metrics` every 0.5 s, and records the job's counters, the git commit and
-the machine in `result.json`. Every point is the median of three runs (E2's no-straggler setting is ten alternating pairs), with
+the machine in `result.json`. Every point is the median of five runs (E2-pairs is ten alternating pairs), with
 the range shown as an error bar. Each plot's caption states the input size,
 M, R and the commit.
 
@@ -260,7 +259,7 @@ M, R and the commit.
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
 | E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
 | E6 | How much does the combiner save on real text? | Word count, 1 GiB each, combiner on and off, on three inputs: `crawl-eng`, Common Crawl's English pages (the real-text result); `crawl`, its pages in every language, where scripts without spaces make runs of text one word; `book`, War and Peace's lines repeated, a fixed vocabulary and so a best case | Bytes shuffled and job time, grouped bars per input |
-| E7 | Does LATE beat the paper's rule on workers of different speeds? (#59, not yet run) | sort, 1 GiB, M = 32; the four workers throttled to 1, 0.6, 0.3 and 0.15 CPU; coordinator `-speculation` `paper`, `late` and `off` | Job time and backups started and won, per setting; no plot yet |
+| E7 | Does LATE beat the paper's rule on workers of different speeds? (#59) | sort, 1 GiB, M = 32; the four workers throttled to 1, 0.6, 0.3 and 0.15 CPU; coordinator `-speculation` `paper` and `late`, and `-backups=false` for no backups | Job time and backups started and won, per setting; each median beside its runs |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled
@@ -275,7 +274,7 @@ differs, fails, or ends before its kill or restart is marked invalid and
 reported, not plotted.
 
 How it runs. [`bench/experiments.sh`](bench/experiments.sh) `E0|E1|E2|E3|E4|E5|E6|E7|all`
-runs the experiments (`all` leaves out E7, which is groundwork for #59) and writes one CSV row per run, plus the
+runs the experiments (`all` leaves out E7, which runs on its own) and writes one CSV row per run, plus the
 coordinator's task counts (E2, E4) or the workers' byte counters (E3) over
 time, to `bench/results/`; [`bench/plot-experiments.py`](bench/plot-experiments.py)
 draws the plots and prints the tables. The [runbook](docs/runbook.md#56-the-evaluation-experiments-and-plots)
@@ -297,19 +296,24 @@ parameter and a seed, and samples from a finite vocabulary of 100,000
 words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
-[`bench/README.md`](bench/README.md#evaluation-e0e6), with the commands that
-made them; the data is in `bench/evaluation/`. What they showed (course VM,
-2026-10-26): every run succeeded with the right output. E0 scaled 3.8× on four
-workers for word count but only 2.3× for grep, whose one-second job is mostly
-fixed cost, so grep is not the most linear, as predicted above. E1 shuffled
-15× to 78× fewer bytes with the combiner, more with more skew, and ran 18%
-to 44% faster. E2, run again on 2026-10-28, took 11.2 s with the straggler and backups and 17.6 s with the straggler and no backups (run in blocks, so not drift-controlled), and 8.0 s with no straggler (ten alternating pairs). E3 cost
-about the 10 s detection timeout when the kill came early and 27 s at 75%,
-when finished map output was lost. E4's restart cost 1.6 s. E5's job file
-made word count 10.5× slower (399 s against 38 s), nearly all in the map
+[`bench/README.md`](bench/README.md#evaluation-e0e7), with the commands that
+made them; the data is in `bench/evaluation/rerun-8f0ddb9/`. What they showed
+(course VM, every experiment at commit `8f0ddb9`, five runs per setting taken
+in turn): every run succeeded, and each disturbed run's output checksum
+matched its experiment's first undisturbed run. E0 scaled 3.7× on four
+workers for word count but only 2.0× for grep, whose job of a second or two
+is mostly fixed cost, so grep is not the most linear, as predicted above.
+E1 shuffled 15× to 78× fewer bytes with the combiner, more with more skew,
+and ran 16% to 42% faster. E2 took 11.4 s with the straggler and backups and
+17.9 s with the straggler and no backups, and about 7.7–7.9 s with no
+straggler, with or without backups (ten alternating pairs). E3 cost a little
+under the 10 s detection timeout when the kill came early and 26 s at 75%,
+when finished map output was lost. E4's restart cost 1.2 s. E5's job file
+made word count 10.2× slower (400 s against 39 s), nearly all in the map
 phase; a profile traced most of it to the job file's per-byte word test, and
-with the compiled helpers `api.Words` and `api.Sum` the job file takes 91 s
-(2.4×).
+with the compiled helpers `api.Words` and `api.Sum` the job file takes 90 s
+(2.3×). E7 found either backup rule 32% faster than none on workers of mixed
+speeds, with no clear difference between the paper's rule and LATE.
 
 ### Process
 

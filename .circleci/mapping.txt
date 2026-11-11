@@ -58,6 +58,8 @@
 ^\.claude/ run-lint
 
 # Files outside python/ that the Python tests read.
+# A plot test reads the bundled fonts' licence.
+^bench/fonts/ run-python
 ^README\.md$ run-python
 ^design\.md$ run-python
 ^docs/README\.md$ run-python

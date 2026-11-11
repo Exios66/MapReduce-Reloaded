@@ -1,0 +1,16 @@
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E5,compiled,wordcount,4,1,1073741824,32,4,,SUCCEEDED,39.134,39.275,5,0,88755466,1,job-91
+E5,interpreted,wordcount,4,1,1073741824,32,4,,SUCCEEDED,89.334,89.439,5,0,88755466,1,job-92
+E5,naive,wordcount,4,1,1073741824,32,4,,SUCCEEDED,400.500,400.579,5,0,88755466,1,job-93
+E5,interpreted,wordcount,4,2,1073741824,32,4,,SUCCEEDED,89.671,89.821,4,0,88755466,1,job-94
+E5,naive,wordcount,4,2,1073741824,32,4,,SUCCEEDED,399.876,399.895,5,0,88755466,1,job-95
+E5,compiled,wordcount,4,2,1073741824,32,4,,SUCCEEDED,39.106,39.112,3,0,88755466,1,job-96
+E5,naive,wordcount,4,3,1073741824,32,4,,SUCCEEDED,400.299,400.403,4,0,88755466,1,job-97
+E5,compiled,wordcount,4,3,1073741824,32,4,,SUCCEEDED,39.192,39.089,3,0,88755466,1,job-98
+E5,interpreted,wordcount,4,3,1073741824,32,4,,SUCCEEDED,88.500,88.564,4,0,88755466,1,job-99
+E5,compiled,wordcount,4,4,1073741824,32,4,,SUCCEEDED,37.750,37.693,5,0,88755466,1,job-100
+E5,interpreted,wordcount,4,4,1073741824,32,4,,SUCCEEDED,90.362,90.389,5,0,88755466,1,job-101
+E5,naive,wordcount,4,4,1073741824,32,4,,SUCCEEDED,400.429,400.356,4,0,88755466,1,job-102
+E5,interpreted,wordcount,4,5,1073741824,32,4,,SUCCEEDED,89.779,89.748,4,0,88755466,1,job-103
+E5,naive,wordcount,4,5,1073741824,32,4,,SUCCEEDED,401.088,401.016,5,0,88755466,1,job-104
+E5,compiled,wordcount,4,5,1073741824,32,4,,SUCCEEDED,37.921,38.056,6,0,88755466,1,job-105

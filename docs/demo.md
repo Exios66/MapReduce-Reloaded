@@ -83,7 +83,7 @@ diff <(bin/mr cat "$OUT") <(bin/mr cat "$OUT-nocombiner") && echo same output
 Compare `map.output.bytes` in the two replies: about 235 kB with the
 combiner and 607 kB without, for the same output. That is the paper's
 §4.3: each map task sums its own counts before the shuffle. At 1 GiB the
-saving is 15× to 78× the bytes and 18–44% of the job time (E1), and 3× to
+saving is 15× to 78× the bytes and 16–42% of the job time (E1), and 3× to
 33× on real text (E6).
 
 ## 2:00 — Read the output, and check the oracle
@@ -140,16 +140,16 @@ finished, there was nothing to recover. `docker kill` crashes the
 coordinator, as `make e2e` does; a `docker restart` would stop it cleanly,
 and a clean stop tells idle workers to exit. Submit without `-wait`: the
 client's connection ends when the coordinator does, so poll `mr status`
-instead. The job ends `SUCCEEDED`, about 1.6 s slower than an undisturbed
+instead. The job ends `SUCCEEDED`, about 1.2 s slower than an undisturbed
 run (E4), and both checksums match: a lost worker and a lost coordinator
 give the same output as each other.
 
 ## 5:15 — The results
 
 Show [`bench/evaluation/faults.png`](../bench/evaluation/faults.png): the
-job time each disturbance added, measured three times each on this VM, and
+job time each disturbance added, measured five times each on this VM, and
 every disturbed run's output identical to an undisturbed run's. Then the README's E0 (word count runs
-3.8× faster on four workers) and E1 figures. Point at the status page for
+3.7× faster on four workers) and E1 figures. Point at the status page for
 the jobs just run.
 
 ## 5:45 — Close
@@ -168,8 +168,8 @@ Each answer has a command or a page to show.
 |---|---|
 | How do you know it is correct? | `make chaos RUNS=5 SEED=1`: seeded worker kills and pauses and coordinator crashes, each run checked against the reference output. [Testing](testing.md) lists the rest: golden vectors shared by Go and Python, a model-based test of the coordinator, fuzzing, mutation testing |
 | Which paper features are built? | [Paper mapping](paper-mapping.md): F1–F24, each with its code and the test that proves it; `internal/papermap` fails the build if one is missing |
-| What about stragglers? | [`faults.png`](../bench/evaluation/faults.png) and [E2](../bench/README.md#evaluation-e0e6): backups cut a straggler's job from 17.6 s to 11.2 s. `deploy/compose/backups-off.yaml` turns them off; `speculation-late.yaml` switches to LATE (ADR 0019) |
-| Does it scale? | [E0](../bench/README.md#evaluation-e0e6): 3.8× for word count on four workers; grep only 2.3×, because a 2 s job is mostly fixed costs |
+| What about stragglers? | [`faults.png`](../bench/evaluation/faults.png) and [E2](../bench/README.md#evaluation-e0e7): backups cut a straggler's job from 17.9 s to 11.4 s. `deploy/compose/backups-off.yaml` turns them off; `speculation-late.yaml` switches to LATE (ADR 0019) |
+| Does it scale? | [E0](../bench/README.md#evaluation-e0e7): 3.7× for word count on four workers; grep only 2.0×, because a 2.6 s job is mostly fixed costs |
 | Can it use object storage? | `make e2e-s3`: the same job with input and output in an S3-compatible store; the commit is a copy and a delete ([ADR 0013](design/0013-commit-on-object-storage.md)) |
 | Is the Python side real? | `make py-e2e`: the Python coordinator drives Go workers to the same output; local mode in Python writes the same bytes as Go |
 | How is it observed? | The status page (paper §4.8), `/metrics` for Prometheus, JSON logs, and `make monitoring-up` for Grafana |

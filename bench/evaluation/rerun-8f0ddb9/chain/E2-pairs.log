@@ -1,0 +1,181 @@
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[01:48:52] E2 normal distsort run 1
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[01:49:23] E2 normal-no-backups distsort run 1
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+[01:49:54] E2 normal-no-backups distsort run 2
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+[01:50:26] E2 normal distsort run 2
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[01:50:57] E2 normal distsort run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+[01:51:28] E2 normal-no-backups distsort run 3
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[01:51:59] E2 normal-no-backups distsort run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[01:52:31] E2 normal distsort run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[01:53:02] E2 normal distsort run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[01:53:34] E2 normal-no-backups distsort run 5
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[01:54:05] E2 normal-no-backups distsort run 6
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[01:54:36] E2 normal distsort run 6
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+[01:55:07] E2 normal distsort run 7
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[01:55:38] E2 normal-no-backups distsort run 7
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[01:56:09] E2 normal-no-backups distsort run 8
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[01:56:41] E2 normal distsort run 8
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[01:57:12] E2 normal distsort run 9
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+[01:57:44] E2 normal-no-backups distsort run 9
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+[01:58:15] E2 normal-no-backups distsort run 10
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[01:58:47] E2 normal distsort run 10
+[01:59:06] done
