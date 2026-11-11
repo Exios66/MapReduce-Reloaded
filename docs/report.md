@@ -15,12 +15,12 @@ provides a coordinator server, and for
 the same uncompressed job both produce the same bytes. All 24 of the
 paper's features (F1–F24) are built and each is named with the test that
 proves it. The paper's §5 experiments (grep, sort, backups, failures) were reproduced
-on the VM, alongside further experiments E0, E1, and E4–E6.
+on the VM, alongside further experiments E0, E1, and E4–E7.
 The mechanisms behave as the paper says: phases overlap, backups cut a
-straggler's tail (17.6 s without them, 11.2 s with), and a job survives a
+straggler's tail (17.9 s without them, 11.4 s with), and a job survives a
 lost worker or a restarted coordinator with the same output. What changes
 at four workers is the size of fixed costs: startup, heartbeats and the
-10 s failure timeout are a large share of a 10-second job.
+10 s failure timeout are a large share of an 8-second job.
 
 ## Architecture
 
@@ -91,16 +91,17 @@ change behavior:
 |---|---|
 | §5.2 Grep, 10 GB | 18.3 s; the input rate rises, plateaus near one disk's rate, and falls, as in Figure 2 |
 | §5.3 Sort, 1 GiB | 7.8 s; map, shuffle and output overlap as in Figure 3(a) |
-| §5.4 and E2: backup tasks | With one worker at 0.2 CPU, 11.2 s with backups and 17.6 s without (+56%; the paper saw +44%). With no straggler, no significant cost over ten interleaved pairs |
-| §5.5 and E3: losing a worker | Every job finished, and its output checksum matched a normal run's; +79% to +232%, because one of four workers is a quarter of the cluster and the 10 s timeout is most of a 12 s job |
-| E0: scaling | 3.8× on four workers for word count, 2.9× for sort, 2.3× for grep |
-| E1: combiner | 15× to 78× fewer bytes shuffled, 18–44% faster |
-| E4: coordinator restart | 1.6 s, every finished task kept |
-| E5: interpreted job file | 2.4× slower than compiled with the compiled helpers, 10.5× without |
-| E6: combiner on real text | 5.2× fewer bytes shuffled and 14% faster on crawled English, 3.2× and 7% in every language, 33× and 22% on the book (a best case) |
+| §5.4 and E2: backup tasks | With one worker at 0.2 CPU, 11.4 s with backups and 17.9 s without (+58%; the paper saw +44%). With no straggler, no significant cost over ten interleaved pairs |
+| §5.5 and E3: losing a worker | Every job finished, and its output checksum matched a normal run's; +101% to +333%, because one of four workers is a quarter of the cluster and the 10 s timeout is longer than the 7.9 s job |
+| E0: scaling | 3.7× on four workers for word count, 3.1× for sort, 2.0× for grep |
+| E1: combiner | 15× to 78× fewer bytes shuffled, 16–42% faster |
+| E4: coordinator restart | 1.2 s, every finished task kept |
+| E5: interpreted job file | 2.3× slower than compiled with the compiled helpers, 10.2× without |
+| E6: combiner on real text | 5.2× fewer bytes shuffled and 11% faster on crawled English, 3.2× and 8% in every language, 33× and 24% on the book (a best case) |
+| E7: paper's backups against LATE | On four workers of mixed speeds, either rule cuts a sort by 32%; LATE uses fewer backups (1 against 5), and the two times overlap |
 
 [Evaluation](evaluation.md) compares each run with the paper's figure;
-[bench/README.md](../bench/README.md#evaluation-e0e6) has the plots, the
+[bench/README.md](../bench/README.md#evaluation-e0e7) has the plots, the
 tables and the commands, and `bench/evaluation/` has the data.
 
 ## How it is tested

@@ -97,7 +97,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions. LATE (#284, tracked in #45) is built; its experiment
-    E7 is wired and has not been run.
+    E7 ran in #349: either backup rule cuts a mixed-speed sort by 32%, with no clear difference between them.
 - **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk with a 33 GB root, shared). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see

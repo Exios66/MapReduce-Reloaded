@@ -79,7 +79,8 @@ def test_the_evaluation_figures_it_shows_exist():
     source = next(cell["source"] for cell in cells() if "display(Image(" in cell["source"])
     names = source.split("for name in (", 1)[1].split(")", 1)[0]
     figures = [name.strip(' "') for name in names.split(",") if name.strip()]
-    assert figures
+    # E5 (#346) and E7 (#343) are results too, not only the README's.
+    assert {"faults", "E0", "E1", "E5", "E7"} <= set(figures)
     for name in figures:
         for theme in ("", "-dark"):
             assert (NOTEBOOK.parents[1] / "bench/evaluation" / f"{name}{theme}.png").is_file()

@@ -127,6 +127,14 @@ cut a release.
   clock each experiment uses. Every figure is set in Inter, shipped in
   `bench/fonts/` under the SIL Open Font License, so they look the same
   whichever machine draws them (#349).
+- Docs: every result in `README.md`, `bench/README.md` (now "Evaluation
+  (E0–E7)"), `docs/evaluation.md`, `docs/report.md`, `docs/demo.md`,
+  `design.md`, `docs/language-choice.md`, `docs/reviewing.md` and the demo
+  notebook comes from the rerun at `8f0ddb9`: five runs per setting, taken
+  in turn. E7's results replace "not yet run", the README and notebook show
+  the E5 and E7 figures, and `docs/evaluation.md` records the isolated E0
+  rerun and the worker memory limit's share of sort's disk reads (#343,
+  #344, #346, #347, #349).
 - Bench results: every figure in `bench/evaluation/` is drawn from the
   rerun at `8f0ddb9` in `bench/evaluation/rerun-8f0ddb9/`: E0–E7 at one
   commit, five interleaved repeats each, with their archives and harness

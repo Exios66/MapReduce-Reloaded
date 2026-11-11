@@ -170,7 +170,7 @@ SSH drops. The command above draws a fresh run into `bench/plots/`
 (`E0.png` … `E6.png`, each with a `-dark` variant), so it does not touch the
 plots committed in `bench/evaluation/`, which come from the saved runs there:
 `python/.venv/bin/python bench/plot-experiments.py bench/evaluation bench/evaluation` (see
-[bench/README.md](../bench/README.md#evaluation-e0e6)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e6).
+[bench/README.md](../bench/README.md#evaluation-e0e7)). The script prints the tables that go in [`bench/README.md`](../bench/README.md#evaluation-e0e7).
 `SIZE` and `REPEAT` shrink a trial run, e.g. `SIZE=268435456 REPEAT=1`.
 
 Every trial appends two rows to `bench/results/EXPERIMENT/cache.jsonl`: a
@@ -197,10 +197,10 @@ through `sudo -n tee`, and the experiment stops if that fails. Every trial of
 one comparison must share a cache state (all dropped or none), so set it for
 all of E1 or none of it, and do not compare the `start` rows' `dropped`
 values across groups.
-E5 is the slowest: its three runs of the naive job file take about 7 minutes each.
+E5 is the slowest: each run of the naive job file takes about 7 minutes.
 `bench/experiments.sh E7` (paper vs LATE on mixed-speed workers, #59) is not
-part of `all` and has not been run; see
-[bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59-not-yet-run).
+part of `all`; see
+[bench/README.md](../bench/README.md#e7-the-papers-backups-against-late-on-mixed-speed-workers-59).
 
 Each run also saves what the cluster logged, to
 `bench/results/EXPERIMENT/logs-SETTING-PROGRAM-RUN.log`: the coordinator's and every

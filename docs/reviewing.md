@@ -62,10 +62,10 @@ Stated where they apply, collected here:
   failures cost more here than in the paper ([evaluation](evaluation.md)).
 - **Backups start when no task of a phase is idle**, because the paper
   gives no threshold; with R equal to the workers, that is every job's last
-  reduce tasks ([E2](../bench/README.md#evaluation-e0e6)).
+  reduce tasks ([E2](../bench/README.md#evaluation-e0e7)).
 - **LATE speculation** is built as an opt-in mode
   ([ADR 0019](design/0019-late-speculation.md)) but not yet evaluated.
 - **Python has no worker**: Python runs local mode and the coordinator; Go
   workers run every cluster task ([future work](report.md#future-work)).
-- **A job file is interpreted**, 2.4× slower than the compiled program when
-  it uses the `api` helpers ([E5](../bench/README.md#evaluation-e0e6)).
+- **A job file is interpreted**, 2.3× slower than the compiled program when
+  it uses the `api` helpers ([E5](../bench/README.md#evaluation-e0e7)).
