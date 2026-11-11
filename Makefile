@@ -157,9 +157,10 @@ sh-lint:
 	fi
 
 # Every relative link and anchor in the tracked Markdown files resolves
-# (scripts/check-links.py, #159), and the Markdown style passes pymarkdown
-# (.pymarkdown.json: line length off, picture/sub HTML allowed). CI's
-# Python jobs run it; pymarkdown comes with python[dev]. Where it is not
+# (scripts/check-links.py, #159), every bench chart a page shows has its
+# dark variant (scripts/check-dark-charts.py, #349), and the Markdown style
+# passes pymarkdown (.pymarkdown.json: line length off, picture/sub HTML
+# allowed). CI's Python jobs run it; pymarkdown comes with python[dev]. Where it is not
 # installed, the style check is skipped unless MR_REQUIRE_PYMARKDOWN is set,
 # mirroring sh-lint's shellcheck handling.
 # PR templates live under .github and use HTML comments by design, so the
@@ -167,6 +168,7 @@ sh-lint:
 MD_FILES = $(shell git ls-files '*.md' | grep -v '^\.github/')
 md-lint:
 	$(PYTHON) scripts/check-links.py
+	$(PYTHON) scripts/check-dark-charts.py
 	@if $(PYTHON) -m pymarkdown --help >/dev/null 2>&1; then \
 		$(PYTHON) -m pymarkdown --config .pymarkdown.json scan $(MD_FILES); \
 	elif [ -n "$$MR_REQUIRE_PYMARKDOWN" ]; then \

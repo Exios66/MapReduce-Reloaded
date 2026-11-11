@@ -745,7 +745,7 @@ def test_e7_takes_settings_in_turn_with_their_overrides_and_throttles(
     result = invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
-        begin() { note "begin|$1"; }
+        begin() { note "begin|$1"; results_dir=.; }
         configure() { note "configure|$1|${2:-}"; }
         compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
         compose=(compose_stub)
@@ -782,7 +782,8 @@ def test_e7_takes_settings_in_turn_with_their_overrides_and_throttles(
     assert log.read_text().splitlines() == expected
 
 
-def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
+def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch, tmp_path):
+    """E7_CPUS and E7_SETTINGS are used, and the limits are recorded in cpus.txt."""
     invoke, log = experiment
     monkeypatch.setenv("REPEAT", "1")
     monkeypatch.setenv("E7_CPUS", "1 1 0.5 .2")
@@ -790,7 +791,7 @@ def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
     invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
-        begin() { :; }
+        begin() { results_dir=.; }
         configure() { note "configure|$1|${2:-}"; }
         compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
         compose=(compose_stub)
@@ -810,13 +811,14 @@ def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
         *(f"docker|update --cpus 1 w{i}" for i in range(1, 5)),
         "configure|4|",
     ]
+    assert (tmp_path / "cpus.txt").read_text() == "1 1 0.5 .2\n"
 
 
 def test_e7_stops_when_the_cluster_has_another_number_of_workers(experiment):
     invoke, log = experiment
     result = invoke(
         """
-        begin() { :; }
+        begin() { results_dir=.; }
         configure() { :; }
         compose_stub() { printf 'w1\nw2\nw3\n'; }
         compose=(compose_stub)
@@ -1355,32 +1357,177 @@ def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(experiment, mon
     assert log.read_text().splitlines() == expected
 
 
+@pytest.mark.parametrize("isolate", ["1", "0"])
 @pytest.mark.parametrize("repeat", ["1", "2"])
 def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
-    experiment, monkeypatch, repeat
+    experiment, monkeypatch, repeat, isolate
 ):
-    """E0 warms each program up, then interleaves every cell, reversed on even repeats (#282)."""
+    """E0 warms each program up, then interleaves every cell, reversed on even repeats (#282).
+
+    With E0_ISOLATE=1 every run, warm-up or measured, starts with only its
+    own program's input in the page cache (#347).
+    """
     invoke, log = experiment
     monkeypatch.setenv("REPEAT", repeat)
+    monkeypatch.setenv("E0_ISOLATE", isolate)
+    monkeypatch.delenv("DROP_CACHES", raising=False)
     result = invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
         begin() { note "begin|$1"; }
         configure() { note "configure|$1"; }
+        isolate() { note "isolate|$1"; }
         run() { note "run|$1|$2|$3|$4|$5"; }
         """,
         "E0",
     )
     assert result.stdout == ""
     programs = ["grep", "distsort", "wordcount"]
+    isolated = (lambda p: [f"isolate|{p}"]) if isolate == "1" else (lambda p: [])
     expected = ["begin|E0", "configure|4"]
-    expected += [f"run|E0|warmup|{p}|1|4" for p in programs]
+    for p in programs:
+        expected += isolated(p) + [f"run|E0|warmup|{p}|1|4"]
     cells = [(p, w) for p in programs for w in (4, 2, 1)]
     for n in range(1, int(repeat) + 1):
         for p, w in cells if n % 2 else reversed(cells):
-            expected += [f"configure|{w}", f"run|E0|w{w}|{p}|{n}|{w}"]
+            expected += [f"configure|{w}"] + isolated(p) + [f"run|E0|w{w}|{p}|{n}|{w}"]
     expected.append("configure|4")
     assert log.read_text().splitlines() == expected
+
+
+ISOLATE_STUBS = """
+note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+input() { note "input|$1"; echo "/out/exp-input-$1-1024.txt"; }
+drop_cache() { note "drop|$*"; }
+in_volume() {
+    case $3 in
+    *exp-input-\**)
+        note "volume:list"
+        printf '%s\n' /out/exp-input-distsort-1024.txt /out/exp-input-grep-1024.txt \
+            /out/exp-input-wordcount-1024-book.txt /out/exp-input-wordcount-1024.txt
+        ;;
+    *) note "volume:$*" ;;
+    esac
+}
+"""
+
+
+def test_isolate_drops_the_other_inputs_then_reads_its_own(experiment):
+    """isolate drops every other input in the volume from the page cache, the
+    word count variants E1 and E6 left among them, then reads its own."""
+    invoke, log = experiment
+    invoke(ISOLATE_STUBS, after="isolate distsort")
+    calls = [line for line in log.read_text().splitlines() if not line.startswith("input|")]
+    assert calls == [
+        "volume:list",
+        "drop|/out/exp-input-grep-1024.txt /out/exp-input-wordcount-1024-book.txt"
+        " /out/exp-input-wordcount-1024.txt",
+        "volume:sh -c cat '/out/exp-input-distsort-1024.txt' > /dev/null",
+    ]
+
+
+def test_isolate_generates_missing_inputs_first(experiment):
+    """Every E0 input exists before isolate drops or reads one, as on a fresh volume."""
+    invoke, log = experiment
+    invoke(ISOLATE_STUBS, after="isolate wordcount")
+    lines = log.read_text().splitlines()
+    assert lines[:3] == ["input|grep", "input|distsort", "input|wordcount"]
+    assert lines[3:5] == ["volume:list", lines[4]] and lines[4].startswith("drop|")
+
+
+def test_drop_cache_runs_the_script_on_the_volume(experiment, tmp_path):
+    """drop_cache runs bench/drop-cache.py in a container that mounts the output volume."""
+    invoke, log = experiment
+    invoke(
+        """
+        docker() { printf 'docker|%s\n' "$*" >> "$CALL_LOG"; }
+        """,
+        after="drop_cache /out/a /out/b",
+    )
+    assert log.read_text().splitlines() == [
+        f"docker|run --rm -v mapreduce_output:/out -v {tmp_path}/bench:/bench:ro "
+        "python:3.13-alpine python /bench/drop-cache.py /out/a /out/b"
+    ]
+
+
+def test_e0_stops_when_the_cache_cannot_be_dropped(experiment, monkeypatch):
+    """If the page cache cannot be dropped, E0 stops instead of running without isolation."""
+    invoke, log = experiment
+    monkeypatch.setenv("E0_ISOLATE", "1")
+    monkeypatch.delenv("DROP_CACHES", raising=False)
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        input() { echo "/out/exp-input-$1-1024.txt"; }
+        in_volume() { :; }
+        docker() { return 1; }
+        begin() { :; }
+        configure() { :; }
+        run() { note "run|$*"; }
+        """,
+        "E0",
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "could not drop the page cache" in result.stderr
+    assert "run|" not in log.read_text()
+
+
+@pytest.mark.parametrize("value", ["2", "yes", ""])
+def test_e0_isolate_rejects_other_values(experiment, monkeypatch, value):
+    """E0_ISOLATE other than 0 or 1 stops the script before the cluster starts."""
+    invoke, _ = experiment
+    monkeypatch.setenv("E0_ISOLATE", value)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        "E0",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E0_ISOLATE" in result.stderr
+    assert "begun" not in result.stdout
+
+
+def test_e0_rejects_isolation_with_drop_caches(experiment, monkeypatch):
+    """DROP_CACHES=1 would empty the cache isolate fills, so E0 refuses both."""
+    invoke, _ = experiment
+    monkeypatch.setenv("E0_ISOLATE", "1")
+    monkeypatch.setenv("DROP_CACHES", "1")
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        "E0",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E0_ISOLATE=1 and DROP_CACHES=1 conflict" in result.stderr
+    assert "begun" not in result.stdout
+
+
+def test_e0_drop_caches_turns_isolation_off_by_default(experiment, monkeypatch):
+    """With DROP_CACHES=1 and no E0_ISOLATE, E0 runs cold instead of stopping."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", "1")
+    monkeypatch.delenv("E0_ISOLATE", raising=False)
+    monkeypatch.setenv("DROP_CACHES", "1")
+    invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { :; }
+        isolate() { note "isolate|$1"; }
+        run() { note "run|$2|$3"; }
+        """,
+        "E0",
+    )
+    calls = log.read_text().splitlines()
+    assert not [c for c in calls if c.startswith("isolate|")]
+    assert len(calls) == 3 + 9  # three warm-ups, then nine measured cells
 
 
 @pytest.mark.parametrize("experiment_name", ["E3", "E4"])

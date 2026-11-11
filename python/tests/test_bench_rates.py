@@ -117,3 +117,22 @@ def test_unplotted_metrics_cost_nothing(tmp_path):
         ["seconds", "input", "shuffle", "output"],
         ["30000.000", "1.000", "0.000", "0.000"],
     ]
+
+
+def test_plot_draws_a_light_and_a_dark_chart(tmp_path):
+    """OUT.png on the light surface and OUT-dark.png on the dark one, as
+    plot-experiments.py draws every figure, so a page can pick by theme."""
+    pytest.importorskip("matplotlib")
+    samples = tmp_path / "samples.csv"
+    samples.write_text(
+        "seconds,url,metric,value\n"
+        "0,a,mr_worker_map_input_bytes_total,0\n"
+        "1,a,mr_worker_map_input_bytes_total,2000000\n"
+        "2,a,mr_worker_map_input_bytes_total,4000000\n"
+    )
+    run("plot-rates.py", samples, tmp_path / "rates.png", "grep, 1 GiB")
+    from matplotlib.image import imread
+
+    light, dark = imread(tmp_path / "rates.png"), imread(tmp_path / "rates-dark.png")
+    assert light[2, 2, :3].mean() > 0.9, "light surface"
+    assert dark[2, 2, :3].mean() < 0.2, "dark surface"

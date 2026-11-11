@@ -57,9 +57,10 @@ differently ([the full table](../design.md#differences-from-the-2004-paper)).
 
 ### Evidence that Go is adequate
 
-- **Scaling.** On the course VM, each job got faster with more one-CPU
-  workers. At four workers against one, word count ran 3.8× faster,
-  `distsort` 2.9× and grep 2.3×
+- **Scaling.** On the course VM, each job got faster with a second
+  one-CPU worker, and sort and word count again with four; grep's two- and
+  four-worker ranges overlap. At four workers against one, word count ran 3.7× faster,
+  `distsort` 3.1× and grep 2.0×
   ([bench/README.md, E0](../bench/README.md#e0-scaling-over-workers)). The
   small gain for grep is fixed cost in a job of about a second, and the
   `distsort` gain is probably limited by one shared disk; both explanations
@@ -124,16 +125,16 @@ image, not of Go as the implementation language. The built-in programs are
 compiled in, and the benchmarks use them.
 
 E5 measured the cost on 1 GiB of Zipf word count, M = 32, R = 4, median of
-three runs
+five runs
 ([bench/README.md, E5](../bench/README.md#e5-what-an-interpreted-job-file-costs)):
 
 | Setting | Job time |
 |---|---:|
-| Compiled `wordcount` | 38.12 s |
-| Job file `examples/wordcount.go`, which uses the compiled helpers `api.Words` and `api.Sum` | 91.08 s (2.4×) |
-| Job file `bench/jobs/wordcount-naive.go`, which tests for word boundaries itself | 398.97 s (10.5×) |
+| Compiled `wordcount` | 39.11 s |
+| Job file `examples/wordcount.go`, which uses the compiled helpers `api.Words` and `api.Sum` | 89.67 s (2.3×) |
+| Job file `bench/jobs/wordcount-naive.go`, which tests for word boundaries itself | 400.43 s (10.2×) |
 
-A profile traced most of the 10.5× to the job file's own per-byte word test,
+A profile traced most of the 10.2× to the job file's own per-byte word test,
 which the interpreter ran for every byte. The helpers move that work into
 compiled code. A job file that does heavy per-byte work in its own code
 pays the full cost.
@@ -270,4 +271,4 @@ later, with this report; the decision already implied it.
 - [ADR 0001](design/0001-languages-and-shared-contract.md): the decision.
 - [Paper mapping](paper-mapping.md): which implementation has which feature.
 - [Testing](testing.md): every kind of test and the coverage floors.
-- [Evaluation](evaluation.md) and [bench/README.md](../bench/README.md#evaluation-e0e6): the experiments.
+- [Evaluation](evaluation.md) and [bench/README.md](../bench/README.md#evaluation-e0e7): the experiments.

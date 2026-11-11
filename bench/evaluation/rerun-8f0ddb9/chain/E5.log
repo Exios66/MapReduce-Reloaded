@@ -1,0 +1,136 @@
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:48:17] E5 compiled wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:49:11] E5 interpreted wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[00:50:56] E5 naive wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+[00:57:50] E5 interpreted wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+[00:59:35] E5 naive wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[01:06:29] E5 compiled wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+[01:07:23] E5 naive wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+[01:14:17] E5 compiled wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[01:15:11] E5 interpreted wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+[01:16:53] E5 compiled wordcount run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[01:17:44] E5 interpreted wordcount run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+[01:19:29] E5 naive wordcount run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[01:26:23] E5 interpreted wordcount run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+[01:28:08] E5 naive wordcount run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[01:35:02] E5 compiled wordcount run 5
+[01:35:42] done

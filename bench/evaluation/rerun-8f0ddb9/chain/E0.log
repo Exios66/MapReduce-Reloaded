@@ -1,0 +1,286 @@
+[23:31:39] generating 1073741824 bytes for grep
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+[23:32:02] E0 warmup grep run 1
+[23:32:05] generating 1073741824 bytes for distsort
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+[23:32:30] E0 warmup distsort run 1
+[23:32:47] generating 1073741824 bytes for wordcount
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[23:34:48] E0 warmup wordcount run 1
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:35:42] E0 w4 grep run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:36:01] E0 w2 grep run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:36:18] E0 w1 grep run 1
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[23:36:37] E0 w4 distsort run 1
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[23:37:08] E0 w2 distsort run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:37:45] E0 w1 distsort run 1
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[23:38:35] E0 w4 wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[23:39:32] E0 w2 wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:41:04] E0 w1 wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:43:48] E0 w1 wordcount run 2
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:46:31] E0 w2 wordcount run 2
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[23:48:03] E0 w4 wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:48:58] E0 w1 distsort run 2
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:49:48] E0 w2 distsort run 2
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+[23:50:26] E0 w4 distsort run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:50:57] E0 w1 grep run 2
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:51:21] E0 w2 grep run 2
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[23:51:39] E0 w4 grep run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+[23:51:56] E0 w4 grep run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:52:14] E0 w2 grep run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:52:31] E0 w1 grep run 3
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[23:52:50] E0 w4 distsort run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:53:21] E0 w2 distsort run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:53:58] E0 w1 distsort run 3
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[23:54:47] E0 w4 wordcount run 3
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[23:55:43] E0 w2 wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:57:14] E0 w1 wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[23:59:59] E0 w1 wordcount run 4
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[00:02:43] E0 w2 wordcount run 4
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:04:15] E0 w4 wordcount run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[00:05:10] E0 w1 distsort run 4
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:06:01] E0 w2 distsort run 4
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+[00:06:37] E0 w4 distsort run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[00:07:08] E0 w1 grep run 4
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:07:32] E0 w2 grep run 4
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:07:50] E0 w4 grep run 4
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+[00:08:07] E0 w4 grep run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[00:08:23] E0 w2 grep run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[00:08:41] E0 w1 grep run 5
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+[00:08:59] E0 w4 distsort run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[00:09:31] E0 w2 distsort run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[00:10:08] E0 w1 distsort run 5
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+[00:10:57] E0 w4 wordcount run 5
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+[00:11:52] E0 w2 wordcount run 5
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+[00:13:24] E0 w1 wordcount run 5
+[00:15:58] done

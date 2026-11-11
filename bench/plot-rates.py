@@ -18,7 +18,8 @@ With fewer than two samples there is no interval, and no chart is drawn.
 With only SAMPLES.csv, this writes the rates as CSV to stdout:
 seconds,input,shuffle,output, one row per interval between samples, at the
 interval's end. With OUT.png it draws them in three panels, one above the
-other, as the paper does; that needs matplotlib.
+other, as the paper does, and again on a dark surface as OUT-dark.png;
+that needs matplotlib.
 
 With a TITLE after OUT.png, the chart carries it as an identification
 line (program, input size, M, R, commit), so the image is readable apart
@@ -29,8 +30,13 @@ Usage: python3 bench/plot-rates.py SAMPLES.csv [OUT.png [TITLE]]
 """
 
 import csv
+import logging
 import sys
 import textwrap
+from pathlib import Path
+
+# The font list falls back past families a machine lacks; say nothing for each one.
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
 METRICS = {
     "input": "mr_worker_map_input_bytes_total",
@@ -68,14 +74,32 @@ def rates(rows):
     return times, series
 
 
-# The light theme of bench/plot-experiments.py, so a rates plot reads as
-# part of the same figure set: text in ink tokens, hairline recessive axes
-# and grid, one series color per panel.
-SURFACE, INK, INK2, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9", "#c3c2b7"
-SERIES = {"input": "#2a78d6", "shuffle": "#eb6834", "output": "#1baf7a"}
+# The themes of bench/plot-experiments.py, so a rates plot reads as part of
+# the same figure set: text in ink tokens, hairline recessive axes and grid,
+# one series color per panel. OUT.png is drawn light and OUT-dark.png dark.
+THEMES = {
+    "light": {
+        "surface": "#fcfcfb",
+        "ink": "#0b0b0b",
+        "ink2": "#52514e",
+        "grid": "#e1e0d9",
+        "axis": "#c3c2b7",
+        "series": {"input": "#2a78d6", "shuffle": "#eb6834", "output": "#1baf7a"},
+    },
+    "dark": {
+        "surface": "#1a1a19",
+        "ink": "#f0efec",
+        "ink2": "#c3c2b7",
+        "grid": "#2c2c2a",
+        "axis": "#383835",
+        "series": {"input": "#3987e5", "shuffle": "#d95926", "output": "#199e70"},
+    },
+}
 
 
 def plot(seconds, series, path, title=None):
+    """Draws the rates to path in the light theme and to path's -dark
+    sibling in the dark one."""
     if len(seconds) < 2:  # no interval to draw, as when no worker answered
         print("plot-rates: fewer than two samples; no chart drawn", file=sys.stderr)
         return
@@ -83,6 +107,23 @@ def plot(seconds, series, path, title=None):
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib import font_manager
+
+    # Inter, from bench/fonts, as bench/plot-experiments.py sets its figures.
+    for font in sorted((Path(__file__).resolve().parent / "fonts").glob("*.ttf")):
+        font_manager.fontManager.addfont(str(font))
+    path = Path(path)
+    for name, t in THEMES.items():
+        out = path if name == "light" else path.with_name(f"{path.stem}-{name}{path.suffix}")
+        with plt.rc_context({"font.family": ["Inter", "DejaVu Sans"]}):
+            draw(plt, seconds, series, out, title, t)
+        plt.close("all")
+
+
+def draw(plt, seconds, series, path, title, t):
+    """One rates chart in theme t."""
+    SURFACE, INK, INK2, GRID, AXIS = (t[k] for k in ("surface", "ink", "ink2", "grid", "axis"))
+    SERIES = t["series"]
 
     # A long title wraps instead of running past the figure's edge; each
     # line adds height, so the panels keep their size.
@@ -110,7 +151,7 @@ def plot(seconds, series, path, title=None):
             ha="left",
             va="top",
             fontsize=10,
-            weight="bold",
+            weight="semibold",
             color=INK,
             linespacing=1.4,
         )
