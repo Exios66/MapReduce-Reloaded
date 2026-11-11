@@ -125,9 +125,9 @@ commands:
           paths:
             - ~/go/pkg/mod
 
-  # The code generators pinned in the Makefile. `make tools` always runs: go
-  # install leaves an up-to-date binary alone, so a cached .tools/bin only
-  # saves the build.
+  # The code generators pinned in the Makefile. `make tools` always runs:
+  # scripts/install-tool.sh keeps a cached binary only if `go version -m`
+  # shows it was built from the pin, and go installs any other.
   proto-tools:
     steps:
       - run:
@@ -183,7 +183,9 @@ commands:
   # content, so a restored entry is only ever reused for identical input; the
   # job's GOFLAGS=-count=1 keeps test results out of it. The key changes with
   # the Go release, go.sum and the ISO week, so the cache is refreshed weekly
-  # and is saved once per key, not on every run.
+  # and is saved once per key, not on every run. Each of the go job's nodes
+  # builds different things (race, coverage, lint), so each keeps its own
+  # cache; a new week starts from the node's last one.
   go-build-cache-restore:
     steps:
       - run:
@@ -193,13 +195,14 @@ commands:
             echo "GOCACHE=$(go env GOCACHE)"
       - restore_cache:
           keys:
-            - go-build-v1-{{ arch }}-{{ checksum "/tmp/go-build-key" }}-{{ checksum "go/go.sum" }}
-            - go-build-v1-{{ arch }}-{{ checksum "/tmp/go-build-key" }}-
+            - go-build-v2-{{ arch }}-node{{ .Environment.CIRCLE_NODE_INDEX }}-{{ checksum "/tmp/go-build-key" }}-{{ checksum "go/go.sum" }}
+            - go-build-v2-{{ arch }}-node{{ .Environment.CIRCLE_NODE_INDEX }}-{{ checksum "/tmp/go-build-key" }}-
+            - go-build-v2-{{ arch }}-node{{ .Environment.CIRCLE_NODE_INDEX }}-
 
   go-build-cache-save:
     steps:
       - save_cache:
-          key: go-build-v1-{{ arch }}-{{ checksum "/tmp/go-build-key" }}-{{ checksum "go/go.sum" }}
+          key: go-build-v2-{{ arch }}-node{{ .Environment.CIRCLE_NODE_INDEX }}-{{ checksum "/tmp/go-build-key" }}-{{ checksum "go/go.sum" }}
           paths:
             - ~/.cache/go-build
             - ~/.cache/golangci-lint
@@ -260,10 +263,17 @@ jobs:
   # papermap (it reads the Python test names) and py-e2e read python/.
   # Every other Go package passes with python/ deleted and no Python on the
   # PATH, so their result from main stands (docs/ci.md).
+  #
+  # The job runs on three nodes at once (ADR 0023): CircleCI reports them as
+  # the one go check, which passes only if every node passes.
+  # scripts/ci-go-job.sh gives each node its part of the same make targets:
+  # the race tests, the coverage tests, and sh-lint, go-lint and py-e2e.
+  # Every node sets up the same toolchain, so the parts are independent.
   go:
     executor:
       name: medium
       python: "3.13"
+    parallelism: 3
     environment:
       # The build cache is restored, but test results never are: every test
       # runs on every run, as on a fresh machine.
@@ -296,8 +306,8 @@ jobs:
                 python: "3.13"
             - go-build-cache-restore
             - run:
-                name: make go-python-test py-e2e (only python/ changed)
-                command: make go-python-test py-e2e PYTHON=python
+                name: make go-python-test py-e2e (only python/ changed), this node's part
+                command: scripts/ci-go-job.sh narrow
                 no_output_timeout: 30m
       - when:
           condition:
@@ -312,18 +322,12 @@ jobs:
                 python: "3.13"
             - go-build-cache-restore
             - golangci-lint
-            # make check skips shellcheck where it is missing; CI must not.
+            # Node 2 installs shellcheck (scripts/vm-setup.sh --shellcheck)
+            # and runs sh-lint with MR_REQUIRE_SHELLCHECK=1, so a missing
+            # shellcheck fails the job.
             - run:
-                name: Install shellcheck
-                command: |
-                  scripts/vm-setup.sh --shellcheck
-                  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
-            - run:
-                name: make sh-lint
-                command: MR_REQUIRE_SHELLCHECK=1 make sh-lint
-            - run:
-                name: make go-lint go-test py-e2e
-                command: make go-lint go-test py-e2e PYTHON=python
+                name: make sh-lint go-lint go-test py-e2e, this node's part
+                command: scripts/ci-go-job.sh full
                 no_output_timeout: 30m
             - go-build-cache-save
             - store_artifacts:

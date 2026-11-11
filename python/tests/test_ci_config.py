@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -50,7 +51,8 @@ def test_circleci_runs_the_six_required_checks():
 def test_circleci_calls_the_make_targets():
     for command in (
         "make proto-check PYTHON=python PROTO_FETCH=false",
-        "make go-lint go-test py-e2e PYTHON=python",
+        "scripts/ci-go-job.sh full",
+        "scripts/ci-go-job.sh narrow",
         "make py-lint py-test PYTHON=python",
         "make md-lint PYTHON=python",
         "make tools",
@@ -137,7 +139,8 @@ def test_ci_runs_the_python_coordinator_with_go_workers():
     """The Python jobs have no Go, so they skip test_coordinator_e2e.py; the
     go job runs it with make py-e2e, which fails instead of skipping."""
     go_job = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
-    assert "make go-lint go-test py-e2e PYTHON=python" in go_job
+    assert "command: scripts/ci-go-job.sh full" in go_job
+    assert "py-e2e" in go_job_targets("full", 3, 2)
     target = MAKEFILE.split("\npy-e2e:\n", 1)[1].split("\n\n", 1)[0]
     assert "MR_REQUIRE_GO=1" in target and "tests/test_coordinator_e2e.py" in target
 
@@ -157,9 +160,103 @@ def test_ci_runs_shellcheck():
     MR_REQUIRE_SHELLCHECK, so a missing shellcheck fails the go job rather
     than skipping."""
     go_job = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
-    assert "scripts/vm-setup.sh --shellcheck" in go_job
-    assert "MR_REQUIRE_SHELLCHECK=1 make sh-lint" in go_job
-    assert "SHELLCHECK_VERSION" not in CONT  # one pin, in vm-setup.sh
+    assert "command: scripts/ci-go-job.sh full" in go_job
+    script = CI_GO_JOB.read_text()
+    assert "scripts/vm-setup.sh --shellcheck" in script
+    assert "SHELLCHECK_VERSION" not in CONT + script  # one pin, in vm-setup.sh
+    # The node that lints runs sh-lint with MR_REQUIRE_SHELLCHECK set.
+    lint_calls = go_job_calls("full", 3, 2)
+    assert ("sh-lint", "1") in lint_calls
+
+
+# --- the go job's nodes (scripts/ci-go-job.sh, ADR 0023) --------------------------
+
+CI_GO_JOB = ROOT / "scripts/ci-go-job.sh"
+# What the go job ran in one step before it was split across nodes.
+FULL = ["sh-lint", "go-lint", "go-test-race", "go-test-cover", "py-e2e"]
+NARROW = ["go-python-test", "py-e2e"]
+
+
+def go_job_calls(mode, total, node, check=True):
+    """[(make target, MR_REQUIRE_SHELLCHECK)] that one node of the go job runs."""
+    stub = Path(tempfile.mkdtemp()) / "make"
+    # A stand-in make that prints each target with the shellcheck flag.
+    stub.write_text('#!/bin/sh\nfor a; do echo "$a ${MR_REQUIRE_SHELLCHECK:-}"; done\n')
+    stub.chmod(0o755)
+    env = {
+        **os.environ,
+        "CIRCLE_NODE_TOTAL": str(total),
+        "CIRCLE_NODE_INDEX": str(node),
+        "MR_CI_GO_JOB_NO_INSTALL": "1",
+        "MAKE": str(stub),
+    }
+    env.pop("MR_REQUIRE_SHELLCHECK", None)
+    out = subprocess.run(
+        [CI_GO_JOB, mode], cwd=ROOT, env=env, capture_output=True, text=True, check=check
+    )
+    calls = []
+    for line in out.stdout.splitlines():
+        if line.startswith("ci-go-job:"):
+            continue
+        target, _, flag = line.partition(" ")
+        if not target.startswith("PYTHON="):
+            calls.append((target, flag))
+    return calls
+
+
+def go_job_targets(mode, total, node):
+    return [target for target, _ in go_job_calls(mode, total, node)]
+
+
+def go_job_parallelism():
+    go_job = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
+    return int(re.search(r"^    parallelism: (\d+)$", go_job, re.M).group(1))
+
+
+@pytest.mark.parametrize("mode, want", [("full", FULL), ("narrow", NARROW)])
+def test_go_job_on_one_node_runs_everything_in_order(mode, want):
+    assert go_job_targets(mode, 1, 0) == want
+
+
+@pytest.mark.parametrize("mode, want", [("full", FULL), ("narrow", NARROW)])
+def test_go_job_nodes_together_run_everything_once(mode, want):
+    """Split across the job's nodes, the go job still runs every target it ran
+    in one step, each exactly once: nothing is dropped and nothing doubled."""
+    total = go_job_parallelism()
+    assert total == 3
+    runs = [t for node in range(total) for t in go_job_targets(mode, total, node)]
+    assert sorted(runs) == sorted(want)
+
+
+def test_go_job_rejects_an_unplanned_node_count():
+    # A parallelism the script has no plan for fails rather than running a part.
+    for total in (2, 4):
+        result = subprocess.run(
+            [CI_GO_JOB, "full"],
+            cwd=ROOT,
+            env={**os.environ, "CIRCLE_NODE_TOTAL": str(total), "MAKE": "true"},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 2 and "1 or 3 CircleCI nodes" in result.stderr
+    result = subprocess.run([CI_GO_JOB], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 2
+
+
+def test_go_test_runs_the_race_pass_then_the_coverage_pass():
+    """make go-test (and so make check) still runs both passes, in turn."""
+    recipe = MAKEFILE.split("\ngo-test:\n", 1)[1].split("\n\n", 1)[0]
+    assert recipe.splitlines() == ["\t$(MAKE) go-test-race", "\t$(MAKE) go-test-cover"]
+    race = MAKEFILE.split("\ngo-test-race:\n", 1)[1].split("\n\n", 1)[0]
+    assert "go test -race -shuffle=on ./..." in race
+    cover = MAKEFILE.split("\ngo-test-cover:\n", 1)[1].split("\n\n", 1)[0]
+    for part in ("-coverpkg=./...", "./internal/papermap ./internal/statusweb", "scripts/cover.py go"):
+        assert part in cover
+
+
+def test_each_go_node_keeps_its_own_build_cache():
+    keys = re.findall(r"go-build-v\d+-\{\{ arch \}\}-([^ \n]*)", CONT)
+    assert keys and all(k.startswith("node{{ .Environment.CIRCLE_NODE_INDEX }}-") for k in keys)
 
 
 def test_install_go_reads_the_version_from_go_mod():

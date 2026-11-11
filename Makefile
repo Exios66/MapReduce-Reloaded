@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -181,10 +181,13 @@ fmt:
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
+# scripts/install-tool.sh keeps a binary that `go version -m` shows was built
+# from the pin, and go installs any other, so CI's cached .tools/bin skips
+# the build.
 tools:
-	GOBIN=$(TOOLS) go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
-	GOBIN=$(TOOLS) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
-	GOBIN=$(TOOLS) go install github.com/bufbuild/buf/cmd/buf@v1.74.0
+	GOBIN=$(TOOLS) scripts/install-tool.sh google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+	GOBIN=$(TOOLS) scripts/install-tool.sh google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+	GOBIN=$(TOOLS) scripts/install-tool.sh github.com/bufbuild/buf/cmd/buf@v1.74.0
 
 # Regenerate Go and Python code from proto/.
 proto:
@@ -230,10 +233,18 @@ proto-check: proto-lint proto-breaking proto
 # GO_COVERDIR; go/cover.out holds both. The race detector runs in a pass of
 # its own: with -coverpkg it makes every package's counters atomic, which
 # slows the cluster tests past their deadlines on a 2-CPU runner.
+# go-test runs the two passes in turn, go-test-race then go-test-cover; CI's
+# go job runs them on separate nodes at the same time (docs/ci.md).
 GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
-	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
+	$(MAKE) go-test-race
+	$(MAKE) go-test-cover
+
+go-test-race:
 	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./...
+
+go-test-cover:
+	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
 	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
 	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
 		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
