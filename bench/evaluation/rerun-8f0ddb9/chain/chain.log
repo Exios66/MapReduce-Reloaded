@@ -1,0 +1,74 @@
+=== 2026-11-11T05:30:37Z p5 stopped (6 containers)
+=== 2026-11-11T05:30:37Z START E0 (E0) 11 GB free
+  w1/distsort                      seconds      median    28.19  range 26.72-29.20  n=5
+  w1/distsort                      wall_seconds median    28.27  range 26.78-29.32  n=5
+  w1/grep                          seconds      median     2.08  range 2.06-8.59  n=5
+  w1/grep                          wall_seconds median     2.14  range 2.12-8.52  n=5
+  w1/wordcount                     seconds      median   148.10  range 147.44-149.20  n=5
+  w1/wordcount                     wall_seconds median   148.06  range 147.47-149.14  n=5
+  w2/distsort                      seconds      median    15.10  range 14.22-15.70  n=5
+  w2/distsort                      wall_seconds median    15.21  range 14.35-15.74  n=5
+  w2/grep                          seconds      median     1.83  range 1.27-1.91  n=5
+  w2/grep                          wall_seconds median     1.86  range 1.33-1.88  n=5
+  w2/wordcount                     seconds      median    76.30  range 75.82-76.41  n=5
+  w2/wordcount                     wall_seconds median    76.32  range 75.86-76.42  n=5
+  w4/distsort                      seconds      median     9.39  range 8.52-9.97  n=5
+  w4/distsort                      wall_seconds median     9.47  range 8.40-9.87  n=5
+  w4/grep                          seconds      median     1.37  range 0.85-3.18  n=5
+  w4/grep                          wall_seconds median     1.35  range 0.81-3.19  n=5
+  w4/wordcount                     seconds      median    39.32  range 38.92-40.84  n=5
+  w4/wordcount                     wall_seconds median    39.32  range 39.04-40.95  n=5
+  warmup/distsort                  seconds      median     8.18  range 8.18-8.18  n=1
+  warmup/distsort                  wall_seconds median     8.15  range 8.15-8.15  n=1
+  warmup/grep                      seconds      median     1.40  range 1.40-1.40  n=1
+  warmup/grep                      wall_seconds median     1.34  range 1.34-1.34  n=1
+  warmup/wordcount                 seconds      median    37.65  range 37.65-37.65  n=1
+  warmup/wordcount                 wall_seconds median    37.76  range 37.76-37.76  n=1
+GATE PASS E0: 48 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E0.tar.gz (160 KiB), 8.3 GB free
+=== 2026-11-11T06:16:24Z dropped inputs: grep-1073741824 distsort-1073741824
+=== 2026-11-11T06:16:24Z DONE E0
+=== 2026-11-11T06:16:24Z START E1 (E1) 10 GB free
+  s0.5-off/wordcount               seconds      median    43.23  range 42.97-44.15  n=5
+  s0.5-off/wordcount               wall_seconds median    43.31  range 42.91-44.13  n=5
+  s0.5-on/wordcount                seconds      median    36.49  range 36.31-38.32  n=5
+  s0.5-on/wordcount                wall_seconds median    36.53  range 36.27-38.41  n=5
+  s1.0-off/wordcount               seconds      median    48.64  range 47.83-49.57  n=5
+  s1.0-off/wordcount               wall_seconds median    48.62  range 47.80-49.54  n=5
+  s1.0-on/wordcount                seconds      median    38.37  range 37.99-39.22  n=5
+  s1.0-on/wordcount                wall_seconds median    38.37  range 38.12-39.18  n=5
+  s1.5-off/wordcount               seconds      median    51.25  range 50.64-51.74  n=5
+  s1.5-off/wordcount               wall_seconds median    51.15  range 50.66-51.81  n=5
+  s1.5-on/wordcount                seconds      median    29.93  range 28.79-29.95  n=5
+  s1.5-on/wordcount                wall_seconds median    29.94  range 28.81-29.97  n=5
+GATE PASS E1: 30 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E1.tar.gz (114 KiB), 6.4 GB free
+=== 2026-11-11T06:47:57Z dropped inputs: wordcount-1073741824-0.5 wordcount-1073741824-1.5
+=== 2026-11-11T06:47:57Z DONE E1
+=== 2026-11-11T06:47:57Z START E5 (E5) 10 GB free
+  compiled/wordcount               seconds      median    39.11  range 37.75-39.19  n=5
+  compiled/wordcount               wall_seconds median    39.09  range 37.69-39.27  n=5
+  interpreted/wordcount            seconds      median    89.67  range 88.50-90.36  n=5
+  interpreted/wordcount            wall_seconds median    89.75  range 88.56-90.39  n=5
+  naive/wordcount                  seconds      median   400.43  range 399.88-401.09  n=5
+  naive/wordcount                  wall_seconds median   400.40  range 399.89-401.02  n=5
+GATE PASS E5: 15 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E5.tar.gz (5609 KiB), 11.3 GB free
+=== 2026-11-11T07:35:59Z dropped inputs: wordcount-1073741824-1.0
+=== 2026-11-11T07:35:59Z DONE E5
+=== 2026-11-11T07:35:59Z START E2 (E2) 12 GB free
+  normal-no-backups/distsort       seconds      median     8.08  range 7.99-8.33  n=5
+  normal-no-backups/distsort       wall_seconds median     8.13  range 7.91-8.45  n=5
+  normal/distsort                  seconds      median     7.83  range 7.27-8.42  n=5
+  normal/distsort                  wall_seconds median     7.91  range 7.35-8.48  n=5
+  straggler-backups/distsort       seconds      median    11.36  range 10.82-11.84  n=5
+  straggler-backups/distsort       wall_seconds median    11.27  range 10.96-11.77  n=5
+  straggler-no-backups/distsort    seconds      median    17.90  range 17.05-18.20  n=5
+  straggler-no-backups/distsort    wall_seconds median    17.89  range 17.04-18.19  n=5
+GATE PASS E2: 20 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E2.tar.gz (984 KiB), 10.5 GB free
+=== 2026-11-11T07:48:35Z DONE E2
+=== 2026-11-11T07:48:35Z START E2-pairs (E2) 10 GB free
+  normal-no-backups/distsort       seconds      median     7.91  range 7.75-8.26  n=10
+  normal-no-backups/distsort       wall_seconds median     7.84  range 7.79-8.39  n=10
+  normal/distsort                  seconds      median     7.67  range 7.46-8.16  n=10
+  normal/distsort                  wall_seconds median     7.64  range 7.45-8.14  n=10
+GATE PASS E2-pairs: 20 runs, archived /home/jjburleson@ad.wisc.edu/runs/8f0ddb9/E2-pairs.tar.gz (800 KiB), 10.5 GB free
+=== 2026-11-11T07:59:13Z DONE E2-pairs
+=== 2026-11-11T07:59:13Z START E3 (E3) 10 GB free

@@ -1,0 +1,254 @@
+python3 -m venv --clear /home/jjburleson@ad.wisc.edu/mr-check/python/.venv
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m pip install --upgrade pip
+Requirement already satisfied: pip in ./python/.venv/lib/python3.12/site-packages (24.0)
+Collecting pip
+  Using cached pip-26.3-py3-none-any.whl.metadata (4.6 kB)
+Using cached pip-26.3-py3-none-any.whl (2.0 MB)
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 24.0
+    Uninstalling pip-24.0:
+      Successfully uninstalled pip-24.0
+Successfully installed pip-26.3
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m pip install -e "python[dev]"
+Obtaining file:///home/jjburleson%40ad.wisc.edu/mr-check/python
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting grpcio>=1.84.1 (from mapreduce-reloaded==0.0.1)
+  Using cached grpcio-1.85.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.8 kB)
+Collecting protobuf>=7.35.1 (from mapreduce-reloaded==0.0.1)
+  Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+Collecting PyYAML>=6 (from mapreduce-reloaded==0.0.1)
+  Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Collecting pytest>=8 (from mapreduce-reloaded==0.0.1)
+  Using cached pytest-9.2.0-py3-none-any.whl.metadata (7.9 kB)
+Collecting hypothesis>=6 (from mapreduce-reloaded==0.0.1)
+  Using cached hypothesis-6.170.15-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.6 kB)
+Collecting coverage>=7 (from mapreduce-reloaded==0.0.1)
+  Using cached coverage-7.17.2-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (8.1 kB)
+Collecting ruff>=0.5 (from mapreduce-reloaded==0.0.1)
+  Using cached ruff-0.17.4-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (20 kB)
+Collecting pymarkdownlnt==0.9.41 (from mapreduce-reloaded==0.0.1)
+  Using cached pymarkdownlnt-0.9.41-py3-none-any.whl.metadata (14 kB)
+Collecting grpcio-tools==1.84.1 (from mapreduce-reloaded==0.0.1)
+  Using cached grpcio_tools-1.84.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+Collecting zstandard>=0.25 (from mapreduce-reloaded==0.0.1)
+  Using cached zstandard-0.25.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.3 kB)
+Collecting python-snappy>=0.7 (from mapreduce-reloaded==0.0.1)
+  Using cached python_snappy-0.7.3-py3-none-any.whl.metadata (1.3 kB)
+Collecting setuptools>=77.0.1 (from grpcio-tools==1.84.1->mapreduce-reloaded==0.0.1)
+  Using cached setuptools-84.2.1-py3-none-any.whl.metadata (6.6 kB)
+Collecting typing-extensions>=4.15.0 (from pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting application-properties>=0.9.3 (from pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached application_properties-0.9.3-py3-none-any.whl.metadata (9.4 kB)
+Collecting application-file-scanner>=0.6.4 (from pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached application_file_scanner-0.6.4-py3-none-any.whl.metadata (9.3 kB)
+Collecting columnar>=1.4.0 (from pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached Columnar-1.4.1-py3-none-any.whl.metadata (11 kB)
+Collecting py-walk>=0.3.3 (from pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached py_walk-0.3.3-py3-none-any.whl.metadata (7.9 kB)
+Collecting tomli>=2.0.1 (from application-properties>=0.9.3->pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached tomli-2.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (10 kB)
+Collecting pyjson5>=1.6.9 (from application-properties>=0.9.3->pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached pyjson5-2.0.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (3.0 kB)
+Collecting toolz (from columnar>=1.4.0->pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached toolz-1.2.0-py3-none-any.whl.metadata (5.2 kB)
+Collecting wcwidth (from columnar>=1.4.0->pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (23 kB)
+Collecting sortedcontainers<3.0.0,>=2.1.0 (from hypothesis>=6->mapreduce-reloaded==0.0.1)
+  Using cached sortedcontainers-2.4.0-py2.py3-none-any.whl.metadata (10 kB)
+Collecting sly (from py-walk>=0.3.3->pymarkdownlnt==0.9.41->mapreduce-reloaded==0.0.1)
+  Using cached sly-0.5-py3-none-any.whl.metadata (373 bytes)
+Collecting iniconfig>=2 (from pytest>=8->mapreduce-reloaded==0.0.1)
+  Using cached iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+Collecting packaging>=24 (from pytest>=8->mapreduce-reloaded==0.0.1)
+  Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+Collecting pluggy<2,>=1.6 (from pytest>=8->mapreduce-reloaded==0.0.1)
+  Using cached pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
+Collecting pygments>=2.15 (from pytest>=8->mapreduce-reloaded==0.0.1)
+  Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting cramjam (from python-snappy>=0.7->mapreduce-reloaded==0.0.1)
+  Using cached cramjam-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+Using cached grpcio_tools-1.84.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.8 MB)
+Using cached pymarkdownlnt-0.9.41-py3-none-any.whl (557 kB)
+Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl (343 kB)
+Using cached application_file_scanner-0.6.4-py3-none-any.whl (15 kB)
+Using cached application_properties-0.9.3-py3-none-any.whl (24 kB)
+Using cached Columnar-1.4.1-py3-none-any.whl (11 kB)
+Using cached coverage-7.17.2-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (263 kB)
+Using cached grpcio-1.85.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.4 MB)
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached hypothesis-6.170.15-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.2 MB)
+Using cached sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+Using cached py_walk-0.3.3-py3-none-any.whl (14 kB)
+Using cached pyjson5-2.0.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (176 kB)
+Using cached pytest-9.2.0-py3-none-any.whl (411 kB)
+Using cached pluggy-1.7.0-py3-none-any.whl (27 kB)
+Using cached iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+Using cached packaging-26.3-py3-none-any.whl (129 kB)
+Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+Using cached python_snappy-0.7.3-py3-none-any.whl (9.2 kB)
+Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+Using cached ruff-0.17.4-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.6 MB)
+Using cached setuptools-84.2.1-py3-none-any.whl (876 kB)
+Using cached tomli-2.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (286 kB)
+Using cached zstandard-0.25.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.5 MB)
+Using cached cramjam-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (2.0 MB)
+Using cached sly-0.5-py3-none-any.whl (28 kB)
+Using cached toolz-1.2.0-py3-none-any.whl (60 kB)
+Using cached wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (785 kB)
+Building wheels for collected packages: mapreduce-reloaded
+  Building editable for mapreduce-reloaded (pyproject.toml): started
+  Building editable for mapreduce-reloaded (pyproject.toml): finished with status 'done'
+  /tmp/pip-build-env-gc_v5dx1/overlay/lib/python3.12/site-packages/setuptools/command/editable_wheel.py:354: BuildBackendWarning: Editable installation.
+  !!
+  
+          ********************************************************************************
+          Please be careful with folders in your working directory with the same
+          name as your package as they may take precedence during imports.
+          ********************************************************************************
+  
+  !!
+    with strategy, WheelFile(wheel_path, "w") as wheel_obj:
+  Created wheel for mapreduce-reloaded: filename=mapreduce_reloaded-0.0.1-0.editable-py3-none-any.whl size=3151 sha256=3b3b2e677c915ecff6456bdcb21b39cf5063ea8de04287c7c274f00bf9bed3aa
+  Stored in directory: /tmp/pip-ephem-wheel-cache-c9rg7n4f/wheels/4b/d0/f7/110a7da2ee994e98eaa6da9882b96c8450838787b9760f1f6b
+Successfully built mapreduce-reloaded
+Installing collected packages: sortedcontainers, sly, zstandard, wcwidth, typing-extensions, toolz, tomli, setuptools, ruff, PyYAML, pyjson5, pygments, py-walk, protobuf, pluggy, packaging, iniconfig, hypothesis, cramjam, coverage, python-snappy, pytest, grpcio, columnar, application-properties, application-file-scanner, pymarkdownlnt, mapreduce-reloaded, grpcio-tools
+
+Successfully installed PyYAML-6.0.3 application-file-scanner-0.6.4 application-properties-0.9.3 columnar-1.4.1 coverage-7.17.2 cramjam-2.14.0 grpcio-1.85.1 grpcio-tools-1.84.1 hypothesis-6.170.15 iniconfig-2.3.1 mapreduce-reloaded-0.0.1 packaging-26.3 pluggy-1.7.0 protobuf-7.36.2 py-walk-0.3.3 pygments-2.21.0 pyjson5-2.0.1 pymarkdownlnt-0.9.41 pytest-9.2.0 python-snappy-0.7.3 ruff-0.17.4 setuptools-84.2.1 sly-0.5 sortedcontainers-2.4.0 tomli-2.5.0 toolz-1.2.0 typing-extensions-4.16.0 wcwidth-0.9.4 zstandard-0.25.0
+make proto-check
+make[1]: Entering directory '/home/jjburleson@ad.wisc.edu/mr-check'
+/home/jjburleson@ad.wisc.edu/mr-check/.tools/bin/buf lint
+PYTHON=/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/gen-proto.sh
+generated: /home/jjburleson@ad.wisc.edu/mr-check/go/gen /home/jjburleson@ad.wisc.edu/mr-check/python/mapreduce_reloaded/gen
+make[1]: Leaving directory '/home/jjburleson@ad.wisc.edu/mr-check'
+make lint
+make[1]: Entering directory '/home/jjburleson@ad.wisc.edu/mr-check'
+cd go && test -z "$(gofmt -l .)" && go vet ./... && ../scripts/golangci-lint.sh run ./...
+0 issues.
+cd python && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m ruff format --check . ../scripts ../bench && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m ruff check . ../scripts ../bench
+103 files already formatted
+All checks passed!
+sh-lint: shellcheck passed on 16 scripts
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/check-links.py
+check-links: 80 files, 0 broken links
+make[1]: Leaving directory '/home/jjburleson@ad.wisc.edu/mr-check'
+make test
+make[1]: Entering directory '/home/jjburleson@ad.wisc.edu/mr-check'
+rm -rf "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover" && mkdir -p "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover"
+cd go && MR_PYTHON=/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python go test -race -shuffle=on ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/coordinator	7.119s
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/mr	8.073s
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/worker	1.155s
+?   	github.com/exios66/mapreduce-reloaded/go/examples/all	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/distsort	1.043s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/grep	1.062s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/internal/run	1.034s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/invertedindex	3.158s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/reverselinks	1.025s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/termvector	1.027s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/urlfreq	1.020s
+?   	github.com/exios66/mapreduce-reloaded/go/examples/wordcount	[no test files]
+?   	github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/combine	1.094s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/contract	1.038s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/coordinator	7.704s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/e2e	49.618s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/extsort	32.749s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats	1.142s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats/kv	3.182s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/jobfile	23.716s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/local	6.942s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/logs	1.025s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/memlimit	1.024s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/papermap	2.500s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/partition	1.026s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/promtext	1.025s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/rpcguard	1.052s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/shuffle	3.311s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/split	1.231s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/statusweb	1.089s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/storage	4.143s
+?   	github.com/exios66/mapreduce-reloaded/go/internal/storage/s3test	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/task	18.607s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wal	1.143s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wire	1.112s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/worker	49.780s
+ok  	github.com/exios66/mapreduce-reloaded/go/pkg/api	1.102s
+ok  	github.com/exios66/mapreduce-reloaded/go/tools/mutate	1.054s
+cd go && MR_E2E_GOCOVERDIR="/home/jjburleson@ad.wisc.edu/mr-check/go/.cover" MR_PYTHON=/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/coordinator	6.103s	coverage: 18.2% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/mr	4.993s	coverage: 43.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/worker	0.111s	coverage: 33.9% of statements in ./...
+?   	github.com/exios66/mapreduce-reloaded/go/examples/all	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/distsort	0.017s	coverage: 12.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/grep	0.019s	coverage: 12.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/internal/run	0.011s	coverage: 1.6% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/invertedindex	0.380s	coverage: 13.9% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/reverselinks	0.013s	coverage: 12.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/termvector	0.037s	coverage: 14.8% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/urlfreq	0.036s	coverage: 14.0% of statements in ./...
+	github.com/exios66/mapreduce-reloaded/go/examples/wordcount		coverage: 0.0% of statements
+	github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1		coverage: 0.0% of statements
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/combine	0.074s	coverage: 5.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/contract	0.021s	coverage: 8.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/coordinator	4.047s	coverage: 30.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/e2e	44.057s	coverage: 0.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/extsort	6.374s	coverage: 6.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats	0.102s	coverage: 6.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats/kv	0.185s	coverage: 4.9% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/jobfile	4.976s	coverage: 15.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/local	1.220s	coverage: 18.7% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/logs	0.017s	coverage: 0.5% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/memlimit	0.012s	coverage: 0.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/papermap	0.115s	coverage: 0.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/partition	0.022s	coverage: 0.2% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/promtext	0.023s	coverage: 0.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/rpcguard	0.015s	coverage: 3.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/shuffle	2.197s	coverage: 3.7% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/split	0.087s	coverage: 2.9% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/statusweb	0.026s	coverage: 4.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/storage	0.805s	coverage: 6.1% of statements in ./...
+	github.com/exios66/mapreduce-reloaded/go/internal/storage/s3test		coverage: 0.0% of statements
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/task	2.480s	coverage: 16.5% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wal	0.142s	coverage: 2.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wire	0.068s	coverage: 6.2% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/worker	40.847s	coverage: 59.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/pkg/api	0.021s	coverage: 2.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/tools/mutate	0.013s	coverage: 0.8% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/papermap	0.059s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/statusweb	0.017s
+if ls "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover"/covcounters.* >/dev/null 2>&1; then \
+	cd go && go tool covdata textfmt -i="/home/jjburleson@ad.wisc.edu/mr-check/go/.cover" -o "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover/e2e.out" && tail -n +2 "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover/e2e.out" >> cover.out; \
+fi
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/cover.py go go/cover.out go/cover-floors.txt
+cover: go 91.6% of 3238 statements in 31 checked packages
+cd python && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m coverage run -m pytest -q && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m coverage json -q -o cover.json
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 19%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 38%]
+........................................................................ [ 44%]
+........................................................................ [ 50%]
+........................................................................ [ 57%]
+........................................................................ [ 63%]
+...................................................................s.... [ 69%]
+........................................................................ [ 76%]
+........................................................................ [ 82%]
+........................................................................ [ 88%]
+........................................................................ [ 95%]
+........................................................                 [100%]
+1135 passed, 1 skipped in 114.04s (0:01:54)
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/cover.py python python/cover.json python/cover-floors.txt
+cover: python 100.0% of 2192 statements in 5 checked packages
+make[1]: Leaving directory '/home/jjburleson@ad.wisc.edu/mr-check'
+EXIT=0

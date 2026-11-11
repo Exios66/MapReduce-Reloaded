@@ -1,0 +1,8 @@
+== E2-pairs
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+normal                   distsort    4  10    10  7.67 [7.46-8.16]              7.63     5.5    0        1085  94 [42-118]
+normal-no-backups        distsort    4  10    10  7.90 [7.75-8.26]              7.84       0    0        1085  14 [7-47]
+ranges between measured settings (same program and worker count):
+  distsort w4: normal vs normal-no-backups: overlap: no clear difference
+

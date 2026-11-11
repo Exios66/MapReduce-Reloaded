@@ -1,0 +1,26 @@
+== E1
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+s0.5-on                  wordcount   4   5     5  36.49 [36.31-38.32]          36.53       5    0          92  0 [0-3]
+s0.5-off                 wordcount   4   5     5  43.23 [42.97-44.15]          43.31       5    0        1403  238 [171-305]
+s1.0-on                  wordcount   4   5     5  38.37 [37.99-39.22]          38.37       3    0          89  475 [0-572]
+s1.0-off                 wordcount   4   5     5  48.64 [47.83-49.57]          48.62       5    0        1512  645 [462-1394]
+s1.5-on                  wordcount   4   5     5  29.93 [28.79-29.95]          29.94       3    0          22  197 [0-291]
+s1.5-off                 wordcount   4   5     5  51.25 [50.64-51.74]          51.15       5    0        1716  162 [55-763]
+ranges between measured settings (same program and worker count):
+  wordcount w4: s0.5-on vs s0.5-off: separate
+  wordcount w4: s0.5-on vs s1.0-on: overlap: no clear difference
+  wordcount w4: s0.5-on vs s1.0-off: separate
+  wordcount w4: s0.5-on vs s1.5-on: separate
+  wordcount w4: s0.5-on vs s1.5-off: separate
+  wordcount w4: s0.5-off vs s1.0-on: separate
+  wordcount w4: s0.5-off vs s1.0-off: separate
+  wordcount w4: s0.5-off vs s1.5-on: separate
+  wordcount w4: s0.5-off vs s1.5-off: separate
+  wordcount w4: s1.0-on vs s1.0-off: separate
+  wordcount w4: s1.0-on vs s1.5-on: separate
+  wordcount w4: s1.0-on vs s1.5-off: separate
+  wordcount w4: s1.0-off vs s1.5-on: separate
+  wordcount w4: s1.0-off vs s1.5-off: separate
+  wordcount w4: s1.5-on vs s1.5-off: separate
+

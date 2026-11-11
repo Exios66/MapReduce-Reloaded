@@ -1,0 +1,11 @@
+== E5
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+compiled                 wordcount   4   5     5  39.11 [37.75-39.19]          39.09       5    0          89  0 [0-0]
+interpreted              wordcount   4   5     5  89.67 [88.50-90.36]          89.75       4    0          89  0 [0-2]
+naive                    wordcount   4   5     5  400.43 [399.88-401.09]      400.40       5    0          89  0 [0-22]
+ranges between measured settings (same program and worker count):
+  wordcount w4: compiled vs interpreted: separate
+  wordcount w4: compiled vs naive: separate
+  wordcount w4: interpreted vs naive: separate
+

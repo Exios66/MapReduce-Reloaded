@@ -1,0 +1,15 @@
+== E2
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+normal                   distsort    4   5     5  7.83 [7.27-8.42]              7.91       5    0        1085  132 [106-175]
+normal-no-backups        distsort    4   5     5  8.08 [7.99-8.33]              8.13       0    0        1085  14 [9-37]
+straggler-backups        distsort    4   5     5  11.36 [10.82-11.84]          11.27       4    8        1085  518 [325-599]
+straggler-no-backups     distsort    4   5     5  17.90 [17.05-18.20]          17.89       0    0        1085  180 [149-206]
+ranges between measured settings (same program and worker count):
+  distsort w4: normal vs normal-no-backups: overlap: no clear difference
+  distsort w4: normal vs straggler-backups: separate
+  distsort w4: normal vs straggler-no-backups: separate
+  distsort w4: normal-no-backups vs straggler-backups: separate
+  distsort w4: normal-no-backups vs straggler-no-backups: separate
+  distsort w4: straggler-backups vs straggler-no-backups: separate
+

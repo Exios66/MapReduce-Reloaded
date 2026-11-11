@@ -1,0 +1,24 @@
+== E0
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+warmup (not measured)    grep        4   1     1  1.40 [1.40-1.40]              1.34       4    0           0  0 [0-0]
+warmup (not measured)    distsort    4   1     1  8.18 [8.18-8.18]              8.15       5    0        1085  598 [598-598]
+warmup (not measured)    wordcount   4   1     1  37.65 [37.65-37.65]          37.76       5    0          89  25 [25-25]
+w4                       grep        4   5     5  1.37 [0.85-3.18]              1.35       3    1           0  0 [0-849]
+w2                       grep        2   5     5  1.83 [1.27-1.91]              1.86       2    0           0  1 [0-53]
+w1                       grep        1   5     5  2.08 [2.06-8.59]              2.14       0    0           0  0 [0-852]
+w4                       distsort    4   5     5  9.39 [8.52-9.97]              9.47       5    0        1085  1201 [803-1288]
+w2                       distsort    2   5     5  15.10 [14.22-15.70]          15.21       2    0        1085  1552 [1424-1878]
+w1                       distsort    1   5     5  28.19 [26.72-29.20]          28.27       0    0        1085  1738 [1632-1971]
+w4                       wordcount   4   5     5  39.32 [38.92-40.84]          39.32       3    0          89  569 [0-577]
+w2                       wordcount   2   5     5  76.30 [75.82-76.41]          76.32       2    0          89  0 [0-0]
+w1                       wordcount   1   5     5  148.10 [147.44-149.20]      148.06       0    0          89  0 [0-3]
+runs to look at:
+  w4/grep/w4 run 1: 3.18 s against a median of 1.37 s, 849 MB read machine-wide
+  w1/grep/w1 run 2: 8.49 s against a median of 2.08 s, 852 MB read machine-wide
+  w1/grep/w1 run 4: 8.59 s against a median of 2.08 s, 849 MB read machine-wide
+ranges between measured settings (same program and worker count):
+  grep speed-up over 1 worker (ratio of medians): 2 workers 1.14x, 4 workers 1.52x
+  distsort speed-up over 1 worker (ratio of medians): 2 workers 1.87x, 4 workers 3.00x
+  wordcount speed-up over 1 worker (ratio of medians): 2 workers 1.94x, 4 workers 3.77x
+

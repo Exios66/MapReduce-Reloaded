@@ -1,0 +1,129 @@
+make proto-check
+make[1]: Entering directory '/home/jjburleson@ad.wisc.edu/mr-check'
+/home/jjburleson@ad.wisc.edu/mr-check/.tools/bin/buf lint
+PYTHON=/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/gen-proto.sh
+generated: /home/jjburleson@ad.wisc.edu/mr-check/go/gen /home/jjburleson@ad.wisc.edu/mr-check/python/mapreduce_reloaded/gen
+make[1]: Leaving directory '/home/jjburleson@ad.wisc.edu/mr-check'
+make lint
+make[1]: Entering directory '/home/jjburleson@ad.wisc.edu/mr-check'
+cd go && test -z "$(gofmt -l .)" && go vet ./... && ../scripts/golangci-lint.sh run ./...
+0 issues.
+cd python && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m ruff format --check . ../scripts ../bench && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m ruff check . ../scripts ../bench
+103 files already formatted
+All checks passed!
+sh-lint: shellcheck passed on 16 scripts
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/check-links.py
+check-links: 80 files, 0 broken links
+make[1]: Leaving directory '/home/jjburleson@ad.wisc.edu/mr-check'
+make test
+make[1]: Entering directory '/home/jjburleson@ad.wisc.edu/mr-check'
+rm -rf "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover" && mkdir -p "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover"
+cd go && MR_PYTHON=/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python go test -race -shuffle=on ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/coordinator	7.119s
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/mr	7.665s
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/worker	1.225s
+?   	github.com/exios66/mapreduce-reloaded/go/examples/all	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/distsort	1.041s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/grep	1.113s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/internal/run	1.026s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/invertedindex	2.523s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/reverselinks	1.018s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/termvector	1.022s
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/urlfreq	1.020s
+?   	github.com/exios66/mapreduce-reloaded/go/examples/wordcount	[no test files]
+?   	github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/combine	1.090s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/contract	1.041s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/coordinator	7.137s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/e2e	42.736s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/extsort	27.996s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats	1.121s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats/kv	3.143s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/jobfile	22.216s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/local	4.988s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/logs	1.024s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/memlimit	1.018s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/papermap	2.109s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/partition	1.031s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/promtext	1.028s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/rpcguard	1.031s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/shuffle	3.233s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/split	1.197s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/statusweb	1.068s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/storage	3.952s
+?   	github.com/exios66/mapreduce-reloaded/go/internal/storage/s3test	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/task	16.514s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wal	1.144s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wire	1.108s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/worker	45.066s
+ok  	github.com/exios66/mapreduce-reloaded/go/pkg/api	1.057s
+ok  	github.com/exios66/mapreduce-reloaded/go/tools/mutate	1.052s
+cd go && MR_E2E_GOCOVERDIR="/home/jjburleson@ad.wisc.edu/mr-check/go/.cover" MR_PYTHON=/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/coordinator	6.086s	coverage: 18.2% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/mr	5.207s	coverage: 43.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/cmd/worker	0.132s	coverage: 33.9% of statements in ./...
+?   	github.com/exios66/mapreduce-reloaded/go/examples/all	[no test files]
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/distsort	0.024s	coverage: 12.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/grep	0.023s	coverage: 12.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/internal/run	0.013s	coverage: 1.6% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/invertedindex	0.566s	coverage: 13.9% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/reverselinks	0.029s	coverage: 12.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/termvector	0.030s	coverage: 14.8% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/examples/urlfreq	0.019s	coverage: 14.0% of statements in ./...
+	github.com/exios66/mapreduce-reloaded/go/examples/wordcount		coverage: 0.0% of statements
+	github.com/exios66/mapreduce-reloaded/go/gen/mapreduce/v1		coverage: 0.0% of statements
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/combine	0.042s	coverage: 5.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/contract	0.018s	coverage: 8.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/coordinator	4.210s	coverage: 30.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/e2e	41.143s	coverage: 0.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/extsort	5.504s	coverage: 6.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats	0.068s	coverage: 6.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/formats/kv	0.331s	coverage: 4.9% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/jobfile	4.553s	coverage: 15.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/local	0.993s	coverage: 18.7% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/logs	0.019s	coverage: 0.5% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/memlimit	0.012s	coverage: 0.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/papermap	0.058s	coverage: 0.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/partition	0.023s	coverage: 0.2% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/promtext	0.013s	coverage: 0.0% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/rpcguard	0.014s	coverage: 3.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/shuffle	2.209s	coverage: 3.7% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/split	0.098s	coverage: 2.9% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/statusweb	0.025s	coverage: 4.4% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/storage	0.797s	coverage: 6.1% of statements in ./...
+	github.com/exios66/mapreduce-reloaded/go/internal/storage/s3test		coverage: 0.0% of statements
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/task	2.228s	coverage: 16.5% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wal	0.165s	coverage: 2.1% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/wire	0.036s	coverage: 6.2% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/worker	36.304s	coverage: 59.6% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/pkg/api	0.026s	coverage: 2.3% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/tools/mutate	0.019s	coverage: 0.8% of statements in ./...
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/papermap	0.060s
+ok  	github.com/exios66/mapreduce-reloaded/go/internal/statusweb	0.016s
+if ls "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover"/covcounters.* >/dev/null 2>&1; then \
+	cd go && go tool covdata textfmt -i="/home/jjburleson@ad.wisc.edu/mr-check/go/.cover" -o "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover/e2e.out" && tail -n +2 "/home/jjburleson@ad.wisc.edu/mr-check/go/.cover/e2e.out" >> cover.out; \
+fi
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/cover.py go go/cover.out go/cover-floors.txt
+cover: go 91.7% of 3238 statements in 31 checked packages
+cd python && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m coverage run -m pytest -q && /home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python -m coverage json -q -o cover.json
+........................................................................ [  6%]
+........................................................................ [ 12%]
+........................................................................ [ 18%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 37%]
+........................................................................ [ 44%]
+........................................................................ [ 50%]
+........................................................................ [ 56%]
+........................................................................ [ 63%]
+........................................................................ [ 69%]
+.s...................................................................... [ 75%]
+........................................................................ [ 81%]
+........................................................................ [ 88%]
+........................................................................ [ 94%]
+..............................................................           [100%]
+1141 passed, 1 skipped in 111.01s (0:01:51)
+/home/jjburleson@ad.wisc.edu/mr-check/python/.venv/bin/python scripts/cover.py python python/cover.json python/cover-floors.txt
+cover: python 100.0% of 2192 statements in 5 checked packages
+make[1]: Leaving directory '/home/jjburleson@ad.wisc.edu/mr-check'
+EXIT=0

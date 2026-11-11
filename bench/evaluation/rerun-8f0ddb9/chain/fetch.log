@@ -1,0 +1,24 @@
+fetch-data: downloading https://raw.githubusercontent.com/GITenberg/War-and-Peace_2600/master/2600.txt
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/warpeace/warpeace.txt (3207436 bytes)
+split-book: 365 chapters in 17 parts
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00000.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00000.warc.wet.gz (107022614 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00001.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00001.warc.wet.gz (107740883 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00002.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00002.warc.wet.gz (107813552 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00003.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00003.warc.wet.gz (108227728 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00004.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00004.warc.wet.gz (108004158 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00005.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00005.warc.wet.gz (107804778 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00006.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00006.warc.wet.gz (109470731 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00007.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00007.warc.wet.gz (107973915 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00008.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00008.warc.wet.gz (107210505 bytes)
+fetch-data: downloading https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/wet/CC-MAIN-20240220211055-20240221001055-00009.warc.wet.gz
+fetch-data: wrote /home/jjburleson@ad.wisc.edu/mr-exp/data/input/crawl/CC-MAIN-20240220211055-20240221001055-00009.warc.wet.gz (106171375 bytes)
+EXIT=0
