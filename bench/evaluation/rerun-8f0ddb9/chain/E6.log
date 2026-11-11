@@ -90,3 +90,66 @@
  Container mapreduce-worker-4 Started 
 [02:40:52] E6 crawl-eng-off wordcount run 5
 [02:41:30] generating 1073741824 bytes for wordcount
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[02:42:01] E6 crawl-on wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+[02:42:46] E6 crawl-off wordcount run 1
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+[02:43:34] E6 crawl-off wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+[02:44:22] E6 crawl-on wordcount run 2
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[02:45:07] E6 crawl-on wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[02:45:52] E6 crawl-off wordcount run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+[02:46:37] E6 crawl-off wordcount run 4
