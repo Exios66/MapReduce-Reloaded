@@ -6,15 +6,16 @@
 #
 # Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
-# - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
+# - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers, after
+#   E0_WARMUP warm-up runs of each program.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
 #   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU and with none, each
 #   with the coordinator's backup tasks on and off; E2_SETTINGS picks some.
-# - E3: distsort with one worker killed at 25%, 50% and 75% of the normal
-#   job time, and with no kill.
+# - E3: distsort with one worker killed at 25%, 50% and 75% of the median
+#   time of E3_CALIBRATE undisturbed runs, and with no kill.
 # - E4: distsort with the coordinator's write-ahead log, restarted at 50% of
-#   the normal job time, and with no restart.
+#   the median time of E4_CALIBRATE undisturbed runs, and with no restart.
 # - E5: Zipf word count compiled into the workers, against the same program
 #   as a job file that the workers interpret: examples/wordcount.go, which
 #   calls the compiled helpers api.Words and api.Sum, and
@@ -390,6 +391,15 @@ EOF
 # The median wall time of an experiment's normal runs.
 median() { awk -F, -v s="$2" '$2 == s && $16 == 1 { print $12 }' "bench/results/$1/runs.csv" | sort -n | awk '{ a[NR] = $1 } END { print a[int((NR + 1) / 2)] }'; }
 
+# need_count NAME VALUE MIN: stops the script before the cluster starts
+# unless VALUE is a whole number of at least MIN.
+need_count() {
+    if ! [[ $2 =~ ^[0-9]+$ ]] || [ "$2" -lt "$3" ]; then
+        echo "$1: '$2' is not a whole number of at least $3" >&2
+        exit 2
+    fi
+}
+
 # E0 first runs each program E0_WARMUP times (default 1) on four workers as
 # its own setting, warmup, which the plots leave out, so no measured run is
 # the first to read its input. Then every program on every number of workers
@@ -399,6 +409,7 @@ e0_warmup=${E0_WARMUP:-1}
 
 e0() {
     local n cells cell order program workers
+    need_count E0_WARMUP "$e0_warmup" 0
     begin E0
     configure 4
     for program in grep distsort wordcount; do
@@ -607,6 +618,7 @@ e3_settings="normal kill-25 kill-50 kill-75"
 
 e3() {
     local n t order s at pct victim
+    need_count E3_CALIBRATE "$e3_calibrate" 1
     begin E3
     configure 4
     for n in $(seq "$e3_calibrate"); do run E3 calibrate distsort "$n" 4 ""; done
@@ -649,6 +661,7 @@ e4_settings="normal restart"
 
 e4() {
     local n t at order s coordinator
+    need_count E4_CALIBRATE "$e4_calibrate" 1
     begin E4
     for n in $(seq "$e4_calibrate"); do
         fresh_log

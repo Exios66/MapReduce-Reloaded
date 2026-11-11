@@ -1405,3 +1405,34 @@ def test_e3_e4_stop_without_a_valid_calibrate_run(experiment, experiment_name):
     assert f"{experiment_name} has no valid calibrate run" in result.stderr
     assert "sample" not in log.read_text()
     assert all(line == "run|calibrate" for line in log.read_text().splitlines())
+
+
+@pytest.mark.parametrize(
+    ("name", "variable", "value"),
+    [
+        ("E0", "E0_WARMUP", "one"),
+        ("E0", "E0_WARMUP", "-1"),
+        ("E3", "E3_CALIBRATE", "0"),
+        ("E3", "E3_CALIBRATE", "2.5"),
+        ("E4", "E4_CALIBRATE", "0"),
+        ("E4", "E4_CALIBRATE", "3x"),
+    ],
+)
+def test_warm_up_and_calibration_counts_are_checked_before_starting(
+    experiment, monkeypatch, name, variable, value
+):
+    """A bad count stops the script before the cluster starts, instead of skipping runs."""
+    invoke, _ = experiment
+    monkeypatch.setenv(variable, value)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        name,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert variable in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout
