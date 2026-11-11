@@ -17,7 +17,8 @@ counted in the table.
   with the saving.
 - E2: tasks completed against time for the median run of each setting, as
   in the paper's Figure 3, and job-time bars in the same colors: color marks
-  backups on or off, dashes and hatching the runs without a straggler.
+  backups on or off; dashes, and a gap between the bars, the runs without a
+  straggler.
 - E2-comparison: the same two panels, but of two datasets: the two
   no-straggler settings come from the ten paired runs in
   RESULTS_DIR/E2-pairs (the drift-controlled comparison), the two straggler
@@ -61,6 +62,18 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 # The font list falls back past families a machine lacks; say nothing for each one.
 logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
+
+
+def use_bundled_fonts():
+    """Registers bench/fonts (Inter, SIL Open Font License), so every
+    machine sets the figures in the same face."""
+    try:
+        from matplotlib import font_manager
+    except ImportError:  # matplotlib replaced, as in the tests
+        return
+    for path in sorted((Path(__file__).resolve().parent / "fonts").glob("*.ttf")):
+        font_manager.fontManager.addfont(str(path))
+
 
 BENCH = Path(__file__).resolve().parent
 PROGRAMS = {"grep": "grep", "distsort": "sort", "wordcount": "Zipf word count"}
@@ -234,9 +247,8 @@ def rc(t):
         "legend.frameon": False,
         "legend.labelcolor": t["ink2"],
         "text.color": t["ink"],
-        # Inter where it is installed, else the nearest clean sans: every
-        # figure in one family whichever machine draws it.
-        "font.family": ["Inter", "Helvetica Neue", "Arial", "DejaVu Sans"],
+        # Inter, from bench/fonts: one face whichever machine draws them.
+        "font.family": ["Inter", "DejaVu Sans"],
         "font.size": 10,
         "savefig.dpi": 150,
     }
@@ -252,7 +264,7 @@ def heading(fig, t, title, subtitle):
         ha="left",
         va="top",
         fontsize=13,
-        weight="bold",
+        weight="semibold",
         color=t["ink"],
     )
     fig.text(
@@ -421,7 +433,7 @@ def e0(rows, out, t, reads=None):
                     textcoords="offset points",
                     va="center",
                     color=t["ink2"],
-                    fontsize=8,
+                    fontsize=9,
                 )
         dots(ax, t, workers, speedup, color)
         best = max(best or (0, "", 0), (speedup[-1], name, workers[-1]))
@@ -544,7 +556,7 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
     Rows must be nonempty. Saves to out and closes the figure on success.
     Missing fields, invalid numbers, and plotting or file errors propagate.
     """
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.4), sharey=True)
+    fig, (left, right) = plt.subplots(1, 2, figsize=(10, 4.4), sharey=True)
     found = {"bytes": [], "time": []}  # off/on byte ratios, and job-time savings
     for ax, field, scale, log, axis_title, saving in (
         (
@@ -676,7 +688,7 @@ def timeline_and_bars(
 
     Each setting takes the next color slot, unless styles maps it to
     (slot, dashed): then settings can share a color, and a dashed one is
-    drawn with a dashed line and a hatched bar. The palette has three
+    drawn with a dashed line, its bar set apart by a gap. The palette has three
     validated slots; omitting styles when settings outnumber the colors
     raises ValueError. Each slot indexes t["series"].
 
@@ -692,9 +704,9 @@ def timeline_and_bars(
             raise ValueError(f"{len(settings)} settings, {len(t['series'])} colors: pass styles")
         styles = {s: (i, False) for i, s in enumerate(settings)}
     fig, (left, right) = plt.subplots(
-        1, 2, figsize=(11, 4.6), gridspec_kw={"width_ratios": [1.7, 1]}
+        1, 2, figsize=(10, 4.6), gridspec_kw={"width_ratios": [1.7, 1]}
     )
-    labels, stats, colors, hatched, marked = [], [], [], [], False
+    labels, stats, colors, dashes, marked = [], [], [], [], False
     for setting, label in settings.items():
         slot, dashed = styles[setting]
         color = t["series"][slot]
@@ -737,7 +749,7 @@ def timeline_and_bars(
         labels.append(label)
         stats.append(spread(runs, field))
         colors.append(color)
-        hatched.append(dashed)
+        dashes.append(dashed)
     left.set_xlabel("Seconds since submission")
     left.set_ylabel("Tasks completed (map + reduce)")
     left.set_xlim(left=0)
@@ -745,14 +757,14 @@ def timeline_and_bars(
     left.legend(loc="lower right")
     left.set_title("Progress of the median run")
 
-    ys = list(range(len(labels)))[::-1]  # the first setting on top
+    # The first setting on top; a gap, not a texture, sets dashed settings
+    # apart from solid ones (dataviz: texture is never on by default).
+    ys, y = [], 0.0
+    for i in reversed(range(len(labels))):
+        ys.insert(0, y)
+        y += 1.6 if i and dashes[i - 1] != dashes[i] else 1
     med = [s[0] for s in stats]
-    bars = right.barh(
-        ys, med, height=0.5, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2
-    )
-    for i in (i for i, hatch in enumerate(hatched) if hatch):
-        # the series color as a hatch on the surface
-        bars[i].set(facecolor=t["surface"], edgecolor=colors[i], hatch="///", linewidth=1.5)
+    right.barh(ys, med, height=0.4, color=colors, edgecolor=t["surface"], linewidth=2, zorder=2)
     ranges(right, t, ys, med, [s[1] for s in stats], [s[2] for s in stats], horizontal=True)
     for y, s in zip(ys, stats, strict=True):
         right.annotate(
@@ -792,8 +804,8 @@ def e2(rows, results, out, t):
     """Saves E2's backup-task comparison to out, in theme t, and closes it.
 
     Compares backups on and off, with and without a worker at 0.2 CPU.
-    Color marks backups on (slot 1) or off (slot 2); dashed lines and
-    hatched bars mark the runs without a straggler. Only valid="1" runs
+    Color marks backups on (slot 1) or off (slot 2); dashed lines, and a
+    gap between the bars, mark the runs without a straggler. Only valid="1" runs
     count; coordinator seconds determine median-run progress and median
     job times with minimum-to-maximum range bars.
     Task CSVs are read from results / "E2"; missing files omit only curves.
@@ -807,7 +819,8 @@ def e2(rows, results, out, t):
     }
     # Four settings, two factors: the color says whether backups are on
     # (blue, as shipped) or off (orange), as color marks the combiner in E1
-    # and E6; a dashed line and a hatched bar mark the no-straggler reference.
+    # and E6; a dashed line and a gap between the bars mark the no-straggler
+    # reference.
     styles = {
         "normal": (0, True),
         "normal-no-backups": (1, True),
@@ -893,7 +906,7 @@ def e3(rows, results, out, t):
     if every kill run is valid. Missing fields, invalid numbers, and file,
     subprocess or plotting errors propagate.
     """
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6))
+    fig, (left, right) = plt.subplots(1, 2, figsize=(10, 4.6))
     normal = spread(valid(rows, setting="normal"), "wall_seconds")
     pcts = [p for p in (25, 50, 75) if valid(rows, setting=f"kill-{p}")]
     stats = [spread(valid(rows, setting=f"kill-{p}"), "wall_seconds") for p in pcts]
@@ -1098,7 +1111,7 @@ def e5(rows, results, out, t):
         ax.bar(
             xs,
             med,
-            width=0.55,
+            width=0.4,
             color=colors,
             edgecolor=t["surface"],
             linewidth=2,
@@ -1194,7 +1207,7 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     share = [[100 * (v / b - 1) for v in d] for _, b, d, _ in cases]  # median, low, high
     added = [s[0] for s in share]
     colors = [t["series"][1] if off else t["series"][0] for *_, off in cases]
-    ax.barh(ys, added, height=0.56, color=colors, edgecolor=t["surface"], linewidth=2)
+    ax.barh(ys, added, height=0.4, color=colors, edgecolor=t["surface"], linewidth=2)
     ranges(ax, t, ys, added, [s[1] for s in share], [s[2] for s in share], horizontal=True)
     for yy, s, (_, b, d, _) in zip(ys, share, cases, strict=True):
         ax.annotate(
@@ -1225,9 +1238,12 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
         t,
         title,
         "Backups (E2), a worker killed mid-job (E3), and a coordinator restart (E4),"
-        " on four one-CPU workers.\n" + label_note(e3_rows or e2_rows or e4_rows) + ".",
+        " on four one-CPU workers.\nE2 is timed by the coordinator; E3 and E4 by the"
+        " clock from submission, which a kill or restart does not reset.\n"
+        + label_note(e3_rows or e2_rows or e4_rows)
+        + ".",
     )
-    finish(fig, out, top=0.8)
+    finish(fig, out, top=0.75)
 
 
 # E7's workers' CPU limits: experiments.sh's E7_CPUS default, which the
@@ -1342,6 +1358,7 @@ def main():
     Missing or empty CSVs are skipped. Filesystem, CSV parsing, plotting,
     and table errors propagate.
     """
+    use_bundled_fonts()
     results = Path(sys.argv[1]) if len(sys.argv) > 1 else BENCH / "results"
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else results
     out.mkdir(parents=True, exist_ok=True)

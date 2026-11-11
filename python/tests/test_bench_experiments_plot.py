@@ -250,7 +250,7 @@ def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, 
 
     assert out.is_dir()
     # One plot per theme, each drawn under that theme's style.
-    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (11, 4.4), "sharey": True})] * 2
+    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (10, 4.4), "sharey": True})] * 2
     assert [c.args[0] for c in figure.savefig.call_args_list] == [
         out / "E1.png",
         out / "E1-dark.png",
@@ -354,7 +354,9 @@ def test_timeline_with_no_valid_run_draws_empty_bars(plotter, tmp_path, exp):
 
 
 def test_e2_colors_backups_and_dashes_the_no_straggler_runs(plotter, tmp_path):
-    """Color marks backups on or off; dashes and hatching mark the runs without a straggler."""
+    """Color marks backups on or off; dashes mark the runs without a straggler,
+    and their bars sit apart from the straggler's, with no texture (dataviz:
+    texture is never on by default)."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
     bars = [Mock() for _ in range(4)]
@@ -379,9 +381,8 @@ def test_e2_colors_backups_and_dashes_the_no_straggler_runs(plotter, tmp_path):
         assert call.kwargs["color"] == color
         assert call.kwargs["ls"] == style
     assert right.barh.call_args.kwargs["color"] == [blue, orange, blue, orange]
-    hatched = [b for b in bars if b.set.called]
-    assert hatched == [bars[0], bars[1]]
-    assert all(b.set.call_args.kwargs["hatch"] == "///" for b in hatched)
+    assert right.barh.call_args.args[0] == pytest.approx([3.6, 2.6, 1, 0])
+    assert not any(b.set.called for b in bars), "no hatching"
 
 
 def test_timeline_needs_styles_for_more_settings_than_colors(plotter, tmp_path):
@@ -1000,3 +1001,26 @@ def test_e7_compares_both_backup_rules_with_none(plotter, tmp_path):
     assert "1, 0.6, 0.3 and 0.15 CPUs" in subtitle
     assert "no clear difference" in subtitle
     figure.savefig.assert_called_once_with(tmp_path / "E7.png")
+
+
+def test_figures_use_the_bundled_inter_face(plotter):
+    """Every figure is set in Inter, shipped in bench/fonts with its licence,
+    so a chart looks the same whichever machine draws it."""
+    module, _ = plotter
+    fonts = SCRIPT.parent / "fonts"
+    assert (fonts / "Inter-Regular.ttf").is_file() and (fonts / "Inter-SemiBold.ttf").is_file()
+    assert "SIL Open Font License" in (fonts / "OFL.txt").read_text()
+    for t in module.THEMES.values():
+        assert module.rc(t)["font.family"][0] == "Inter"
+
+
+def test_text_is_at_least_9_points_and_figures_at_most_10_inches_wide():
+    """README images shrink to the page's width; at 10 inches or less, 9-point
+    text stays readable there."""
+    import re
+
+    source = SCRIPT.read_text()
+    sizes = [float(x) for x in re.findall(r"fontsize=([0-9.]+)", source)]
+    assert sizes and min(sizes) >= 9, sizes
+    widths = [float(x) for x in re.findall(r"figsize=\(([0-9.]+),", source)]
+    assert widths and max(widths) <= 10, widths

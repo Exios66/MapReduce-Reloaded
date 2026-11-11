@@ -125,7 +125,7 @@ The sort's scaling over 1, 2 and 4 workers is E0: 36.7 s, 20.4 s and
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E2-comparison-dark.png">
-  <img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png" width="480">
+  <img alt="E2: tasks completed over time and job time, using ten pairs without a straggler and three runs per straggler setting" src="../bench/evaluation/E2-comparison.png">
 </picture>
 
 The paper turned backup tasks off for the same sort and it took 1,283 s
@@ -174,7 +174,7 @@ these saved straggler rows.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E3-dark.png">
-  <img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png" width="480">
+  <img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png">
 </picture>
 
 The rates panel's "worker lost" band is on the sampling clock and the kill

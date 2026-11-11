@@ -113,8 +113,13 @@ cut a release.
   undisturbed baseline, gives each bar its range, and colors backups on
   and off as E2 does instead of hatching. E0's legend is a row above the
   plot; E0, E1 and E6 draw each run's ring beside its median instead of
-  behind it; E1 and E6's log axes drop their minor ticks; and every figure
-  uses one font list, so they match whichever machine draws them (#349).
+  behind it; E1 and E6's log axes drop their minor ticks. E2's job-time
+  bars set the no-straggler runs apart with a gap instead of hatching, bars
+  are thinner, text is at least 9 points and figures at most 10 inches wide
+  so they stay legible scaled into a page, and the fault summary says which
+  clock each experiment uses. Every figure is set in Inter, shipped in
+  `bench/fonts/` under the SIL Open Font License, so they look the same
+  whichever machine draws them (#349).
 - Bench figures: `bench/plot-rates.py OUT.png` also writes `OUT-dark.png`,
   and `docs/evaluation.md` shows the dark variant of the grep and sort rate
   plots and of E3. A test checks that every chart a page shows has a dark
