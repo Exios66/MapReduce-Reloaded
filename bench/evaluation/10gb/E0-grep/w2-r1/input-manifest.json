@@ -1,0 +1,10 @@
+{
+  "records": 100000000,
+  "logical_bytes": 10000000000,
+  "physical_bytes": 10000000000,
+  "shards": 160,
+  "format": "text",
+  "sort_fingerprint": "f8b4d470765f86d3686f43d5c829ac60a2f09dfca8292ab156d2d242fc99bc63",
+  "grep_fingerprint": "f7fdee6863b705c91d3b8944018ed590df5597594f76d575e18c3097b28936e3",
+  "grep_records": 923
+}
