@@ -55,6 +55,7 @@
 ^\.github/ run-lint
 ^LICENSE run-lint
 ^\.[^/]*$ run-lint
+^\.claude/ run-lint
 
 # Files outside python/ that the Python tests read.
 ^README\.md$ run-python
