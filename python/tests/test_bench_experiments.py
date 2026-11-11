@@ -1497,6 +1497,27 @@ def test_e0_rejects_isolation_with_drop_caches(experiment, monkeypatch):
     assert "begun" not in result.stdout
 
 
+def test_e0_drop_caches_turns_isolation_off_by_default(experiment, monkeypatch):
+    """With DROP_CACHES=1 and no E0_ISOLATE, E0 runs cold instead of stopping."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", "1")
+    monkeypatch.delenv("E0_ISOLATE", raising=False)
+    monkeypatch.setenv("DROP_CACHES", "1")
+    invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { :; }
+        isolate() { note "isolate|$1"; }
+        run() { note "run|$2|$3"; }
+        """,
+        "E0",
+    )
+    calls = log.read_text().splitlines()
+    assert not [c for c in calls if c.startswith("isolate|")]
+    assert len(calls) == 3 + 9  # three warm-ups, then nine measured cells
+
+
 @pytest.mark.parametrize("experiment_name", ["E3", "E4"])
 def test_e3_e4_stop_without_a_valid_calibrate_run(experiment, experiment_name):
     """With no valid calibration run there is no time to disturb at, so nothing is killed."""

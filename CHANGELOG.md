@@ -97,8 +97,9 @@ cut a release.
 ### Changed
 
 - Bench: E7 records its workers' CPU limits in `cpus.txt`, which
-  `bench/plot-experiments.py` names in the E7 subtitle; E0 refuses
-  `E0_ISOLATE=1` with `DROP_CACHES=1`, which would undo the isolation;
+  `bench/plot-experiments.py` names in the E7 subtitle; `DROP_CACHES=1`
+  turns E0's input isolation off by default, and E0 refuses an explicit
+  `E0_ISOLATE=1` with it, which the cache drop would undo;
   `bench/drop-cache.py` flushes each input before dropping it. The
   QUALITY tables label their columns `bk med` and `won sum` (#349).
 - Bench: E3 (`bench/experiments.sh E3`) takes its kill times from

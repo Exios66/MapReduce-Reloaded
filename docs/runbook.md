@@ -189,7 +189,8 @@ by construction.
 
 `DROP_CACHES=1` flushes and drops the kernel's page, dentry and inode caches
 before each trial, after the workers restart and before submission, so it
-also costs the workers their own pages. "Cold" means that and nothing more;
+also costs the workers their own pages. It turns off E0's input isolation
+(`E0_ISOLATE` then defaults to 0; setting both to 1 is an error). "Cold" means that and nothing more;
 process memory and the coordinator's state are not reset. It acts on the
 whole machine, including any other user or campaign on it, so set it only
 for runs on the course VM that nothing else is using. It runs as root or

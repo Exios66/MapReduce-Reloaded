@@ -7,8 +7,9 @@
 # Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers, after
-#   E0_WARMUP warm-up runs of each program; with E0_ISOLATE=1 (the default)
-#   each run starts with only its own program's input in the page cache.
+#   E0_WARMUP warm-up runs of each program; with E0_ISOLATE=1 (the default
+#   unless DROP_CACHES=1) each run starts with only its own program's input
+#   in the page cache.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
 #   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU and with none, each
@@ -413,9 +414,14 @@ need_count() {
 # E2, E3 and E4, which keep one input (#347). So with E0_ISOLATE=1 (the
 # default) every E0 run, warm-up or measured, starts with the other two
 # inputs dropped from the page cache and its own read in. E0_ISOLATE=0 gives
-# the order those reruns used.
+# the order those reruns used. DROP_CACHES=1 makes every run cold, so it
+# turns isolation off by default; asking for both is an error.
 e0_warmup=${E0_WARMUP:-1}
-e0_isolate=${E0_ISOLATE-1}
+if [ "${DROP_CACHES:-}" = 1 ]; then
+    e0_isolate=${E0_ISOLATE-0}
+else
+    e0_isolate=${E0_ISOLATE-1}
+fi
 
 # drop_cache PATH...: drops the volume's files at PATH from the page cache.
 # The files are root's, so bench/drop-cache.py runs in a container.

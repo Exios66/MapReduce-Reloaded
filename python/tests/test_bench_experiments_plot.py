@@ -1026,6 +1026,8 @@ def test_e7_subtitle_uses_the_recorded_cpu_limits(plotter, tmp_path):
     assert module.e7_cpus(tmp_path) == "1, 0.6, 0.3 and 0.15"
     (tmp_path / "E7" / "cpus.txt").write_text("1 1 0.5 .2\n")
     assert module.e7_cpus(tmp_path) == "1, 1, 0.5 and .2"
+    (tmp_path / "E7" / "cpus.txt").write_text("")
+    assert module.e7_cpus(tmp_path) == "1, 0.6, 0.3 and 0.15"
 
 
 def test_figures_use_the_bundled_inter_face(plotter):

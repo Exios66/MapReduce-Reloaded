@@ -1274,6 +1274,8 @@ def e7_cpus(results):
     if not path.exists():
         return E7_CPUS
     limits = path.read_text().split()
+    if not limits:
+        return E7_CPUS
     return ", ".join(limits[:-1]) + " and " + limits[-1] if len(limits) > 1 else limits[0]
 
 
