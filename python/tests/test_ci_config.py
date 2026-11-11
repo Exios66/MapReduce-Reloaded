@@ -250,7 +250,11 @@ def test_go_test_runs_the_race_pass_then_the_coverage_pass():
     race = MAKEFILE.split("\ngo-test-race:\n", 1)[1].split("\n\n", 1)[0]
     assert "go test -race -shuffle=on ./..." in race
     cover = MAKEFILE.split("\ngo-test-cover:\n", 1)[1].split("\n\n", 1)[0]
-    for part in ("-coverpkg=./...", "./internal/papermap ./internal/statusweb", "scripts/cover.py go"):
+    for part in (
+        "-coverpkg=./...",
+        "./internal/papermap ./internal/statusweb",
+        "scripts/cover.py go",
+    ):
         assert part in cover
 
 
