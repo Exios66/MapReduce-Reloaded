@@ -17,6 +17,7 @@ type attemptBar struct {
 	Width   float64
 	Backup  bool
 	Trace   string // "map" or "reduce", with "open" while the attempt runs and "failed" if it did not complete
+	State   string
 	Seconds string
 }
 
@@ -29,11 +30,21 @@ func timeline(j *pb.GetJobStatusResponse, now time.Time, attempts map[string][]c
 	if len(rs) == 0 {
 		return nil
 	}
-	start := j.GetSubmittedAt().AsTime()
-	if first := rs[0].Started; start.IsZero() || first.Before(start) {
-		start = first
+	var start, stop time.Time
+	if j.GetSubmittedAt() != nil {
+		start = j.GetSubmittedAt().AsTime()
 	}
-	stop := j.GetFinishedAt().AsTime()
+	for _, a := range rs {
+		if !a.Started.IsZero() && (start.IsZero() || a.Started.Before(start)) {
+			start = a.Started
+		}
+	}
+	if start.IsZero() {
+		return nil
+	}
+	if j.GetFinishedAt() != nil {
+		stop = j.GetFinishedAt().AsTime()
+	}
 	if stop.IsZero() || !stop.After(start) {
 		stop = now
 	}
@@ -43,6 +54,9 @@ func timeline(j *pb.GetJobStatusResponse, now time.Time, attempts map[string][]c
 	window := float64(stop.Sub(start))
 	out := make([]attemptBar, 0, len(rs))
 	for _, a := range rs {
+		if a.Started.IsZero() {
+			continue // An unknown assignment time cannot be positioned honestly.
+		}
 		end := a.Ended
 		open := end.IsZero()
 		if open {
@@ -50,19 +64,25 @@ func timeline(j *pb.GetJobStatusResponse, now time.Time, attempts map[string][]c
 		}
 		kind := kindName(a.Kind)
 		trace := kind
+		state := "completed"
 		switch {
 		case open:
 			trace += " open"
+			state = "running"
 		case !a.Ok:
 			trace += " failed"
+			state = "failed"
 		}
+		left := clampPct(float64(a.Started.Sub(start)) / window * 100)
+		right := clampPct(float64(end.Sub(start)) / window * 100)
 		out = append(out, attemptBar{
 			Label:   fmt.Sprintf("%s %d #%d %s", kind, a.Index, a.Attempt, a.Worker),
-			Left:    clampPct(float64(a.Started.Sub(start)) / window * 100),
-			Width:   clampPct(float64(end.Sub(a.Started)) / window * 100),
+			Left:    left,
+			Width:   max(0, right-left),
 			Backup:  a.Backup,
 			Trace:   trace,
-			Seconds: fmt.Sprintf("%.1f s", end.Sub(a.Started).Seconds()),
+			State:   state,
+			Seconds: fmt.Sprintf("%.1f s", max(0, end.Sub(a.Started).Seconds())),
 		})
 	}
 	return out

@@ -20,8 +20,12 @@ cut a release.
   a bar for map (blue) and reduce (purple), a marker for backup
   attempts, a red outline for attempts that failed and an outline for
   the ones still running; `/status.json` carries the same data as each
-  job's `attempts`. The history lives in memory: a coordinator restart
-  does not rebuild it from the write-ahead log (#332).
+  job's `attempts`. Each row also says in words whether the attempt was a
+  backup and whether it completed, failed or is still running, and open
+  timelines and keyboard focus survive the page's refreshes. Attempts with
+  no known start time are left out rather than drawn at a guessed place.
+  The history lives in memory: a coordinator restart does not rebuild it
+  from the write-ahead log (#332).
 - Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
   status-page GIFs from one real job's whole run, in the page's dark and
   light variants, with a provenance sidecar (commit, machine, job, input,

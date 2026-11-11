@@ -95,10 +95,14 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
 .bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .stale { color: var(--red); font-weight: 600; }
 .timeline { margin-top: 8px; font-size: 12px; color: var(--muted); }
-.timeline .row { display: grid; grid-template-columns: 11em 1fr 6em; gap: 6px; align-items: center; padding-top: 3px; }
-.timeline .label { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.timeline .backup .label::after { content: " \00b7 backup"; color: var(--amber); }
-.timeline .lane { position: relative; height: 12px; background: var(--track); border-radius: 3px; }
+.timeline .row { display: grid; grid-template-columns: minmax(0, 11em) minmax(3em, 1fr) 5em;
+  gap: 6px; align-items: center; padding-top: 3px; }
+.timeline .label { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.timeline .backup { color: var(--amber); }
+.timeline .secs { text-align: right; font-variant-numeric: tabular-nums; }
+.timeline .outcome { display: block; font-size: 11px; }
+.timeline .lane { position: relative; height: 12px; background: var(--track); border-radius: 3px;
+  overflow: hidden; }
 .timeline .trace { position: absolute; top: 3px; height: 6px; border-radius: 3px; min-width: 2px; }
 .timeline .trace.map { background: var(--blue); }
 .timeline .trace.reduce { background: var(--purple); }
@@ -113,7 +117,7 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
 No answer from the coordinator. Showing the last update.
 </span>
 </div>
-<div id="live">
+<div id="live" role="main">
 <header>
 <h1>MapReduce status</h1>
 <p class="summary"><b>{{len .Jobs}}</b> jobs &middot; <b>{{len .Workers}}</b> workers &middot; <b>{{len .Lost}}</b> lost &middot; {{.At.Format "15:04:05"}}</p>
@@ -145,15 +149,16 @@ No answer from the coordinator. Showing the last update.
 <span>reduce out <b>{{counter .GetCounters "reduce.output.records"}}</b></span>
 {{if .Error}}<span class="error">{{.Error}}</span>{{end}}
 </div>
-<details>
+<details id="counters-{{.JobId}}">
 <summary>all counters</summary>
 <div class="counters">{{range $name, $n := .GetCounters.GetValues}}{{$name}}: {{$n}}<br>{{end}}</div>
 </details>
 {{$r := timeline . $.At $.Attempts}}
 {{if $r}}
-<details class="timeline">
+<details class="timeline" id="timeline-{{.JobId}}">
 <summary>task timeline</summary>
-{{range $r}}<div class="row"><span class="label{{if .Backup}} backup{{end}}">{{.Label}}</span><span class="lane"><i class="trace {{.Trace}}" style="left:{{printf "%.2f" .Left}}%;width:{{printf "%.2f" .Width}}%"></i></span><span class="secs">{{.Seconds}}</span></div>{{end}}
+<p>Map and reduce attempts share the job's time scale. Most recent 512 attempts; unknown start times are omitted.</p>
+{{range $r}}<div class="row"><span class="label">{{.Label}}{{if .Backup}} <span class="backup">backup</span>{{end}}<span class="outcome">{{.State}}</span></span><span class="lane" aria-hidden="true"><i class="trace {{.Trace}}" style="left:{{printf "%.2f" .Left}}%;width:{{printf "%.2f" .Width}}%"></i></span><span class="secs">{{.Seconds}}</span></div>{{end}}
 </details>
 {{end}}
 </article>
@@ -205,14 +210,18 @@ No answer from the coordinator. Showing the last update.
     }).then(function (text) {
       var next = new DOMParser().parseFromString(text, "text/html").getElementById("live");
       if (!next) throw new Error("not a status page");
+      var focused = document.activeElement;
+      var focusID = focused && focused.tagName === "SUMMARY" && focused.parentElement.id;
       var open = [].map.call(live.querySelectorAll("details[open]"), function (d) {
-        return d.closest("article").id;
+        return d.id;
       });
       live.innerHTML = next.innerHTML;
       open.forEach(function (id) {
-        var a = document.getElementById(id), d = a && a.querySelector("details");
+        var d = document.getElementById(id);
         if (d) d.open = true;
       });
+      var summary = focusID && document.getElementById(focusID);
+      if (summary) summary.querySelector("summary").focus({ preventScroll: true });
       stale.hidden = true;
     }).catch(function () { stale.hidden = false; });
   }

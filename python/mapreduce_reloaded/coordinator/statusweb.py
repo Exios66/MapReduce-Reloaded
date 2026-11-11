@@ -260,12 +260,14 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline
 .bar button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .stale { color: var(--red); font-weight: 600; }
 .timeline { margin-top: 8px; font-size: 12px; color: var(--muted); }
-.timeline .row { display: grid; grid-template-columns: 11em 1fr 6em; gap: 6px; align-items: center;
-  padding-top: 3px; }
-.timeline .label { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; }
-.timeline .backup .label::after { content: " \\00b7 backup"; color: var(--amber); }
-.timeline .lane { position: relative; height: 12px; background: var(--track); border-radius: 3px; }
+.timeline .row { display: grid; grid-template-columns: minmax(0, 11em) minmax(3em, 1fr) 5em;
+  gap: 6px; align-items: center; padding-top: 3px; }
+.timeline .label { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.timeline .backup { color: var(--amber); }
+.timeline .secs { text-align: right; font-variant-numeric: tabular-nums; }
+.timeline .outcome { display: block; font-size: 11px; }
+.timeline .lane { position: relative; height: 12px; background: var(--track); border-radius: 3px;
+  overflow: hidden; }
 .timeline .trace { position: absolute; top: 3px; height: 6px; border-radius: 3px; min-width: 2px; }
 .timeline .trace.map { background: var(--blue); }
 .timeline .trace.reduce { background: var(--purple); }
@@ -282,7 +284,7 @@ _BAR = """<div class="bar" id="bar" hidden>
 No answer from the coordinator. Showing the last update.
 </span>
 </div>
-<div id="live">
+<div id="live" role="main">
 """
 
 _SCRIPT = """<script>
@@ -300,14 +302,18 @@ _SCRIPT = """<script>
     }).then(function (text) {
       var next = new DOMParser().parseFromString(text, "text/html").getElementById("live");
       if (!next) throw new Error("not a status page");
+      var focused = document.activeElement;
+      var focusID = focused && focused.tagName === "SUMMARY" && focused.parentElement.id;
       var open = [].map.call(live.querySelectorAll("details[open]"), function (d) {
-        return d.closest("article").id;
+        return d.id;
       });
       live.innerHTML = next.innerHTML;
       open.forEach(function (id) {
-        var a = document.getElementById(id), d = a && a.querySelector("details");
+        var d = document.getElementById(id);
         if (d) d.open = true;
       });
+      var summary = focusID && document.getElementById(focusID);
+      if (summary) summary.querySelector("summary").focus({ preventScroll: true });
       stale.hidden = true;
     }).catch(function () { stale.hidden = false; });
   }
@@ -369,8 +375,11 @@ def _timeline(j: coordinator_pb2.GetJobStatusResponse, now: float, attempts) -> 
         return ts.ToNanoseconds() / 1e9 if ts is not None else None
 
     window_start = stamp(j.submitted_at) if j.HasField("submitted_at") else None
-    if window_start is None or attempts[0].started < window_start:
-        window_start = attempts[0].started
+    for a in attempts:
+        if a.started is not None and (window_start is None or a.started < window_start):
+            window_start = a.started
+    if window_start is None:
+        return []
     window_stop = stamp(j.finished_at) if j.HasField("finished_at") else None
     if window_stop is None or not window_stop > window_start:
         window_stop = now
@@ -379,24 +388,31 @@ def _timeline(j: coordinator_pb2.GetJobStatusResponse, now: float, attempts) -> 
     span = window_stop - window_start
     bars = []
     for a in attempts:
+        if a.started is None:
+            continue  # An unknown assignment time cannot be positioned honestly.
         ended, open = a.ended, a.ended is None
         if open:
             ended = window_stop
-        left, width = (a.started - window_start) / span * 100, (ended - a.started) / span * 100
+        left = max(0.0, min((a.started - window_start) / span * 100, 100.0))
+        right = max(0.0, min((ended - window_start) / span * 100, 100.0))
         kind = _kind(a.kind)
         trace = kind
+        state = "completed"
         if open:
             trace += " open"
+            state = "running"
         elif not a.ok:
             trace += " failed"
+            state = "failed"
         bars.append(
             {
                 "label": f"{kind} {a.index} #{a.attempt} {a.worker}",
-                "left": max(0.0, min(left, 100.0)),
-                "width": max(0.0, min(width, 100.0)),
+                "left": left,
+                "width": max(0.0, right - left),
                 "backup": a.backup,
                 "trace": trace,
-                "seconds": f"{ended - a.started:.1f} s",
+                "state": state,
+                "seconds": f"{max(0.0, ended - a.started):.1f} s",
             }
         )
     return bars
@@ -449,16 +465,23 @@ def page(st: Status, dark: bool = False) -> str:
         out.append(f"<span>reduce out <b>{_counter(j, 'reduce.output.records')}</b></span>\n")
         if j.error:
             out.append(f'<span class="error">{e(j.error)}</span>\n')
-        out.append("</div>\n<details>\n<summary>all counters</summary>\n")
+        out.append(f'</div>\n<details id="counters-{e(j.job_id)}">\n')
+        out.append("<summary>all counters</summary>\n")
         out.append(f'<div class="counters">{counters}</div>\n</details>\n')
         bars = _timeline(j, st.at, st.attempts.get(j.job_id, ()))
         if bars:
-            out.append('<details class="timeline">\n<summary>task timeline</summary>\n')
+            out.append(f'<details class="timeline" id="timeline-{e(j.job_id)}">\n')
+            out.append("<summary>task timeline</summary>\n")
+            out.append(
+                "<p>Map and reduce attempts share the job's time scale. Most recent 512 attempts; "
+                "unknown start times are omitted.</p>\n"
+            )
             for b in bars:
-                extra = " backup" if b["backup"] else ""
+                backup = ' <span class="backup">backup</span>' if b["backup"] else ""
                 out.append(
-                    f'<div class="row"><span class="label{extra}">{e(b["label"])}</span>'
-                    f'<span class="lane"><i class="trace {e(b["trace"])}"'
+                    f'<div class="row"><span class="label">{e(b["label"])}{backup}'
+                    f'<span class="outcome">{e(b["state"])}</span></span>'
+                    f'<span class="lane" aria-hidden="true"><i class="trace {e(b["trace"])}"'
                     f' style="left:{b["left"]:.2f}%;width:{b["width"]:.2f}%"></i></span>'
                     f'<span class="secs">{e(b["seconds"])}</span></div>\n'
                 )

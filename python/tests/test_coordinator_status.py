@@ -226,6 +226,39 @@ JOB_KEYS = (
 ).split()
 
 
+@pytest.mark.parametrize(
+    "submitted,finished,started,ended,left,width,seconds",
+    [
+        (None, None, AT - 2, None, 0, 100, "2.0 s"),
+        (AT - 10, AT, AT - 2, AT + 1, 80, 20, "3.0 s"),
+        (AT - 10, None, AT - 2, AT - 3, 80, 0, "0.0 s"),
+        (AT - 10, None, AT + 1, None, 100, 0, "0.0 s"),
+    ],
+)
+def test_timeline_bounds(submitted, finished, started, ended, left, width, seconds):
+    """Missing timestamps and clock changes never place bars outside their lane."""
+    j = _job(submitted, finished)
+    a = AttemptRange(types_pb2.TASK_KIND_MAP, 0, 0, "w", started, ended)
+    (bar,) = statusweb._timeline(j, AT, [a])
+    assert (bar["left"], bar["width"], bar["seconds"]) == (left, width, seconds)
+
+
+def test_timeline_unknown_start():
+    """An unknown assignment time cannot be placed on the job's time scale."""
+    a = AttemptRange(types_pb2.TASK_KIND_MAP, 0, 0, "w", None)
+    assert statusweb._timeline(_job(), AT, [a]) == []
+
+
+def test_timeline_backup_is_text():
+    """Backup and outcome labels are readable without colours or generated CSS content."""
+    a = STATUS.attempts["job-1"][0]._replace(backup=True)
+    st = STATUS._replace(attempts={"job-1": [a]})
+    body = statusweb.page(st)
+    assert '<span class="backup">backup</span>' in body
+    assert '<span class="outcome">completed</span>' in body
+    assert 'id="timeline-job-1"' in body and 'id="counters-job-1"' in body
+
+
 def test_status_json(get):
     """/status.json has the keys the Go server's has, and the page's numbers."""
     code, headers, body = get("/status.json")

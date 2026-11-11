@@ -179,7 +179,7 @@ class AttemptRange(NamedTuple):
     index: int
     attempt: int
     worker: str
-    started: float
+    started: float | None
     ended: float | None = None  # None while the attempt is running
     backup: bool = False  # started while another attempt of the task was running (§3.6)
     ok: bool = False  # the coordinator accepted its completion report
