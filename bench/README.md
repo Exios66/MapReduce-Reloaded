@@ -196,18 +196,27 @@ directly. Each title states the finding, computed from the CSVs. The chart
 type follows the comparison:
 
 - E0 is a line against the ideal diagonal, because workers are an ordered
-  scale. It draws each run as a ring beside its median.
+  scale. A whisker right of each dot spans its runs; the one-worker
+  baseline is 1× by definition and has none, and a range narrower than a
+  dot is not drawn.
 - E1 and E6 compare two settings per group, so they are dumbbells: one row
-  per group joining the combiner-on and combiner-off medians, each run a
-  ring. Bytes use a log axis, where a row's length is the factor saved and
-  15× and 78× can share one axis; job time uses a linear axis from zero.
-- E3's kill points are separate settings, not a series, so each is a stem
-  from the no-failure baseline, with no line joining them; the stem's
-  length is the time the failure added.
-- E2 and E4 show completed tasks over time as steps, beside bars of each
-  setting's job time; E5 and `faults.png` compare magnitudes, so they are
-  bars from zero. E7 compares three settings' runs, so it draws each run
-  as a ring beside its median.
+  per group joining the combiner-on and combiner-off medians, labeled with
+  the saving. Bytes use a log axis, where a row's length is the factor
+  saved and 15× and 78× can share one axis; job time uses a linear axis
+  from zero.
+- E2, E3 and E4 compare each disturbance with the undisturbed run, so
+  their job times are dumbbells too, labeled with the time added (or saved,
+  for backups), or "no clear difference" when the run ranges overlap. Two
+  medians too close for two dots are drawn a little above and below the
+  row. Beside them is the reason: tasks finished over time for E2 and E4,
+  and the cluster's data rate for E3, with the lost worker shaded.
+- E5 and `faults.png` compare magnitudes, so they are bars from zero. E5's
+  runs all fall within a few percent of their medians, too close for a
+  whisker to show, so its subtitle gives that spread instead. E7 compares
+  three settings, so each is a median dot on a pale bar spanning its runs.
+
+Text is set in Atkinson Hyperlegible, shipped in `bench/fonts/` with its
+license, so the figures look the same whichever machine draws them.
 
 It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
 and E4, each the job time it added against the same experiment's
@@ -230,7 +239,7 @@ from their `samples.csv` with `plot-rates.py`, whose third argument is the
 identification line in the image.
 
 E2 and E5 are timed by the coordinator, from the job's submission to its
-end. E3 and E4 are timed by the clock from submission, which a killed
+end. E3 and E4 are timed from when `mr submit` returned, which a killed
 worker or a restarted coordinator does not reset. The results published
 before this rerun, at several commits with three runs each, are kept in
 [`evaluation/superseded/before-8f0ddb9/`](evaluation/superseded/before-8f0ddb9/).
@@ -293,11 +302,12 @@ before this rerun, at several commits with three runs each, are kept in
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E2-dark.png">
-  <img alt="E2: tasks completed over time and job time, with and without a straggler and backups" src="evaluation/E2.png">
+  <img alt="E2: job time with backups on and off, without and with a straggler, and the straggler runs' tasks completed over time" src="evaluation/E2.png">
 </picture>
 
-Color marks backups, blue on and orange off; a dashed line and the upper
-pair of bars mark the runs without a straggler.
+Color marks backups, blue on and orange off. On the left, the upper row
+joins the two medians without a straggler and the lower row those with
+one; on the right are the straggler runs' tasks finished over time.
 
 | Setting | Job time (s) | Backups run | Backups won |
 |---|---|---:|---:|
@@ -324,7 +334,7 @@ pair of bars mark the runs without a straggler.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E3-dark.png">
-  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the normal job time, each a stem from the no-failure baseline, and the data rates of the median run killed at 50%" src="evaluation/E3.png">
+  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the normal job time, each a dumbbell from the no-failure median, and the data rate of the median run killed at 50%" src="evaluation/E3.png">
 </picture>
 
 Three calibration runs come first; the kill times are 25, 50 and 75% of
@@ -354,7 +364,7 @@ the offset between those two clocks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E4-dark.png">
-  <img alt="E4: tasks completed over time and job time across a restart" src="evaluation/E4.png">
+  <img alt="E4: job time with and without a coordinator restart, and tasks completed over time across the restart" src="evaluation/E4.png">
 </picture>
 
 | Setting | Job time (s) |
@@ -429,7 +439,7 @@ the offset between those two clocks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E7-dark.png">
-  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median beside its runs" src="evaluation/E7.png">
+  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median on a bar spanning its runs" src="evaluation/E7.png">
 </picture>
 
 E2 slows one worker. E7 slows all four, each to a different speed, which is

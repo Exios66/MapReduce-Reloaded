@@ -15,6 +15,12 @@ cut a release.
 
 ### Added
 
+- Bench: `make figures-check` (`scripts/check-figures.py`) checks the
+  evaluation archives against their `SHA256SUMS`, unpacks only the archives
+  it lists, redraws every figure in `bench/evaluation/` from them in a
+  temporary directory, and compares each
+  with the committed PNG pixel by pixel. It needs matplotlib, so it runs on
+  the experiment VM with `PLOT_PYTHON`, not in `make check` (#357).
 - Lint: `make md-lint` runs `scripts/check-dark-charts.py`, which fails if
   a Markdown page shows a bench chart without its dark variant. It runs in
   the lint job, not the Python tests, so a Markdown-only change still runs
@@ -97,6 +103,44 @@ cut a release.
 
 ### Changed
 
+- Bench figures: every figure in `bench/evaluation/` is redrawn for
+  reading at a glance. Each has a bold title stating its finding, a
+  subtitle with the setup, a rule, then its legend; panel titles name what
+  they measure and whether lower or higher is better. Blue is the system
+  as it ships or undisturbed, orange the changed or disturbed setting.
+  E1, E6 and E2 to E4 compare two medians per row as dumbbells labeled with
+  the saving or the time added, or "no clear difference" when the run
+  ranges overlap, and nudge two dots apart vertically when their medians
+  are too close to show both. E2 and E4 pair that with tasks finished over
+  time, and E3 with the cluster's data rate, the lost worker shaded. E5 is
+  one bar per setting, labeled with how many times slower than compiled
+  it is and its map phase. The faults summary heads each experiment's
+  group of bars. E0 draws whiskers right of each dot and none at the
+  one-worker baseline. No figure marks single runs any more, and none
+  draws a whisker too short to see: E0 and E5 say so in their subtitles.
+  The titles also give the range of job time added and say outputs were
+  unchanged (faults), that E3 and E4 time from when `mr submit` returned,
+  and that E7's backup counts are medians. E1 and E6's titles claim a
+  saving only when no pair's run ranges overlap (#357).
+- Bench figures: every figure, including the paper's rate plots in
+  `bench/evaluation/paper/`, is set in Atkinson Hyperlegible, shipped in
+  `bench/fonts/` under the SIL Open Font License in place of Inter. The
+  rate plots' titles, and those `bench/run.sh` draws, no longer name the
+  commit, which `result.json` records (#357).
+- Agent tooling: the `interpreting-bench-results` skill states which
+  experiments report wall time, which commit the reported E0 ran at, how
+  each experiment orders its runs, and that `valid` is the only record of
+  an output check; its `summarize.py` also flags a group whose bytes
+  shuffled differ between runs and a setting with fewer valid runs than the
+  rest, and reports `wall_seconds` for E3 and E4 in its medians, ranges,
+  slow runs and overlaps. `analyzing-bench-results` documents `make figures-check`;
+  `saving-ci-credits` describes the three-node `go` job and cold cache runs,
+  and its `preflight.sh` names the PR's likely number so the CHANGELOG can
+  cite it before the PR opens, as `AGENTS.md` now allows. `scripts/README.md`
+  lists `check-dark-charts.py`, `check-figures.py`, `ci-go-job.sh` and
+  `install-tool.sh`. `preflight.sh` counts discussions, which share the
+  number sequence, when it predicts the PR's number, and gives no prediction
+  when a lookup fails (#357).
 - CI: the `go` job runs on three nodes at once (`parallelism: 3`), still
   one `go` check: `scripts/ci-go-job.sh` gives the race tests, the coverage
   tests, and sh-lint, go-lint and py-e2e a node each, the same make targets

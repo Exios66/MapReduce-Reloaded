@@ -6,12 +6,16 @@ Usage: python3 summarize.py DIR [DIR...]
 Each DIR is one experiment's results directory (bench/results/E2,
 bench/evaluation/E0, ...) holding runs.csv and, when present, cache.jsonl
 and machine.json. For each setting, program and worker count it prints the
-valid runs' median and range of the coordinator's job time (`seconds`), the
+valid runs' median and range of the experiment's reported clock (the
+coordinator's job time, `seconds`, except `wall_seconds` for E3 and E4), the
 wall clock, median backups launched, total backups won across the valid
 runs, bytes shuffled and the disk reads during the run. Then
-it lists runs to look at (invalid, or far from their group's median) and,
-within each program and worker count, whether every pair of measured
-settings has separate or overlapping ranges.
+it lists runs to look at (invalid, or far from their group's median), groups
+whose bytes shuffled differ between valid runs (deterministic for an input),
+measured settings with fewer valid runs than the most any has, and, within
+each program and worker count, whether every pair of measured settings has
+separate or overlapping ranges. Medians, ranges, slow runs and overlaps all
+use the reported clock.
 
 disk_read_sectors in cache.jsonl counts the whole machine's reads, so the
 disk column suggests, but cannot prove, what one run read. Standard library
@@ -27,6 +31,9 @@ from pathlib import Path
 
 # Settings that only prepare the measured ones; the figures leave them out.
 UNMEASURED = {"warmup", "calibrate"}
+# Experiments that report wall_seconds: a restarted coordinator times its
+# jobs from the replay, so its `seconds` misses the time before the restart.
+WALL_CLOCK = {"E3", "E4"}
 
 
 def load(d):
@@ -65,37 +72,48 @@ def summarize(d):
         print(f"commit {machine.get('commit', '?')[:7]}{dirty}, {machine.get('cpus', '?')} CPUs")
     else:
         print("no machine.json: commit unknown")
+    experiments = {r.get("experiment") for r in rows} - {None, ""} or {d.name}
+    col = "wall_seconds" if experiments & WALL_CLOCK else "seconds"
+    print(f"clock: {col}")
+
+    def clock(r):
+        return float(r[col]) if r.get(col) else None
+
     groups = {}
     for r in rows:
         groups.setdefault((r["setting"], r["program"], r["workers"]), []).append(r)
     print(
         f"{'setting':24} {'program':10} {'w':>2} {'n':>3} {'valid':>5}  "
-        f"{'seconds med [range]':24} {'wall med':>9} {'bk med':>7} {'won sum':>7} "
+        f"{col + ' med [range]':24} {'wall med':>9} {'bk med':>7} {'won sum':>7} "
         f"{'shuffle MB':>11}  disk MB (machine-wide)"
     )
     look = []
     for (setting, program, workers), group in groups.items():
         ok = [r for r in group if r["valid"] == "1"]
-        secs = [float(r["seconds"]) for r in ok]
+        secs = [t for r in ok if (t := clock(r)) is not None]
         wall = [float(r["wall_seconds"]) for r in ok if r.get("wall_seconds")]
         backups = [int(r["backups"]) for r in ok if r.get("backups")]
         won = sum(int(r["backups_won"]) for r in ok if r.get("backups_won"))
-        shuffled = {
-            round(int(r["map_output_bytes"]) / 1e6) for r in ok if r.get("map_output_bytes")
-        }
+        shuffled = {int(r["map_output_bytes"]) for r in ok if r.get("map_output_bytes")}
         disk = [
             reads[(setting, program, r["run"])] for r in ok if (setting, program, r["run"]) in reads
         ]
+        if len(shuffled) > 1:
+            look.append(
+                f"{setting}/{program}/w{workers}: bytes shuffled differ between valid runs "
+                f"({'/'.join(map(str, sorted(shuffled)))} bytes): suspect a different input"
+            )
         mark = " (not measured)" if setting in UNMEASURED else ""
         print(
             f"{setting + mark:24} {program:10} {workers:>2} {len(group):>3} {len(ok):>5}  "
             f"{span(secs):24} {statistics.median(wall) if wall else 0:9.2f} "
             f"{statistics.median(backups) if backups else 0:7g} {won:7} "
-            f"{'/'.join(map(str, sorted(shuffled))) or '-':>11}  {span(disk, '{:.0f}')}"
+            f"{'/'.join(str(round(b / 1e6)) for b in sorted(shuffled)) or '-':>11}  "
+            f"{span(disk, '{:.0f}')}"
         )
         med = statistics.median(secs) if secs else None
         for r in group:
-            t = float(r["seconds"]) if r["seconds"] else None
+            t = clock(r)
             why = []
             if r["valid"] != "1":
                 why.append(f"valid={r['valid']} state={r['state']}")
@@ -107,6 +125,15 @@ def summarize(d):
                 look.append(
                     f"{setting}/{program}/w{workers} run {r['run']}: {'; '.join(why)}{extra}"
                 )
+    counts = {
+        key: sum(r["valid"] == "1" for r in group)
+        for key, group in groups.items()
+        if key[0] not in UNMEASURED
+    }
+    most = max(counts.values(), default=0)
+    for (setting, program, workers), n in counts.items():
+        if n < most:
+            look.append(f"{setting}/{program}/w{workers}: {n} valid runs against {most} elsewhere")
     if look:
         print("runs to look at:")
         for line in look:
@@ -116,7 +143,7 @@ def summarize(d):
     for (setting, program, workers), group in groups.items():
         if setting in UNMEASURED:
             continue
-        secs = [float(r["seconds"]) for r in group if r["valid"] == "1"]
+        secs = [t for r in group if r["valid"] == "1" and (t := clock(r)) is not None]
         if secs:
             by_cell.setdefault((program, workers), []).append((setting, min(secs), max(secs)))
     for (program, workers), cells in by_cell.items():
@@ -126,7 +153,7 @@ def summarize(d):
     # E0-style data: one setting per worker count, so compare across workers.
     medians = {}
     for (setting, program, workers), group in groups.items():
-        secs = [float(r["seconds"]) for r in group if r["valid"] == "1"]
+        secs = [t for r in group if r["valid"] == "1" and (t := clock(r)) is not None]
         if setting not in UNMEASURED and secs:
             medians.setdefault(program, {})[int(workers)] = statistics.median(secs)
     for program, by_workers in medians.items():
