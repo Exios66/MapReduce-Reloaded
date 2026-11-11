@@ -31,12 +31,16 @@ def write(tmp_path):
     return write
 
 
-def test_a_picture_whose_dark_variant_exists_passes(write):
+@pytest.mark.parametrize("srcset_first", [False, True])
+def test_a_picture_whose_dark_variant_exists_passes(write, srcset_first):
     write("bench/evaluation/E2-dark.png")
-    page = write(
-        "README.md",
-        PICTURE.format(dark="bench/evaluation/E2-dark.png", light="bench/evaluation/E2.png"),
-    )
+    text = PICTURE.format(dark="bench/evaluation/E2-dark.png", light="bench/evaluation/E2.png")
+    if srcset_first:
+        text = text.replace(
+            'media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E2-dark.png"',
+            'srcset="bench/evaluation/E2-dark.png" media="(prefers-color-scheme: dark)"',
+        )
+    page = write("README.md", text)
     assert charts.check(page) == ([], 1)
 
 
@@ -50,42 +54,18 @@ def test_a_missing_dark_variant_is_reported(write):
     assert problems == [f"{page}: dark variant bench/evaluation/E2-dark.png does not exist"]
 
 
-def test_a_bare_chart_outside_a_picture_is_reported(write):
+def test_a_chart_without_a_dark_source_is_reported(write):
     page = write(
         "docs/report.md",
+        '<picture><img src="../bench/evaluation/E0.png" alt="E0"></picture>\n'
         '<img src="../bench/evaluation/E1.png" alt="E1">\n\n![E3](evaluation/E3.png)\n',
     )
     problems, _ = charts.check(page)
     assert problems == [
+        f"{page}: shows ../bench/evaluation/E0.png without a dark variant",
         f"{page}: shows ../bench/evaluation/E1.png without a dark variant",
         f"{page}: shows evaluation/E3.png without a dark variant",
     ]
-
-
-def test_a_dark_source_with_srcset_first_counts(write):
-    write("bench/evaluation/E2-dark.png")
-    page = write(
-        "README.md",
-        "<picture>\n"
-        '  <source srcset="bench/evaluation/E2-dark.png" media="(prefers-color-scheme: dark)">\n'
-        '  <img src="bench/evaluation/E2.png" alt="E2">\n'
-        "</picture>\n",
-    )
-    assert charts.check(page) == ([], 1)
-
-
-def test_a_chart_in_a_picture_without_a_dark_source_is_reported(write):
-    page = write(
-        "README.md",
-        "<picture>\n"
-        '  <source media="(min-width: 600px)" srcset="bench/evaluation/E2-wide.png">\n'
-        '  <img src="bench/evaluation/E2.png" alt="E2">\n'
-        "</picture>\n",
-    )
-    assert charts.check(page) == (
-        [f"{page}: shows bench/evaluation/E2.png without a dark variant"],
-        0,
-    )
 
 
 def test_images_that_are_not_bench_charts_are_left_alone(write):

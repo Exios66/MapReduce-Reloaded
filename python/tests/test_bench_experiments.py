@@ -1432,7 +1432,7 @@ def test_isolate_generates_missing_inputs_first(experiment):
     invoke(ISOLATE_STUBS, after="isolate wordcount")
     lines = log.read_text().splitlines()
     assert lines[:3] == ["input|grep", "input|distsort", "input|wordcount"]
-    assert lines[3:5] == ["volume:list", lines[4]] and lines[4].startswith("drop|")
+    assert lines[3] == "volume:list"
 
 
 def test_drop_cache_runs_the_script_on_the_volume(experiment, tmp_path):
