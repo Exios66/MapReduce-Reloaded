@@ -1301,3 +1301,57 @@ def test_e3_calibrates_then_takes_settings_in_turn(experiment, monkeypatch, repe
                 "wait|4",
             ]
     assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(
+    experiment, monkeypatch, repeat
+):
+    """E4's restart time comes from calibration runs; then its settings alternate,
+    each on a fresh log (#282)."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    monkeypatch.setenv("E4_CALIBRATE", "2")
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        fresh_log() { note fresh; }
+        compose_stub() {
+            case $* in
+            "ps -q coordinator") echo c1 ;;
+            *) note "compose|$*" ;;
+            esac
+        }
+        compose=(compose_stub)
+        median() { note "median|$1|$2"; echo 20; }
+        wait_workers() { note "wait|$1"; }
+        start_sampler() { note "sample|$1|$2"; }
+        stop_sampler() { note stop; }
+        run() { note "run|$1|$2|$3|$4|$5|$6|${7:-}"; }
+        """,
+        "E4",
+    )
+    assert result.stdout == ""
+    expected = [
+        "begin|E4",
+        "fresh",
+        "run|E4|calibrate|distsort|1|4||",
+        "fresh",
+        "run|E4|calibrate|distsort|2|4||",
+        "median|E4|calibrate",
+    ]
+    orders = {1: ["normal", "restart"], 2: ["restart", "normal"]}
+    for n in range(1, int(repeat) + 1):
+        for setting in orders[n]:
+            expected += ["fresh", f"sample|tasks|bench/results/E4/tasks-{setting}-{n}.csv"]
+            if setting == "normal":
+                expected += [f"run|E4|normal|distsort|{n}|4||", "stop"]
+                continue
+            expected += [
+                f"run|E4|restart|distsort|{n}|4|10.0|docker kill c1 && docker start c1",
+                "stop",
+                "wait|4",
+            ]
+    expected.append("fresh")
+    assert log.read_text().splitlines() == expected

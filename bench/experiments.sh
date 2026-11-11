@@ -611,25 +611,43 @@ e3() {
     done
 }
 
+# E4 restarts the coordinator at half an undisturbed run's time, taken from
+# E4_CALIBRATE runs of their own setting, calibrate, which the plots leave
+# out. Then normal and restart take turns within each repeat, in reverse
+# order on even repeats, as in E3 (#282). Every run starts with a fresh log,
+# so each restart replays its own job only, however many ran before it.
+e4_calibrate=${E4_CALIBRATE:-3}
+e4_settings="normal restart"
+
 e4() {
+    local n t at order s coordinator
     begin E4
-    # A fresh log, so the restarts below replay this experiment's jobs only.
-    fresh_log
-    for n in $(seq "$repeat"); do
-        start_sampler tasks "bench/results/E4/tasks-normal-$n.csv"
-        run E4 normal distsort "$n" 4 ""
-        stop_sampler
+    for n in $(seq "$e4_calibrate"); do
+        fresh_log
+        run E4 calibrate distsort "$n" 4 ""
     done
-    local t at coordinator
-    t=$(median E4 normal)
+    t=$(median E4 calibrate)
     at=$(awk -v t="$t" 'BEGIN { printf "%.1f", t / 2 }')
-    coordinator=$("${compose[@]}" ps -q coordinator)
     for n in $(seq "$repeat"); do
-        start_sampler tasks "bench/results/E4/tasks-restart-$n.csv"
-        # SIGKILL, so the coordinator crashes instead of telling its workers to exit.
-        run E4 restart distsort "$n" 4 "$at" "docker kill $coordinator && docker start $coordinator"
-        stop_sampler
-        wait_workers 4
+        order=$e4_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e4_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            fresh_log
+            start_sampler tasks "bench/results/E4/tasks-$setting-$n.csv"
+            if [ "$setting" = normal ]; then
+                run E4 normal distsort "$n" 4 ""
+                stop_sampler
+                continue
+            fi
+            coordinator=$("${compose[@]}" ps -q coordinator)
+            # SIGKILL, so the coordinator crashes instead of telling its workers to exit.
+            run E4 restart distsort "$n" 4 "$at" "docker kill $coordinator && docker start $coordinator"
+            stop_sampler
+            wait_workers 4
+        done
     done
     fresh_log
 }

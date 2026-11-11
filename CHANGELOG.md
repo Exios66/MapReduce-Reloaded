@@ -79,6 +79,11 @@ cut a release.
   `kill-75` in turn within each repeat, reversed on even repeats, as E2 and
   E7 do. Before, it ran each setting as a block, so drift in the machine
   could fall on one setting (#282).
+- Bench: E4 (`bench/experiments.sh E4`) does the same: `E4_CALIBRATE`
+  runs (default 3) of a `calibrate` setting set the restart time, then
+  `normal` and `restart` take turns. Every E4 run now starts with a fresh
+  write-ahead log, so each restart replays only its own job instead of
+  every job before it (#282).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
