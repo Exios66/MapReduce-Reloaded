@@ -82,23 +82,22 @@ def summarize(d):
         wall = [float(r["wall_seconds"]) for r in ok if r.get("wall_seconds")]
         backups = [int(r["backups"]) for r in ok if r.get("backups")]
         won = sum(int(r["backups_won"]) for r in ok if r.get("backups_won"))
-        shuffled = {
-            round(int(r["map_output_bytes"]) / 1e6) for r in ok if r.get("map_output_bytes")
-        }
+        shuffled = {int(r["map_output_bytes"]) for r in ok if r.get("map_output_bytes")}
         disk = [
             reads[(setting, program, r["run"])] for r in ok if (setting, program, r["run"]) in reads
         ]
         if len(shuffled) > 1:
             look.append(
                 f"{setting}/{program}/w{workers}: bytes shuffled differ between valid runs "
-                f"({'/'.join(map(str, sorted(shuffled)))} MB): suspect a different input"
+                f"({'/'.join(map(str, sorted(shuffled)))} bytes): suspect a different input"
             )
         mark = " (not measured)" if setting in UNMEASURED else ""
         print(
             f"{setting + mark:24} {program:10} {workers:>2} {len(group):>3} {len(ok):>5}  "
             f"{span(secs):24} {statistics.median(wall) if wall else 0:9.2f} "
             f"{statistics.median(backups) if backups else 0:7g} {won:7} "
-            f"{'/'.join(map(str, sorted(shuffled))) or '-':>11}  {span(disk, '{:.0f}')}"
+            f"{'/'.join(str(round(b / 1e6)) for b in sorted(shuffled)) or '-':>11}  "
+            f"{span(disk, '{:.0f}')}"
         )
         med = statistics.median(secs) if secs else None
         for r in group:

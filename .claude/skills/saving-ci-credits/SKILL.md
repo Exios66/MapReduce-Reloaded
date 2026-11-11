@@ -27,7 +27,7 @@ It checks the owner identity and the absence of attribution footers, lists the j
 
 ## What a pipeline costs
 
-A change to `.circleci/`, `Makefile`, `scripts/`, `bin/`, `go/go.mod`, `python/pyproject.toml` or `.gitignore`, or any deletion, runs every job (`run-all`); other paths run only the jobs `.circleci/mapping.txt` names. The `go` job runs on three nodes but is still one check, so there are still six required checks (ADR 0024). With warm caches `go` takes about 200 s and is the critical path; a change to a cache key (the Makefile's tool pins, `go/go.sum`, the weekly build key) makes that run cold, and the first run after one is slower without anything being wrong.
+A change to `.circleci/`, `Makefile`, `scripts/`, `bin/`, `go/go.mod`, `python/pyproject.toml` or `.gitignore`, or any deletion, runs every job (`run-all`); other paths run only the jobs `.circleci/mapping.txt` names, and a path it does not match runs every job and fails `mapping-coverage` until it is mapped. The `go` job runs on three nodes but is still one check, so there are still six required checks (ADR 0024). With warm caches `go` takes about 200 s and is the critical path; a change to a cache key (the Makefile's tool pins, `go/go.sum`, the weekly build key) makes that run cold, and the first run after one is slower without anything being wrong.
 
 ## Common mistakes
 

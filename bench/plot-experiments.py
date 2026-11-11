@@ -1021,7 +1021,7 @@ def e3(rows, results, out, t):
         t,
         title,
         label_note(rows, ranges=False) + "; each stem is the time a failure adds.\n"
-        "Job time is the clock from submission, which a kill does not reset.",
+        "Job time runs from when mr submit returned; a kill does not reset it.",
     )
     finish(fig, out)
 
@@ -1053,7 +1053,7 @@ def e4(rows, results, out, t):
         t,
         e4_title(rows),
         "coordinator restarted",
-        note="Job time is the clock from submission, which a restart does not reset.",
+        note="Job time runs from when mr submit returned; a restart does not reset it.",
     )
     finish(fig, out)
 
@@ -1254,15 +1254,15 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     title = "Fault tolerance: the time each disturbance adds"
     if correct:
         title = (
-            f"Faults add {min(added):+.0f}% to {max(added):+.0f}% to job time; outputs all correct"
+            f"Faults add {min(added):+.0f}% to {max(added):+.0f}% to job time; outputs unchanged"
         )
     heading(
         fig,
         t,
         title,
         "Backups (E2), a worker killed mid-job (E3), and a coordinator restart (E4),"
-        " on four one-CPU workers.\nE2 is timed by the coordinator; E3 and E4 by the"
-        " clock from submission, which a kill or restart does not reset.\n"
+        " on four one-CPU workers.\nE2 is timed by the coordinator; E3 and E4 from when"
+        " mr submit returned, which a kill or restart does not reset.\n"
         + label_note(e3_rows or e2_rows or e4_rows)
         + ".",
     )

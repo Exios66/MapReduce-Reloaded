@@ -230,7 +230,7 @@ from their `samples.csv` with `plot-rates.py`, whose third argument is the
 identification line in the image.
 
 E2 and E5 are timed by the coordinator, from the job's submission to its
-end. E3 and E4 are timed by the clock from submission, which a killed
+end. E3 and E4 are timed from when `mr submit` returned, which a killed
 worker or a restarted coordinator does not reset. The results published
 before this rerun, at several commits with three runs each, are kept in
 [`evaluation/superseded/before-8f0ddb9/`](evaluation/superseded/before-8f0ddb9/).

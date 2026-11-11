@@ -116,8 +116,9 @@ repeat, and every run's output matched the normal run's.
   <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median beside its runs" src="bench/evaluation/E7.png">
 </picture>
 
-In every plot, blue is the system as it ships and orange the changed or
-disturbed setting. E1 and E6 are dumbbells: each row joins the combiner-on
+In every plot but the faults summary, blue is the system as it ships and
+orange the changed or disturbed setting; the faults summary draws every bar
+in blue and names each disturbance beside it. E1 and E6 are dumbbells: each row joins the combiner-on
 and combiner-off medians, and bytes use a log axis, so a row's length is
 the factor the combiner saves. The other plots (E2–E4), the raw CSVs, the
 machine and the commands are in
