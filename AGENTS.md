@@ -109,8 +109,8 @@ already tested. Do not add CI work to `main` pushes.
 ## Agent tooling
 
 Skills in `.claude/skills/` hold checked scripts for recurring work. Claude
-Code loads them by name; any other agent runs the scripts directly. They
-read files, git and the experiment host, and change nothing.
+Code loads them by name; any other agent runs the scripts directly. All but
+the last read files, git and the experiment host, and change nothing.
 
 | Task | Run |
 | --- | --- |
@@ -118,6 +118,7 @@ read files, git and the experiment host, and change nothing.
 | Read an experiment's results: medians, ranges, invalid and slow runs, overlaps | `python3 .claude/skills/interpreting-bench-results/summarize.py DIR...` |
 | Compare a new run with a published one | `python3 .claude/skills/analyzing-bench-results/compare.py OLD_DIR NEW_DIR` |
 | Snapshot a running campaign on the experiment host | `bash .claude/skills/checking-campaign-status/status.sh HOST` |
+| Start, drive, disturb and stop the cluster; refuses while an experiment runs | `bash .claude/skills/run-mapreduce-reloaded/drive.sh help` |
 
 Each skill's `SKILL.md` gives the rules for reading the output.
 

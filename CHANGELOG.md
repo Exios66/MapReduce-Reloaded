@@ -22,6 +22,12 @@ cut a release.
   `analyzing-bench-results` (`compare.py` compares a run with a published
   one) and `checking-campaign-status` (`status.sh` snapshots a running
   campaign).
+- Agent tooling: the `run-mapreduce-reloaded` skill. Its `drive.sh` starts
+  and stops the Compose cluster, runs a word count, kills a worker or
+  restarts the coordinator mid-job and checks the output matches an
+  undisturbed run. Because every clone on a host shares one cluster and its
+  volumes, it refuses while a bench script runs or another clone started
+  the cluster.
 - Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
   disturbance in E2, E3 and E4 added, on one axis; its title says every
   disturbed run gave an undisturbed run's output only when every one was
