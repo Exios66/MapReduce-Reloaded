@@ -1353,3 +1353,31 @@ def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(experiment, mon
             ]
     expected.append("fresh")
     assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
+    experiment, monkeypatch, repeat
+):
+    """E0 warms each program up, then interleaves every cell, reversed on even repeats (#282)."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        configure() { note "configure|$1"; }
+        run() { note "run|$1|$2|$3|$4|$5"; }
+        """,
+        "E0",
+    )
+    assert result.stdout == ""
+    programs = ["grep", "distsort", "wordcount"]
+    expected = ["begin|E0", "configure|4"]
+    expected += [f"run|E0|warmup|{p}|1|4" for p in programs]
+    cells = [(p, w) for p in programs for w in (4, 2, 1)]
+    for n in range(1, int(repeat) + 1):
+        for p, w in cells if n % 2 else reversed(cells):
+            expected += [f"configure|{w}", f"run|E0|w{w}|{p}|{n}|{w}"]
+    expected.append("configure|4")
+    assert log.read_text().splitlines() == expected

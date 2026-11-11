@@ -37,8 +37,9 @@
 # coordinator and workers logged from before the run's workers restarted
 # until it ended, one line per event with its container's name and time. bench/plot-experiments.py draws the plots.
 #
-# Every run's output is checksummed and compared with the first normal run
-# on the same input; a run that differs has valid=0 and is not plotted.
+# Every run's output is checksummed and compared with the first run on the
+# same input, an undisturbed one: E0's warm-up or E3's and E4's calibration
+# where there is one. A run that differs has valid=0 and is not plotted.
 # The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt
 # (-SIZE-S.txt for word count's Zipf exponent S, -SIZE-TEXT.txt for E6's
 # book, crawl and crawl-eng) between
@@ -389,14 +390,37 @@ EOF
 # The median wall time of an experiment's normal runs.
 median() { awk -F, -v s="$2" '$2 == s && $16 == 1 { print $12 }' "bench/results/$1/runs.csv" | sort -n | awk '{ a[NR] = $1 } END { print a[int((NR + 1) / 2)] }'; }
 
+# E0 first runs each program E0_WARMUP times (default 1) on four workers as
+# its own setting, warmup, which the plots leave out, so no measured run is
+# the first to read its input. Then every program on every number of workers
+# takes its turn within each repeat, in reverse order on even repeats, so
+# drift in the machine falls on no one setting (#282).
+e0_warmup=${E0_WARMUP:-1}
+
 e0() {
+    local n cells cell order program workers
     begin E0
+    configure 4
     for program in grep distsort wordcount; do
-        for workers in 4 2 1; do
+        for n in $(seq "$e0_warmup"); do run E0 warmup "$program" "$n" 4 ""; done
+    done
+    cells=
+    for program in grep distsort wordcount; do
+        for workers in 4 2 1; do cells="$cells $program:$workers"; done
+    done
+    for n in $(seq "$repeat"); do
+        order=$cells
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for cell in $cells; do order="$cell $order"; done
+        fi
+        for cell in $order; do
+            program=${cell%:*} workers=${cell#*:}
             configure "$workers"
-            for n in $(seq "$repeat"); do run E0 "w$workers" "$program" "$n" "$workers" ""; done
+            run E0 "w$workers" "$program" "$n" "$workers" ""
         done
     done
+    configure 4
 }
 
 # E1 compares word count with the combiner on and off on four workers at

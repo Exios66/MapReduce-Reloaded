@@ -297,8 +297,9 @@ def e0(rows, out, t):
     N workers, with the range from the slowest and fastest N-worker runs.
     Only valid="1" runs count; a program without a valid one-worker run, or
     with a time of zero, is skipped. Missing fields, invalid numbers, and
-    file errors propagate.
+    file errors propagate. Warm-up runs (setting="warmup") are left out.
     """
+    rows = [r for r in rows if r["setting"] != "warmup"]
     fig, ax = plt.subplots(figsize=(7.5, 4.8))
     ax.plot([1, 4], [1, 4], "--", color=t["muted"], linewidth=1, zorder=1)
     ax.text(
