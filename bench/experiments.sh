@@ -611,6 +611,10 @@ e3() {
     configure 4
     for n in $(seq "$e3_calibrate"); do run E3 calibrate distsort "$n" 4 ""; done
     t=$(median E3 calibrate)
+    if [ -z "$t" ]; then
+        echo "experiments: E3 has no valid calibrate run to time its disturbances from; stopping" >&2
+        exit 1
+    fi
     for n in $(seq "$repeat"); do
         order=$e3_settings
         if [ $((n % 2)) = 0 ]; then
@@ -651,6 +655,10 @@ e4() {
         run E4 calibrate distsort "$n" 4 ""
     done
     t=$(median E4 calibrate)
+    if [ -z "$t" ]; then
+        echo "experiments: E4 has no valid calibrate run to time its disturbances from; stopping" >&2
+        exit 1
+    fi
     at=$(awk -v t="$t" 'BEGIN { printf "%.1f", t / 2 }')
     for n in $(seq "$repeat"); do
         order=$e4_settings

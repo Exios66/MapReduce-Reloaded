@@ -1381,3 +1381,27 @@ def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
             expected += [f"configure|{w}", f"run|E0|w{w}|{p}|{n}|{w}"]
     expected.append("configure|4")
     assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("experiment_name", ["E3", "E4"])
+def test_e3_e4_stop_without_a_valid_calibrate_run(experiment, experiment_name):
+    """With no valid calibration run there is no time to disturb at, so nothing is killed."""
+    invoke, log = experiment
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { :; }
+        fresh_log() { :; }
+        compose=(true)
+        median() { :; }
+        start_sampler() { note sample; }
+        run() { note "run|$2"; }
+        """,
+        experiment_name,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"{experiment_name} has no valid calibrate run" in result.stderr
+    assert "sample" not in log.read_text()
+    assert all(line == "run|calibrate" for line in log.read_text().splitlines())
