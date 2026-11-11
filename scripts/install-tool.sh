@@ -14,7 +14,10 @@ set -eu
 pin=${1:?usage: GOBIN=dir install-tool.sh package@version}
 pkg=${pin%@*}
 version=${pin##*@}
-[ "$pkg" != "$pin" ] && [ -n "$pkg" ] && [ -n "$version" ] || { echo "install-tool.sh: want package@version, got $pin" >&2; exit 2; }
+if [ "$pkg" = "$pin" ] || [ -z "$pkg" ] || [ -z "$version" ]; then
+    echo "install-tool.sh: want package@version, got $pin" >&2
+    exit 2
+fi
 : "${GOBIN:?install-tool.sh: set GOBIN}"
 bin="$GOBIN/${pkg##*/}"
 

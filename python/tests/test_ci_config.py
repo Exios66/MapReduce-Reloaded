@@ -255,7 +255,7 @@ def test_go_test_runs_the_race_pass_then_the_coverage_pass():
 
 
 def test_each_go_node_keeps_its_own_build_cache():
-    keys = re.findall(r"go-build-v\d+-\{\{ arch \}\}-([^ \n]*)", CONT)
+    keys = re.findall(r"go-build-v\d+-\{\{ arch \}\}-(.*)$", CONT, re.M)
     assert keys and all(k.startswith("node{{ .Environment.CIRCLE_NODE_INDEX }}-") for k in keys)
 
 
