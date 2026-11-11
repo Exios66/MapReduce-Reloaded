@@ -104,3 +104,19 @@ GATE PASS E7: 15 runs, archived ~/runs/8f0ddb9/E7.tar.gz (129 KiB), 10.5 GB free
 === 2026-11-11T08:32:36Z dropped inputs: distsort-1073741824
 === 2026-11-11T08:32:36Z DONE E7
 === 2026-11-11T08:32:36Z START E6 (E6) 11 GB free
+  book-off/wordcount               seconds      median    43.30  range 42.71-45.30  n=5
+  book-off/wordcount               wall_seconds median    43.41  range 42.85-45.27  n=5
+  book-on/wordcount                seconds      median    33.09  range 32.96-34.27  n=5
+  book-on/wordcount                wall_seconds median    33.19  range 33.03-34.39  n=5
+  crawl-eng-off/wordcount          seconds      median    35.41  range 35.19-36.05  n=5
+  crawl-eng-off/wordcount          wall_seconds median    35.39  range 35.16-36.19  n=5
+  crawl-eng-on/wordcount           seconds      median    31.48  range 30.52-32.78  n=5
+  crawl-eng-on/wordcount           wall_seconds median    31.38  range 30.55-32.82  n=5
+  crawl-off/wordcount              seconds      median    33.68  range 31.92-34.05  n=5
+  crawl-off/wordcount              wall_seconds median    33.74  range 31.82-34.06  n=5
+  crawl-on/wordcount               seconds      median    30.94  range 30.68-31.47  n=5
+  crawl-on/wordcount               wall_seconds median    31.07  range 30.68-31.47  n=5
+GATE PASS E6: 30 runs, archived ~/runs/8f0ddb9/E6.tar.gz (116 KiB), 7.2 GB free
+=== 2026-11-11T08:58:58Z DONE E6
+=== 2026-11-11T08:58:58Z CHAIN DONE
+=== 2026-11-11T08:58:59Z p5 restored (6 containers)

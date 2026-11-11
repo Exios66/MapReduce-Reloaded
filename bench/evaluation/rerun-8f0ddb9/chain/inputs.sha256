@@ -10,3 +10,6 @@ E2-pairs bbd47c47ca8f592a0ce980dfbfc92c1f8a29461b4c978d69bdbc917e587b7f0e  exp-i
 E3 bbd47c47ca8f592a0ce980dfbfc92c1f8a29461b4c978d69bdbc917e587b7f0e  exp-input-distsort-1073741824.txt
 E4 bbd47c47ca8f592a0ce980dfbfc92c1f8a29461b4c978d69bdbc917e587b7f0e  exp-input-distsort-1073741824.txt
 E7 bbd47c47ca8f592a0ce980dfbfc92c1f8a29461b4c978d69bdbc917e587b7f0e  exp-input-distsort-1073741824.txt
+E6 ab92245b6032fca01687e6da3d306729852234f1d9110336aae80f4e3ea6d829  exp-input-wordcount-1073741824-book.txt
+E6 2fa7d8aa4ff2f79bd3edc2b2ca295e11e9e4272f3808c7077f5219b64a7eeec9  exp-input-wordcount-1073741824-crawl-eng.txt
+E6 d0e0acdd672b99a72df5e8b95f344427ea097f76e1189f51c44ddfe325348bf7  exp-input-wordcount-1073741824-crawl.txt
