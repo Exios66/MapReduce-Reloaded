@@ -1235,10 +1235,11 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
         )
     ax.set_yticks(ys, [c[0] for c in cases])
     ax.tick_params(axis="y", length=0)
-    # A disturbance that sped a job up is drawn left of zero, not clipped.
+    # A disturbance that sped a job up is drawn left of zero, not clipped;
+    # zero stays in view even when every disturbance sped its job up.
     low = min((s[1] for s in share), default=0)
     high = max((s[2] for s in share), default=0)
-    ax.set_xlim(min(low, 0) * 1.45, (high or 1) * 1.38)
+    ax.set_xlim(min(low, 0) * 1.45, (high if high > 0 else 1) * 1.38)
     ax.xaxis.set_major_formatter("{x:+.0f}%")
     ax.set_xlabel("Job time added, against the same experiment's undisturbed median")
     ax.grid(axis="y", visible=False)
@@ -1260,12 +1261,23 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     finish(fig, out, top=0.75)
 
 
-# E7's workers' CPU limits: experiments.sh's E7_CPUS default, which the
-# published runs used.
+# E7's workers' CPU limits when the results record none: experiments.sh's
+# E7_CPUS default, which the published runs at 8f0ddb9 used (their chain set
+# no E7_CPUS). experiments.sh records the limits in cpus.txt since #349.
 E7_CPUS = "1, 0.6, 0.3 and 0.15"
 
 
-def e7(rows, out, t):
+def e7_cpus(results):
+    """Returns E7's CPU limits as text, from cpus.txt beside its runs.csv,
+    or E7_CPUS when the results record none."""
+    path = source(results, "E7") / "cpus.txt"
+    if not path.exists():
+        return E7_CPUS
+    limits = path.read_text().split()
+    return ", ".join(limits[:-1]) + " and " + limits[-1] if len(limits) > 1 else limits[0]
+
+
+def e7(rows, out, t, cpus=E7_CPUS):
     """Saves E7 to out, in theme t: job time on workers of mixed speeds
     with no backups (slot 2, as E2 colors backups off), the paper's backup
     rule (slot 1) and LATE (slot 3), one row each, top to bottom.
@@ -1321,10 +1333,10 @@ def e7(rows, out, t):
     ax.set_xlim(0, (max((st[2] for st in spans.values()), default=0) or 1) * 1.25)
     ax.set_xlabel("Job time (s)")
     title = "E7: backup rules on workers of mixed speeds"
-    if saved:
+    if saved and min(saved) >= 0:
         cut = span(saved, lambda x: f"{x:.0%}".rstrip("%"))
         title = f"E7: backups cut a mixed-speed sort by {cut}%"
-    note = f"Four workers limited to {E7_CPUS} CPUs; dots are medians, rings are runs."
+    note = f"Four workers limited to {cpus} CPUs; dots are medians, rings are runs."
     paper, late = spans.get("mixed-paper"), spans.get("mixed-late")
     if paper and late and paper[1] <= late[2] and late[1] <= paper[2]:
         note += "\nThe paper's rule and LATE: the ranges overlap, so no clear difference."
@@ -1384,7 +1396,7 @@ def main():
         "E4": lambda rows, png, t: e4(rows, results, png, t),
         "E5": lambda rows, png, t: e5(rows, results, png, t),
         "E6": lambda rows, png, t: e6(rows, png, t),
-        "E7": lambda rows, png, t: e7(rows, png, t),
+        "E7": lambda rows, png, t: e7(rows, png, t, e7_cpus(results)),
     }
     for exp, fn in draw.items():
         rows = load(results, exp)

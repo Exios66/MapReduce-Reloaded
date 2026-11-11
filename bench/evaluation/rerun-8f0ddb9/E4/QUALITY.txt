@@ -1,9 +1,9 @@
 == E4
 commit 8f0ddb9, 4 CPUs
-setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
-calibrate (not measured) distsort    4   3     3  7.78 [7.61-7.84]              7.67       6    0        1085  92 [43-180]
-normal                   distsort    4   5     5  8.00 [7.60-8.20]              7.95       5    0        1085  131 [102-227]
-restart                  distsort    4   5     5  9.30 [8.85-9.73]              9.18       6    0        1085  115 [38-198]
+setting                  program     w   n valid  seconds med [range]       wall med  bk med won sum  shuffle MB  disk MB (machine-wide)
+calibrate (not measured) distsort    4   3     3  7.78 [7.61-7.84]              7.67       6       0        1085  92 [43-180]
+normal                   distsort    4   5     5  8.00 [7.60-8.20]              7.95       5       0        1085  131 [102-227]
+restart                  distsort    4   5     5  9.30 [8.85-9.73]              9.18       6       0        1085  115 [38-198]
 ranges between measured settings (same program and worker count):
   distsort w4: normal vs restart: separate
 

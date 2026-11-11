@@ -185,7 +185,8 @@ Kept open as `[stretch]` issues:
 - **Modern extensions (#43–#55):** an external shuffle service,
   coordinator high availability, LATE-style speculation (built as an
   opt-in coordinator mode, [ADR 0019](design/0019-late-speculation.md), and
-  not yet evaluated), skew handling, memory-aware spilling, tracing, mTLS,
+  measured by E7 against the paper's rule: no clear difference in time,
+  fewer backups), skew handling, memory-aware spilling, tracing, mTLS,
   Kubernetes, Parquet and JSON Lines, a job service, job DAGs, incremental execution and WebAssembly
   user functions.
 - **Their evaluation (#59)** against this baseline.

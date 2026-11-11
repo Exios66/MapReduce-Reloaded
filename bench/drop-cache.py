@@ -5,7 +5,7 @@ E0 runs it in a container that mounts the output volume, before each run,
 on the inputs of the programs that are not running, so a run starts with
 only its own input cached (#347). posix_fadvise(POSIX_FADV_DONTNEED) needs
 no root, unlike writing to /proc/sys/vm/drop_caches; it drops only clean
-pages, and the inputs are never written after they are generated.
+pages, so each file is flushed first.
 """
 
 import os
@@ -23,6 +23,9 @@ def main(argv: list[str]) -> int:
             print(f"drop-cache: {path}: {err.strerror}", file=sys.stderr)
             return 1
         try:
+            # A freshly written input may still have dirty pages, which
+            # DONTNEED leaves cached; flush them first.
+            os.fsync(fd)
             os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
         finally:
             os.close(fd)

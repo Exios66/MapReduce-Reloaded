@@ -447,6 +447,12 @@ e0() {
         echo "E0_ISOLATE: '$e0_isolate' is not 0 or 1" >&2
         exit 2
     fi
+    # DROP_CACHES=1 empties the page cache before every run, which would
+    # undo the input isolate just read in.
+    if [ "$e0_isolate" = 1 ] && [ "${DROP_CACHES:-}" = 1 ]; then
+        echo "E0: E0_ISOLATE=1 and DROP_CACHES=1 conflict; set E0_ISOLATE=0 for cold runs" >&2
+        exit 2
+    fi
     begin E0
     configure 4
     for program in grep distsort wordcount; do
@@ -627,6 +633,7 @@ e7() {
         fi
     done
     begin E7
+    echo "$e7_cpus" > "$results_dir/cpus.txt"
     for n in $(seq "$repeat"); do
         order=$e7_settings
         if [ $((n % 2)) = 0 ]; then

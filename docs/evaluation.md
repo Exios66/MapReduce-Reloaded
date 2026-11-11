@@ -247,12 +247,17 @@ has the settings, the output files and the knobs.
 ## The E0–E7 reruns (#344, #343)
 
 The results above were run again at **one commit**, `8f0ddb9`, recorded in
-every `machine.json`, with this protocol, fixed before any data was taken:
+every `machine.json`, with this protocol, fixed before any data was taken.
+The one exception is the replacement E0 below, whose `machine.json`
+records `3a907de`.
 
 - **Repeats.** Five runs per setting (ten pairs for E2-pairs), on the
   course VM with the other course containers stopped.
 - **Order.** Every experiment's settings take turns within each repeat,
-  reversed on even repeats (#348). E0 first runs each program once as
+  reversed on even repeats (#348). E1 and E6 take turns within each input:
+  combiner on and off alternate on one skew or corpus before the next
+  begins, so only on-against-off comparisons are drift-controlled; their
+  comparisons across inputs are of bytes, which drift does not change. E0 first runs each program once as
   `warmup`; E3 and E4 first run three `calibrate` runs, whose median sets
   the kill and restart times. The figures leave `warmup` and `calibrate`
   out.

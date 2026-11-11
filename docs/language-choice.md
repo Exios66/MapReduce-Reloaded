@@ -57,8 +57,9 @@ differently ([the full table](../design.md#differences-from-the-2004-paper)).
 
 ### Evidence that Go is adequate
 
-- **Scaling.** On the course VM, each job got faster with more one-CPU
-  workers. At four workers against one, word count ran 3.7× faster,
+- **Scaling.** On the course VM, each job got faster with a second
+  one-CPU worker, and sort and word count again with four; grep's two- and
+  four-worker ranges overlap. At four workers against one, word count ran 3.7× faster,
   `distsort` 3.1× and grep 2.0×
   ([bench/README.md, E0](../bench/README.md#e0-scaling-over-workers)). The
   small gain for grep is fixed cost in a job of about a second, and the

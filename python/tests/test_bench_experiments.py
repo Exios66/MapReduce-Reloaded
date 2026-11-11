@@ -745,7 +745,7 @@ def test_e7_takes_settings_in_turn_with_their_overrides_and_throttles(
     result = invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
-        begin() { note "begin|$1"; }
+        begin() { note "begin|$1"; results_dir=.; }
         configure() { note "configure|$1|${2:-}"; }
         compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
         compose=(compose_stub)
@@ -782,7 +782,8 @@ def test_e7_takes_settings_in_turn_with_their_overrides_and_throttles(
     assert log.read_text().splitlines() == expected
 
 
-def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
+def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch, tmp_path):
+    """E7_CPUS and E7_SETTINGS are used, and the limits are recorded in cpus.txt."""
     invoke, log = experiment
     monkeypatch.setenv("REPEAT", "1")
     monkeypatch.setenv("E7_CPUS", "1 1 0.5 .2")
@@ -790,7 +791,7 @@ def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
     invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
-        begin() { :; }
+        begin() { results_dir=.; }
         configure() { note "configure|$1|${2:-}"; }
         compose_stub() { printf 'w1\nw2\nw3\nw4\n'; }
         compose=(compose_stub)
@@ -810,13 +811,14 @@ def test_e7_cpu_limits_and_settings_can_be_chosen(experiment, monkeypatch):
         *(f"docker|update --cpus 1 w{i}" for i in range(1, 5)),
         "configure|4|",
     ]
+    assert (tmp_path / "cpus.txt").read_text() == "1 1 0.5 .2\n"
 
 
 def test_e7_stops_when_the_cluster_has_another_number_of_workers(experiment):
     invoke, log = experiment
     result = invoke(
         """
-        begin() { :; }
+        begin() { results_dir=.; }
         configure() { :; }
         compose_stub() { printf 'w1\nw2\nw3\n'; }
         compose=(compose_stub)
@@ -1368,6 +1370,7 @@ def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
     invoke, log = experiment
     monkeypatch.setenv("REPEAT", repeat)
     monkeypatch.setenv("E0_ISOLATE", isolate)
+    monkeypatch.delenv("DROP_CACHES", raising=False)
     result = invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
@@ -1435,9 +1438,11 @@ def test_drop_cache_runs_the_script_on_the_volume(experiment, tmp_path):
     ]
 
 
-def test_e0_stops_when_the_cache_cannot_be_dropped(experiment):
+def test_e0_stops_when_the_cache_cannot_be_dropped(experiment, monkeypatch):
     """If the page cache cannot be dropped, E0 stops instead of running without isolation."""
     invoke, log = experiment
+    monkeypatch.setenv("E0_ISOLATE", "1")
+    monkeypatch.delenv("DROP_CACHES", raising=False)
     result = invoke(
         """
         note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
@@ -1471,6 +1476,24 @@ def test_e0_isolate_rejects_other_values(experiment, monkeypatch, value):
     )
     assert result.returncode == 2
     assert "E0_ISOLATE" in result.stderr
+    assert "begun" not in result.stdout
+
+
+def test_e0_rejects_isolation_with_drop_caches(experiment, monkeypatch):
+    """DROP_CACHES=1 would empty the cache isolate fills, so E0 refuses both."""
+    invoke, _ = experiment
+    monkeypatch.setenv("E0_ISOLATE", "1")
+    monkeypatch.setenv("DROP_CACHES", "1")
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        "E0",
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "E0_ISOLATE=1 and DROP_CACHES=1 conflict" in result.stderr
     assert "begun" not in result.stdout
 
 

@@ -181,10 +181,11 @@ do not:
 
 ```sh
 a=bench/evaluation/rerun-8f0ddb9/archives
-mkdir -p data/iso
-for e in E1 E2 E2-pairs E3 E4 E5 E6 E7; do tar xzf "$a/$e.tar.gz" -C data; done
-tar xzf "$a/E0-isolated.tar.gz" -C data/iso && mv data/iso/E0 data/E0-isolated
-python3 bench/plot-experiments.py data bench/evaluation
+d=data/eval  # a fresh directory, so no older results are drawn
+rm -rf "$d" && mkdir -p "$d/iso"
+for e in E1 E2 E2-pairs E3 E4 E5 E6 E7; do tar xzf "$a/$e.tar.gz" -C "$d"; done
+tar xzf "$a/E0-isolated.tar.gz" -C "$d/iso" && mv "$d/iso/E0" "$d/E0-isolated"
+python3 bench/plot-experiments.py "$d" bench/evaluation
 ```
 
 Every figure uses the same colors: blue is the system as it ships
@@ -244,8 +245,10 @@ before this rerun, at several commits with three runs each, are kept in
 | distsort | 25.04 (23.98–25.66) | 13.37 (12.86–14.12) | 8.06 (7.63–8.91) | 3.1× |
 | wordcount | 148.35 (148.01–150.24) | 75.16 (74.95–76.37) | 40.10 (38.52–40.27) | 3.7× |
 
-- Every job got faster with more workers. Word count, the most
-  CPU-bound, scales almost linearly (3.7× on 4).
+- Every job got faster from one worker to two, and sort and word count
+  again at four; grep's two- and four-worker ranges overlap, so it shows
+  no clear gain past two. Word count, the most CPU-bound, scales almost
+  linearly (3.7× on 4).
 - grep scales least, not most as design.md predicted: it finds few matches,
   so its job takes about a second and the fixed costs (task assignment,
   heartbeats, one reduce wave) dominate. Its 2- and 4-worker ranges overlap:

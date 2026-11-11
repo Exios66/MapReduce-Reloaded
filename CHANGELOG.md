@@ -35,8 +35,9 @@ cut a release.
   the other two inputs with the new `bench/drop-cache.py`
   (`posix_fadvise`, run in a container, no root needed) and reads the
   run's own input. `E0_ISOLATE=0` restores the old order. In the reruns at
-  `8f0ddb9`, E0's sort read 1.1–1.7 GiB from disk per run, against about
-  0.1 GiB for the same job in E2–E4 (#347, #349).
+  `8f0ddb9`, E0's sort runs read 0.75–1.84 GiB (803–1,971 MB) from disk,
+  machine-wide, against about 0.1 GiB for the same job in E2–E4 (#347,
+  #349).
 - Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
   disturbance in E2, E3 and E4 added, on one axis; its title says every
   disturbed run gave an undisturbed run's output only when every one was
@@ -95,6 +96,11 @@ cut a release.
 
 ### Changed
 
+- Bench: E7 records its workers' CPU limits in `cpus.txt`, which
+  `bench/plot-experiments.py` names in the E7 subtitle; E0 refuses
+  `E0_ISOLATE=1` with `DROP_CACHES=1`, which would undo the isolation;
+  `bench/drop-cache.py` flushes each input before dropping it. The
+  QUALITY tables label their columns `bk med` and `won sum` (#349).
 - Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
   `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
   the figures leave out, then runs `normal`, `kill-25`, `kill-50` and
@@ -209,6 +215,12 @@ cut a release.
 
 ### Fixed
 
+- Bench figures: the fault summary keeps zero in view when every
+  disturbance sped its job up, and E7's title claims a cut only when no
+  backup rule was slower (#349).
+- Tests: `TestClusterReregistersOnHeartbeat` uses a 1 s worker timeout, so
+  a heartbeat delayed on a loaded CI runner no longer costs the worker a
+  third registration (#349).
 - CI: `.circleci/mapping.txt` maps `.claude/` to the lint job, so the
   agent skills' Python scripts no longer fail `mapping-coverage` and
   `make check` with "unmapped file" (#352).

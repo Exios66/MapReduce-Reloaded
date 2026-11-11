@@ -299,7 +299,8 @@ The plots and their tables are in
 [`bench/README.md`](bench/README.md#evaluation-e0e7), with the commands that
 made them; the data is in `bench/evaluation/rerun-8f0ddb9/`. What they showed
 (course VM, every experiment at commit `8f0ddb9`, five runs per setting taken
-in turn): every run succeeded with the right output. E0 scaled 3.7× on four
+in turn): every run succeeded, and each disturbed run's output checksum
+matched its experiment's first undisturbed run. E0 scaled 3.7× on four
 workers for word count but only 2.0× for grep, whose job of a second or two
 is mostly fixed cost, so grep is not the most linear, as predicted above.
 E1 shuffled 15× to 78× fewer bytes with the combiner, more with more skew,

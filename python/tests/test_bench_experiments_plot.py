@@ -952,6 +952,19 @@ def test_faults_draws_a_disturbance_that_sped_the_job_up_left_of_zero(plotter, t
     assert low == pytest.approx(-20 * 1.45) and high == pytest.approx(300 * 1.38)
 
 
+def test_faults_keeps_zero_in_view_when_every_disturbance_sped_up(plotter, tmp_path):
+    """With only a negative share, the axis still ends right of zero."""
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    axis.barh.return_value = [Mock()]
+    pyplot.subplots.return_value = figure, axis
+    _, _, e4 = fault_rows()
+    e4[1]["wall_seconds"] = "10"  # the restarted run was faster: -20%
+    module.faults([], [], e4, tmp_path / "faults.png", light(module))
+    low, high = axis.set_xlim.call_args.args
+    assert low == pytest.approx(-20 * 1.45) and high > 0
+
+
 def e7_rows():
     """E7 rows: no backups about 25 s, the paper's rule about 17 s, LATE about 18 s."""
     rows = []
@@ -994,6 +1007,25 @@ def test_e7_compares_both_backup_rules_with_none(plotter, tmp_path):
     assert "1, 0.6, 0.3 and 0.15 CPUs" in subtitle
     assert "no clear difference" in subtitle
     figure.savefig.assert_called_once_with(tmp_path / "E7.png")
+
+
+def test_e7_claims_no_cut_when_a_backup_rule_is_slower(plotter, tmp_path):
+    """If a rule's median is slower than no backups, the title compares instead."""
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    rows = [r | {"seconds": "30"} if r["setting"] == "mixed-paper" else r for r in e7_rows()]
+    module.e7(rows, tmp_path / "E7.png", light(module))
+    assert titles(figure)[0] == "E7: backup rules on workers of mixed speeds"
+
+
+def test_e7_subtitle_uses_the_recorded_cpu_limits(plotter, tmp_path):
+    """cpus.txt beside E7's runs.csv names the limits; without it, the default."""
+    module, _ = plotter
+    (tmp_path / "E7").mkdir()
+    assert module.e7_cpus(tmp_path) == "1, 0.6, 0.3 and 0.15"
+    (tmp_path / "E7" / "cpus.txt").write_text("1 1 0.5 .2\n")
+    assert module.e7_cpus(tmp_path) == "1, 1, 0.5 and .2"
 
 
 def test_figures_use_the_bundled_inter_face(plotter):

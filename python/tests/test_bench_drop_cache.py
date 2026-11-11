@@ -19,19 +19,27 @@ def drop_cache():
     return module
 
 
-def test_drops_each_file(drop_cache, tmp_path, monkeypatch):
+def test_flushes_then_drops_each_file(drop_cache, tmp_path, monkeypatch):
+    """Each file is flushed before DONTNEED, which leaves dirty pages cached."""
     a, b = tmp_path / "a", tmp_path / "b"
     a.write_text("a")
     b.write_text("b")
     calls = []
 
     def fadvise(fd, offset, length, advice):
-        calls.append((os.fstat(fd).st_ino, offset, length, advice))
+        calls.append(("drop", os.fstat(fd).st_ino, offset, length, advice))
 
+    monkeypatch.setattr(os, "fsync", lambda fd: calls.append(("sync", os.fstat(fd).st_ino)))
     monkeypatch.setattr(os, "posix_fadvise", fadvise, raising=False)
     monkeypatch.setattr(os, "POSIX_FADV_DONTNEED", 4, raising=False)
     assert drop_cache.main([str(a), str(b)]) == 0
-    assert calls == [(a.stat().st_ino, 0, 0, 4), (b.stat().st_ino, 0, 0, 4)]
+    ia, ib = a.stat().st_ino, b.stat().st_ino
+    assert calls == [
+        ("sync", ia),
+        ("drop", ia, 0, 0, 4),
+        ("sync", ib),
+        ("drop", ib, 0, 0, 4),
+    ]
 
 
 def test_missing_file_exits_1_and_names_it(drop_cache, tmp_path, monkeypatch, capsys):

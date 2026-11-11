@@ -50,7 +50,7 @@ test for each of the paper's features F1–F24.
 | Failures do not change the output | `make chaos RUNS=5 SEED=1`: seeded worker kills, pauses and coordinator crashes; a failing seed replays with `scripts/chaos.sh 1 SEED` |
 | Go and Python agree | [`testdata/`](../testdata/README.md): the file format, hash, message and example-output vectors both test suites read; `make py-e2e` runs the Python coordinator with Go workers |
 | The paper mapping is accurate | `(cd go && go test -count=1 ./internal/papermap)` checks each feature's status and fails if the mapping names a file or test that does not exist; the named code and tests are the evidence that a feature is built |
-| The evaluation's numbers | `bench/evaluation/*/` holds each run's CSVs, `machine.json` with the commit, and logs; `python3 bench/plot-experiments.py bench/evaluation OUT` redraws every figure and prints every table |
+| The evaluation's numbers | `bench/evaluation/rerun-8f0ddb9/` holds each experiment's CSVs, `machine.json` with the commit, and the harness logs; the [archive commands](../bench/README.md#evaluation-e0e7) redraw every figure and print every table |
 | The tests check results, not only run code | `make mutate` mutates core packages (the partition hash, the external sort, and more) and reports the survivors ([Testing](testing.md)) |
 
 ## Known limits
@@ -64,7 +64,9 @@ Stated where they apply, collected here:
   gives no threshold; with R equal to the workers, that is every job's last
   reduce tasks ([E2](../bench/README.md#evaluation-e0e7)).
 - **LATE speculation** is built as an opt-in mode
-  ([ADR 0019](design/0019-late-speculation.md)) but not yet evaluated.
+  ([ADR 0019](design/0019-late-speculation.md)) and measured only by E7:
+  on workers of mixed speeds it matches the paper's rule with fewer
+  backups, but the two times overlap.
 - **Python has no worker**: Python runs local mode and the coordinator; Go
   workers run every cluster task ([future work](report.md#future-work)).
 - **A job file is interpreted**, 2.3× slower than the compiled program when

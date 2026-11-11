@@ -1,12 +1,12 @@
 == E6
 commit 8f0ddb9, 4 CPUs
-setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
-crawl-eng-on             wordcount   4   5     5  31.48 [30.52-32.78]          31.38       6    0         266  0 [0-2]
-crawl-eng-off            wordcount   4   5     5  35.41 [35.19-36.05]          35.39       5    0        1375  0 [0-30]
-crawl-on                 wordcount   4   5     5  30.94 [30.68-31.47]          31.07       6    0         418  94 [0-222]
-crawl-off                wordcount   4   5     5  33.68 [31.92-34.05]          33.74       6    0        1320  30 [0-462]
-book-on                  wordcount   4   5     5  33.09 [32.96-34.27]          33.19       3    0          43  3 [0-157]
-book-off                 wordcount   4   5     5  43.30 [42.71-45.30]          43.41       5    0        1453  0 [0-510]
+setting                  program     w   n valid  seconds med [range]       wall med  bk med won sum  shuffle MB  disk MB (machine-wide)
+crawl-eng-on             wordcount   4   5     5  31.48 [30.52-32.78]          31.38       6       0         266  0 [0-2]
+crawl-eng-off            wordcount   4   5     5  35.41 [35.19-36.05]          35.39       5       0        1375  0 [0-30]
+crawl-on                 wordcount   4   5     5  30.94 [30.68-31.47]          31.07       6       0         418  94 [0-222]
+crawl-off                wordcount   4   5     5  33.68 [31.92-34.05]          33.74       6       0        1320  30 [0-462]
+book-on                  wordcount   4   5     5  33.09 [32.96-34.27]          33.19       3       0          43  3 [0-157]
+book-off                 wordcount   4   5     5  43.30 [42.71-45.30]          43.41       5       0        1453  0 [0-510]
 ranges between measured settings (same program and worker count):
   wordcount w4: crawl-eng-on vs crawl-eng-off: separate
   wordcount w4: crawl-eng-on vs crawl-on: overlap: no clear difference

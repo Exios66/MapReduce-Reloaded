@@ -168,7 +168,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 **Tier B — robustness and operations**
 
 - **Coordinator high availability**: leader election via an etcd lease, or embedded Raft (`hashicorp/raft`). This builds on the F9 WAL.
-- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); its evaluation is pending in #59 (experiment E7, not yet run).
+- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); E7 measured it against the paper's rule (#349): on mixed-speed workers the two times overlap, and LATE launches fewer backups.
 - **Skew handling**: sample-based range partitioner (TeraSort-style) and hot-key salting.
 - **Memory-aware spilling**: a bounded sort buffer that spills to disk under memory pressure.
 - **Observability**: Prometheus metrics, OpenTelemetry traces, structured JSON logs. A React or HTMX UI replaces the static status page.
@@ -296,7 +296,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
 
-- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
+- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; measured by E7, #349) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
 
