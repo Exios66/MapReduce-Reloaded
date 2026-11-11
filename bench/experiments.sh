@@ -7,7 +7,8 @@
 # Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
 # - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers, after
-#   E0_WARMUP warm-up runs of each program.
+#   E0_WARMUP warm-up runs of each program; with E0_ISOLATE=1 (the default)
+#   each run starts with only its own program's input in the page cache.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
 #   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU and with none, each
@@ -405,15 +406,54 @@ need_count() {
 # the first to read its input. Then every program on every number of workers
 # takes its turn within each repeat, in reverse order on even repeats, so
 # drift in the machine falls on no one setting (#282).
+#
+# E0 is the one experiment with three 1 GiB inputs, and the two not running
+# stay in the page cache. In the reruns at 8f0ddb9 E0's distsort read
+# 1.1-1.7 GiB from disk per run, against about 0.1 GiB for the same job in
+# E2, E3 and E4, which keep one input (#347). So with E0_ISOLATE=1 (the
+# default) every E0 run, warm-up or measured, starts with the other two
+# inputs dropped from the page cache and its own read in. E0_ISOLATE=0 gives
+# the order those reruns used.
 e0_warmup=${E0_WARMUP:-1}
+e0_isolate=${E0_ISOLATE-1}
+
+# drop_cache PATH...: drops the volume's files at PATH from the page cache.
+# The files are root's, so bench/drop-cache.py runs in a container.
+drop_cache() {
+    docker run --rm -v mapreduce_output:/out -v "$PWD/bench:/bench:ro" \
+        python:3.13-alpine python /bench/drop-cache.py "$@"
+}
+
+# isolate PROGRAM: generates any missing E0 input, drops the inputs of the
+# other two programs from the page cache, then reads PROGRAM's input in.
+isolate() {
+    local p path own others=()
+    for p in grep distsort wordcount; do
+        path=$(input "$p")
+        if [ "$p" = "$1" ]; then own=$path; else others+=("$path"); fi
+    done
+    log "E0 isolates $1's input"
+    if ! drop_cache "${others[@]}"; then
+        echo "experiments: could not drop the page cache; stopping" >&2
+        exit 1
+    fi
+    in_volume sh -c "cat '$own' > /dev/null"
+}
 
 e0() {
     local n cells cell order program workers
     need_count E0_WARMUP "$e0_warmup" 0
+    if [ "$e0_isolate" != 0 ] && [ "$e0_isolate" != 1 ]; then
+        echo "E0_ISOLATE: '$e0_isolate' is not 0 or 1" >&2
+        exit 2
+    fi
     begin E0
     configure 4
     for program in grep distsort wordcount; do
-        for n in $(seq "$e0_warmup"); do run E0 warmup "$program" "$n" 4 ""; done
+        for n in $(seq "$e0_warmup"); do
+            [ "$e0_isolate" = 0 ] || isolate "$program"
+            run E0 warmup "$program" "$n" 4 ""
+        done
     done
     cells=
     for program in grep distsort wordcount; do
@@ -428,6 +468,7 @@ e0() {
         for cell in $order; do
             program=${cell%:*} workers=${cell#*:}
             configure "$workers"
+            [ "$e0_isolate" = 0 ] || isolate "$program"
             run E0 "w$workers" "$program" "$n" "$workers" ""
         done
     done

@@ -15,6 +15,13 @@ cut a release.
 
 ### Added
 
+- Bench: E0 starts every run with only its own program's input in the page
+  cache. Before each warm-up and measured run, `bench/experiments.sh` drops
+  the other two inputs with the new `bench/drop-cache.py`
+  (`posix_fadvise`, run in a container, no root needed) and reads the
+  run's own input. `E0_ISOLATE=0` restores the old order. In the reruns at
+  `8f0ddb9`, E0's sort read 1.1–1.7 GiB from disk per run, against about
+  0.1 GiB for the same job in E2–E4 (#347).
 - Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
   disturbance in E2, E3 and E4 added, on one axis; its title says every
   disturbed run gave an undisturbed run's output only when every one was
