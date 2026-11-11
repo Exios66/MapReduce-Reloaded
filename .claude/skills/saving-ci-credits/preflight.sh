@@ -60,9 +60,12 @@ skip=false
 git log -1 --format=%B | grep -q '\[skip ci\]' && skip=true
 if [ -z "$pr" ]; then
     note "no open PR: opening one always runs one pipeline, so open it only when the work is ready for review"
-    # Issues and PRs share one sequence, so the newest of either names the
-    # next number, unless another is opened first; check it after opening.
+    # Issues, PRs and discussions share one sequence, so the newest of any
+    # names the next number, unless another is opened first; check it after.
     last=$(gh api "repos/{owner}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc" --jq '.[0].number' 2>/dev/null || true)
+    # shellcheck disable=SC2016 # $owner and $repo are GraphQL variables
+    disc=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){discussions(first:1,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number}}}}' --jq '.data.repository.discussions.nodes[0].number // empty' 2>/dev/null || true)
+    if [ -n "$disc" ] && { [ -z "$last" ] || [ "$disc" -gt "$last" ]; }; then last=$disc; fi
     if [ -n "$last" ]; then
         note "the PR will likely be #$((last + 1)): cite it in the CHANGELOG before opening, so the opening pipeline is the final one"
     fi

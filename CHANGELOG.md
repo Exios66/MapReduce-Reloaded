@@ -19,7 +19,7 @@ cut a release.
   evaluation archives against their `SHA256SUMS`, redraws every figure in
   `bench/evaluation/` from them in a temporary directory, and compares each
   with the committed PNG pixel by pixel. It needs matplotlib, so it runs on
-  the experiment VM with `PLOT_PYTHON`, not in `make check` (#NUM).
+  the experiment VM with `PLOT_PYTHON`, not in `make check` (#357).
 - Lint: `make md-lint` runs `scripts/check-dark-charts.py`, which fails if
   a Markdown page shows a bench chart without its dark variant. It runs in
   the lint job, not the Python tests, so a Markdown-only change still runs
@@ -102,6 +102,13 @@ cut a release.
 
 ### Changed
 
+- Bench figures: clearer titles and labels in `bench/evaluation/`. E0's
+  title gives every program's speed-up on four workers; the faults summary
+  draws every bar in one color and its title gives the range of job time
+  added; E3 and E4 say their job time runs from submission; E3's "worker
+  lost" band is marked approximate; E7's backup counts are labeled medians;
+  range marks are called whiskers; and E4's two bars are as thin as E2's
+  four (#357).
 - Agent tooling: the `interpreting-bench-results` skill states which
   experiments report wall time, which commit the reported E0 ran at, how
   each experiment orders its runs, and that `valid` is the only record of
@@ -112,7 +119,8 @@ cut a release.
   and its `preflight.sh` names the PR's likely number so the CHANGELOG can
   cite it before the PR opens, as `AGENTS.md` now allows. `scripts/README.md`
   lists `check-dark-charts.py`, `check-figures.py`, `ci-go-job.sh` and
-  `install-tool.sh` (#NUM).
+  `install-tool.sh`. `preflight.sh` counts discussions, which share the
+  number sequence, when it predicts the PR's number (#357).
 - CI: the `go` job runs on three nodes at once (`parallelism: 3`), still
   one `go` check: `scripts/ci-go-job.sh` gives the race tests, the coverage
   tests, and sh-lint, go-lint and py-e2e a node each, the same make targets
