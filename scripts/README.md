@@ -12,6 +12,10 @@
 | [`soak.sh`](soak.sh) | The soak run: 1 GiB with the combiner off on two workers limited to 256 MB, which must finish with no container killed for memory (#160, #47). `make soak`; `SIZE` and `WORKERS` override the defaults. |
 | [`perf.sh`](perf.sh), [`perf-compare.py`](perf-compare.py) | Run the Go benchmarks and compare their median time per operation with `bench/baseline.txt`, failing on a slowdown over `THRESHOLD` percent (default 20) when the CPU lines match; on a different CPU the comparison is printed but cannot fail. `make perf`; `PERF_UPDATE=1` rewrites the baseline. |
 | [`check-links.py`](check-links.py) | Checks that every relative link and anchor in the tracked Markdown files resolves. Run by `make md-lint` (#159). |
+| [`check-dark-charts.py`](check-dark-charts.py) | Checks that every bench chart a Markdown page shows has a dark variant that exists. Run by `make md-lint` (#349). |
+| [`check-figures.py`](check-figures.py) | Checks the evaluation archives against their `SHA256SUMS`, redraws every figure in `bench/evaluation/` from them, and compares each with the committed PNG pixel by pixel. Needs matplotlib, so `make check` does not run it: `make figures-check PLOT_PYTHON=...` on the experiment VM. |
+| [`ci-go-job.sh`](ci-go-job.sh) | Runs one CircleCI node's share of the `go` job, which runs on three nodes (ADR 0024). |
+| [`install-tool.sh`](install-tool.sh) | Installs a pinned Go tool for `make tools`, keeping a cached binary that `go version -m` shows was built from the pin (ADR 0024). |
 | [`ci-params.py`](ci-params.py) | Selects the CI jobs a branch's changed files implicate, from `.circleci/mapping.txt`, and checks that selection. See [CI](../docs/ci.md) and ADR 0020. |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |
 | [`fetch-corpus.sh`](fetch-corpus.sh) | Fetches the public-domain texts of the golden corpus into `testdata/corpus/`. |

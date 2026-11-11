@@ -35,12 +35,21 @@ python3 -m venv /tmp/plotvenv && /tmp/plotvenv/bin/pip install -q matplotlib
 /tmp/plotvenv/bin/python bench/plot-experiments.py RESULTS_DIR OUT_DIR
 ```
 
-`RESULTS_DIR` holds `E0/`, `E1/`, ... each with `runs.csv`; it writes `E*.png` and `E*-dark.png` to `OUT_DIR`.
+`RESULTS_DIR` holds `E0/`, `E1/`, ... each with `runs.csv`; it writes `E*.png` and `E*-dark.png` to `OUT_DIR`. A directory named `E0-isolated/` is read in place of `E0/`.
 
 Titles are computed from the CSVs; check each against interpreting-bench-results' summary before publishing.
+
+## Check the published figures
+
+```bash
+make figures-check PLOT_PYTHON=/tmp/plotvenv/bin/python
+```
+
+It checks the archives in `bench/evaluation/rerun-8f0ddb9/archives/` against their `SHA256SUMS`, unpacks them into a new temporary directory, redraws every figure and compares each with the committed PNG pixel by pixel (`scripts/check-figures.py`). A figure that differs was drawn from other data or by another version of the plot script: redraw and commit it, or find out why.
 
 ## Common mistakes
 
 - Attributing a speed-up to code because the commits differ, without a controlled run.
 - Comparing an E0 time with an E2 time for the same setting without noting that the cache state differs.
 - Writing "faster" when the ranges overlap.
+- Unpacking archives over an existing results directory: a stale `runs.csv` from another run is drawn too. Use a new directory, as `make figures-check` does.

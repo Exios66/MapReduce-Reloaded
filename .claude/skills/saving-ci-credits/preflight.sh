@@ -60,6 +60,12 @@ skip=false
 git log -1 --format=%B | grep -q '\[skip ci\]' && skip=true
 if [ -z "$pr" ]; then
     note "no open PR: opening one always runs one pipeline, so open it only when the work is ready for review"
+    # Issues and PRs share one sequence, so the newest of either names the
+    # next number, unless another is opened first; check it after opening.
+    last=$(gh api "repos/{owner}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc" --jq '.[0].number' 2>/dev/null || true)
+    if [ -n "$last" ]; then
+        note "the PR will likely be #$((last + 1)): cite it in the CHANGELOG before opening, so the opening pipeline is the final one"
+    fi
 fi
 if [ "$final" = true ]; then
     if [ "$behind" = 0 ]; then ok "up to date with origin/main"; else bad "$behind commit(s) behind origin/main: merge main, then make check"; fi

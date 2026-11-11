@@ -9,9 +9,11 @@ and machine.json. For each setting, program and worker count it prints the
 valid runs' median and range of the coordinator's job time (`seconds`), the
 wall clock, median backups launched, total backups won across the valid
 runs, bytes shuffled and the disk reads during the run. Then
-it lists runs to look at (invalid, or far from their group's median) and,
-within each program and worker count, whether every pair of measured
-settings has separate or overlapping ranges.
+it lists runs to look at (invalid, or far from their group's median), groups
+whose bytes shuffled differ between valid runs (deterministic for an input),
+measured settings with fewer valid runs than the most any has, and, within
+each program and worker count, whether every pair of measured settings has
+separate or overlapping ranges.
 
 disk_read_sectors in cache.jsonl counts the whole machine's reads, so the
 disk column suggests, but cannot prove, what one run read. Standard library
@@ -86,6 +88,11 @@ def summarize(d):
         disk = [
             reads[(setting, program, r["run"])] for r in ok if (setting, program, r["run"]) in reads
         ]
+        if len(shuffled) > 1:
+            look.append(
+                f"{setting}/{program}/w{workers}: bytes shuffled differ between valid runs "
+                f"({'/'.join(map(str, sorted(shuffled)))} MB): suspect a different input"
+            )
         mark = " (not measured)" if setting in UNMEASURED else ""
         print(
             f"{setting + mark:24} {program:10} {workers:>2} {len(group):>3} {len(ok):>5}  "
@@ -107,6 +114,15 @@ def summarize(d):
                 look.append(
                     f"{setting}/{program}/w{workers} run {r['run']}: {'; '.join(why)}{extra}"
                 )
+    counts = {
+        key: sum(r["valid"] == "1" for r in group)
+        for key, group in groups.items()
+        if key[0] not in UNMEASURED
+    }
+    most = max(counts.values(), default=0)
+    for (setting, program, workers), n in counts.items():
+        if n < most:
+            look.append(f"{setting}/{program}/w{workers}: {n} valid runs against {most} elsewhere")
     if look:
         print("runs to look at:")
         for line in look:

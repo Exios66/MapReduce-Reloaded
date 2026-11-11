@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -176,6 +176,14 @@ md-lint:
 	else \
 		echo "md-lint: pymarkdown is not installed; skipping style check (install python[dev])"; \
 	fi
+
+# Redraws the evaluation figures from bench/evaluation/rerun-8f0ddb9/archives
+# and compares each with the committed PNG (scripts/check-figures.py). It
+# needs matplotlib, which make venv does not install, so make check does not
+# run it: PLOT_PYTHON names a Python that has it, on the experiment VM.
+PLOT_PYTHON ?= python3
+figures-check:
+	$(PLOT_PYTHON) scripts/check-figures.py
 
 fmt:
 	cd go && gofmt -w .
