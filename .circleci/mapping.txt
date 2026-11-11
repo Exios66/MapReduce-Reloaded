@@ -58,6 +58,10 @@
 ^\.claude/ run-lint
 
 # Files outside python/ that the Python tests read.
+# test_every_chart_on_a_page_has_its_dark_variant reads every Markdown page,
+# and a plot test reads the bundled fonts' licence.
+\.md$ run-python
+^bench/fonts/ run-python
 ^README\.md$ run-python
 ^design\.md$ run-python
 ^docs/README\.md$ run-python

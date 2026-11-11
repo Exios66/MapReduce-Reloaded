@@ -91,6 +91,10 @@ cut a release.
 
 ### Changed
 
+- CI: every Markdown page and `bench/fonts/` now also run the Python jobs,
+  because `test_every_chart_on_a_page_has_its_dark_variant` reads every
+  page and a plot test reads the fonts' licence (`.circleci/mapping.txt`)
+  (#349).
 - Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
   `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
   the figures leave out, then runs `normal`, `kill-25`, `kill-50` and
