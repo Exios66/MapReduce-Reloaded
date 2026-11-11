@@ -73,6 +73,24 @@ cut a release.
 
 ### Changed
 
+- Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
+  `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
+  the figures leave out, then runs `normal`, `kill-25`, `kill-50` and
+  `kill-75` in turn within each repeat, reversed on even repeats, as E2 and
+  E7 do. Before, it ran each setting as a block, so drift in the machine
+  could fall on one setting (#282, #348).
+- Bench: E4 (`bench/experiments.sh E4`) does the same: `E4_CALIBRATE`
+  runs (default 3) of a `calibrate` setting set the restart time, then
+  `normal` and `restart` take turns. Every E4 run now starts with a fresh
+  write-ahead log, so each restart replays only its own job instead of
+  every job before it. Its restart cost is therefore a new measurement, not
+  comparable with the published 1.6 s, which replayed three to five earlier
+  jobs (#282, #348).
+- Bench: E0 (`bench/experiments.sh E0`) first runs each program
+  `E0_WARMUP` times (default 1) as a `warmup` setting, which the E0 figure
+  leaves out, so no measured run is the first to read its input. Then all
+  nine program and worker-count settings take turns within each repeat,
+  reversed on even repeats; before, each ran as a block (#282, #348).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
@@ -131,6 +149,11 @@ cut a release.
 
 ### Fixed
 
+- Go coordinator: a succeeded job's output no longer keeps a stray
+  `_temporary` directory when a losing backup reduce attempt creates its
+  file while the job is cleaning up. The local file system's delete now
+  retries until the directory is gone, after which no attempt can create
+  it again (#345, #348).
 - Tooling: `make go-lint`, and so `make check` and the pre-push hook, no
   longer fail when the `golangci-lint` on `PATH` was built by an older Go
   than `go/go.mod` needs. `scripts/golangci-lint.sh` uses the pinned version

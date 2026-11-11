@@ -1249,3 +1249,190 @@ def test_failed_job_still_records_its_end_cache_row(experiment, tmp_path, monkey
         (run,) = csv.reader(result_file)
     assert run[9] == "FAILED"
     assert run[-2:] == ["0", "job-1"]
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e3_calibrates_then_takes_settings_in_turn(experiment, monkeypatch, repeat):
+    """E3's kill times come from calibration runs; then its settings alternate (#282)."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    monkeypatch.setenv("E3_CALIBRATE", "2")
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        configure() { note "configure|$1"; }
+        compose_stub() {
+            case $* in
+            "ps -q worker") printf 'w1\nw2\nw3\nw4\n' ;;
+            *) note "compose|$*" ;;
+            esac
+        }
+        compose=(compose_stub)
+        median() { note "median|$1|$2"; echo 20; }
+        wait_workers() { note "wait|$1"; }
+        start_sampler() { note "sample|$1|$2"; }
+        stop_sampler() { note stop; }
+        run() { note "run|$1|$2|$3|$4|$5|$6|${7:-}"; }
+        """,
+        "E3",
+    )
+    assert result.stdout == ""
+    expected = [
+        "begin|E3",
+        "configure|4",
+        "run|E3|calibrate|distsort|1|4||",
+        "run|E3|calibrate|distsort|2|4||",
+        "median|E3|calibrate",
+    ]
+    settings = ["normal", "kill-25", "kill-50", "kill-75"]
+    orders = {1: settings, 2: list(reversed(settings))}
+    at = {"kill-25": "5.0", "kill-50": "10.0", "kill-75": "15.0"}
+    for n in range(1, int(repeat) + 1):
+        for setting in orders[n]:
+            expected.append(f"sample|bytes|bench/results/E3/samples-{setting}-{n}.csv")
+            if setting == "normal":
+                expected += [f"run|E3|normal|distsort|{n}|4||", "stop"]
+                continue
+            expected += [
+                f"run|E3|{setting}|distsort|{n}|4|{at[setting]}|docker kill w4",
+                "stop",
+                "compose|up -d --scale worker=4 worker",
+                "wait|4",
+            ]
+    assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(experiment, monkeypatch, repeat):
+    """E4's restart time comes from calibration runs; then its settings alternate,
+    each on a fresh log (#282)."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    monkeypatch.setenv("E4_CALIBRATE", "2")
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        fresh_log() { note fresh; }
+        compose_stub() {
+            case $* in
+            "ps -q coordinator") echo c1 ;;
+            *) note "compose|$*" ;;
+            esac
+        }
+        compose=(compose_stub)
+        median() { note "median|$1|$2"; echo 20; }
+        wait_workers() { note "wait|$1"; }
+        start_sampler() { note "sample|$1|$2"; }
+        stop_sampler() { note stop; }
+        run() { note "run|$1|$2|$3|$4|$5|$6|${7:-}"; }
+        """,
+        "E4",
+    )
+    assert result.stdout == ""
+    expected = [
+        "begin|E4",
+        "fresh",
+        "run|E4|calibrate|distsort|1|4||",
+        "fresh",
+        "run|E4|calibrate|distsort|2|4||",
+        "median|E4|calibrate",
+    ]
+    orders = {1: ["normal", "restart"], 2: ["restart", "normal"]}
+    for n in range(1, int(repeat) + 1):
+        for setting in orders[n]:
+            expected += ["fresh", f"sample|tasks|bench/results/E4/tasks-{setting}-{n}.csv"]
+            if setting == "normal":
+                expected += [f"run|E4|normal|distsort|{n}|4||", "stop"]
+                continue
+            expected += [
+                f"run|E4|restart|distsort|{n}|4|10.0|docker kill c1 && docker start c1",
+                "stop",
+                "wait|4",
+            ]
+    expected.append("fresh")
+    assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e0_warms_up_then_takes_every_program_and_worker_count_in_turn(
+    experiment, monkeypatch, repeat
+):
+    """E0 warms each program up, then interleaves every cell, reversed on even repeats (#282)."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        configure() { note "configure|$1"; }
+        run() { note "run|$1|$2|$3|$4|$5"; }
+        """,
+        "E0",
+    )
+    assert result.stdout == ""
+    programs = ["grep", "distsort", "wordcount"]
+    expected = ["begin|E0", "configure|4"]
+    expected += [f"run|E0|warmup|{p}|1|4" for p in programs]
+    cells = [(p, w) for p in programs for w in (4, 2, 1)]
+    for n in range(1, int(repeat) + 1):
+        for p, w in cells if n % 2 else reversed(cells):
+            expected += [f"configure|{w}", f"run|E0|w{w}|{p}|{n}|{w}"]
+    expected.append("configure|4")
+    assert log.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("experiment_name", ["E3", "E4"])
+def test_e3_e4_stop_without_a_valid_calibrate_run(experiment, experiment_name):
+    """With no valid calibration run there is no time to disturb at, so nothing is killed."""
+    invoke, log = experiment
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { :; }
+        configure() { :; }
+        fresh_log() { :; }
+        compose=(true)
+        median() { :; }
+        start_sampler() { note sample; }
+        run() { note "run|$2"; }
+        """,
+        experiment_name,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"{experiment_name} has no valid calibrate run" in result.stderr
+    assert "sample" not in log.read_text()
+    assert all(line == "run|calibrate" for line in log.read_text().splitlines())
+
+
+@pytest.mark.parametrize(
+    ("name", "variable", "value"),
+    [
+        ("E0", "E0_WARMUP", "one"),
+        ("E0", "E0_WARMUP", "-1"),
+        ("E3", "E3_CALIBRATE", "0"),
+        ("E3", "E3_CALIBRATE", "2.5"),
+        ("E4", "E4_CALIBRATE", "0"),
+        ("E4", "E4_CALIBRATE", "3x"),
+    ],
+)
+def test_warm_up_and_calibration_counts_are_checked_before_starting(
+    experiment, monkeypatch, name, variable, value
+):
+    """A bad count stops the script before the cluster starts, instead of skipping runs."""
+    invoke, _ = experiment
+    monkeypatch.setenv(variable, value)
+    result = invoke(
+        """
+        begin() { echo begun; }
+        configure() { echo configured; }
+        """,
+        name,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert variable in result.stderr
+    assert "begun" not in result.stdout
+    assert "configured" not in result.stdout

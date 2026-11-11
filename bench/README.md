@@ -336,6 +336,11 @@ record the offset between those two clocks.
   coordinator replays its log and keeps every task that had finished; the
   plot's flat step at the restart is the time the coordinator was down and
   the workers' reconnects.
+- These runs predate the interleaved protocol (#282): all three `normal`
+  runs came first, on one log, so restart *n* replayed those three jobs and
+  the *n* − 1 restarts before it. `bench/experiments.sh E4` now starts every
+  run on a fresh log, so a restart replays its own job only. A cost measured
+  that way replaces this 1.6 s; it is not compared with it.
 
 ### E5: what an interpreted job file costs
 

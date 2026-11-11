@@ -792,6 +792,22 @@ def test_e0_titles_the_largest_worker_count_it_has(plotter, tmp_path):
     assert titles(figure)[0] == "E0: grep runs 2.0× faster on 2 workers"
 
 
+def test_e0_leaves_out_warm_up_runs(plotter, tmp_path):
+    """A slow warm-up run on four workers changes neither the title nor the rings."""
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    rows = [
+        row(f"w{w}", seconds) | {"program": "grep", "workers": str(w)}
+        for w, seconds in ((1, 10), (4, 2.5))
+    ]
+    rows.append(row("warmup", 40) | {"program": "grep", "workers": "4"})
+    module.e0(rows, tmp_path / "E0.png", light(module))
+    assert titles(figure)[0] == "E0: grep runs 4.0× faster on 4 workers"
+    rings = [c for c in axis.plot.call_args_list if c.kwargs.get("linestyle") == "none"]
+    assert sorted(len(c.args[1]) for c in rings) == [1, 1]
+
+
 def test_faults_draws_a_disturbance_that_sped_the_job_up_left_of_zero(plotter, tmp_path):
     """A negative share is labeled with its sign and the axis extends below zero."""
     module, pyplot = plotter

@@ -6,15 +6,16 @@
 #
 # Usage: bench/experiments.sh E0|E1|E2|E3|E4|E5|E6|E7|all
 #
-# - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers.
+# - E0: grep, distsort and Zipf word count on 1, 2 and 4 workers, after
+#   E0_WARMUP warm-up runs of each program.
 # - E1: Zipf word count with exponents 0.5, 1.0 and 1.5, with the combiner
 #   and without it (-combiner=false).
 # - E2: distsort with one worker throttled to 0.2 CPU and with none, each
 #   with the coordinator's backup tasks on and off; E2_SETTINGS picks some.
-# - E3: distsort with one worker killed at 25%, 50% and 75% of the normal
-#   job time, and with no kill.
+# - E3: distsort with one worker killed at 25%, 50% and 75% of the median
+#   time of E3_CALIBRATE undisturbed runs, and with no kill.
 # - E4: distsort with the coordinator's write-ahead log, restarted at 50% of
-#   the normal job time, and with no restart.
+#   the median time of E4_CALIBRATE undisturbed runs, and with no restart.
 # - E5: Zipf word count compiled into the workers, against the same program
 #   as a job file that the workers interpret: examples/wordcount.go, which
 #   calls the compiled helpers api.Words and api.Sum, and
@@ -37,8 +38,9 @@
 # coordinator and workers logged from before the run's workers restarted
 # until it ended, one line per event with its container's name and time. bench/plot-experiments.py draws the plots.
 #
-# Every run's output is checksummed and compared with the first normal run
-# on the same input; a run that differs has valid=0 and is not plotted.
+# Every run's output is checksummed and compared with the first run on the
+# same input, an undisturbed one: E0's warm-up or E3's and E4's calibration
+# where there is one. A run that differs has valid=0 and is not plotted.
 # The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt
 # (-SIZE-S.txt for word count's Zipf exponent S, -SIZE-TEXT.txt for E6's
 # book, crawl and crawl-eng) between
@@ -389,14 +391,47 @@ EOF
 # The median wall time of an experiment's normal runs.
 median() { awk -F, -v s="$2" '$2 == s && $16 == 1 { print $12 }' "bench/results/$1/runs.csv" | sort -n | awk '{ a[NR] = $1 } END { print a[int((NR + 1) / 2)] }'; }
 
+# need_count NAME VALUE MIN: stops the script before the cluster starts
+# unless VALUE is a whole number of at least MIN.
+need_count() {
+    if ! [[ $2 =~ ^[0-9]+$ ]] || [ "$2" -lt "$3" ]; then
+        echo "$1: '$2' is not a whole number of at least $3" >&2
+        exit 2
+    fi
+}
+
+# E0 first runs each program E0_WARMUP times (default 1) on four workers as
+# its own setting, warmup, which the plots leave out, so no measured run is
+# the first to read its input. Then every program on every number of workers
+# takes its turn within each repeat, in reverse order on even repeats, so
+# drift in the machine falls on no one setting (#282).
+e0_warmup=${E0_WARMUP:-1}
+
 e0() {
+    local n cells cell order program workers
+    need_count E0_WARMUP "$e0_warmup" 0
     begin E0
+    configure 4
     for program in grep distsort wordcount; do
-        for workers in 4 2 1; do
+        for n in $(seq "$e0_warmup"); do run E0 warmup "$program" "$n" 4 ""; done
+    done
+    cells=
+    for program in grep distsort wordcount; do
+        for workers in 4 2 1; do cells="$cells $program:$workers"; done
+    done
+    for n in $(seq "$repeat"); do
+        order=$cells
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for cell in $cells; do order="$cell $order"; done
+        fi
+        for cell in $order; do
+            program=${cell%:*} workers=${cell#*:}
             configure "$workers"
-            for n in $(seq "$repeat"); do run E0 "w$workers" "$program" "$n" "$workers" ""; done
+            run E0 "w$workers" "$program" "$n" "$workers" ""
         done
     done
+    configure 4
 }
 
 # E1 compares word count with the combiner on and off on four workers at
@@ -573,23 +608,42 @@ e7() {
     configure 4
 }
 
+# E3 kills a worker at 25%, 50% and 75% of an undisturbed run's time. The
+# kill times come from E3_CALIBRATE runs of their own setting, calibrate,
+# which the plots leave out; then normal and the three kill settings take
+# turns within each repeat, in reverse order on even repeats, as in E2, so
+# drift in the machine does not fall on one setting (#282).
+e3_calibrate=${E3_CALIBRATE:-3}
+e3_settings="normal kill-25 kill-50 kill-75"
+
 e3() {
+    local n t order s at pct victim
+    need_count E3_CALIBRATE "$e3_calibrate" 1
     begin E3
     configure 4
+    for n in $(seq "$e3_calibrate"); do run E3 calibrate distsort "$n" 4 ""; done
+    t=$(median E3 calibrate)
+    if [ -z "$t" ]; then
+        echo "experiments: E3 has no valid calibrate run to time its disturbances from; stopping" >&2
+        exit 1
+    fi
     for n in $(seq "$repeat"); do
-        start_sampler bytes "bench/results/E3/samples-normal-$n.csv"
-        run E3 normal distsort "$n" 4 ""
-        stop_sampler
-    done
-    local t at
-    t=$(median E3 normal)
-    for pct in 25 50 75; do
-        at=$(awk -v t="$t" -v p="$pct" 'BEGIN { printf "%.1f", t * p / 100 }')
-        for n in $(seq "$repeat"); do
-            local victim
+        order=$e3_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e3_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            start_sampler bytes "bench/results/E3/samples-$setting-$n.csv"
+            if [ "$setting" = normal ]; then
+                run E3 normal distsort "$n" 4 ""
+                stop_sampler
+                continue
+            fi
+            pct=${setting#kill-}
+            at=$(awk -v t="$t" -v p="$pct" 'BEGIN { printf "%.1f", t * p / 100 }')
             victim=$("${compose[@]}" ps -q worker | tail -1)
-            start_sampler bytes "bench/results/E3/samples-kill-$pct-$n.csv"
-            run E3 "kill-$pct" distsort "$n" 4 "$at" "docker kill $victim"
+            run E3 "$setting" distsort "$n" 4 "$at" "docker kill $victim"
             stop_sampler
             "${compose[@]}" up -d --scale worker=4 worker >/dev/null 2>&1
             wait_workers 4
@@ -597,25 +651,48 @@ e3() {
     done
 }
 
+# E4 restarts the coordinator at half an undisturbed run's time, taken from
+# E4_CALIBRATE runs of their own setting, calibrate, which the plots leave
+# out. Then normal and restart take turns within each repeat, in reverse
+# order on even repeats, as in E3 (#282). Every run starts with a fresh log,
+# so each restart replays its own job only, however many ran before it.
+e4_calibrate=${E4_CALIBRATE:-3}
+e4_settings="normal restart"
+
 e4() {
+    local n t at order s coordinator
+    need_count E4_CALIBRATE "$e4_calibrate" 1
     begin E4
-    # A fresh log, so the restarts below replay this experiment's jobs only.
-    fresh_log
-    for n in $(seq "$repeat"); do
-        start_sampler tasks "bench/results/E4/tasks-normal-$n.csv"
-        run E4 normal distsort "$n" 4 ""
-        stop_sampler
+    for n in $(seq "$e4_calibrate"); do
+        fresh_log
+        run E4 calibrate distsort "$n" 4 ""
     done
-    local t at coordinator
-    t=$(median E4 normal)
+    t=$(median E4 calibrate)
+    if [ -z "$t" ]; then
+        echo "experiments: E4 has no valid calibrate run to time its disturbances from; stopping" >&2
+        exit 1
+    fi
     at=$(awk -v t="$t" 'BEGIN { printf "%.1f", t / 2 }')
-    coordinator=$("${compose[@]}" ps -q coordinator)
     for n in $(seq "$repeat"); do
-        start_sampler tasks "bench/results/E4/tasks-restart-$n.csv"
-        # SIGKILL, so the coordinator crashes instead of telling its workers to exit.
-        run E4 restart distsort "$n" 4 "$at" "docker kill $coordinator && docker start $coordinator"
-        stop_sampler
-        wait_workers 4
+        order=$e4_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e4_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            fresh_log
+            start_sampler tasks "bench/results/E4/tasks-$setting-$n.csv"
+            if [ "$setting" = normal ]; then
+                run E4 normal distsort "$n" 4 ""
+                stop_sampler
+                continue
+            fi
+            coordinator=$("${compose[@]}" ps -q coordinator)
+            # SIGKILL, so the coordinator crashes instead of telling its workers to exit.
+            run E4 restart distsort "$n" 4 "$at" "docker kill $coordinator && docker start $coordinator"
+            stop_sampler
+            wait_workers 4
+        done
     done
     fresh_log
 }
