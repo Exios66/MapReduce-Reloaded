@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- Lint: `make md-lint` runs `scripts/check-dark-charts.py`, which fails if
+  a Markdown page shows a bench chart without its dark variant. It runs in
+  the lint job, not the Python tests, so a Markdown-only change still runs
+  only the lint job (#349).
 - Bench figures: E7 (`E7.png` and `E7-dark.png`): job time on workers of
   mixed speeds with no backups, the paper's backup rule and LATE, each
   run's ring beside its median, the backups each rule launched and won, and
@@ -91,10 +95,6 @@ cut a release.
 
 ### Changed
 
-- CI: every Markdown page and `bench/fonts/` now also run the Python jobs,
-  because `test_every_chart_on_a_page_has_its_dark_variant` reads every
-  page and a plot test reads the fonts' licence (`.circleci/mapping.txt`)
-  (#349).
 - Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
   `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
   the figures leave out, then runs `normal`, `kill-25`, `kill-50` and

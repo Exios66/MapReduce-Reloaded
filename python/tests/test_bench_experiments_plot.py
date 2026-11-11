@@ -952,30 +952,6 @@ def test_faults_draws_a_disturbance_that_sped_the_job_up_left_of_zero(plotter, t
     assert low == pytest.approx(-20 * 1.45) and high == pytest.approx(300 * 1.38)
 
 
-def test_every_chart_on_a_page_has_its_dark_variant():
-    """Each chart a Markdown page shows sits in a <picture> whose dark source
-    exists, so no page shows a light chart to a reader in dark mode."""
-    import re
-
-    root = SCRIPT.parents[1]
-    pages = [p for p in root.rglob("*.md") if not {".git", "node_modules", ".venv"} & set(p.parts)]
-    pictures = re.compile(r"<picture>.*?</picture>", re.S)
-    checked = 0
-    for page in pages:
-        text = page.read_text()
-        for block in pictures.findall(text):
-            for dark in re.findall(
-                r'<source media="\(prefers-color-scheme: dark\)" srcset="([^"]+)"', block
-            ):
-                assert (page.parent / dark).is_file(), f"{page}: {dark}"
-                checked += 1
-        bare = re.findall(r'<img [^>]*src="([^"]+\.png)"', pictures.sub("", text))
-        bare += re.findall(r"!\[[^\]]*\]\(([^)]+\.png)\)", pictures.sub("", text))
-        charts = [b for b in bare if "/evaluation/" in b or b.startswith("evaluation/")]
-        assert not charts, f"{page} shows {charts} without a dark variant"
-    assert checked, "the check found no pictures"
-
-
 def e7_rows():
     """E7 rows: no backups about 25 s, the paper's rule about 17 s, LATE about 18 s."""
     rows = []
