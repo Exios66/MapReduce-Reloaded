@@ -103,14 +103,27 @@ cut a release.
 
 ### Changed
 
-- Bench figures: clearer titles and labels in `bench/evaluation/`. E0's
-  title gives every program's speed-up on four workers; the faults summary
-  draws every bar in one color and its title gives the range of job time
-  added and that outputs were unchanged; E3 and E4 say their job time runs
-  from when `mr submit` returned; E3's "worker
-  lost" band is marked approximate; E7's backup counts are labeled medians;
-  range marks are called whiskers; and E4's two bars are as thin as E2's
-  four (#357).
+- Bench figures: every figure in `bench/evaluation/` is redrawn for
+  reading at a glance. Each has a bold title stating its finding, a
+  subtitle with the setup, a rule, then its legend; panel titles name what
+  they measure and whether lower or higher is better. Blue is the system
+  as it ships or undisturbed, orange the changed or disturbed setting.
+  E1, E6 and E2 to E4 compare two medians per row as dumbbells labeled with
+  the saving or the time added, or "no clear difference" when the run
+  ranges overlap, and nudge two dots apart vertically when their medians
+  are too close to show both. E2 and E4 pair that with tasks finished over
+  time, and E3 with the cluster's data rate, the lost worker shaded. E5 is
+  one bar per setting, labeled with how many times slower than compiled
+  it is and its map phase. The faults summary heads each experiment's
+  group of bars. E0 draws whiskers right of each dot and none at the
+  one-worker baseline. No figure marks single runs any more, and none
+  draws a whisker too short to see: E0 and E5 say so in their subtitles.
+  The titles also give the range of job time added and say outputs were
+  unchanged (faults), that E3 and E4 time from when `mr submit` returned,
+  and that E7's backup counts are medians (#357).
+- Bench figures: every figure, including the paper's rate plots in
+  `bench/evaluation/paper/`, is set in Atkinson Hyperlegible, shipped in
+  `bench/fonts/` under the SIL Open Font License in place of Inter (#357).
 - Agent tooling: the `interpreting-bench-results` skill states which
   experiments report wall time, which commit the reported E0 ran at, how
   each experiment orders its runs, and that `valid` is the only record of

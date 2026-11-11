@@ -259,7 +259,7 @@ M, R and the commit.
 | E4 | What does a coordinator restart cost? | sort, 1 GiB; kill the coordinator (`docker kill`, so it cannot tell its workers to exit) and start it again at 50% of the normal job time, with the log | Tasks completed against time with the restart marked; job time with and without the restart |
 | E5 | What do interpreted job files cost? | Zipf word count, compiled `wordcount` against `examples/wordcount.go` and `bench/jobs/wordcount-naive.go` | Job time and map-phase time, bars |
 | E6 | How much does the combiner save on real text? | Word count, 1 GiB each, combiner on and off, on three inputs: `crawl-eng`, Common Crawl's English pages (the real-text result); `crawl`, its pages in every language, where scripts without spaces make runs of text one word; `book`, War and Peace's lines repeated, a fixed vocabulary and so a best case | Bytes shuffled and job time, grouped bars per input |
-| E7 | Does LATE beat the paper's rule on workers of different speeds? (#59) | sort, 1 GiB, M = 32; the four workers throttled to 1, 0.6, 0.3 and 0.15 CPU; coordinator `-speculation` `paper` and `late`, and `-backups=false` for no backups | Job time and backups started and won, per setting; each median beside its runs |
+| E7 | Does LATE beat the paper's rule on workers of different speeds? (#59) | sort, 1 GiB, M = 32; the four workers throttled to 1, 0.6, 0.3 and 0.15 CPU; coordinator `-speculation` `paper` and `late`, and `-backups=false` for no backups | Job time and backups started and won, per setting; each median on a bar spanning its runs |
 
 What each plot should show if the feature works: E0, job time falling as
 workers are added, close to linear for grep; E1, far fewer bytes shuffled

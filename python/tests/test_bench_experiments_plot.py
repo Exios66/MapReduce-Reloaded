@@ -2,7 +2,6 @@
 
 import csv
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -79,7 +78,8 @@ def notes(axis, *words):
 
 
 def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_path):
-    """E1 joins each group's valid medians, rings each run, and labels the savings."""
+    """E1 joins each group's valid medians and labels the savings, or no clear
+    difference when the ranges overlap."""
     module, pyplot = plotter
     figure, shuffled, seconds = Mock(), Mock(), Mock()
     shuffled.get_legend_handles_labels.return_value = [], []
@@ -101,8 +101,8 @@ def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_
 
     # The first group is the top row, at y = 1.
     for axis, on, off, title in (
-        (shuffled, [4, 7], [13, 20], "Bytes shuffled (MB, log scale)"),
-        (seconds, [4, 3], [7, 9], "Job time (s)"),
+        (shuffled, [4, 7], [13, 20], "Bytes shuffled, MB (log scale; fewer is better)"),
+        (seconds, [4, 3], [7, 9], "Job time, seconds (lower is better)"),
     ):
         assert medians(axis, "combiner on") == (pytest.approx(on), [1, 0])
         assert medians(axis, "combiner off") == (pytest.approx(off), [1, 0])
@@ -113,19 +113,16 @@ def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_
         assert list(ticks) == [1, 0]
         assert labels == ["S = 0.5", "S = 1.5"]
         axis.set_title.assert_called_once_with(title)
-    # Every valid run is a ring; the invalid one is not drawn.
-    # Rings sit on a strip 0.22 below each row.
-    ring = sorted((x, round(y, 2)) for x, y in single_runs(shuffled, t, t["series"][0]))
-    assert ring == [(2, 0.78), (4, 0.78), (7, -0.22), (10, 0.78)]
-    ring = sorted((x, round(y, 2)) for x, y in single_runs(seconds, t, t["series"][1]))
-    assert ring == [(6, 0.78), (8, 0.78), (9, -0.22)]
+    # Only medians are drawn: no single runs.
+    assert single_runs(shuffled, t, t["series"][0]) == []
     # Bytes are on a log axis, so a row's length is the factor saved.
     shuffled.set_xscale.assert_called_once_with("log")
     seconds.set_xscale.assert_not_called()
     assert seconds.set_xlim.call_args.args == (0, pytest.approx(10 * 1.25))
     # Each median is labeled, and each row with both medians is labeled with the saving.
     assert notes(shuffled, "fewer") == ["3× fewer", "3× fewer"]
-    assert notes(seconds, "faster") == ["43% faster", "67% faster"]
+    # S = 0.5: on 2-10 s and off 6-8 s overlap; S = 1.5 does not.
+    assert notes(seconds, "faster", "difference") == ["no clear difference", "67% faster"]
     values = [c.args[0] for c in shuffled.annotate.call_args_list if c.args[0].isdigit()]
     assert values == ["4", "13", "7", "20"]
     figure.savefig.assert_called_once_with(out)
@@ -250,7 +247,7 @@ def test_main_loads_e1_csv_and_selects_its_plot(plotter, tmp_path, monkeypatch, 
 
     assert out.is_dir()
     # One plot per theme, each drawn under that theme's style.
-    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (10, 4.4), "sharey": True})] * 2
+    assert pyplot.subplots.call_args_list == [((1, 2), {"figsize": (10, 5.4), "sharey": True})] * 2
     assert [c.args[0] for c in figure.savefig.call_args_list] == [
         out / "E1.png",
         out / "E1-dark.png",
@@ -269,6 +266,7 @@ def test_e3_marks_worker_loss_on_the_sampling_clock(plotter, tmp_path):
     """E3 shades the sampling interval in which a worker disappeared."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
+    left.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), (left, right)
     data = tmp_path / "E3"
     data.mkdir()
@@ -290,24 +288,24 @@ def test_e3_marks_worker_loss_on_the_sampling_clock(plotter, tmp_path):
     right.axvline.assert_not_called()
 
 
-def test_e3_draws_each_kill_point_as_a_stem_from_the_baseline_without_a_line(plotter, tmp_path):
-    """Each kill point is a stem from the no-failure median, labeled with its cost."""
+def test_e3_draws_each_kill_point_as_a_dumbbell_from_the_baseline(plotter, tmp_path):
+    """Each kill point is a row from the no-failure median to its own, labeled with its cost."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
-    pyplot.subplots.return_value = Mock(), (left, right)
-    rows = [row("normal") | {"wall_seconds": w} for w in ("10", "12", "11")]
+    left.get_legend_handles_labels.return_value = [], []
+    figure = Mock()
+    pyplot.subplots.return_value = figure, (left, right)
+    rows = [row("normal") | {"wall_seconds": w, "run": "1"} for w in ("10", "12", "11")]
     rows += [row("kill-25") | {"wall_seconds": w} for w in ("20", "22", "21")]
     rows += [row("kill-75") | {"wall_seconds": "40"}, row("kill-75", valid="0")]
-    t = light(module)
-    color = t["series"][1]
 
-    module.e3(rows, tmp_path, tmp_path / "E3.png", t)
+    # No samples file: the right panel is left empty.
+    module.e3(rows, tmp_path, tmp_path / "E3.png", light(module))
 
-    left.vlines.assert_called_once_with([25, 75], 11, [21, 40], color=color, linewidth=2, zorder=2)
-    assert sorted(single_runs(left, t, color)) == [(25, 20), (25, 21), (25, 22), (75, 40)]
-    # The kill points are separate settings, so no line joins their medians.
-    assert left.plot.call_args_list and all(c.args[2:] == ("o",) for c in left.plot.call_args_list)
-    assert [c.args[0] for c in left.annotate.call_args_list][1:] == ["+10.0 s", "+29.0 s"]
+    assert medians(left, "no failure") == ([11, 11], [1, 0])
+    assert medians(left, "one worker killed") == ([21, 40], [1, 0])
+    assert notes(left, "+") == ["+10.0 s (+91%)", "+29.0 s (+264%)"]
+    assert titles(figure)[0] == "E3: a lost worker adds 10–29 s"  # kill-75 has an invalid run
 
 
 @pytest.mark.parametrize("counts", [(4, 4), (3, 3)])
@@ -329,6 +327,7 @@ def test_e0_skips_a_program_with_a_zero_time(plotter, tmp_path):
     module, pyplot = plotter
     ax = Mock()
     pyplot.subplots.return_value = Mock(), ax
+    ax.get_legend_handles_labels.return_value = [], []
     rows = [
         row("normal", seconds) | {"program": "grep", "workers": str(w)}
         for w, seconds in ((1, 2), (2, 0), (4, 1))
@@ -339,58 +338,48 @@ def test_e0_skips_a_program_with_a_zero_time(plotter, tmp_path):
 
 
 @pytest.mark.parametrize("exp", ["e2", "e4"])
-def test_timeline_with_no_valid_run_draws_empty_bars(plotter, tmp_path, exp):
-    """E2 and E4 with no valid run draw no bars and keep an axis width."""
+def test_fault_figures_with_no_valid_run_draw_no_rows(plotter, tmp_path, exp):
+    """E2 and E4 with no valid run draw no medians and keep an axis width."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
+    left.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), (left, right)
     rows = [
         row(setting, valid="0") | {"run": "1", "event_at": ""} for setting in ("normal", "restart")
     ]
     getattr(module, exp)(rows, tmp_path, tmp_path / "out.png", light(module))
-    right.barh.assert_called_once()
-    assert right.barh.call_args.args[1] == []
-    right.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
+    left.hlines.assert_not_called()
+    right.step.assert_not_called()
+    left.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
 
 
-def test_e2_colors_backups_and_dashes_the_no_straggler_runs(plotter, tmp_path):
-    """Color marks backups on or off; dashes mark the runs without a straggler,
-    and their bars sit apart from the straggler's, with no texture (dataviz:
-    texture is never on by default)."""
+def test_e2_compares_backups_on_and_off_and_draws_the_straggler_timeline(plotter, tmp_path):
+    """Left, one row per scenario from backups on (blue) to off (orange);
+    right, the straggler runs' tasks over time in the same colors."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
-    bars = [Mock() for _ in range(4)]
-    right.barh.return_value = bars
+    left.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), (left, right)
     settings = ("normal", "normal-no-backups", "straggler-backups", "straggler-no-backups")
-    rows = [row(s) | {"run": "1", "event_at": "", "job": "job-1"} for s in settings]
+    seconds = (8, 8.2, 11, 18)
+    rows = [
+        row(s, x) | {"run": "1", "event_at": "", "job": "job-1"}
+        for s, x in zip(settings, seconds, strict=True)
+    ]
     (tmp_path / "E2").mkdir()
     for setting in settings:
         tasks_file(tmp_path / "E2" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
     t = light(module)
     module.e2(rows, tmp_path, tmp_path / "out.png", t)
     blue, orange = t["series"][:2]
-    assert left.step.call_count == 4
-    for call, color, style in zip(
-        left.step.call_args_list,
-        (blue, orange, blue, orange),
-        ("--", "--", "-", "-"),
-        strict=True,
-    ):
-        assert call.args == ([0, 1], [0, 4])
-        assert call.kwargs["color"] == color
-        assert call.kwargs["ls"] == style
-    assert right.barh.call_args.kwargs["color"] == [blue, orange, blue, orange]
-    assert right.barh.call_args.args[0] == pytest.approx([3.6, 2.6, 1, 0])
-    assert not any(b.set.called for b in bars), "no hatching"
-
-
-def test_timeline_needs_styles_for_more_settings_than_colors(plotter, tmp_path):
-    """More settings than palette slots need explicit styles."""
-    module, _ = plotter
-    settings = {f"s{i}": f"setting {i}" for i in range(4)}
-    with pytest.raises(ValueError, match="pass styles"):
-        module.timeline_and_bars([], tmp_path, "E2", settings, "seconds", light(module), "t")
+    # 8 s and 8.2 s are too close for two dots: each moves off the row, x exact,
+    # and only the straggler row has a joining line.
+    assert medians(left, "backups on") == ([8, 11], [pytest.approx(1.12), 0])
+    assert medians(left, "backups off") == ([8.2, 18], [pytest.approx(0.88), 0])
+    assert [c.args[0] for c in left.hlines.call_args_list] == [0]
+    assert notes(left, "backups cut") == ["backups cut 2%", "backups cut 39%"]
+    assert [c.kwargs["color"] for c in right.step.call_args_list] == [blue, orange]
+    assert all(c.args == ([0, 1], [0, 4]) for c in right.step.call_args_list)
 
 
 def tasks_file(path, job, samples, total=4):
@@ -414,11 +403,12 @@ def test_map_phase_ends_when_every_map_task_is_done(plotter, tmp_path):
     assert module.map_phase(path, "job-1") is None
 
 
-def test_e5_compares_job_and_map_phase_times(plotter, tmp_path):
-    """E5 draws job and map-phase medians of the valid runs with their multiples."""
+def test_e5_compares_job_times_with_their_multiples_and_map_phases(plotter, tmp_path):
+    """E5 draws one bar per setting, compiled on top, labeled with how many
+    times slower than compiled it is and the map phase."""
     module, pyplot = plotter
-    jobs, maps = Mock(), Mock()
-    pyplot.subplots.return_value = Mock(), (jobs, maps)
+    axis = Mock()
+    pyplot.subplots.return_value = Mock(), axis
     (tmp_path / "E5").mkdir()
     rows = []
     for n, (setting, seconds, phase) in enumerate(
@@ -435,26 +425,48 @@ def test_e5_compares_job_and_map_phase_times(plotter, tmp_path):
         tasks_file(tmp_path / "E5" / f"tasks-{setting}-1.csv", job, [(0, 0), (phase, 4)])
     # Run 4 is invalid and overwrote nothing that counts: its file is for job-4.
     tasks_file(tmp_path / "E5" / "tasks-interpreted-1.csv", "job-3", [(0, 0), (12, 4)])
+    t = light(module)
 
+    module.e5(rows, tmp_path, tmp_path / "E5.png", t)
+
+    ys, heights = axis.barh.call_args.args
+    assert ys == [2, 1, 0]
+    assert heights == pytest.approx([10, 15, 100])
+    assert axis.barh.call_args.kwargs["color"] == [t["series"][0], t["series"][1], t["series"][1]]
+    assert [c.args[0] for c in axis.annotate.call_args_list] == [
+        "10.0 s",
+        "15.0 s  (1.5× slower)\nmap phase 12.0 s",
+        "100.0 s  (10.0× slower)\nmap phase 80.0 s",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("seconds", "drawn", "note"),
+    [
+        ((10, 10.1, 100, 101), False, "Every run is within 1% of its setting's median."),
+        ((10, 14, 100, 101), True, "whiskers span the range."),
+    ],
+)
+def test_e5_draws_whiskers_only_when_they_can_be_seen(plotter, tmp_path, seconds, drawn, note):
+    """Whiskers under 2% of the axis are specks: E5 states the spread instead."""
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    settings = ("compiled", "compiled", "interpreted", "interpreted")
+    rows = [
+        row(s, x) | {"run": str(n), "job": f"job-{n}"}
+        for n, (s, x) in enumerate(zip(settings, seconds, strict=True))
+    ]
     module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
-
-    for axis, heights in ((jobs, [10, 15, 100]), (maps, [8, 12, 80])):
-        call = axis.bar.call_args
-        assert call.args[0] == [0, 1, 2]
-        assert call.args[1] == pytest.approx(heights)
-        labels = [c.args[0] for c in axis.annotate.call_args_list]
-        assert labels == [
-            f"{heights[0]:.1f} s",
-            f"{heights[1]:.1f} s (1.5×)",
-            f"{heights[2]:.1f} s (10.0×)",
-        ]
+    assert axis.errorbar.called is drawn
+    assert titles(figure)[1].endswith(note)
 
 
 def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
     """E5 still plots results that have no naive setting."""
     module, pyplot = plotter
-    jobs, maps = Mock(), Mock()
-    pyplot.subplots.return_value = Mock(), (jobs, maps)
+    axis = Mock()
+    pyplot.subplots.return_value = Mock(), axis
     rows = [
         row("compiled", 10) | {"run": "1", "job": "job-1"},
         row("interpreted", 105) | {"run": "1", "job": "job-2"},
@@ -462,9 +474,15 @@ def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):
 
     module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
 
-    assert jobs.bar.call_args.args[0] == [0, 1]
-    assert jobs.set_xticks.call_args.args[1] == ["compiled", "job file\n(api.Words,\napi.Sum)"]
-    assert [c.args[0] for c in jobs.annotate.call_args_list] == ["10.0 s", "105.0 s (10.5×)"]
+    assert axis.barh.call_args.args[0] == [1, 0]
+    assert axis.set_yticks.call_args.args[1] == [
+        "compiled into\nthe workers",
+        "job file using\napi.Words, api.Sum",
+    ]
+    assert [c.args[0] for c in axis.annotate.call_args_list] == [
+        "10.0 s",
+        "105.0 s  (10.5× slower)",
+    ]
 
 
 @pytest.mark.parametrize("field", ["seconds", "map_output_bytes"])
@@ -521,6 +539,7 @@ def test_e0_title_places_caption_on_a_second_line(plotter, tmp_path):
     figure, axis = Mock(), Mock()
     axis.errorbar.return_value = [Mock()]
     pyplot.subplots.return_value = figure, axis
+    axis.get_legend_handles_labels.return_value = [], []
 
     module.e0([row("normal")], tmp_path / "E0.png", light(module))
 
@@ -536,7 +555,7 @@ def test_e2_comparison_reads_each_setting_from_its_own_directory(plotter, tmp_pa
     """The mixed E2 chart reads no-straggler runs from E2-pairs and straggler runs from E2."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
-    right.barh.return_value = [Mock() for _ in range(4)]
+    left.get_legend_handles_labels.return_value = [], []
     fig = Mock()
     pyplot.subplots.return_value = fig, (left, right)
     kinds = {"normal": "E2-pairs", "normal-no-backups": "E2-pairs"}
@@ -552,8 +571,9 @@ def test_e2_comparison_reads_each_setting_from_its_own_directory(plotter, tmp_pa
     for setting in ("straggler-backups", "straggler-no-backups"):
         tasks_file(tmp_path / "E2" / f"tasks-{setting}-1.csv", "job-1", [(0, 0), (1, 4)])
     module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
-    # Four curves: the main run's own no-straggler row is not used.
-    assert left.step.call_count == 4
+    # The straggler curves, from E2; the main run's own no-straggler row is not used.
+    assert right.step.call_count == 2
+    assert medians(left, "backups on")[0] == [1, 1]
     subtitle = [c.args[2] for c in fig.text.call_args_list if "paired runs" in c.args[2]]
     assert subtitle
 
@@ -571,7 +591,7 @@ def test_e2_comparison_takes_each_setting_from_its_source_and_checks_valid_runs(
     """A setting from the wrong source, or an unplotted invalid run, does not count."""
     module, pyplot = plotter
     left, right = Mock(), Mock()
-    right.barh.return_value = [Mock() for _ in range(4)]
+    left.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), (left, right)
     base = {"run": "1", "event_at": "", "job": "job-1"}
     pairs = [row("normal") | base, row("straggler-backups", seconds=99) | base]
@@ -581,8 +601,7 @@ def test_e2_comparison_takes_each_setting_from_its_source_and_checks_valid_runs(
         row("straggler-no-backups", valid="0") | base | {"m": "64"},
     ]
     module.e2_comparison(pairs, main, tmp_path, tmp_path / "out.png", light(module))
-    times = right.barh.call_args.args[1]
-    assert 99 not in times
+    assert 99 not in medians(left, "backups on")[0]
 
 
 def titles(figure):
@@ -597,14 +616,16 @@ def test_span_collapses_ends_that_agree_after_formatting(plotter):
     assert module.span([5.04, 4.96], lambda x: f"{x:.0f}") == "5"
 
 
-def test_e0_titles_the_best_speed_up_and_names_a_run_far_below_its_median(plotter, tmp_path):
-    """E0's title names the best speed-up, and only the outlier run is labeled."""
+def test_e0_titles_the_best_speed_up_and_draws_each_programs_range(plotter, tmp_path):
+    """E0's title names the best speed-ups; each program has a line, median
+    dots and whiskers in its own color, and no single runs."""
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
+    axis.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = figure, axis
     times = {
         ("grep", 1): (2.0, 2.0, 2.0),
-        ("grep", 4): (0.8, 0.9, 5.5),  # one cold run
+        ("grep", 4): (0.8, 0.9, 5.5),
         ("wordcount", 1): (40.0, 40.0, 40.0),
         ("wordcount", 4): (10.0, 10.0, 10.0),
     }
@@ -613,141 +634,41 @@ def test_e0_titles_the_best_speed_up_and_names_a_run_far_below_its_median(plotte
         for (program, w), runs in times.items()
         for seconds in runs
     ]
-    module.e0(rows, tmp_path / "E0.png", light(module))
+    t = light(module)
+    module.e0(rows, tmp_path / "E0.png", t)
     title, subtitle = titles(figure)
     best = module.PROGRAMS["wordcount"]
     assert title == f"E0: 4 workers speed up {best} 4.0×, grep 2.2×"
-    first, second, third = subtitle.split("\n")
-    assert first.startswith("Speed-up = job time on 1 worker")
-    assert second == "Grep takes 2.0 s on one worker, so fixed per-job costs cap its speed-up."
-    assert "whiskers span the range" not in third
-    labels = [call.args[0] for call in axis.annotate.call_args_list]
-    assert "one grep run: 5.5 s" in labels
-    assert sum("run:" in label for label in labels) == 1, "only the outlier is named"
-    # Every run is drawn as a hollow marker: two worker counts, three runs, two programs.
-    rings = [c for c in axis.plot.call_args_list if c.kwargs.get("linestyle") == "none"]
-    assert sorted(len(c.args[1]) for c in rings) == [3, 3, 3, 3]
-    assert all(c.kwargs["markerfacecolor"] == light(module)["surface"] for c in rings)
-
-
-def cache_rows(path, reads):
-    """Writes cache.jsonl to path: a start and an end row per (setting, program,
-    run), whose disk_read_sectors differ by that run's bytes read / 512."""
-    lines = []
-    for (setting, program, run), read in reads.items():
-        for phase, sectors in (("start", 1000), ("end", 1000 + read // 512)):
-            lines.append(
-                json.dumps(
-                    {
-                        "phase": phase,
-                        "setting": setting,
-                        "program": program,
-                        "run": run,
-                        "disk_read_sectors": sectors,
-                    }
-                )
-            )
-    path.write_text("\n".join(lines) + "\n")
-
-
-def test_disk_reads_pairs_start_and_end_and_skips_incomplete_runs(plotter, tmp_path):
-    """Each run's reads are its end counter minus its start counter, in bytes."""
-    module, _ = plotter
-    (tmp_path / "E0").mkdir()
-    path = tmp_path / "E0" / "cache.jsonl"
-    cache_rows(path, {("w1", "grep", 1): 850 * 2**20, ("w4", "grep", 1): 0})
-    with open(path, "a") as f:
-        f.write(
-            json.dumps(
-                {
-                    "phase": "start",
-                    "setting": "w2",
-                    "program": "grep",
-                    "run": 1,
-                    "disk_read_sectors": 5,
-                }
-            )
-            + "\n"
-        )
-        f.write(
-            json.dumps(
-                {
-                    "phase": "start",
-                    "setting": "w2",
-                    "program": "grep",
-                    "run": 2,
-                    "disk_read_sectors": None,
-                }
-            )
-            + "\n"
-        )
-        f.write(
-            json.dumps(
-                {
-                    "phase": "end",
-                    "setting": "w2",
-                    "program": "grep",
-                    "run": 2,
-                    "disk_read_sectors": 9,
-                }
-            )
-            + "\n"
-        )
-    assert module.disk_reads(tmp_path, "E0") == {
-        ("w1", "grep", "1"): 850 * 2**20,
-        ("w4", "grep", "1"): 0,
-    }
-    assert module.disk_reads(tmp_path, "E9") == {}
+    first, second = subtitle.split("\n")
+    assert first == (
+        "Speed-up = job time on 1 worker ÷ job time on N workers."
+        " Grep takes 2.0 s on one worker, so fixed per-job costs cap its speed-up."
+    )
+    assert "whiskers span the range" in second
+    assert notes(axis, "run") == []
+    grep = axis.errorbar.call_args_list[0]
+    assert grep.kwargs["ecolor"] == t["series"][0]
+    # Right of the dot; one worker is the 1x baseline and draws none, and
+    # word count's runs all took 10 s, a range too narrow to draw.
+    assert grep.args[0] == pytest.approx([4 + 0.06])
+    assert axis.errorbar.call_count == 1
+    # The slowest run (5.5 s) gives the lowest speed-up, the fastest the highest.
+    low, high = grep.kwargs["yerr"]
+    assert 2.0 / 0.9 - low[0] == pytest.approx(2.0 / 5.5)
+    assert 2.0 / 0.9 + high[0] == pytest.approx(2.0 / 0.8)
 
 
 def test_e0_reads_the_isolated_rerun_in_place_of_the_e0_it_supersedes(plotter, tmp_path):
-    """E0-isolated, when present, is E0's data, its runs and its disk reads (#347)."""
+    """E0-isolated, when present, is E0's data (#347)."""
     module, _ = plotter
-    for name, seconds, reads in (("E0", "9", 1000 * 2**20), ("E0-isolated", "8", 100 * 2**20)):
+    for name, seconds in (("E0", "9"), ("E0-isolated", "8")):
         (tmp_path / name).mkdir()
         (tmp_path / name / "runs.csv").write_text(
             f"setting,program,workers,run,seconds\nw4,distsort,4,1,{seconds}\n"
         )
-        cache_rows(tmp_path / name / "cache.jsonl", {("w4", "distsort", 1): reads})
     assert [r["seconds"] for r in module.load(tmp_path, "E0")] == ["8"]
-    assert module.disk_reads(tmp_path, "E0") == {("w4", "distsort", "1"): 100 * 2**20}
     (tmp_path / "E0-isolated" / "runs.csv").unlink()
-    (tmp_path / "E0-isolated" / "cache.jsonl").unlink()
     assert [r["seconds"] for r in module.load(tmp_path, "E0")] == ["9"]
-    assert module.disk_reads(tmp_path, "E0") == {("w4", "distsort", "1"): 1000 * 2**20}
-
-
-def test_e0_crosses_runs_that_read_far_more_from_disk_and_labels_them_together(plotter, tmp_path):
-    """A run that read a quarter of the input more than its group's median is a cross.
-
-    The two slow one-worker grep runs share one label; the other runs stay rings.
-    """
-    module, pyplot = plotter
-    figure, axis = Mock(), Mock()
-    pyplot.subplots.return_value = figure, axis
-    times = {1: (2.0, 8.5, 2.1, 8.6, 2.0), 4: (1.4, 1.3, 1.4, 1.3, 0.9)}
-    rows = [
-        row(f"w{w}", seconds) | {"program": "grep", "workers": str(w), "run": str(n)}
-        for w, runs in times.items()
-        for n, seconds in enumerate(runs, 1)
-    ]
-    reads = {(r["setting"], "grep", r["run"]): 0 for r in rows}
-    reads[("w1", "grep", "2")] = reads[("w1", "grep", "4")] = 850 * 2**20
-    reads[("w4", "grep", "5")] = 2**28 - 1  # just under a quarter of the input: a ring
-    module.e0(rows, tmp_path / "E0.png", light(module), reads)
-    t = light(module)
-    color = t["series"][0]
-    crosses = [c for c in axis.plot.call_args_list if c.args[2:] == ("x",)]
-    assert [(list(c.args[0]), list(c.args[1])) for c in crosses] == [
-        ([1.07, 1.07], [2.1 / 8.5, 2.1 / 8.6])  # just right of the median
-    ]
-    assert len(single_runs(axis, t, color)) == 8
-    assert notes(axis, "run") == ["2 grep runs: 8.5–8.6 s"]
-    _, subtitle = titles(figure)
-    # The chart states what was measured, not a cause: sort's heavy reads
-    # come from the worker memory limit, not a cold input (#347).
-    assert "Crosses: runs that read ¼ of the input more from disk" in subtitle
-    assert "cold" not in subtitle
 
 
 def test_e2_title_states_the_straggler_times_and_falls_back(plotter):
@@ -812,8 +733,8 @@ def fault_rows():
 
 
 def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
-    """One bar per disturbance, as the share it adds, grouped by experiment,
-    in one color: the labels name each disturbance."""
+    """One bar per disturbance, as the share it adds, grouped under a heading
+    per experiment, in the disturbed color."""
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
     bars = [Mock() for _ in range(6)]
@@ -823,9 +744,14 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     module.faults(*fault_rows(), tmp_path / "faults.png", t)
     ys, added = axis.barh.call_args.args
     # The first disturbance on top; a gap between E2, E3 and E4, whose baselines differ.
-    assert ys == pytest.approx([6.2, 5.2, 3.6, 2.6, 1.6, 0])
+    assert ys == pytest.approx([6.5, 5.5, 3.75, 2.75, 1.75, 0])
     assert added == pytest.approx([25, 100, 100, 150, 300, 20])
-    assert axis.barh.call_args.kwargs["color"] == t["series"][0]
+    assert axis.barh.call_args.kwargs["color"] == t["series"][1]
+    assert [c.args[2] for c in axis.text.call_args_list] == [
+        "E2: one worker slowed to 0.2 CPU",
+        "E3: one of four workers killed",
+        "E4: the coordinator restarted",
+    ]
     assert axis.errorbar.called, "each bar has its range"
     assert axis.set_yticks.call_args.args[1] == [
         "straggler, backups on",
@@ -911,6 +837,7 @@ def test_e0_titles_the_largest_worker_count_it_has(plotter, tmp_path):
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
     pyplot.subplots.return_value = figure, axis
+    axis.get_legend_handles_labels.return_value = [], []
     rows = [
         row("normal", seconds) | {"program": "grep", "workers": str(w)}
         for w, seconds in ((1, 10), (2, 5))
@@ -920,10 +847,11 @@ def test_e0_titles_the_largest_worker_count_it_has(plotter, tmp_path):
 
 
 def test_e0_leaves_out_warm_up_runs(plotter, tmp_path):
-    """A slow warm-up run on four workers changes neither the title nor the rings."""
+    """A slow warm-up run on four workers changes neither the title nor the whiskers."""
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
     pyplot.subplots.return_value = figure, axis
+    axis.get_legend_handles_labels.return_value = [], []
     rows = [
         row(f"w{w}", seconds) | {"program": "grep", "workers": str(w)}
         for w, seconds in ((1, 10), (4, 2.5))
@@ -931,8 +859,8 @@ def test_e0_leaves_out_warm_up_runs(plotter, tmp_path):
     rows.append(row("warmup", 40) | {"program": "grep", "workers": "4"})
     module.e0(rows, tmp_path / "E0.png", light(module))
     assert titles(figure)[0] == "E0: 4 workers speed up grep 4.0×"
-    rings = [c for c in axis.plot.call_args_list if c.kwargs.get("linestyle") == "none"]
-    assert sorted(len(c.args[1]) for c in rings) == [1, 1]
+    # One run each, so no range to draw: the 40 s warm-up is left out.
+    axis.errorbar.assert_not_called()
 
 
 def test_faults_draws_a_disturbance_that_sped_the_job_up_left_of_zero(plotter, tmp_path):
@@ -982,7 +910,7 @@ def e7_rows():
 
 def test_e7_compares_both_backup_rules_with_none(plotter, tmp_path):
     """No backups on top, then the paper's rule and LATE, each a median dot
-    with its runs, the backups each launched in its label, and the time each
+    over its range, the backups each launched in its label, and the time each
     rule saves in the title; overlapping ranges are called no clear difference."""
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
@@ -995,9 +923,12 @@ def test_e7_compares_both_backup_rules_with_none(plotter, tmp_path):
         "paper's rule\n(median 4 backups, 3 won)",
         "LATE\n(median 1 backup, 1 won)",
     ]
-    assert len(single_runs(axis, t, t["series"][0])) == 3  # the paper's rule, slot 1
-    assert len(single_runs(axis, t, t["series"][1])) == 3  # no backups, slot 2, as in E2
-    assert len(single_runs(axis, t, t["series"][2])) == 3  # LATE, slot 3
+    # No backups in slot 2, as in E2; the paper's rule slot 1; LATE slot 3.
+    assert [(c.args, c.kwargs["color"]) for c in axis.hlines.call_args_list] == [
+        ((2, 24, 26), t["series"][1]),
+        ((1, 16, 18), t["series"][0]),
+        ((0, 17, 19), t["series"][2]),
+    ]
     assert notes(axis, "%") == ["17.0 s  −32%", "18.0 s  −28%"]
     title, subtitle = titles(figure)
     assert title == "E7: backups cut a mixed-speed sort by 28–32%"
@@ -1028,24 +959,27 @@ def test_e7_subtitle_uses_the_recorded_cpu_limits(plotter, tmp_path):
     assert module.e7_cpus(tmp_path) == "1, 0.6, 0.3 and 0.15"
 
 
-def test_figures_use_the_bundled_inter_face(plotter):
-    """Every figure is set in Inter, shipped in bench/fonts with its licence,
-    so a chart looks the same whichever machine draws it."""
+def test_figures_use_the_bundled_atkinson_hyperlegible_face(plotter):
+    """Every figure is set in Atkinson Hyperlegible, shipped in bench/fonts
+    with its licence, so a chart looks the same whichever machine draws it."""
     module, _ = plotter
     fonts = SCRIPT.parent / "fonts"
-    assert (fonts / "Inter-Regular.ttf").is_file() and (fonts / "Inter-SemiBold.ttf").is_file()
+    assert (fonts / "AtkinsonHyperlegible-Regular.ttf").is_file()
+    assert (fonts / "AtkinsonHyperlegible-Bold.ttf").is_file()
     assert "SIL Open Font License" in (fonts / "OFL.txt").read_text()
     for t in module.THEMES.values():
-        assert module.rc(t)["font.family"][0] == "Inter"
+        assert module.rc(t)["font.family"][0] == "Atkinson Hyperlegible"
 
 
-def test_text_is_at_least_9_points_and_figures_at_most_10_inches_wide():
-    """README images shrink to the page's width; at 10 inches or less, 9-point
+def test_text_is_at_least_10_points_and_figures_at_most_10_inches_wide():
+    """README images shrink to the page's width; at 10 inches or less, 10-point
     text stays readable there."""
     import re
 
     source = SCRIPT.read_text()
-    sizes = [float(x) for x in re.findall(r"fontsize=([0-9.]+)", source)]
-    assert sizes and min(sizes) >= 9, sizes
+    (sizes,) = re.findall(r"^TITLE, SUBTITLE, PANEL, LABEL, TICK, NOTE = (.+)$", source, re.M)
+    sizes = [float(x) for x in sizes.split(",")]
+    sizes += [float(x) for x in re.findall(r"fontsize=([0-9.]+)", source)]
+    assert len(sizes) >= 6 and min(sizes) >= 10, sizes
     widths = [float(x) for x in re.findall(r"figsize=\(([0-9.]+),", source)]
     assert widths and max(widths) <= 10, widths

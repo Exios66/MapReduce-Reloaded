@@ -109,13 +109,13 @@ def plot(seconds, series, path, title=None):
     import matplotlib.pyplot as plt
     from matplotlib import font_manager
 
-    # Inter, from bench/fonts, as bench/plot-experiments.py sets its figures.
+    # Atkinson Hyperlegible, from bench/fonts, as bench/plot-experiments.py sets its figures.
     for font in sorted((Path(__file__).resolve().parent / "fonts").glob("*.ttf")):
         font_manager.fontManager.addfont(str(font))
     path = Path(path)
     for name, t in THEMES.items():
         out = path if name == "light" else path.with_name(f"{path.stem}-{name}{path.suffix}")
-        with plt.rc_context({"font.family": ["Inter", "DejaVu Sans"]}):
+        with plt.rc_context({"font.family": ["Atkinson Hyperlegible", "DejaVu Sans"]}):
             draw(plt, seconds, series, out, title, t)
         plt.close("all")
 

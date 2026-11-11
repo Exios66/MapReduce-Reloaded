@@ -174,7 +174,7 @@ Both took their settings in turn within each repeat.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E3-dark.png">
-  <img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png">
+  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the way through, each a dumbbell from the no-failure median, and the data rate of the median run killed at 50%" src="../bench/evaluation/E3.png">
 </picture>
 
 The rates panel's "worker lost" band is on the sampling clock and the kill
@@ -216,7 +216,7 @@ calibration runs' median.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E7-dark.png">
-  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median beside its runs" src="../bench/evaluation/E7.png">
+  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median on a bar spanning its runs" src="../bench/evaluation/E7.png">
 </picture>
 
 E2 makes one worker slow. [ADR 0019](design/0019-late-speculation.md) adds
