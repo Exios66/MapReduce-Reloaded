@@ -61,3 +61,66 @@
  Container mapreduce-worker-3 Started 
  Container mapreduce-worker-1 Started 
 [02:26:04] E7 mixed-paper distsort run 3
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+[02:26:44] E7 mixed-late distsort run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[02:27:26] E7 mixed-off distsort run 3
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-4 Started 
+[02:28:14] E7 mixed-off distsort run 4
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[02:29:04] E7 mixed-late distsort run 4
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-4 Started 
+[02:29:44] E7 mixed-paper distsort run 4
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[02:30:25] E7 mixed-paper distsort run 5
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-4 Started 
+[02:31:08] E7 mixed-late distsort run 5
