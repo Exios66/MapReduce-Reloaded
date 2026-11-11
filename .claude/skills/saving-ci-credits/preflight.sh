@@ -62,12 +62,18 @@ if [ -z "$pr" ]; then
     note "no open PR: opening one always runs one pipeline, so open it only when the work is ready for review"
     # Issues, PRs and discussions share one sequence, so the newest of any
     # names the next number, unless another is opened first; check it after.
-    last=$(gh api "repos/{owner}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc" --jq '.[0].number' 2>/dev/null || true)
+    # Either lookup failing would leave a number already taken, so a failed
+    # lookup gives a note and no prediction.
     # shellcheck disable=SC2016 # $owner and $repo are GraphQL variables
-    disc=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){discussions(first:1,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number}}}}' --jq '.data.repository.discussions.nodes[0].number // empty' 2>/dev/null || true)
-    if [ -n "$disc" ] && { [ -z "$last" ] || [ "$disc" -gt "$last" ]; }; then last=$disc; fi
-    if [ -n "$last" ]; then
-        note "the PR will likely be #$((last + 1)): cite it in the CHANGELOG before opening, so the opening pipeline is the final one"
+    if ! last=$(gh api "repos/{owner}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc" --jq '.[0].number // empty' 2>/dev/null); then
+        note "could not look up the newest issue or PR; no PR-number prediction"
+    elif ! disc=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){discussions(first:1,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number}}}}' --jq '.data.repository.discussions.nodes[0].number // empty' 2>/dev/null); then
+        note "could not look up the newest discussion; no PR-number prediction"
+    else
+        if [ -n "$disc" ] && { [ -z "$last" ] || [ "$disc" -gt "$last" ]; }; then last=$disc; fi
+        if [ -n "$last" ]; then
+            note "the PR will likely be #$((last + 1)): cite it in the CHANGELOG before opening, so the opening pipeline is the final one"
+        fi
     fi
 fi
 if [ "$final" = true ]; then

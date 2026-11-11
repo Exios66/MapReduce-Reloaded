@@ -1174,7 +1174,7 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     """Saves the fault-tolerance summary to out, in theme t: for each
     disturbance in E2, E3 and E4, the median job time as a share added to
     the same experiment's undisturbed median, one horizontal bar each, on
-    one axis, with a range bar from its fastest to its slowest valid run.
+    one axis, with a whisker from its fastest to its slowest valid run.
     Experiments are grouped with a gap between them, as each has its own
     undisturbed baseline. Bars share slot 1; their labels name the
     disturbance. Each bar is labeled with both medians. The title gives the
@@ -1253,9 +1253,9 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     correct = bool(cases) and all(r["valid"] == "1" for r in disturbed)
     title = "Fault tolerance: the time each disturbance adds"
     if correct:
-        title = (
-            f"Faults add {min(added):+.0f}% to {max(added):+.0f}% to job time; outputs unchanged"
-        )
+        lo, hi = f"{min(added):+.0f}%", f"{max(added):+.0f}%"
+        cost = lo if lo == hi else f"{lo} to {hi}"
+        title = f"Faults add {cost} to job time; outputs unchanged"
     heading(
         fig,
         t,

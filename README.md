@@ -118,10 +118,10 @@ repeat, and every run's output matched the normal run's.
 
 In every plot but the faults summary, blue is the system as it ships and
 orange the changed or disturbed setting; the faults summary draws every bar
-in blue and names each disturbance beside it. E1 and E6 are dumbbells: each row joins the combiner-on
-and combiner-off medians, and bytes use a log axis, so a row's length is
-the factor the combiner saves. The other plots (E2–E4), the raw CSVs, the
-machine and the commands are in
+in blue and names each disturbance beside it. E1 and E6 are dumbbells: each
+row joins the combiner-on and combiner-off medians, and bytes use a log
+axis, so a row's length is the factor the combiner saves. The other plots
+(E2–E4), the raw CSVs, the machine and the commands are in
 [`bench/README.md`](bench/README.md#evaluation-e0e7).
 
 ## How a job runs

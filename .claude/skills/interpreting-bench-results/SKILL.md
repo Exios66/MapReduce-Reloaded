@@ -13,7 +13,7 @@ A number is reportable only if its runs are valid, its commit is known and clean
 python3 .claude/skills/interpreting-bench-results/summarize.py bench/results/E2 [more dirs...]
 ```
 
-Per setting, program and worker count: valid runs, median and range of `seconds`, wall clock, median backups launched and total backups won, bytes shuffled and machine-wide disk reads; then runs to look at (invalid, more than 2x from their median, or a group whose bytes shuffled differ between runs), settings with fewer valid runs than the others, whether each pair of settings overlaps, and E0's speed-ups.
+Per setting, program and worker count: valid runs, median and range of the experiment's reported clock (`seconds`, or `wall_seconds` for E3 and E4, named on its `clock:` line), wall clock, median backups launched and total backups won, bytes shuffled and machine-wide disk reads; then runs to look at (invalid, more than 2x from their median, or a group whose bytes shuffled differ between runs), settings with fewer valid runs than the others, whether each pair of settings overlaps, and E0's speed-ups.
 
 ## Rules
 

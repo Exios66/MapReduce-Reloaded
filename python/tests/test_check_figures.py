@@ -55,6 +55,21 @@ def test_reports_a_changed_or_missing_archive(tmp_path):
     ]
 
 
+def test_an_unlisted_archive_is_reported_and_not_unpacked(tmp_path):
+    a = tmp_path / "archives"
+    a.mkdir()
+    sha = archive(a / "E1.tar.gz", "E1/runs.csv")
+    forged = b"forged\n"
+    with tarfile.open(a / "Z-extra.tar.gz", "w:gz") as t:
+        info = tarfile.TarInfo("E1/runs.csv")
+        info.size = len(forged)
+        t.addfile(info, io.BytesIO(forged))
+    (a / "SHA256SUMS").write_text(f"{sha}  ./E1.tar.gz\n")
+    assert figures.verify(a) == ["Z-extra.tar.gz: not listed in SHA256SUMS, so not unpacked"]
+    figures.unpack(a, tmp_path / "out")
+    assert (tmp_path / "out/E1/runs.csv").read_bytes() == b"setting,valid\n"
+
+
 def test_a_figure_that_changes_only_in_color_differs(tmp_path):
     Image = pytest.importorskip("PIL.Image")
     Image.new("RGB", (4, 4), "white").save(tmp_path / "a.png")

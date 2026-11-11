@@ -839,7 +839,7 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     assert labels[0] == "+25%   11.2 s vs 9.0 s"
     assert labels[-1] == "+20%   15.0 s vs 12.5 s"
     title, subtitle = titles(figure)
-    assert title.startswith("Faults add +") and title.endswith("; outputs unchanged")
+    assert title == "Faults add +20% to +300% to job time; outputs unchanged"
     assert "whiskers span the range" in subtitle
     figure.savefig.assert_called_once_with(tmp_path / "faults.png")
 
