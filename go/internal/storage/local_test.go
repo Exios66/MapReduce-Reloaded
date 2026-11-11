@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // Directories that MkdirAll creates are writable by everyone, so the host
@@ -120,6 +121,44 @@ func TestLocalDeleteAllConcurrentCreates(t *testing.T) {
 		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
 			t.Fatalf("%s is still there after DeleteAll: %v", dir, err)
 		}
+	}
+}
+
+// DeleteAll outlasts writers that win its race many times in a row, as busy
+// ones do on a loaded machine: a fixed count of tight retries ran out there
+// (TestLocalDeleteAllConcurrentCreates failed in CI).
+func TestLocalDeleteAllOutlastsBusyWriters(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "_temporary")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	removeAll = func(path string) error {
+		calls++
+		if calls <= 150 {
+			return &fs.PathError{Op: "unlinkat", Path: path, Err: syscall.ENOTEMPTY}
+		}
+		return os.RemoveAll(path)
+	}
+	t.Cleanup(func() { removeAll = os.RemoveAll })
+	if err := (Local{}).DeleteAll(t.Context(), dir); err != nil {
+		t.Fatalf("DeleteAll after %d tries: %v", calls, err)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("%s is still there after DeleteAll: %v", dir, err)
+	}
+}
+
+// A directory that stays busy past deleteFor gives up with the last error.
+func TestLocalDeleteAllGivesUp(t *testing.T) {
+	removeAll = func(path string) error {
+		return &fs.PathError{Op: "unlinkat", Path: path, Err: syscall.ENOTEMPTY}
+	}
+	saved := deleteFor
+	deleteFor = 20 * time.Millisecond
+	t.Cleanup(func() { removeAll, deleteFor = os.RemoveAll, saved })
+	if err := (Local{}).DeleteAll(t.Context(), t.TempDir()); !errors.Is(err, syscall.ENOTEMPTY) {
+		t.Fatalf("DeleteAll = %v; want ENOTEMPTY", err)
 	}
 }
 

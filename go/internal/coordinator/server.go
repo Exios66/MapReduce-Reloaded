@@ -877,6 +877,9 @@ func (s *Server) Close() error {
 // output. It runs under the lock, once the log holds the job's end, so that
 // the job is never reported done before its output is clean; the directory holds at most R
 // files. The job's outcome is already decided, so an error is only logged.
+// Its context never cancels, so storage's deleteFor (10 s) bounds how long
+// the lock is held when late attempts keep writing into TempDir; every RPC
+// waits behind it for that long.
 func (j *job) cleanup() {
 	path, err := wire.Path(j.spec.GetOutput())
 	if err == nil {

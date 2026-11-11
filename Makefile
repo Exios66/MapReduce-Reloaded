@@ -177,7 +177,7 @@ md-lint:
 
 fmt:
 	cd go && gofmt -w .
-	cd python && $(PYTHON) -m ruff format . ../scripts ../bench && $(PYTHON) -m ruff check --fix . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format . ../scripts ../bench ../.claude && $(PYTHON) -m ruff check --fix . ../scripts ../bench ../.claude
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
@@ -295,4 +295,4 @@ py-e2e:
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench ../.claude && $(PYTHON) -m ruff check . ../scripts ../bench ../.claude
