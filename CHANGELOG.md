@@ -158,7 +158,7 @@ cut a release.
 
 - CI: `.circleci/mapping.txt` maps `.claude/` to the lint job, so the
   agent skills' Python scripts no longer fail `mapping-coverage` and
-  `make check` with "unmapped file".
+  `make check` with "unmapped file" (#350).
 - Go coordinator: a succeeded job's output no longer keeps a stray
   `_temporary` directory when a losing backup reduce attempt creates its
   file while the job is cleaning up. The local file system's delete now
