@@ -80,6 +80,14 @@ cut a release.
 
 ### Changed
 
+- CI: the `go` job runs on three nodes at once (`parallelism: 3`), still
+  one `go` check: `scripts/ci-go-job.sh` gives the race tests, the coverage
+  tests, and sh-lint, go-lint and py-e2e a node each, the same make targets
+  as before (`make go-test` is now `go-test-race` then `go-test-cover`).
+  `make tools` keeps a cached generator that `scripts/install-tool.sh`
+  finds was built from its pin, so `proto` no longer rebuilds buf on every
+  run. The full pipeline should drop from about 400 s to about 220 s with
+  no check removed; see docs/ci.md, Pipeline time, and ADR 0024.
 - Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
   `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
   the figures leave out, then runs `normal`, `kill-25`, `kill-50` and

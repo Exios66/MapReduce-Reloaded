@@ -165,6 +165,41 @@ How each job meets its requirements:
   from that node's last one.
 - **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
 
+## Pipeline time
+
+The six jobs start together, so a PR's pipeline takes as long as its slowest
+job ([ADR 0024](design/0024-faster-ci-pipeline.md)). Before ADR 0024 that
+was always `go`, which ran its parts in series in one step. Measured on
+#352's final run (head `db396e8`, CircleCI jobs 620-625, every job
+implicated):
+
+| Job | Before | Longest step |
+|---|---|---|
+| `go` | 395 s | `make go-lint go-test py-e2e`, 366 s |
+| `proto` | 180 s | `make tools` rebuilding buf, 151 s |
+| `python-3.13` | 103 s | `make py-lint py-test`, 69 s |
+| `python-3.11` | 98 s | `make py-lint py-test`, 79 s |
+| `lint` | 18 s | `make md-lint`, 9 s |
+| `mapping-coverage` | 7 s | |
+
+The go job's parts, timed on the course VM pinned to two CPUs (the medium
+class's count) with a warm build cache, two runs each: `go-test-race`
+149-151 s, `go-test-cover` 85-89 s, `py-e2e` 45-46 s, `go-lint` and
+`sh-lint` 1-2 s. In series that is about 290 s, against 366 s on CircleCI,
+so CircleCI ran about 1.27 times slower. Split across the three nodes, each
+with about 30 s of setup:
+
+| Go node | Runs | Estimated |
+|---|---|---|
+| 0 | `go-test-race` | about 220 s |
+| 1 | `go-test-cover` | about 140 s |
+| 2 | `sh-lint`, `go-lint`, `py-e2e` | about 100 s |
+
+So the estimate for the full pipeline is about 220 s instead of about 400 s,
+with `go` node 0 still the slowest, then the Python jobs. `proto` drops to
+about 30 s, since `make tools` keeps the cached generators. The PR that made
+the change records the first CircleCI run's times.
+
 ## Caching
 
 Caches only save time; none of them replaces a check.

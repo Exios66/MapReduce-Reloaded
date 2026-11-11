@@ -29,8 +29,9 @@ Two things made it slow:
   the module, then the coverage pass, then the Python coordinator with the
   Go commands. Each part is bounded by its slowest package (internal/e2e
   takes 65 s under the race detector and 78 s with coverage; py-e2e takes
-  62 s), and none needs another's result. A medium runner has 2 CPUs, which
-  go test already fills within each part.
+  62 s), and none needs another's result. Timed on the course VM pinned to
+  two CPUs, the race pass took about 150 s, the coverage pass 87 s and
+  py-e2e 45 s.
 - **`proto` rebuilt buf from source on every run.** The cache restored
   `.tools/bin` with the right binaries, but `make tools` ran `go install` for
   each pin, and go install decides whether a binary is current from Go's
@@ -100,6 +101,11 @@ often, never by running less of it. Every job, check and make target stays.
   meant to shorten.
 - **A large resource class.** docs/ci.md keeps the pipeline to the Free
   plan's `small` and `medium` classes, and more CPUs would not shorten the
-  slowest packages, which wait on processes and timers more than on CPU.
+  parts' slowest packages (internal/e2e alone takes over a minute in each
+  pass), which bound each part however many CPUs run it.
+- **Splitting the race pass across two more nodes by package.** The race
+  node is still the longest (about 220 s); splitting it would bring the
+  pipeline near the coverage node's 140 s, for another node's setup and a
+  package list to keep complete. Left for later, if the time matters.
 - **pytest-xdist in the Python jobs.** They run on `small` (1 CPU) and are
   not on the critical path.
