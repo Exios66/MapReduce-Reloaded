@@ -41,7 +41,10 @@ book-only result overstated what real text saves.
 
 ## Grep (§5.2)
 
-<img alt="Grep over 10 GB: input, shuffle and output rates" src="../bench/evaluation/paper/grep/rates.png" width="480">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/paper/grep/rates-dark.png">
+  <img alt="Grep over 10 GB: input, shuffle and output rates" src="../bench/evaluation/paper/grep/rates.png" width="480">
+</picture>
 
 ```sh
 SIZE=10000000000 M=160 R=1 bench/run.sh grep
@@ -75,7 +78,10 @@ won.
 
 ## Sort (§5.3)
 
-<img alt="Sort of 1 GiB: input, shuffle and output rates" src="../bench/evaluation/paper/sort/rates.png" width="480">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/paper/sort/rates-dark.png">
+  <img alt="Sort of 1 GiB: input, shuffle and output rates" src="../bench/evaluation/paper/sort/rates.png" width="480">
+</picture>
 
 ```sh
 SIZE=1073741824 M=32 R=4 bench/run.sh sort
@@ -166,7 +172,10 @@ these saved straggler rows.
 
 ## Machine failures (§5.5)
 
-<img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png" width="480">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/E3-dark.png">
+  <img alt="E3: job time with a worker killed, and data rates" src="../bench/evaluation/E3.png" width="480">
+</picture>
 
 The rates panel's "worker lost" band is on the sampling clock and the kill
 times are on the submission clock; the saved data does not record the offset

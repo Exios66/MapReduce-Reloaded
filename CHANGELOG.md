@@ -15,6 +15,10 @@ cut a release.
 
 ### Added
 
+- Bench figures: E7 (`E7.png` and `E7-dark.png`): job time on workers of
+  mixed speeds with no backups, the paper's backup rule and LATE, each
+  run's ring beside its median, the backups each rule launched and won, and
+  the time each saves in the title (#343, #349).
 - Agent tooling: four skills in `.claude/skills/`, listed in AGENTS.md:
   `saving-ci-credits` (`preflight.sh` checks identity, CHANGELOG and
   `[skip ci]` before a push), `interpreting-bench-results` (`summarize.py`
@@ -100,9 +104,21 @@ cut a release.
   reversed on even repeats; before, each ran as a block (#282, #348).
 - Bench figures: E0 draws a run as a cross instead of a ring when the
   machine read at least a quarter of the input more from disk during it
-  than during the median run of its setting: a likely cold input. The
-  counter in `cache.jsonl` counts the whole machine's reads, so the
-  caption says "likely" (#349).
+  than during the median run of its program and worker count. The caption
+  states only that measurement, not a cause: the counter in `cache.jsonl`
+  counts the whole machine's reads, and sort's re-reads under the worker
+  memory limit are one cause besides a cold input (#347, #349).
+- Bench figures: one look across all of them. The fault-tolerance summary
+  (`faults.png`) groups its bars by experiment, as each has its own
+  undisturbed baseline, gives each bar its range, and colors backups on
+  and off as E2 does instead of hatching. E0's legend is a row above the
+  plot; E0, E1 and E6 draw each run's ring beside its median instead of
+  behind it; E1 and E6's log axes drop their minor ticks; and every figure
+  uses one font list, so they match whichever machine draws them (#349).
+- Bench figures: `bench/plot-rates.py OUT.png` also writes `OUT-dark.png`,
+  and `docs/evaluation.md` shows the dark variant of the grep and sort rate
+  plots and of E3. A test checks that every chart a page shows has a dark
+  variant (#349).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system

@@ -114,8 +114,11 @@ def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_
         assert labels == ["S = 0.5", "S = 1.5"]
         axis.set_title.assert_called_once_with(title)
     # Every valid run is a ring; the invalid one is not drawn.
-    assert sorted(single_runs(shuffled, t, t["series"][0])) == [(2, 1), (4, 1), (7, 0), (10, 1)]
-    assert sorted(single_runs(seconds, t, t["series"][1])) == [(6, 1), (8, 1), (9, 0)]
+    # Rings sit on a strip 0.22 below each row.
+    ring = sorted((x, round(y, 2)) for x, y in single_runs(shuffled, t, t["series"][0]))
+    assert ring == [(2, 0.78), (4, 0.78), (7, -0.22), (10, 0.78)]
+    ring = sorted((x, round(y, 2)) for x, y in single_runs(seconds, t, t["series"][1]))
+    assert ring == [(6, 0.78), (8, 0.78), (9, -0.22)]
     # Bytes are on a log axis, so a row's length is the factor saved.
     shuffled.set_xscale.assert_called_once_with("log")
     seconds.set_xscale.assert_not_called()
@@ -718,12 +721,15 @@ def test_e0_crosses_runs_that_read_far_more_from_disk_and_labels_them_together(p
     color = t["series"][0]
     crosses = [c for c in axis.plot.call_args_list if c.args[2:] == ("x",)]
     assert [(list(c.args[0]), list(c.args[1])) for c in crosses] == [
-        ([1, 1], [2.1 / 8.5, 2.1 / 8.6])
+        ([1.07, 1.07], [2.1 / 8.5, 2.1 / 8.6])  # just right of the median
     ]
     assert len(single_runs(axis, t, color)) == 8
     assert notes(axis, "run") == ["2 grep runs: 8.5–8.6 s"]
     _, subtitle = titles(figure)
-    assert "Crosses: the VM read far more from disk than usual" in subtitle
+    # The chart states what was measured, not a cause: sort's heavy reads
+    # come from the worker memory limit, not a cold input (#347).
+    assert "Crosses: runs that read ¼ of the input more from disk" in subtitle
+    assert "cold" not in subtitle
 
 
 def test_e2_title_states_the_straggler_times_and_falls_back(plotter):
@@ -788,7 +794,8 @@ def fault_rows():
 
 
 def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
-    """One bar per disturbance, as the share it adds, with backups off hatched."""
+    """One bar per disturbance, as the share it adds, grouped by experiment,
+    colored as E2 colors backups: on in slot 1, off in slot 2."""
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
     bars = [Mock() for _ in range(6)]
@@ -797,10 +804,13 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     t = light(module)
     module.faults(*fault_rows(), tmp_path / "faults.png", t)
     ys, added = axis.barh.call_args.args
-    assert ys == [5, 4, 3, 2, 1, 0], "the first disturbance is on top"
+    # The first disturbance on top; a gap between E2, E3 and E4, whose baselines differ.
+    assert ys == pytest.approx([6.2, 5.2, 3.6, 2.6, 1.6, 0])
     assert added == pytest.approx([25, 100, 100, 150, 300, 20])
-    assert axis.barh.call_args.kwargs["color"] == t["series"][1]
-    assert [b for b in bars if b.set.called] == [bars[1]], "only backups off is hatched"
+    on, off = t["series"][0], t["series"][1]
+    assert axis.barh.call_args.kwargs["color"] == [on, off, on, on, on, on]
+    assert not any(b.set.called for b in bars), "color alone marks backups off, as in E2"
+    assert axis.errorbar.called, "each bar has its range"
     assert axis.set_yticks.call_args.args[1] == [
         "straggler, backups on",
         "straggler, backups off",
@@ -814,7 +824,7 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     assert labels[-1] == "+20%   15.0 s vs 12.5 s"
     title, subtitle = titles(figure)
     assert title == "Every disturbance gave the undisturbed run's output"
-    assert "bars span the range" not in subtitle
+    assert "bars span the range" in subtitle
     figure.savefig.assert_called_once_with(tmp_path / "faults.png")
 
 
@@ -921,4 +931,72 @@ def test_faults_draws_a_disturbance_that_sped_the_job_up_left_of_zero(plotter, t
     labels = [call.args[0] for call in axis.annotate.call_args_list]
     assert labels[-1] == "-20%   10.0 s vs 12.5 s"
     low, high = axis.set_xlim.call_args.args
-    assert low == pytest.approx(-20 * 1.45) and high == pytest.approx(300 * 1.45)
+    assert low == pytest.approx(-20 * 1.45) and high == pytest.approx(300 * 1.38)
+
+
+def test_every_chart_on_a_page_has_its_dark_variant():
+    """Each chart a Markdown page shows sits in a <picture> whose dark source
+    exists, so no page shows a light chart to a reader in dark mode."""
+    import re
+
+    root = SCRIPT.parents[1]
+    pages = [p for p in root.rglob("*.md") if not {".git", "node_modules", ".venv"} & set(p.parts)]
+    pictures = re.compile(r"<picture>.*?</picture>", re.S)
+    checked = 0
+    for page in pages:
+        text = page.read_text()
+        for block in pictures.findall(text):
+            for dark in re.findall(
+                r'<source media="\(prefers-color-scheme: dark\)" srcset="([^"]+)"', block
+            ):
+                assert (page.parent / dark).is_file(), f"{page}: {dark}"
+                checked += 1
+        bare = re.findall(r'<img [^>]*src="([^"]+\.png)"', pictures.sub("", text))
+        bare += re.findall(r"!\[[^\]]*\]\(([^)]+\.png)\)", pictures.sub("", text))
+        charts = [b for b in bare if "/evaluation/" in b or b.startswith("evaluation/")]
+        assert not charts, f"{page} shows {charts} without a dark variant"
+    assert checked, "the check found no pictures"
+
+
+def e7_rows():
+    """E7 rows: no backups about 25 s, the paper's rule about 17 s, LATE about 18 s."""
+    rows = []
+    for setting, times, backups in (
+        ("mixed-off", (25, 26, 24), (0, 0)),
+        ("mixed-paper", (17, 16, 18), (4, 3)),
+        ("mixed-late", (18, 17, 19), (1, 1)),
+    ):
+        for n, s in enumerate(times, 1):
+            rows.append(
+                row(setting, s)
+                | {"program": "distsort", "run": str(n), "backups": str(backups[0])}
+                | {"backups_won": str(backups[1])}
+            )
+    return rows
+
+
+def test_e7_compares_both_backup_rules_with_none(plotter, tmp_path):
+    """No backups on top, then the paper's rule and LATE, each a median dot
+    with its runs, the backups each launched in its label, and the time each
+    rule saves in the title; overlapping ranges are called no clear difference."""
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    t = light(module)
+    module.e7(e7_rows(), tmp_path / "E7.png", t)
+    labels = axis.set_yticks.call_args.args[1]
+    assert labels == [
+        "no backups",
+        "paper's rule\n(4 backups, 3 won)",
+        "LATE\n(1 backup, 1 won)",
+    ]
+    assert len(single_runs(axis, t, t["series"][0])) == 3  # the paper's rule, slot 1
+    assert len(single_runs(axis, t, t["series"][1])) == 3  # no backups, slot 2, as in E2
+    assert len(single_runs(axis, t, t["series"][2])) == 3  # LATE, slot 3
+    assert notes(axis, "%") == ["17.0 s  −32%", "18.0 s  −28%"]
+    title, subtitle = titles(figure)
+    assert title == "E7: backups cut a mixed-speed sort by 28–32%"
+    assert len(title) <= 60
+    assert "1, 0.6, 0.3 and 0.15 CPUs" in subtitle
+    assert "no clear difference" in subtitle
+    figure.savefig.assert_called_once_with(tmp_path / "E7.png")

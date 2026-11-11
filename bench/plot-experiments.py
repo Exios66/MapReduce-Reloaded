@@ -2,7 +2,7 @@
 results of bench/experiments.sh, and prints a Markdown table of each
 experiment's job times for bench/README.md.
 
-For each of E0 to E6 whose bench/results/EXPERIMENT/runs.csv
+For each of E0 to E7 whose bench/results/EXPERIMENT/runs.csv
 exists, this writes OUT_DIR/EXPERIMENT.png on a light background and
 OUT_DIR/EXPERIMENT-dark.png on a dark one. Each title states the finding,
 computed from the data. Points are medians of the valid runs, drawn with
@@ -48,6 +48,7 @@ Usage: python3 bench/plot-experiments.py [RESULTS_DIR [OUT_DIR]]
 
 import csv
 import json
+import logging
 import statistics
 import subprocess
 import sys
@@ -57,6 +58,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+
+# The font list falls back past families a machine lacks; say nothing for each one.
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
 BENCH = Path(__file__).resolve().parent
 PROGRAMS = {"grep": "grep", "distsort": "sort", "wordcount": "Zipf word count"}
@@ -99,8 +103,11 @@ def disk_reads(results, exp):
 def likely_cold(rows, reads):
     """The (setting, program, run) keys of the rows during which the machine
     read at least a quarter of the input more from disk than the median run
-    of the same program and worker count: runs that probably found their
-    input out of the page cache. Rows without a reading are never marked."""
+    of the same program and worker count. The counter covers the whole VM,
+    so this marks a measurement, not a cause: a cold input is one, and
+    sort's re-reads under the worker memory limit are another, which
+    comparing within a worker count leaves out (#347). Rows without a
+    reading are never marked."""
     groups = {}
     for r in rows:
         key = (r["setting"], r["program"], r.get("run"))
@@ -227,6 +234,9 @@ def rc(t):
         "legend.frameon": False,
         "legend.labelcolor": t["ink2"],
         "text.color": t["ink"],
+        # Inter where it is installed, else the nearest clean sans: every
+        # figure in one family whichever machine draws it.
+        "font.family": ["Inter", "Helvetica Neue", "Arial", "DejaVu Sans"],
         "font.size": 10,
         "savefig.dpi": 150,
     }
@@ -334,6 +344,9 @@ def label_note(rows, ranges=True):
     )
 
 
+RING_SHIFT = 0.07  # workers: E0 draws each run's ring this far right of its median
+
+
 def e0(rows, out, t, reads=None):
     """Saves E0's speed-up against worker count to out, in theme t.
 
@@ -378,11 +391,12 @@ def e0(rows, out, t, reads=None):
             each = [one / x for x in times]
             marked = [(r["setting"], r["program"], r.get("run")) in cold for r in group]
             warm = [y for y, m in zip(each, marked, strict=True) if not m]
-            runs(ax, t, [w] * len(warm), warm, color)
+            # Just right of the median, so no ring hides behind its dot.
+            runs(ax, t, [w + RING_SHIFT] * len(warm), warm, color)
             crossed = [y for y, m in zip(each, marked, strict=True) if m]
             if crossed:
                 ax.plot(
-                    [w] * len(crossed),
+                    [w + RING_SHIFT] * len(crossed),
                     crossed,
                     "x",
                     markersize=6,
@@ -402,7 +416,7 @@ def e0(rows, out, t, reads=None):
                     )
                 ax.annotate(
                     label,
-                    (w, min(y for _, y in far)),
+                    (w + RING_SHIFT, min(y for _, y in far)),
                     xytext=(8, 0),
                     textcoords="offset points",
                     va="center",
@@ -414,7 +428,7 @@ def e0(rows, out, t, reads=None):
         shortest = min(shortest or (float("inf"), ""), (one, name))
         ax.annotate(
             f"{name}  {speedup[-1]:.1f}×",
-            (workers[-1], speedup[-1]),
+            (workers[-1] + RING_SHIFT, speedup[-1]),
             xytext=(10, 0),
             textcoords="offset points",
             va="center",
@@ -426,15 +440,16 @@ def e0(rows, out, t, reads=None):
     ax.set_xlabel("Workers, one CPU each")
     ax.set_ylabel("Speed-up over one worker (×)")
     ax.grid(axis="x", visible=False)
-    ax.legend(loc="upper left")
+    # One row above the plot, clear of the lines and of the rings below them.
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncols=3, borderaxespad=0.2)
     title = "E0: scaling over workers"
     if best:
         title = f"E0: {best[1]} runs {best[0]:.1f}× faster on {best[2]} workers"
     note = "Speed-up = job time on 1 worker ÷ job time on N; lines join medians, rings are runs."
     if cold:
         note += (
-            "\nCrosses: the VM read far more from disk than usual during the run"
-            " (likely a cold input)."
+            "\nCrosses: runs that read ¼ of the input more from disk than the"
+            " median run of their program and worker count (VM-wide counter)."
         )
     if shortest and shortest[0] < 5:
         note += (
@@ -442,7 +457,9 @@ def e0(rows, out, t, reads=None):
             " so fixed per-job costs cap its speed-up."
         )
     heading(fig, t, title, note + "\n" + label_note(rows, ranges=False) + ".")
-    finish(fig, out, top=0.76)
+    # The subtitle has the note's lines and the setup line; the legend row
+    # sits just below it.
+    finish(fig, out, top=0.92 - 0.045 * (note.count("\n") + 2))
 
 
 def dumbbell(ax, t, labels, stats_on, stats_off, runs_on, runs_off, scale, log=False):
@@ -465,7 +482,8 @@ def dumbbell(ax, t, labels, stats_on, stats_off, runs_on, runs_off, scale, log=F
         yk, med = [y for y, _ in kept], [st[0] / scale for _, st in kept]
         for y, values in zip(ys, each, strict=True):
             values = [v / scale for v in values if v > 0 or not log]
-            runs(ax, t, values, [y] * len(values), color)
+            # On a strip just below the row, so no ring hides behind its median.
+            runs(ax, t, values, [y - 0.22] * len(values), color)
         ax.plot(
             med,
             yk,
@@ -507,6 +525,7 @@ def dumbbell(ax, t, labels, stats_on, stats_off, runs_on, runs_off, scale, log=F
     ax.grid(axis="y", visible=False)
     if log:
         ax.set_xscale("log")
+        ax.minorticks_off()  # labeled decades only; minor ticks crowd the axis
     ax.xaxis.set_major_formatter("{x:,.0f}")
     return ys
 
@@ -1121,13 +1140,16 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     """Saves the fault-tolerance summary to out, in theme t: for each
     disturbance in E2, E3 and E4, the median job time as a share added to
     the same experiment's undisturbed median, one horizontal bar each, on
-    one axis. Bars are slot 2 (a disturbed run); the run with backups off,
-    the paper's mechanism disabled, is hatched. Each bar is labeled with
-    both medians. The title claims the undisturbed output only if every disturbed
+    one axis, with a range bar from its fastest to its slowest valid run.
+    Experiments are grouped with a gap between them, as each has its own
+    undisturbed baseline. Bars are colored as E2 colors backups: slot 1
+    with backups on, which every disturbance but one runs with, and slot 2
+    for the straggler with backups off. Each bar is labeled with both
+    medians. The title claims the undisturbed output only if every disturbed
     run is valid, drawn or not. Disturbances without valid runs, or experiments without
     an undisturbed median, are left out. Missing fields, invalid numbers
     and plotting or file errors propagate."""
-    cases = []  # (label, baseline, disturbed, hatched)
+    groups = []  # per experiment: [(label, baseline, (median, low, high), backups off)]
     disturbed = []  # every run of every disturbance, drawn or not
     for rows, field, base, items in (
         (
@@ -1153,23 +1175,31 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
         ),
     ):
         b = median_of(rows, base, field)
-        for label, setting, hatched in items:
+        group = []
+        for label, setting, off in items:
             disturbed += [r for r in rows if r["setting"] == setting]
-            d = median_of(rows, setting, field)
+            d = spread(valid(rows, setting=setting), field)
             if b and d:
-                cases.append((label, b, d, hatched))
-    fig, ax = plt.subplots(figsize=(9, 4.4))
-    ys = list(range(len(cases)))[::-1]  # the first case on top
-    added = [100 * (d / b - 1) for _, b, d, _ in cases]
-    color = t["series"][1]
-    bars = ax.barh(ys, added, height=0.56, color=color, edgecolor=t["surface"], linewidth=2)
-    for bar, (_, _, _, hatched) in zip(bars, cases, strict=True):
-        if hatched:
-            bar.set(facecolor=t["surface"], edgecolor=color, hatch="///", linewidth=1.5)
-    for y, a, (_, b, d, _) in zip(ys, added, cases, strict=True):
+                group.append((label, b, d, off))
+        if group:
+            groups.append(group)
+    cases, ys, y = [], [], 0.0
+    for group in reversed(groups):  # the first experiment on top, a gap between groups
+        for case in reversed(group):
+            cases.insert(0, case)
+            ys.insert(0, y)
+            y += 1
+        y += 0.6
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    share = [[100 * (v / b - 1) for v in d] for _, b, d, _ in cases]  # median, low, high
+    added = [s[0] for s in share]
+    colors = [t["series"][1] if off else t["series"][0] for *_, off in cases]
+    ax.barh(ys, added, height=0.56, color=colors, edgecolor=t["surface"], linewidth=2)
+    ranges(ax, t, ys, added, [s[1] for s in share], [s[2] for s in share], horizontal=True)
+    for yy, s, (_, b, d, _) in zip(ys, share, cases, strict=True):
         ax.annotate(
-            f"{a:+.0f}%   {d:.1f} s vs {b:.1f} s",
-            (max(a, 0), y),
+            f"{s[0]:+.0f}%   {d[0]:.1f} s vs {b:.1f} s",
+            (max(s[2], 0), yy),
             xytext=(6, 0),
             textcoords="offset points",
             va="center",
@@ -1179,9 +1209,11 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     ax.set_yticks(ys, [c[0] for c in cases])
     ax.tick_params(axis="y", length=0)
     # A disturbance that sped a job up is drawn left of zero, not clipped.
-    ax.set_xlim(min(min(added, default=0), 0) * 1.45, (max(added, default=0) or 1) * 1.45)
+    low = min((s[1] for s in share), default=0)
+    high = max((s[2] for s in share), default=0)
+    ax.set_xlim(min(low, 0) * 1.45, (high or 1) * 1.38)
     ax.xaxis.set_major_formatter("{x:+.0f}%")
-    ax.set_xlabel("Job time added, against the same job undisturbed")
+    ax.set_xlabel("Job time added, against the same experiment's undisturbed median")
     ax.grid(axis="y", visible=False)
     # A disturbance whose runs all failed has no bar, but still fails the claim.
     correct = bool(cases) and all(r["valid"] == "1" for r in disturbed)
@@ -1193,11 +1225,81 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
         t,
         title,
         "Backups (E2), a worker killed mid-job (E3), and a coordinator restart (E4),"
-        " on four one-CPU workers.\n"
-        + label_note(e3_rows or e2_rows or e4_rows, ranges=False)
-        + ".",
+        " on four one-CPU workers.\n" + label_note(e3_rows or e2_rows or e4_rows) + ".",
     )
     finish(fig, out, top=0.8)
+
+
+# E7's workers' CPU limits: experiments.sh's E7_CPUS default, which the
+# published runs used.
+E7_CPUS = "1, 0.6, 0.3 and 0.15"
+
+
+def e7(rows, out, t):
+    """Saves E7 to out, in theme t: job time on workers of mixed speeds
+    with no backups (slot 2, as E2 colors backups off), the paper's backup
+    rule (slot 1) and LATE (slot 3), one row each, top to bottom.
+
+    Each row has its valid="1" median as a dot and each run as a ring on a
+    strip below it; its label gives the median backups launched and won.
+    Each rule's median is labeled with the time it saves against no
+    backups, and the title gives that saving's range. When the two rules'
+    run ranges overlap, the subtitle calls it no clear difference. A setting
+    without a valid run is left out. Missing fields, invalid numbers and
+    plotting or file errors propagate.
+    """
+    settings = (
+        ("mixed-off", "no backups", 1),
+        ("mixed-paper", "paper's rule", 0),
+        ("mixed-late", "LATE", 2),
+    )
+    drawn = [(s, label, slot, valid(rows, setting=s)) for s, label, slot in settings]
+    drawn = [d for d in drawn if d[3]]
+    fig, ax = plt.subplots(figsize=(9, 3.9))
+    ys = list(range(len(drawn)))[::-1]
+    off = median_of(rows, "mixed-off", "seconds")
+    labels, saved, spans = [], [], {}
+    for y, (setting, label, slot, group) in zip(ys, drawn, strict=True):
+        color = t["series"][slot]
+        st = spread(group, "seconds")
+        spans[setting] = st
+        runs(ax, t, [float(r["seconds"]) for r in group], [y - 0.22] * len(group), color)
+        dots(ax, t, [st[0]], [y], color)
+        text = f"{st[0]:.1f} s"
+        if setting != "mixed-off" and off:
+            cut = 1 - st[0] / off
+            saved.append(cut)
+            text += f"  {-cut:+.0%}".replace("-", "−")
+        ax.annotate(
+            text,
+            (st[2], y),
+            xytext=(10, 0),
+            textcoords="offset points",
+            va="center",
+            color=t["ink"],
+            fontsize=9.5,
+        )
+        if setting != "mixed-off":
+            launched = statistics.median(int(r["backups"]) for r in group)
+            won = statistics.median(int(r["backups_won"]) for r in group)
+            label += f"\n({launched:g} backup{'' if launched == 1 else 's'}, {won:g} won)"
+        labels.append(label)
+    ax.set_yticks(ys, labels)
+    ax.set_ylim(-0.6, len(drawn) - 0.4)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlim(0, (max((st[2] for st in spans.values()), default=0) or 1) * 1.25)
+    ax.set_xlabel("Job time (s)")
+    title = "E7: backup rules on workers of mixed speeds"
+    if saved:
+        cut = span(saved, lambda x: f"{x:.0%}".rstrip("%"))
+        title = f"E7: backups cut a mixed-speed sort by {cut}%"
+    note = f"Four workers limited to {E7_CPUS} CPUs; dots are medians, rings are runs."
+    paper, late = spans.get("mixed-paper"), spans.get("mixed-late")
+    if paper and late and paper[1] <= late[2] and late[1] <= paper[2]:
+        note += "\nThe paper's rule and LATE: the ranges overlap, so no clear difference."
+    heading(fig, t, title, note + "\n" + label_note(rows, ranges=False) + ".")
+    finish(fig, out, top=0.92 - 0.06 * (note.count("\n") + 2))
 
 
 def table(exp, rows):
@@ -1235,7 +1337,7 @@ def main():
 
     Results default to bench/results; output defaults to the results path.
     Creates the output directory, writes EXPERIMENT.png and
-    EXPERIMENT-dark.png for each nonempty E0 to E6 runs.csv, replacing
+    EXPERIMENT-dark.png for each nonempty E0 to E7 runs.csv, replacing
     existing plots, and prints tables to stdout.
     Missing or empty CSVs are skipped. Filesystem, CSV parsing, plotting,
     and table errors propagate.
@@ -1251,6 +1353,7 @@ def main():
         "E4": lambda rows, png, t: e4(rows, results, png, t),
         "E5": lambda rows, png, t: e5(rows, results, png, t),
         "E6": lambda rows, png, t: e6(rows, png, t),
+        "E7": lambda rows, png, t: e7(rows, png, t),
     }
     for exp, fn in draw.items():
         rows = load(results, exp)
