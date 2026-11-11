@@ -196,3 +196,13 @@
  Container mapreduce-worker-2 Started 
  Container mapreduce-worker-3 Started 
 [02:12:46] E3 kill-50 distsort run 5
+ Container mapreduce-worker-3 Restarting 
+ Container mapreduce-worker-1 Restarting 
+ Container mapreduce-worker-4 Restarting 
+ Container mapreduce-worker-2 Restarting 
+ Container mapreduce-worker-4 Started 
+ Container mapreduce-worker-2 Started 
+ Container mapreduce-worker-1 Started 
+ Container mapreduce-worker-3 Started 
+[02:13:31] E3 kill-75 distsort run 5
+[02:14:14] done

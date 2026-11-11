@@ -72,3 +72,16 @@ GATE PASS E2: 20 runs, archived ~/runs/8f0ddb9/E2.tar.gz (984 KiB), 10.5 GB free
 GATE PASS E2-pairs: 20 runs, archived ~/runs/8f0ddb9/E2-pairs.tar.gz (800 KiB), 10.5 GB free
 === 2026-11-11T07:59:13Z DONE E2-pairs
 === 2026-11-11T07:59:13Z START E3 (E3) 10 GB free
+  calibrate/distsort               seconds      median     7.17  range 7.06-7.51  n=3
+  calibrate/distsort               wall_seconds median     7.14  range 7.06-7.62  n=3
+  kill-25/distsort                 seconds      median    15.69  range 13.89-16.01  n=5
+  kill-25/distsort                 wall_seconds median    15.78  range 13.88-16.11  n=5
+  kill-50/distsort                 seconds      median    20.77  range 19.59-23.31  n=5
+  kill-50/distsort                 wall_seconds median    20.70  range 19.71-23.22  n=5
+  kill-75/distsort                 seconds      median    34.10  range 32.56-34.30  n=5
+  kill-75/distsort                 wall_seconds median    34.05  range 32.49-34.37  n=5
+  normal/distsort                  seconds      median     7.79  range 6.91-7.91  n=5
+  normal/distsort                  wall_seconds median     7.86  range 7.03-7.88  n=5
+GATE PASS E3: 23 runs, archived ~/runs/8f0ddb9/E3.tar.gz (187 KiB), 10.5 GB free
+=== 2026-11-11T08:14:19Z DONE E3
+=== 2026-11-11T08:14:19Z START E4 (E4) 10 GB free

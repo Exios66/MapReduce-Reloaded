@@ -1,0 +1,16 @@
+== E3
+commit 8f0ddb9, 4 CPUs
+setting                  program     w   n valid  seconds med [range]       wall med backups  won  shuffle MB  disk MB (machine-wide)
+calibrate (not measured) distsort    4   3     3  7.17 [7.06-7.51]              7.14       6    0        1085  107 [103-114]
+normal                   distsort    4   5     5  7.79 [6.91-7.91]              7.86       5    0        1085  114 [41-150]
+kill-25                  distsort    4   5     5  15.69 [13.89-16.01]          15.78       7    7        1085  501 [429-549]
+kill-50                  distsort    4   5     5  20.77 [19.59-23.31]          20.70      10    6        1085  598 [499-707]
+kill-75                  distsort    4   5     5  34.10 [32.56-34.30]          34.05       7    0        1085  401 [273-526]
+ranges between measured settings (same program and worker count):
+  distsort w4: normal vs kill-25: separate
+  distsort w4: normal vs kill-50: separate
+  distsort w4: normal vs kill-75: separate
+  distsort w4: kill-25 vs kill-50: separate
+  distsort w4: kill-25 vs kill-75: separate
+  distsort w4: kill-50 vs kill-75: separate
+
