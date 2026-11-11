@@ -45,7 +45,11 @@ def check(page: Path) -> tuple[list[str], int]:
 
 def tracked() -> list[Path]:
     out = subprocess.run(
-        ["git", "ls-files", "-z", "*.md"], cwd=ROOT, capture_output=True, text=True, check=True
+        ["git", "ls-files", "-z", "*.md"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     return [ROOT / p for p in out.split("\0") if p]
 
@@ -64,7 +68,10 @@ def main(argv: list[str]) -> int:
         file=sys.stderr,
     )
     if not argv and checked == 0:
-        print("check-dark-charts: no page names a dark variant; the scan found nothing", file=sys.stderr)
+        print(
+            "check-dark-charts: no page names a dark variant; the scan found nothing",
+            file=sys.stderr,
+        )
         return 1
     return 1 if problems else 0
 
