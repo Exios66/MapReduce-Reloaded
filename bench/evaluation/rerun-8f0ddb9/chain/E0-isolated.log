@@ -4,4 +4,4 @@
 === 2026-11-11T17:45:06Z Task 4 gate: rows=48 bad=0 machine=[3a907dea09ad80728d269c13b76ac23f8a6110dd False] 4-worker distsort reads MiB [99, 114, 142, 150, 188] median 142 -> PASS
 === 2026-11-11T17:45:06Z GATE PASS E0-isolated: archived ~/runs/3a907de/E0.tar.gz b3d86632d936b02f
 === 2026-11-11T17:45:06Z E0CHAIN DONE
-=== 2026-11-11T17:45:07Z WARNING p5 containers differ; see /home/jjburleson@ad.wisc.edu/runs/e0-rerun/p5-before.txt and p5-after.txt
+=== 2026-11-11T17:45:07Z WARNING p5 containers differ; see ~/runs/e0-rerun/p5-before.txt and p5-after.txt
