@@ -83,7 +83,9 @@ cut a release.
   runs (default 3) of a `calibrate` setting set the restart time, then
   `normal` and `restart` take turns. Every E4 run now starts with a fresh
   write-ahead log, so each restart replays only its own job instead of
-  every job before it (#282).
+  every job before it. Its restart cost is therefore a new measurement, not
+  comparable with the published 1.6 s, which replayed three to five earlier
+  jobs (#282).
 - Bench figures: every title states its finding in one short line,
   computed from the CSVs (for example "E2: backups cut a straggler's job
   from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
