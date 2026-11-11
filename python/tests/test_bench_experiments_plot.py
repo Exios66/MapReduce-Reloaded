@@ -616,11 +616,11 @@ def test_e0_titles_the_best_speed_up_and_names_a_run_far_below_its_median(plotte
     module.e0(rows, tmp_path / "E0.png", light(module))
     title, subtitle = titles(figure)
     best = module.PROGRAMS["wordcount"]
-    assert title == f"E0: {best} runs 4.0× faster on 4 workers"
+    assert title == f"E0: 4 workers speed up {best} 4.0×, grep 2.2×"
     first, second, third = subtitle.split("\n")
     assert first.startswith("Speed-up = job time on 1 worker")
     assert second == "Grep takes 2.0 s on one worker, so fixed per-job costs cap its speed-up."
-    assert "bars span the range" not in third
+    assert "whiskers span the range" not in third
     labels = [call.args[0] for call in axis.annotate.call_args_list]
     assert "one grep run: 5.5 s" in labels
     assert sum("run:" in label for label in labels) == 1, "only the outlier is named"
@@ -813,7 +813,7 @@ def fault_rows():
 
 def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     """One bar per disturbance, as the share it adds, grouped by experiment,
-    colored as E2 colors backups: on in slot 1, off in slot 2."""
+    in one color: the labels name each disturbance."""
     module, pyplot = plotter
     figure, axis = Mock(), Mock()
     bars = [Mock() for _ in range(6)]
@@ -825,9 +825,7 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     # The first disturbance on top; a gap between E2, E3 and E4, whose baselines differ.
     assert ys == pytest.approx([6.2, 5.2, 3.6, 2.6, 1.6, 0])
     assert added == pytest.approx([25, 100, 100, 150, 300, 20])
-    on, off = t["series"][0], t["series"][1]
-    assert axis.barh.call_args.kwargs["color"] == [on, off, on, on, on, on]
-    assert not any(b.set.called for b in bars), "color alone marks backups off, as in E2"
+    assert axis.barh.call_args.kwargs["color"] == t["series"][0]
     assert axis.errorbar.called, "each bar has its range"
     assert axis.set_yticks.call_args.args[1] == [
         "straggler, backups on",
@@ -841,8 +839,8 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     assert labels[0] == "+25%   11.2 s vs 9.0 s"
     assert labels[-1] == "+20%   15.0 s vs 12.5 s"
     title, subtitle = titles(figure)
-    assert title == "Every disturbance gave the undisturbed run's output"
-    assert "bars span the range" in subtitle
+    assert title.startswith("Faults add +") and title.endswith("; outputs all correct")
+    assert "whiskers span the range" in subtitle
     figure.savefig.assert_called_once_with(tmp_path / "faults.png")
 
 
@@ -918,7 +916,7 @@ def test_e0_titles_the_largest_worker_count_it_has(plotter, tmp_path):
         for w, seconds in ((1, 10), (2, 5))
     ]
     module.e0(rows, tmp_path / "E0.png", light(module))
-    assert titles(figure)[0] == "E0: grep runs 2.0× faster on 2 workers"
+    assert titles(figure)[0] == "E0: 2 workers speed up grep 2.0×"
 
 
 def test_e0_leaves_out_warm_up_runs(plotter, tmp_path):
@@ -932,7 +930,7 @@ def test_e0_leaves_out_warm_up_runs(plotter, tmp_path):
     ]
     rows.append(row("warmup", 40) | {"program": "grep", "workers": "4"})
     module.e0(rows, tmp_path / "E0.png", light(module))
-    assert titles(figure)[0] == "E0: grep runs 4.0× faster on 4 workers"
+    assert titles(figure)[0] == "E0: 4 workers speed up grep 4.0×"
     rings = [c for c in axis.plot.call_args_list if c.kwargs.get("linestyle") == "none"]
     assert sorted(len(c.args[1]) for c in rings) == [1, 1]
 
@@ -994,8 +992,8 @@ def test_e7_compares_both_backup_rules_with_none(plotter, tmp_path):
     labels = axis.set_yticks.call_args.args[1]
     assert labels == [
         "no backups",
-        "paper's rule\n(4 backups, 3 won)",
-        "LATE\n(1 backup, 1 won)",
+        "paper's rule\n(median 4 backups, 3 won)",
+        "LATE\n(median 1 backup, 1 won)",
     ]
     assert len(single_runs(axis, t, t["series"][0])) == 3  # the paper's rule, slot 1
     assert len(single_runs(axis, t, t["series"][1])) == 3  # no backups, slot 2, as in E2

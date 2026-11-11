@@ -361,12 +361,12 @@ def ranges(ax, t, xs, med, lo, hi, horizontal=False):
 
 def label_note(rows, ranges=True):
     """The run's setup and how to read the marks: "Input 1 GiB, M = 32,
-    R = 4; medians of the valid runs", and ", bars span the range" when
-    the figure draws range bars."""
+    R = 4; medians of the valid runs", and ", whiskers span the range"
+    when the figure draws range whiskers."""
     r = rows[0]
     return (
         f"Input {int(r['input_bytes']) / 2**30:g} GiB, M = {r['m']}, R = {r['r']}; "
-        "medians of the valid runs" + (", bars span the range" if ranges else "")
+        "medians of the valid runs" + (", whiskers span the range" if ranges else "")
     )
 
 
@@ -399,9 +399,9 @@ def e0(rows, out, t, reads=None):
         ha="center",
     )
     best, shortest = (
+        [],
         None,
-        None,
-    )  # (speed-up, name, workers) at most workers; (one-worker time, name)
+    )  # (speed-up, name, workers) per program; (one-worker time, name)
     for (program, name), color in zip(PROGRAMS.items(), t["series"], strict=True):
         workers = sorted({int(r["workers"]) for r in valid(rows, program=program)})
         if not workers or workers[0] != 1:
@@ -451,7 +451,7 @@ def e0(rows, out, t, reads=None):
                     fontsize=9,
                 )
         dots(ax, t, workers, speedup, color)
-        best = max(best or (0, "", 0), (speedup[-1], name, workers[-1]))
+        best.append((speedup[-1], name, workers[-1]))
         shortest = min(shortest or (float("inf"), ""), (one, name))
         ax.annotate(
             f"{name}  {speedup[-1]:.1f}×",
@@ -471,7 +471,9 @@ def e0(rows, out, t, reads=None):
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncols=3, borderaxespad=0.2)
     title = "E0: scaling over workers"
     if best:
-        title = f"E0: {best[1]} runs {best[0]:.1f}× faster on {best[2]} workers"
+        top = max(w for *_, w in best)
+        each = sorted(((s, n) for s, n, w in best if w == top), reverse=True)
+        title = f"E0: {top} workers speed up " + ", ".join(f"{n} {s:.1f}×" for s, n in each)
     note = "Speed-up = job time on 1 worker ÷ job time on N; lines join medians, rings are runs."
     if cold:
         note += (
@@ -791,6 +793,8 @@ def timeline_and_bars(
             color=t["ink"],
         )
     right.set_yticks(ys, labels)
+    pad = max(0, 3 - (ys[0] if ys else 0)) / 2  # two bars look as thin as E2's four
+    right.set_ylim(-0.7 - pad, (ys[0] if ys else 0) + 0.7 + pad)
     right.set_xlim(0, (max((s[2] for s in stats), default=0) or 1) * 1.3)  # no valid run: empty
     right.set_xlabel("Job time (s)")
     right.grid(axis="y", visible=False)
@@ -990,7 +994,7 @@ def e3(rows, results, out, t):
         if interval:
             right.axvspan(*interval, color=t["muted"], alpha=0.35, linewidth=0, zorder=1)
             right.annotate(
-                "worker lost",
+                "worker lost (approx.)",
                 (interval[1], 1),
                 xycoords=("data", "axes fraction"),
                 xytext=(4, -4),
@@ -1016,7 +1020,8 @@ def e3(rows, results, out, t):
         fig,
         t,
         title,
-        label_note(rows, ranges=False) + "; each stem is the time a failure adds.",
+        label_note(rows, ranges=False) + "; each stem is the time a failure adds.\n"
+        "Job time is the clock from submission, which a kill does not reset.",
     )
     finish(fig, out)
 
@@ -1048,6 +1053,7 @@ def e4(rows, results, out, t):
         t,
         e4_title(rows),
         "coordinator restarted",
+        note="Job time is the clock from submission, which a restart does not reset.",
     )
     finish(fig, out)
 
@@ -1170,11 +1176,10 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     the same experiment's undisturbed median, one horizontal bar each, on
     one axis, with a range bar from its fastest to its slowest valid run.
     Experiments are grouped with a gap between them, as each has its own
-    undisturbed baseline. Bars are colored as E2 colors backups: slot 1
-    with backups on, which every disturbance but one runs with, and slot 2
-    for the straggler with backups off. Each bar is labeled with both
-    medians. The title claims the undisturbed output only if every disturbed
-    run is valid, drawn or not. Disturbances without valid runs, or experiments without
+    undisturbed baseline. Bars share slot 1; their labels name the
+    disturbance. Each bar is labeled with both medians. The title gives the
+    range of medians added and claims the undisturbed output only if every
+    disturbed run is valid, drawn or not. Disturbances without valid runs, or experiments without
     an undisturbed median, are left out. Missing fields, invalid numbers
     and plotting or file errors propagate."""
     groups = []  # per experiment: [(label, baseline, (median, low, high), backups off)]
@@ -1221,8 +1226,8 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     fig, ax = plt.subplots(figsize=(9, 4.6))
     share = [[100 * (v / b - 1) for v in d] for _, b, d, _ in cases]  # median, low, high
     added = [s[0] for s in share]
-    colors = [t["series"][1] if off else t["series"][0] for *_, off in cases]
-    ax.barh(ys, added, height=0.4, color=colors, edgecolor=t["surface"], linewidth=2)
+    # One color: the labels name each disturbance, so color would only repeat them.
+    ax.barh(ys, added, height=0.4, color=t["series"][0], edgecolor=t["surface"], linewidth=2)
     ranges(ax, t, ys, added, [s[1] for s in share], [s[2] for s in share], horizontal=True)
     for yy, s, (_, b, d, _) in zip(ys, share, cases, strict=True):
         ax.annotate(
@@ -1248,7 +1253,9 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
     correct = bool(cases) and all(r["valid"] == "1" for r in disturbed)
     title = "Fault tolerance: the time each disturbance adds"
     if correct:
-        title = "Every disturbance gave the undisturbed run's output"
+        title = (
+            f"Faults add {min(added):+.0f}% to {max(added):+.0f}% to job time; outputs all correct"
+        )
     heading(
         fig,
         t,
@@ -1327,7 +1334,7 @@ def e7(rows, out, t, cpus=E7_CPUS):
         if setting != "mixed-off":
             launched = statistics.median(int(r["backups"]) for r in group)
             won = statistics.median(int(r["backups_won"]) for r in group)
-            label += f"\n({launched:g} backup{'' if launched == 1 else 's'}, {won:g} won)"
+            label += f"\n(median {launched:g} backup{'' if launched == 1 else 's'}, {won:g} won)"
         labels.append(label)
     ax.set_yticks(ys, labels)
     ax.set_ylim(-0.6, len(drawn) - 0.4)
