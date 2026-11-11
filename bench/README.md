@@ -302,11 +302,12 @@ before this rerun, at several commits with three runs each, are kept in
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E2-dark.png">
-  <img alt="E2: tasks completed over time and job time, with and without a straggler and backups" src="evaluation/E2.png">
+  <img alt="E2: job time with backups on and off, without and with a straggler, and the straggler runs' tasks completed over time" src="evaluation/E2.png">
 </picture>
 
-Color marks backups, blue on and orange off; a dashed line and the upper
-pair of bars mark the runs without a straggler.
+Color marks backups, blue on and orange off. On the left, the upper row
+joins the two medians without a straggler and the lower row those with
+one; on the right are the straggler runs' tasks finished over time.
 
 | Setting | Job time (s) | Backups run | Backups won |
 |---|---|---:|---:|

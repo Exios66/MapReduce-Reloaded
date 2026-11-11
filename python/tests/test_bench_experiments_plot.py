@@ -123,6 +123,9 @@ def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_
     assert notes(shuffled, "fewer") == ["3× fewer", "3× fewer"]
     # S = 0.5: on 2-10 s and off 6-8 s overlap; S = 1.5 does not.
     assert notes(seconds, "faster", "difference") == ["no clear difference", "67% faster"]
+    # The title claims the bytes saved, but no job-time saving while a pair overlaps.
+    assert "faster" not in titles(figure)[0]
+    assert "fewer bytes" in titles(figure)[0]
     values = [c.args[0] for c in shuffled.annotate.call_args_list if c.args[0].isdigit()]
     assert values == ["4", "13", "7", "20"]
     figure.savefig.assert_called_once_with(out)
@@ -460,6 +463,20 @@ def test_e5_draws_whiskers_only_when_they_can_be_seen(plotter, tmp_path, seconds
     module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
     assert axis.errorbar.called is drawn
     assert titles(figure)[1].endswith(note)
+
+
+def test_e5_states_the_spread_when_a_median_is_zero(plotter, tmp_path):
+    """A zero median has no relative spread; E5 still draws and states the rest."""
+    module, pyplot = plotter
+    figure, axis = Mock(), Mock()
+    pyplot.subplots.return_value = figure, axis
+    rows = [
+        row("compiled", 0) | {"run": "1", "job": "job-1"},
+        row("interpreted", 1) | {"run": "2", "job": "job-2"},
+    ]
+    module.e5(rows, tmp_path, tmp_path / "E5.png", light(module))
+    axis.errorbar.assert_not_called()
+    assert titles(figure)[1].endswith("Every run is within 0% of its setting's median.")
 
 
 def test_e5_plots_older_results_without_the_naive_setting(plotter, tmp_path):

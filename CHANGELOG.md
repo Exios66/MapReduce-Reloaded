@@ -120,7 +120,8 @@ cut a release.
   draws a whisker too short to see: E0 and E5 say so in their subtitles.
   The titles also give the range of job time added and say outputs were
   unchanged (faults), that E3 and E4 time from when `mr submit` returned,
-  and that E7's backup counts are medians (#357).
+  and that E7's backup counts are medians. E1 and E6's titles claim a
+  saving only when no pair's run ranges overlap (#357).
 - Bench figures: every figure, including the paper's rate plots in
   `bench/evaluation/paper/`, is set in Atkinson Hyperlegible, shipped in
   `bench/fonts/` under the SIL Open Font License in place of Inter. The

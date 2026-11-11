@@ -590,7 +590,9 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
     Missing fields, invalid numbers, and plotting or file errors propagate.
     """
     fig, (left, right) = plt.subplots(1, 2, figsize=(10, 5.4), sharey=True)
-    found = {"bytes": [], "time": []}  # off/on byte ratios, and job-time savings
+    # Off/on byte ratios and job-time savings; None marks a pair whose run
+    # ranges overlap, which the title may not claim either way.
+    found = {"bytes": [], "time": []}
     for ax, field, scale, log, axis_title, saving in (
         (
             left,
@@ -621,7 +623,9 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
             ax.set_xlim(0, (hi or 1) * 1.25)  # with no valid run, the axis still needs a width
         for a, b in zip(on, off, strict=True):
             if a and b and a[0] > 0 and b[0] > 0:
-                found["bytes" if log else "time"].append(b[0] / a[0] if log else 1 - a[0] / b[0])
+                found["bytes" if log else "time"].append(
+                    None if overlap(a, b) else b[0] / a[0] if log else 1 - a[0] / b[0]
+                )
         gap_labels(
             ax,
             t,
@@ -636,12 +640,15 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
         )
         ax.set_title(axis_title)
     left.set_ylabel(ylabel)
-    if found["bytes"] and found["time"]:
+    clear = {k: v and None not in v for k, v in found.items()}
+    if clear["bytes"]:
+        times = found["time"] if clear["time"] else [0]
         title = title.format(
             bytes=span(found["bytes"], lambda x: f"{x:.0f}") + "×",
-            time=span(found["time"], lambda x: f"{x:.0%}".rstrip("%")) + "%",
+            time=span(times, lambda x: f"{x:.0%}".rstrip("%")) + "%",
         )
-        if min(found["time"]) < 0:  # a saving below zero is not "faster"
+        # A saving below zero is not "faster", and an overlap is no claim.
+        if not clear["time"] or min(found["time"]) < 0:
             title = title.split(",", 1)[0]
     else:
         title = title.split(":", 1)[0] + ": the combiner on and off"
@@ -1132,7 +1139,10 @@ def e5(rows, results, out, t):
         ranges(ax, t, ys, med, [st[1] for st in stats], [st[2] for st in stats], horizontal=True)
         spread_note = label_note(rows) + "."
     else:
-        widest = max((max(st[0] - st[1], st[2] - st[0]) / st[0] for st in stats), default=0)
+        # A zero median has no relative spread; its range is zero wide here.
+        widest = max(
+            (max(st[0] - st[1], st[2] - st[0]) / st[0] for st in stats if st[0] > 0), default=0
+        )
         spread_note = (
             label_note(rows, ranges=False)
             + f". Every run is within {math.ceil(widest * 100):.0f}% of its setting's median."
