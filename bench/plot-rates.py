@@ -22,7 +22,7 @@ other, as the paper does, and again on a dark surface as OUT-dark.png;
 that needs matplotlib.
 
 With a TITLE after OUT.png, the chart carries it as an identification
-line (program, input size, M, R, commit), so the image is readable apart
+line (program, input size, M, R, workers), so the image is readable apart
 from the page that embeds it. Only the annotation changes: the plotted
 rates are the same with or without it.
 

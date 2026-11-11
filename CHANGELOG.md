@@ -123,7 +123,9 @@ cut a release.
   and that E7's backup counts are medians (#357).
 - Bench figures: every figure, including the paper's rate plots in
   `bench/evaluation/paper/`, is set in Atkinson Hyperlegible, shipped in
-  `bench/fonts/` under the SIL Open Font License in place of Inter (#357).
+  `bench/fonts/` under the SIL Open Font License in place of Inter. The
+  rate plots' titles, and those `bench/run.sh` draws, no longer name the
+  commit, which `result.json` records (#357).
 - Agent tooling: the `interpreting-bench-results` skill states which
   experiments report wall time, which commit the reported E0 ran at, how
   each experiment orders its runs, and that `valid` is the only record of
