@@ -1,8 +1,13 @@
 package storage
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -55,5 +60,64 @@ func TestEscape(t *testing.T) {
 	}
 	if got, _ := List(t.Context(), Join(dir, "part-r-*")); len(got) != 0 {
 		t.Fatalf("without Escape the directory still matched itself: %q", got)
+	}
+}
+
+// A file created in a directory after os.RemoveAll has read its last
+// entries, as a losing backup attempt does in a finished job's TempDir, does
+// not leave the directory behind (#345).
+func TestLocalDeleteAllLateFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "_temporary")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	removeAll = func(path string) error {
+		calls++
+		if calls == 1 { // the late file appears just before the directory goes
+			if err := os.WriteFile(filepath.Join(path, "part-r-00001.attempt-1"), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return &fs.PathError{Op: "unlinkat", Path: path, Err: syscall.ENOTEMPTY}
+		}
+		return os.RemoveAll(path)
+	}
+	t.Cleanup(func() { removeAll = os.RemoveAll })
+	if err := (Local{}).DeleteAll(t.Context(), dir); err != nil {
+		t.Fatalf("DeleteAll: %v", err)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("%s is still there after DeleteAll: %v", dir, err)
+	}
+}
+
+// DeleteAll removes a directory that others keep creating files in, as
+// running attempts do, until it is gone; then their creates fail.
+func TestLocalDeleteAllConcurrentCreates(t *testing.T) {
+	for range 20 {
+		dir := filepath.Join(t.TempDir(), "_temporary")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		for w := range 4 {
+			wg.Go(func() {
+				for i := range 200 {
+					f, err := os.Create(filepath.Join(dir, fmt.Sprintf("w%d-%d", w, i)))
+					if err != nil {
+						return // dir is gone
+					}
+					_ = f.Close()
+				}
+			})
+		}
+		err := (Local{}).DeleteAll(t.Context(), dir)
+		wg.Wait()
+		if err != nil {
+			t.Fatalf("DeleteAll: %v", err)
+		}
+		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("%s is still there after DeleteAll: %v", dir, err)
+		}
 	}
 }

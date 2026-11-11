@@ -1249,3 +1249,55 @@ def test_failed_job_still_records_its_end_cache_row(experiment, tmp_path, monkey
         (run,) = csv.reader(result_file)
     assert run[9] == "FAILED"
     assert run[-2:] == ["0", "job-1"]
+
+
+@pytest.mark.parametrize("repeat", ["1", "2"])
+def test_e3_calibrates_then_takes_settings_in_turn(experiment, monkeypatch, repeat):
+    """E3's kill times come from calibration runs; then its settings alternate (#282)."""
+    invoke, log = experiment
+    monkeypatch.setenv("REPEAT", repeat)
+    monkeypatch.setenv("E3_CALIBRATE", "2")
+    result = invoke(
+        """
+        note() { printf '%s\n' "$*" >> "$CALL_LOG"; }
+        begin() { note "begin|$1"; }
+        configure() { note "configure|$1"; }
+        compose_stub() {
+            case $* in
+            "ps -q worker") printf 'w1\nw2\nw3\nw4\n' ;;
+            *) note "compose|$*" ;;
+            esac
+        }
+        compose=(compose_stub)
+        median() { note "median|$1|$2"; echo 20; }
+        wait_workers() { note "wait|$1"; }
+        start_sampler() { note "sample|$1|$2"; }
+        stop_sampler() { note stop; }
+        run() { note "run|$1|$2|$3|$4|$5|$6|${7:-}"; }
+        """,
+        "E3",
+    )
+    assert result.stdout == ""
+    expected = [
+        "begin|E3",
+        "configure|4",
+        "run|E3|calibrate|distsort|1|4||",
+        "run|E3|calibrate|distsort|2|4||",
+        "median|E3|calibrate",
+    ]
+    settings = ["normal", "kill-25", "kill-50", "kill-75"]
+    orders = {1: settings, 2: list(reversed(settings))}
+    at = {"kill-25": "5.0", "kill-50": "10.0", "kill-75": "15.0"}
+    for n in range(1, int(repeat) + 1):
+        for setting in orders[n]:
+            expected.append(f"sample|bytes|bench/results/E3/samples-{setting}-{n}.csv")
+            if setting == "normal":
+                expected += [f"run|E3|normal|distsort|{n}|4||", "stop"]
+                continue
+            expected += [
+                f"run|E3|{setting}|distsort|{n}|4|{at[setting]}|docker kill w4",
+                "stop",
+                "compose|up -d --scale worker=4 worker",
+                "wait|4",
+            ]
+    assert log.read_text().splitlines() == expected

@@ -73,4 +73,24 @@ func (l Local) MkdirAll(ctx context.Context, dir string) error {
 	return os.Chmod(dir, 0o777)
 }
 
-func (Local) DeleteAll(_ context.Context, dir string) error { return os.RemoveAll(dir) }
+// removeAll is os.RemoveAll; tests replace it to stage a race.
+var removeAll = os.RemoveAll
+
+// deleteTries bounds DeleteAll's retries. Each retry follows a file that
+// someone created during the last one, and nobody can create one once dir is
+// gone, so a few suffice.
+const deleteTries = 100
+
+// DeleteAll retries when a file appears in dir after os.RemoveAll has read
+// its last entries but before it removes dir: a losing backup attempt
+// creating its file in a finished job's TempDir (#345). Nobody creates a
+// file in dir once dir is gone, as attempts never create TempDir.
+func (Local) DeleteAll(_ context.Context, dir string) error {
+	var err error
+	for range deleteTries {
+		if err = removeAll(dir); !errors.Is(err, syscall.ENOTEMPTY) {
+			return err
+		}
+	}
+	return err
+}

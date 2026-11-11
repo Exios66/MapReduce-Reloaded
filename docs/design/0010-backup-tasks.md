@@ -72,7 +72,10 @@ close "close" is.
   lists it in `cancel`; the worker checks between records and groups, and
   does not report it. Until then it keeps running. A losing reduce attempt
   still running when the job ends fails, because the job has removed
-  `_temporary` and attempts never create it, so it leaves nothing. A losing
+  `_temporary` and attempts never create it, so it leaves nothing. An
+  attempt that creates its file while the job is removing `_temporary` can
+  make that removal fail with "directory not empty", so the local file
+  system's delete retries until the directory is gone (#345). A losing
   map attempt writes to its worker's work directory and can finish there,
   leaving partition files that no reducer reads.
 - Output must be deterministic for both attempts to agree (§3.3).

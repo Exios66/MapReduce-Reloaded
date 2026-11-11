@@ -573,23 +573,37 @@ e7() {
     configure 4
 }
 
+# E3 kills a worker at 25%, 50% and 75% of an undisturbed run's time. The
+# kill times come from E3_CALIBRATE runs of their own setting, calibrate,
+# which the plots leave out; then normal and the three kill settings take
+# turns within each repeat, in reverse order on even repeats, as in E2, so
+# drift in the machine does not fall on one setting (#282).
+e3_calibrate=${E3_CALIBRATE:-3}
+e3_settings="normal kill-25 kill-50 kill-75"
+
 e3() {
+    local n t order s at pct victim
     begin E3
     configure 4
+    for n in $(seq "$e3_calibrate"); do run E3 calibrate distsort "$n" 4 ""; done
+    t=$(median E3 calibrate)
     for n in $(seq "$repeat"); do
-        start_sampler bytes "bench/results/E3/samples-normal-$n.csv"
-        run E3 normal distsort "$n" 4 ""
-        stop_sampler
-    done
-    local t at
-    t=$(median E3 normal)
-    for pct in 25 50 75; do
-        at=$(awk -v t="$t" -v p="$pct" 'BEGIN { printf "%.1f", t * p / 100 }')
-        for n in $(seq "$repeat"); do
-            local victim
+        order=$e3_settings
+        if [ $((n % 2)) = 0 ]; then
+            order=
+            for s in $e3_settings; do order="$s $order"; done
+        fi
+        for setting in $order; do
+            start_sampler bytes "bench/results/E3/samples-$setting-$n.csv"
+            if [ "$setting" = normal ]; then
+                run E3 normal distsort "$n" 4 ""
+                stop_sampler
+                continue
+            fi
+            pct=${setting#kill-}
+            at=$(awk -v t="$t" -v p="$pct" 'BEGIN { printf "%.1f", t * p / 100 }')
             victim=$("${compose[@]}" ps -q worker | tail -1)
-            start_sampler bytes "bench/results/E3/samples-kill-$pct-$n.csv"
-            run E3 "kill-$pct" distsort "$n" 4 "$at" "docker kill $victim"
+            run E3 "$setting" distsort "$n" 4 "$at" "docker kill $victim"
             stop_sampler
             "${compose[@]}" up -d --scale worker=4 worker >/dev/null 2>&1
             wait_workers 4

@@ -239,6 +239,9 @@ func parts(t *testing.T, dir string) map[string][]byte {
 	}
 	files := make(map[string][]byte)
 	for _, e := range entries {
+		if e.IsDir() { // such as a TempDir a losing attempt kept alive (#345)
+			t.Fatalf("%s holds the directory %s; a succeeded job's output holds only part files", dir, e.Name())
+		}
 		if files[e.Name()], err = os.ReadFile(filepath.Join(dir, e.Name())); err != nil {
 			t.Fatal(err)
 		}
