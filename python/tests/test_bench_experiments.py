@@ -1304,9 +1304,7 @@ def test_e3_calibrates_then_takes_settings_in_turn(experiment, monkeypatch, repe
 
 
 @pytest.mark.parametrize("repeat", ["1", "2"])
-def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(
-    experiment, monkeypatch, repeat
-):
+def test_e4_calibrates_then_takes_settings_in_turn_on_fresh_logs(experiment, monkeypatch, repeat):
     """E4's restart time comes from calibration runs; then its settings alternate,
     each on a fresh log (#282)."""
     invoke, log = experiment
