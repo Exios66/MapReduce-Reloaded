@@ -225,6 +225,37 @@ func TestStatusJSONAttempts(t *testing.T) {
 	}
 }
 
+// An attempt with no known start time is served with started null, as the
+// Python server does, and does not take the status handler down.
+func TestStatusJSONUnknownStart(t *testing.T) {
+	defer func() { status.Attempts = nil }()
+	status.Attempts = map[string][]coordinator.AttemptRange{"job-1": {
+		{Kind: pb.TaskKind_TASK_KIND_MAP, Index: 0, Worker: "w1", Ended: at, Ok: true},
+	}}
+	resp, body := get(t, "/status.json")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200: %s", resp.StatusCode, body)
+	}
+	var doc struct {
+		Jobs []struct {
+			Attempts []map[string]any
+		}
+	}
+	if err := json.Unmarshal([]byte(body), &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := doc.Jobs[0].Attempts
+	if len(got) != 1 {
+		t.Fatalf("job-1 has %d attempts, want 1", len(got))
+	}
+	if v, ok := got[0]["started"]; !ok || v != nil {
+		t.Errorf("started = %v (present %v), want null", v, ok)
+	}
+	if got[0]["ended"] == nil {
+		t.Error("ended = null, want its time")
+	}
+}
+
 // The timeline has no bars for a job without attempts, starts at the first
 // attempt when it began before the submission, and has a window even when
 // the job's times give none.
