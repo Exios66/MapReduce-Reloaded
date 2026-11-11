@@ -14,7 +14,12 @@ from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from mapreduce_reloaded.coordinator.server import Status
+from mapreduce_reloaded.coordinator.server import (
+    OUTCOME_COMPLETED,
+    OUTCOME_FAILED,
+    OUTCOME_LOST,
+    Status,
+)
 from mapreduce_reloaded.gen.mapreduce.v1 import coordinator_pb2, types_pb2
 
 # The Content-Type of a /metrics response: the text format, version 0.0.4.
@@ -387,43 +392,30 @@ def _timeline(j: coordinator_pb2.GetJobStatusResponse, now: float, attempts) -> 
     if window_stop is None or not window_stop > window_start:
         window_stop = window_start + 1.0  # no window at all
     span = window_stop - window_start
-    # When each task's first accepted attempt ended. The coordinator stops
-    # tracking a task's other attempts then, and drops a lost worker's
-    # attempts without a report, so neither ever gets an end.
-    won: dict[tuple[int, int], float] = {}
-    for a in attempts:
-        k = (a.kind, a.index)
-        if a.ok and a.ended is not None and (k not in won or a.ended < won[k]):
-            won[k] = a.ended
     finished = j.HasField("finished_at")
     bars = []
     for a in attempts:
         if a.started is None:
             continue  # An unknown assignment time cannot be positioned honestly.
         ended, open = a.ended, a.ended is None
-        w = won.get((a.kind, a.index))
-        superseded = open and w is not None and w >= a.started
-        if superseded:  # another attempt of its task won while it ran
-            ended, open = w, False
-        elif open and finished:  # its job ended without hearing from it
-            ended, open = window_stop, False
-        elif open:
+        if open:
             ended = window_stop
         left = max(0.0, min((a.started - window_start) / span * 100, 100.0))
         right = max(0.0, min((ended - window_start) / span * 100, 100.0))
         kind = _kind(a.kind)
         trace = kind
-        state = "completed"
-        if superseded:
-            state = "superseded"
-        elif a.ended is None and not open:
+        state = a.outcome
+        if open and finished:  # its job ended without hearing from it
             state = "abandoned"
         elif open:
             trace += " open"
             state = "running"
-        elif not a.ok:
+        elif state in (OUTCOME_FAILED, OUTCOME_LOST):
             trace += " failed"
-            state = "failed"
+        elif state is None:  # ended with no outcome: only ok says how
+            state = OUTCOME_COMPLETED if a.ok else OUTCOME_FAILED
+            if not a.ok:
+                trace += " failed"
         bars.append(
             {
                 "label": f"{kind} {a.index} #{a.attempt} {a.worker}",
@@ -586,6 +578,7 @@ def status_json(st: Status) -> bytes:
                         "ended": a.ended,
                         "backup": a.backup,
                         "ok": a.ok,
+                        "outcome": a.outcome,
                     }
                     for a in st.attempts.get(j.job_id, ())
                 ],

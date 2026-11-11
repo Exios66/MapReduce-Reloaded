@@ -183,6 +183,15 @@ class AttemptRange(NamedTuple):
     ended: float | None = None  # None while the attempt is running
     backup: bool = False  # started while another attempt of the task was running (§3.6)
     ok: bool = False  # the coordinator accepted its completion report
+    # None while the attempt runs, then one of the OUTCOME_ values: how the
+    # coordinator stopped counting on it, as go's AttemptRange.Outcome.
+    outcome: str | None = None
+
+
+OUTCOME_COMPLETED = "completed"  # its completion report was accepted
+OUTCOME_FAILED = "failed"  # it reported a failure
+OUTCOME_SUPERSEDED = "superseded"  # another attempt of its task completed first
+OUTCOME_LOST = "lost"  # its worker was declared lost
 
 
 class WorkerStatus(NamedTuple):
@@ -473,6 +482,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                     except RpcError as e:
                         log.error("logging a lost worker: worker %s: %s", w, e)
                     reset = self._active.tasks.reset_worker(w)
+                    self._attempts_stopped(
+                        self._active, lambda a, w=w: a.worker == w, at, OUTCOME_LOST
+                    )
                 self._lost = [*self._lost, LostWorker(w, at, reset)][-MAX_LOST:]
                 log.warning("worker lost: worker %s, %d tasks reset", w, len(reset))
             return dead
@@ -837,18 +849,27 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             )
         )
 
-    def _attempt_end(self, j: _Job, t: Task, attempt: int, at: float | None, ok: bool):
+    def _attempt_end(self, j: _Job, t: Task, attempt: int, at: float | None, outcome: str):
         """Records the outcome of j's open attempt at (t, attempt), which
         reports arrive in order (§4.9). A stale or invalid report has already
-        been rejected by the time this is called. An attempt whose worker is
-        lost without a report keeps its open end: the next attempt of the
-        same task says that task ran again."""
+        been rejected by the time this is called."""
         at = self.now() if at is None else at
         for i in range(len(j.attempts) - 1, -1, -1):
             a = j.attempts[i]
             if a.kind == t.kind and a.index == t.index and a.attempt == attempt and a.ended is None:
-                j.attempts[i] = a._replace(ended=at, ok=ok)
+                j.attempts[i] = a._replace(
+                    ended=at, ok=outcome == OUTCOME_COMPLETED, outcome=outcome
+                )
                 return
+
+    def _attempts_stopped(self, j: _Job, stopped, at: float | None, outcome: str):
+        """Ends, at at with outcome, every open attempt of j for which
+        stopped is true: the coordinator no longer waits for their reports,
+        so they would otherwise stay open on the timeline for good."""
+        at = self.now() if at is None else at
+        for i, a in enumerate(j.attempts):
+            if a.ended is None and stopped(a):
+                j.attempts[i] = a._replace(ended=at, outcome=outcome)
 
     def _report(self, j: _Job, req, at: float | None) -> tuple[bool, bool]:
         """Applies req, received at at, to j, and says whether it completed
@@ -863,7 +884,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             f = req.failure
             counted = j.tasks.runs(t, id.attempt, req.worker_id)
             if counted:  # a stale report changes nothing; an ended job's rows stay
-                self._attempt_end(j, t, id.attempt, at, False)
+                self._attempt_end(j, t, id.attempt, at, OUTCOME_FAILED)
             j.tasks.fail(t, id.attempt, req.worker_id, f)
             n = j.tasks.failures(t)
             limit = j.spec.max_skipped_records if j.spec.HasField("max_skipped_records") else None
@@ -882,7 +903,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             return False, self._active is not j
         accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs, at)
         if accepted:
-            self._attempt_end(j, t, id.attempt, at, True)
+            self._attempt_end(j, t, id.attempt, at, OUTCOME_COMPLETED)
+            # The task's other attempts stopped counting when this one won.
+            self._attempts_stopped(
+                j, lambda a: (a.kind, a.index) == (t.kind, t.index), at, OUTCOME_SUPERSEDED
+            )
             # A map task run again after its worker died replaces its counts.
             j.counts[t] = dict(req.success.counters.values)
             j.ran[t] = j.placed[t][id.attempt]

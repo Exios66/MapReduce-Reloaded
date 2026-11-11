@@ -17,7 +17,7 @@ type attemptBar struct {
 	Width   float64
 	Backup  bool
 	Trace   string // "map" or "reduce", with "open" while the attempt runs and "failed" if it did not complete
-	State   string // completed, failed, running, superseded or abandoned
+	State   string // an attempt's outcome, or running or abandoned while open
 	Seconds string
 }
 
@@ -52,20 +52,6 @@ func timeline(j *pb.GetJobStatusResponse, now time.Time, attempts map[string][]c
 		stop = start.Add(time.Second) // no window at all
 	}
 	window := float64(stop.Sub(start))
-	// won holds when each task's first accepted attempt ended. The
-	// coordinator stops tracking a task's other attempts then, and drops a
-	// lost worker's attempts without a report, so neither ever gets an end.
-	type task struct {
-		kind  pb.TaskKind
-		index uint32
-	}
-	won := map[task]time.Time{}
-	for _, a := range rs {
-		k := task{a.Kind, a.Index}
-		if w, seen := won[k]; a.Ok && !a.Ended.IsZero() && (!seen || a.Ended.Before(w)) {
-			won[k] = a.Ended
-		}
-	}
 	finished := j.GetFinishedAt() != nil
 	out := make([]attemptBar, 0, len(rs))
 	for _, a := range rs {
@@ -76,21 +62,21 @@ func timeline(j *pb.GetJobStatusResponse, now time.Time, attempts map[string][]c
 		open := end.IsZero()
 		kind := kindName(a.Kind)
 		trace := kind
-		state := "completed"
-		w, superseded := won[task{a.Kind, a.Index}]
-		superseded = superseded && open && !w.Before(a.Started)
+		state := a.Outcome
 		switch {
-		case superseded: // another attempt of its task won while it ran
-			end, state = w, "superseded"
 		case open && finished: // its job ended without hearing from it
 			end, state = stop, "abandoned"
 		case open:
 			end = stop
 			trace += " open"
 			state = "running"
-		case !a.Ok:
+		case state == coordinator.OutcomeFailed || state == coordinator.OutcomeLost:
 			trace += " failed"
-			state = "failed"
+		case state == "":
+			state = coordinator.OutcomeCompleted // ended with no outcome: only Ok says how
+			if !a.Ok {
+				state, trace = coordinator.OutcomeFailed, trace+" failed"
+			}
 		}
 		left := clampPct(float64(a.Started.Sub(start)) / window * 100)
 		right := clampPct(float64(end.Sub(start)) / window * 100)

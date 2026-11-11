@@ -25,7 +25,18 @@ type AttemptRange struct {
 	Ended   time.Time // zero while the attempt is running
 	Backup  bool      // started while another attempt of the task was running (§3.6)
 	Ok      bool      // the coordinator accepted its completion report
+	// Outcome is empty while the attempt runs, then one of the Outcome
+	// constants: how the coordinator stopped counting on it.
+	Outcome string
 }
+
+// An attempt's Outcome once it ends.
+const (
+	OutcomeCompleted  = "completed"  // its completion report was accepted
+	OutcomeFailed     = "failed"     // it reported a failure
+	OutcomeSuperseded = "superseded" // another attempt of its task completed first
+	OutcomeLost       = "lost"       // its worker was declared lost
+)
 
 // attempt records that the coordinator assigned an attempt at t now. Once a
 // job reaches maxAttempts attempts, history drops its oldest attempt: the
@@ -43,15 +54,24 @@ func (j *job) attempt(t Task, attempt uint32, worker string, now time.Time, back
 
 // attemptEnded records the outcome of the job's open attempt at
 // (t, attempt), which reports arrive in order (§4.9). A stale or invalid
-// report has already been rejected by the time this is called. An attempt
-// whose worker is lost without a report keeps its open end: the next
-// attempt of the same task says the original task ran again.
-func (j *job) attemptEnded(t Task, attempt uint32, at time.Time, ok bool) {
+// report has already been rejected by the time this is called.
+func (j *job) attemptEnded(t Task, attempt uint32, at time.Time, outcome string) {
 	for i := len(j.attempts) - 1; i >= 0; i-- {
 		a := &j.attempts[i]
 		if a.Kind == t.Kind && a.Index == t.Index && a.Attempt == attempt && a.Ended.IsZero() {
-			a.Ended, a.Ok = at, ok
+			a.Ended, a.Ok, a.Outcome = at, outcome == OutcomeCompleted, outcome
 			return
+		}
+	}
+}
+
+// attemptsStopped ends, at at with outcome, every open attempt for which
+// stopped is true: the coordinator no longer waits for their reports, so
+// they would otherwise stay open on the timeline for good.
+func (j *job) attemptsStopped(stopped func(AttemptRange) bool, at time.Time, outcome string) {
+	for i := range j.attempts {
+		if a := &j.attempts[i]; a.Ended.IsZero() && stopped(*a) {
+			a.Ended, a.Outcome = at, outcome
 		}
 	}
 }

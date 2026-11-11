@@ -157,6 +157,12 @@ func TestRecoverBackup(t *testing.T) {
 	if !succeed(t, s, w2, backup, outputs(0, 1)) {
 		t.Fatal("backup's completion rejected")
 	}
+	// The original stops counting when its backup wins, so it ends then.
+	rs := s.Status().Attempts[sub.GetJobId()]
+	if len(rs) != 2 || rs[0].Outcome != OutcomeSuperseded || !rs[0].Ended.Equal(rs[1].Ended) ||
+		rs[1].Outcome != OutcomeCompleted || !rs[1].Ok || rs[0].Ok {
+		t.Fatalf("attempts %+v; want the original superseded when the backup completed", rs)
+	}
 
 	s = recoverServer(t, Config{}, path)
 	if st := jobStatus(t, s, sub.GetJobId()); st.GetMapTasksCompleted() != 1 || st.GetBackupAttempts() != 1 || st.GetBackupWins() != 1 {

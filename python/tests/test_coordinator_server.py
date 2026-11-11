@@ -748,6 +748,15 @@ def test_expire(new_job):
     assert c.request(c.register()).map_task.attempt.attempt == 1
 
 
+def test_expire_ends_the_lost_workers_attempts(new_job):
+    """A lost worker's running attempt ends with it, not running for good."""
+    c, w, job = new_job()
+    c.next(w)
+    assert c.s.expire(time.monotonic() + 120) == [w]
+    (a,) = c.s.status().attempts[job]
+    assert (a.worker, a.outcome, a.ok) == (w, "lost", False) and a.ended is not None
+
+
 def test_expire_while_idle_remembers_the_loss(new_job):
     c, w, _ = new_job(cfg=Config(worker_timeout=1))
     end_active(c.s)
@@ -911,6 +920,10 @@ def test_backup_status(new_job):
     assert c.succeed(other, backup, outputs(0, 1)) and not c.succeed(w, first, outputs(0, 1))
     st = c.status(job)
     assert (st.backup_attempts, st.backup_wins) == (1, 1)
+    # The original stops counting when its backup wins, so it ends then.
+    a, b = c.s.status().attempts[job]
+    assert (a.outcome, a.ok, b.outcome, b.ok) == ("superseded", False, "completed", True)
+    assert a.ended == b.ended is not None
 
 
 # wire.py

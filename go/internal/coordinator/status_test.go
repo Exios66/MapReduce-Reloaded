@@ -41,4 +41,8 @@ func TestStatus(t *testing.T) {
 	if len(st.Lost) != 1 || st.Lost[0].ID != a || !st.Lost[0].At.Equal(lostAt) || !slices.Equal(st.Lost[0].Tasks, []Task{m0}) {
 		t.Fatalf("lost %+v; want %s, running %v", st.Lost, a, m0)
 	}
+	// The lost worker's attempt ends with it instead of running for good.
+	if rs := st.Attempts[id]; len(rs) != 1 || rs[0].Worker != a || rs[0].Outcome != OutcomeLost || rs[0].Ended.IsZero() || rs[0].Ok {
+		t.Fatalf("attempts %+v; want %s's attempt lost", rs, a)
+	}
 }

@@ -252,22 +252,23 @@ def test_timeline_unknown_start():
 @pytest.mark.parametrize(
     "finished,states",
     [
-        (None, ["superseded", "completed", "running", "running"]),
-        (AT, ["superseded", "completed", "abandoned", "abandoned"]),
+        (None, ["superseded", "completed", "lost", "running"]),
+        (AT, ["superseded", "completed", "lost", "abandoned"]),
     ],
 )
-def test_timeline_unreported_attempts(finished, states):
-    """A race's loser ends when the winner did; a job's end abandons the rest."""
+def test_timeline_outcomes(finished, states):
+    """Rows show the coordinator's outcome; a job's end abandons open ones."""
     m = types_pb2.TASK_KIND_MAP
     attempts = [
-        AttemptRange(m, 0, 0, "w", AT - 8),  # lost the race
-        AttemptRange(m, 0, 1, "w", AT - 6, AT - 4, ok=True),  # won it
-        AttemptRange(m, 0, 2, "w", AT - 2),  # ran again later
-        AttemptRange(m, 1, 0, "w", AT - 8),  # never heard from
+        AttemptRange(m, 0, 0, "w", AT - 8, AT - 4, outcome="superseded"),
+        AttemptRange(m, 0, 1, "w", AT - 6, AT - 4, ok=True, outcome="completed"),
+        AttemptRange(m, 1, 0, "w", AT - 8, AT - 4, outcome="lost"),
+        AttemptRange(m, 2, 0, "w", AT - 2),
     ]
     bars = statusweb._timeline(_job(AT - 10, finished), AT, attempts)
     assert [b["state"] for b in bars] == states
     assert (bars[0]["width"], bars[0]["seconds"], bars[0]["trace"]) == (40, "4.0 s", "map")
+    assert bars[2]["trace"] == "map failed"
 
 
 def test_timeline_backup_is_text():
@@ -294,6 +295,7 @@ def test_status_json(get):
     assert [a["kind"] for a in attempts] == ["map", "map", "reduce"]
     assert attempts[1]["ended"] is None and attempts[0]["ended"] is not None
     assert attempts[2]["ok"] is False
+    assert all("outcome" in a for a in attempts) and attempts[1]["outcome"] is None
     assert sorted(doc["workers"][0]) == sorted(
         ["id", "host", "zone", "slots", "last_seen", "running"]
     )

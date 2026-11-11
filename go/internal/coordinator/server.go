@@ -210,6 +210,7 @@ func (s *Server) Expire(now time.Time) []string {
 				slog.Error("logging a lost worker", "worker", w, "err", err)
 			}
 			reset = s.active.tasks.ResetWorker(w)
+			s.active.attemptsStopped(func(a AttemptRange) bool { return a.Worker == w }, at, OutcomeLost)
 		}
 		s.lost = append(s.lost, LostWorker{ID: w, At: now, Tasks: reset})
 		s.lost = s.lost[max(0, len(s.lost)-maxLost):]
@@ -674,7 +675,7 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 	if f := req.GetFailure(); f != nil {
 		counted := j.tasks.Runs(t, id.GetAttempt(), req.GetWorkerId())
 		if counted { // a stale report changes nothing; an ended job's rows stay
-			j.attemptEnded(t, id.GetAttempt(), at, false)
+			j.attemptEnded(t, id.GetAttempt(), at, OutcomeFailed)
 		}
 		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
 		n := j.tasks.Failures(t)
@@ -691,7 +692,9 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 	}
 	accepted, err = j.tasks.CompleteAt(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs(), at)
 	if accepted {
-		j.attemptEnded(t, id.GetAttempt(), at, true)
+		j.attemptEnded(t, id.GetAttempt(), at, OutcomeCompleted)
+		// The task's other attempts stopped counting when this one won.
+		j.attemptsStopped(func(a AttemptRange) bool { return a.Kind == t.Kind && a.Index == t.Index }, at, OutcomeSuperseded)
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
 		j.ran[t] = j.placed[t][id.GetAttempt()]

@@ -45,22 +45,22 @@ func TestTimelineUnknownStart(t *testing.T) {
 	}
 }
 
-func TestTimelineUnreportedAttempts(t *testing.T) {
+func TestTimelineOutcomes(t *testing.T) {
 	m := pb.TaskKind_TASK_KIND_MAP
 	won := at.Add(-4 * time.Second)
 	rs := []coordinator.AttemptRange{
-		{Kind: m, Index: 0, Attempt: 0, Started: at.Add(-8 * time.Second)},                       // lost the race
-		{Kind: m, Index: 0, Attempt: 1, Started: at.Add(-6 * time.Second), Ended: won, Ok: true}, // won it
-		{Kind: m, Index: 0, Attempt: 2, Started: at.Add(-2 * time.Second)},                       // ran again later
-		{Kind: m, Index: 1, Attempt: 0, Started: at.Add(-8 * time.Second)},                       // never heard from
+		{Kind: m, Index: 0, Attempt: 0, Started: at.Add(-8 * time.Second), Ended: won, Outcome: coordinator.OutcomeSuperseded},
+		{Kind: m, Index: 0, Attempt: 1, Started: at.Add(-6 * time.Second), Ended: won, Ok: true, Outcome: coordinator.OutcomeCompleted},
+		{Kind: m, Index: 1, Attempt: 0, Started: at.Add(-8 * time.Second), Ended: won, Outcome: coordinator.OutcomeLost},
+		{Kind: m, Index: 2, Attempt: 0, Started: at.Add(-2 * time.Second)},
 	}
 	for _, tc := range []struct {
 		name     string
 		finished *timestamppb.Timestamp
 		states   []string
 	}{
-		{"running job", nil, []string{"superseded", "completed", "running", "running"}},
-		{"finished job", timestamppb.New(at), []string{"superseded", "completed", "abandoned", "abandoned"}},
+		{"running job", nil, []string{"superseded", "completed", "lost", "running"}},
+		{"finished job", timestamppb.New(at), []string{"superseded", "completed", "lost", "abandoned"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			j := &pb.GetJobStatusResponse{JobId: "j", SubmittedAt: timestamppb.New(at.Add(-10 * time.Second)), FinishedAt: tc.finished}
@@ -71,7 +71,10 @@ func TestTimelineUnreportedAttempts(t *testing.T) {
 				}
 			}
 			if b := bars[0]; b.Width != 40 || b.Seconds != "4.0 s" || b.Trace != "map" {
-				t.Errorf("superseded bar = %+v; want it to end when the winner did", b)
+				t.Errorf("superseded bar = %+v; want a plain bar to the winner's end", b)
+			}
+			if b := bars[2]; b.Trace != "map failed" {
+				t.Errorf("lost bar trace = %q; want it outlined as failed", b.Trace)
 			}
 		})
 	}

@@ -172,14 +172,17 @@ func TestTimeline(t *testing.T) {
 	}
 }
 
-// A job's attempts are in /status.json: an attempt still running has no end.
+// A job's attempts are in /status.json: an attempt still running has no end
+// and no outcome, and one with an unknown start has a null start.
 func TestStatusJSONAttempts(t *testing.T) {
 	defer func() { status.Attempts = nil }()
 	status.Attempts = map[string][]coordinator.AttemptRange{"job-1": {
 		{Kind: pb.TaskKind_TASK_KIND_MAP, Index: 2, Attempt: 1, Worker: "w1",
-			Started: at.Add(-2 * time.Second), Ended: at.Add(-time.Second), Backup: true, Ok: true},
+			Started: at.Add(-2 * time.Second), Ended: at.Add(-time.Second), Backup: true, Ok: true,
+			Outcome: coordinator.OutcomeCompleted},
 		{Kind: pb.TaskKind_TASK_KIND_REDUCE, Index: 0, Attempt: 0, Worker: "w2",
 			Started: at.Add(-time.Second)},
+		{Kind: pb.TaskKind_TASK_KIND_REDUCE, Index: 1, Attempt: 0, Worker: "w3"},
 	}}
 	_, body := get(t, "/status.json")
 	var doc struct {
@@ -190,10 +193,11 @@ func TestStatusJSONAttempts(t *testing.T) {
 				Index   uint32
 				Attempt uint32
 				Worker  string
-				Started float64
+				Started *float64
 				Ended   *float64
 				Backup  bool
 				Ok      bool
+				Outcome *string
 			}
 		}
 	}
@@ -201,17 +205,20 @@ func TestStatusJSONAttempts(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := doc.Jobs[0].Attempts
-	if len(got) != 2 {
-		t.Fatalf("job-1 has %d attempts, want 2", len(got))
+	if len(got) != 3 {
+		t.Fatalf("job-1 has %d attempts, want 3", len(got))
 	}
-	a, b := got[0], got[1]
+	a, b, c := got[0], got[1], got[2]
 	start := float64(at.Add(-2*time.Second).UnixNano()) / 1e9
-	if a.Kind != "map" || a.Index != 2 || a.Attempt != 1 || a.Worker != "w1" || a.Started != start ||
-		a.Ended == nil || *a.Ended != start+1 || !a.Backup || !a.Ok {
+	if a.Kind != "map" || a.Index != 2 || a.Attempt != 1 || a.Worker != "w1" || a.Started == nil || *a.Started != start ||
+		a.Ended == nil || *a.Ended != start+1 || !a.Backup || !a.Ok || a.Outcome == nil || *a.Outcome != "completed" {
 		t.Errorf("first attempt = %+v", a)
 	}
-	if b.Kind != "reduce" || b.Worker != "w2" || b.Ended != nil || b.Backup || b.Ok {
+	if b.Kind != "reduce" || b.Worker != "w2" || b.Started == nil || b.Ended != nil || b.Backup || b.Ok || b.Outcome != nil {
 		t.Errorf("second attempt = %+v", b)
+	}
+	if c.Worker != "w3" || c.Started != nil || c.Ended != nil {
+		t.Errorf("unknown-start attempt = %+v", c)
 	}
 	if n := len(doc.Jobs[1].Attempts); n != 0 {
 		t.Errorf("job-2 has %d attempts, want none", n)

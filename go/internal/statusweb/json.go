@@ -38,17 +38,18 @@ type jsonJob struct {
 
 // jsonAttempt is one ranged attempt for the timeline: its kind and index,
 // what worker ran it, when it started and ended (both Unix seconds;
-// ended absent while the attempt runs), and whether the coordinator
-// accepted its completion.
+// started null if unknown, ended null while the attempt runs), whether the
+// coordinator accepted its completion, and its outcome (null while it runs).
 type jsonAttempt struct {
 	Kind    string   `json:"kind"`
 	Index   uint32   `json:"index"`
 	Attempt uint32   `json:"attempt"`
 	Worker  string   `json:"worker"`
-	Started float64  `json:"started"`
+	Started *float64 `json:"started"`
 	Ended   *float64 `json:"ended"`
 	Backup  bool     `json:"backup"`
 	Ok      bool     `json:"ok"`
+	Outcome *string  `json:"outcome"`
 }
 
 // kindName is a task kind without its enum prefix: "map".
@@ -74,6 +75,14 @@ type jsonLost struct {
 	ID    string   `json:"id"`
 	At    float64  `json:"at"`
 	Tasks []string `json:"tasks"`
+}
+
+// outcome is an attempt's outcome, or nil while it runs.
+func outcome(o string) *string {
+	if o == "" {
+		return nil
+	}
+	return &o
 }
 
 // unix is t as Unix seconds, or nil if t was never set.
@@ -113,8 +122,8 @@ func toJSON(st coordinator.Status) jsonStatus {
 		for _, a := range st.Attempts[j.GetJobId()] {
 			jj.Attempts = append(jj.Attempts, jsonAttempt{
 				Kind: kindName(a.Kind), Index: a.Index, Attempt: a.Attempt,
-				Worker: a.Worker, Started: *unix(a.Started), Ended: unix(a.Ended),
-				Backup: a.Backup, Ok: a.Ok,
+				Worker: a.Worker, Started: unix(a.Started), Ended: unix(a.Ended),
+				Backup: a.Backup, Ok: a.Ok, Outcome: outcome(a.Outcome),
 			})
 		}
 		out.Jobs = append(out.Jobs, jj)
