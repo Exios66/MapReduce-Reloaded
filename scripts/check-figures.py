@@ -70,7 +70,8 @@ def differs(drawn: Path, committed: Path) -> str | None:
     b = Image.open(committed).convert("RGBA")
     if a.size != b.size:
         return f"size {a.size} against {b.size}"
-    box = ImageChops.difference(a, b).getbbox()
+    # getbbox on RGBA looks only at alpha, which two opaque figures share.
+    box = ImageChops.difference(a, b).getbbox(alpha_only=False)
     return f"pixels differ within {box}" if box else None
 
 

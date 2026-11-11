@@ -6,6 +6,8 @@ import io
 import tarfile
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/check-figures.py"
 _spec = importlib.util.spec_from_file_location("check_figures", SCRIPT)
 figures = importlib.util.module_from_spec(_spec)
@@ -51,3 +53,12 @@ def test_reports_a_changed_or_missing_archive(tmp_path):
         "E1.tar.gz: SHA-256 differs from SHA256SUMS",
         "E2.tar.gz: listed in SHA256SUMS but missing",
     ]
+
+
+def test_a_figure_that_changes_only_in_color_differs(tmp_path):
+    Image = pytest.importorskip("PIL.Image")
+    Image.new("RGB", (4, 4), "white").save(tmp_path / "a.png")
+    Image.new("RGB", (4, 4), "white").save(tmp_path / "b.png")
+    Image.new("RGB", (4, 4), "black").save(tmp_path / "c.png")
+    assert figures.differs(tmp_path / "a.png", tmp_path / "b.png") is None
+    assert figures.differs(tmp_path / "a.png", tmp_path / "c.png") is not None
