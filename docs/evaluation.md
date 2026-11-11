@@ -22,8 +22,8 @@ had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 The grep and sort rows ran with `bench/run.sh` at commit `2707160`; their
 directories hold the samples, the rates, the counters and the machine. E0 to E7 are the course evaluation in
 [bench/README.md](../bench/README.md#evaluation-e0e7), all with the system at
-commit `8f0ddb9`, each the median of five runs (E2-pairs is ten alternating
-pairs).
+commit `8f0ddb9` except E0, rerun at `3a907de` (below), each the median of
+five runs (E2-pairs is ten alternating pairs).
 
 Provenance of the machine. The E-series directories each hold a
 `machine.json`, written by `bench/experiments.sh`. The grep and sort
@@ -254,7 +254,8 @@ records `3a907de`.
 - **Repeats.** Five runs per setting (ten pairs for E2-pairs), on the
   course VM with the other course containers stopped.
 - **Order.** Every experiment's settings take turns within each repeat,
-  reversed on even repeats (#348). E1 and E6 take turns within each input:
+  reversed on even repeats (#348), except E5's three, which rotate so each
+  runs first in turn. E1 and E6 take turns within each input:
   combiner on and off alternate on one skew or corpus before the next
   begins, so only on-against-off comparisons are drift-controlled; their
   comparisons across inputs are of bytes, which drift does not change. E0 first runs each program once as
@@ -303,7 +304,7 @@ protocol above:
   check set before that, every sort run under 500 MiB, fails on the 1- and
   2-worker runs for this reason.
 - **E1's word count also read from disk in some runs,** up to 1.4 GB
-  machine-wide, with the combiner on and off alike. The time it saves is
+  machine-wide, with the combiner on and off, more often off. The time it saves is
   far larger than the spread this adds, so E1 was not run again.
 
 ## What scale changes

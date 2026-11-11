@@ -225,6 +225,12 @@ cut a release.
 
 ### Fixed
 
+- Docs: the E0-E7 rerun write-ups name `3a907de` wherever they say every
+  experiment ran at `8f0ddb9`, say E5's settings rotate rather than reverse,
+  compare E0's sort with E2-E4 on one clock, describe E3's cost and E1's
+  disk reads as measured, and say that `runs.csv`'s `valid` column, not a
+  stored checksum, records each output check (`README.md`, `design.md`,
+  `docs/evaluation.md`, `bench/README.md`) (#355).
 - Bench figures: the fault summary keeps zero in view when every
   disturbance sped its job up, and E7's title claims a cut only when no
   backup rule was slower (#349).
