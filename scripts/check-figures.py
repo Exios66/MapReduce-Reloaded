@@ -56,7 +56,15 @@ def unpack(archives: Path, dest: Path) -> None:
         target = dest / "iso" if tar.name == ISOLATED else dest
         target.mkdir(parents=True, exist_ok=True)
         with tarfile.open(tar) as t:
-            t.extractall(target, filter="data")
+            if hasattr(tarfile, "data_filter"):  # Python 3.11.4 and later
+                t.extractall(target, filter="data")
+                continue
+            # Earlier 3.11 releases lack filter=: refuse what "data" would.
+            for m in t.getmembers():
+                name = Path(m.name)
+                if name.is_absolute() or ".." in name.parts or not (m.isfile() or m.isdir()):
+                    raise ValueError(f"{tar.name}: unsafe member {m.name}")
+            t.extractall(target)
     if (dest / "iso" / "E0").is_dir():
         (dest / "iso" / "E0").rename(dest / "E0-isolated")
         shutil.rmtree(dest / "iso")
@@ -70,8 +78,10 @@ def differs(drawn: Path, committed: Path) -> str | None:
     b = Image.open(committed).convert("RGBA")
     if a.size != b.size:
         return f"size {a.size} against {b.size}"
-    # getbbox on RGBA looks only at alpha, which two opaque figures share.
-    box = ImageChops.difference(a, b).getbbox(alpha_only=False)
+    # getbbox on RGBA looks only at alpha, which two opaque figures share,
+    # and older Pillow has no alpha_only=False: check color and alpha apart.
+    diff = ImageChops.difference(a, b)
+    box = diff.convert("RGB").getbbox() or diff.getchannel("A").getbbox()
     return f"pixels differ within {box}" if box else None
 
 
