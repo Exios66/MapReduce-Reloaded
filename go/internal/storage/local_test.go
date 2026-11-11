@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -119,5 +120,26 @@ func TestLocalDeleteAllConcurrentCreates(t *testing.T) {
 		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
 			t.Fatalf("%s is still there after DeleteAll: %v", dir, err)
 		}
+	}
+}
+
+// A cancelled caller stops DeleteAll's retries instead of waiting out all of
+// them.
+func TestLocalDeleteAllStopsWhenCancelled(t *testing.T) {
+	dir := t.TempDir()
+	calls := 0
+	removeAll = func(path string) error {
+		calls++
+		return &fs.PathError{Op: "unlinkat", Path: path, Err: syscall.ENOTEMPTY}
+	}
+	t.Cleanup(func() { removeAll = os.RemoveAll })
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	err := (Local{}).DeleteAll(ctx, dir)
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, syscall.ENOTEMPTY) {
+		t.Fatalf("DeleteAll = %v; want both context.Canceled and ENOTEMPTY", err)
+	}
+	if calls != 1 {
+		t.Fatalf("removeAll called %d times after cancellation; want 1", calls)
 	}
 }

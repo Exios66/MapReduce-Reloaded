@@ -1,0 +1,34 @@
+---
+name: saving-ci-credits
+description: Use when about to push a branch, open or update a pull request, merge main into a branch, or decide whether a push should carry [skip ci], in MapReduce-Reloaded, where CircleCI Free credits are limited.
+---
+
+# Saving CI credits
+
+CircleCI's Free plan is the only CI (AGENTS.md, docs/ci.md, ADR 0014). Credits are saved by running CI less often, never by running less of it: one full pipeline per PR, on its final head.
+
+## Before every push
+
+```bash
+bash .claude/skills/saving-ci-credits/preflight.sh          # an in-progress push
+bash .claude/skills/saving-ci-credits/preflight.sh --final  # the one push that runs CI
+```
+
+It checks the owner identity and the absence of attribution footers, lists the jobs the diff implicates (`scripts/ci-params.py`), checks the CHANGELOG bullet and its `(#NNN)`, how far the branch is behind `origin/main`, and whether the head's `[skip ci]` matches the kind of push. Exit 1 means do not push yet.
+
+## Which push is which
+
+| Situation | Head commit | Behind main |
+|---|---|---|
+| Work or review still going on | `[skip ci]` | leave it |
+| Opening the PR | anything: opening always runs one pipeline, so open only when ready for review | leave it |
+| Final push | no `[skip ci]` | 0: merge main, then `make check` |
+| Final pipeline failed | fix, push without `[skip ci]` | 0 |
+
+## Common mistakes
+
+- Pushing each fix separately: batch commits, push once per review round.
+- Running `make check` on a busy laptop: run it on the experiment VM.
+- Merging main mid-review: it costs nothing now but forces a re-check later; do it once, in the final push.
+- Empty commits or closing and reopening a PR to rerun CI: never.
+- Narrowing `.circleci/mapping.txt` or `scripts/ci-params.py` to skip jobs: never.

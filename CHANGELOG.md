@@ -15,6 +15,13 @@ cut a release.
 
 ### Added
 
+- Agent tooling: four skills in `.claude/skills/`, listed in AGENTS.md:
+  `saving-ci-credits` (`preflight.sh` checks identity, CHANGELOG and
+  `[skip ci]` before a push), `interpreting-bench-results` (`summarize.py`
+  reports medians, ranges, slow and invalid runs, and overlaps),
+  `analyzing-bench-results` (`compare.py` compares a run with a published
+  one) and `checking-campaign-status` (`status.sh` snapshots a running
+  campaign).
 - Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
   disturbance in E2, E3 and E4 added, on one axis; its title says every
   disturbed run gave an undisturbed run's output only when every one was
