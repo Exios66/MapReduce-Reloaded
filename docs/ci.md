@@ -200,6 +200,18 @@ with `go` node 0 still the slowest, then the Python jobs. `proto` drops to
 about 30 s, since `make tools` keeps the cached generators. The PR that made
 the change records the first CircleCI run's times.
 
+Two later changes shorten the tests themselves, with the same checks
+(#358), timed on a development machine pinned as the CircleCI classes are:
+
+- `internal/e2e`, the slowest package of the race node, spent most of its
+  time writing the 48 MB input of its kill and restart tests, once per
+  test, in a loop the race detector instruments. It now writes the same
+  bytes once. On two CPUs the package's race run went from 55 s to 29 s.
+- `make py-test` measures coverage through `sys.monitoring` on Python 3.12
+  and later, which records exactly the lines the default tracer does. On
+  one CPU the Python 3.13 tests went from 51 s to 36 s. Python 3.11 has no
+  `sys.monitoring` and is unchanged.
+
 ## Caching
 
 Caches only save time; none of them replaces a check.

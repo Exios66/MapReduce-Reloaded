@@ -15,6 +15,16 @@ cut a release.
 
 ### Added
 
+- Tests: `TestWorkerKilled` (`go/internal/e2e`) also checks what a worker
+  killed with SIGKILL leaves behind: its work directory stays until the
+  next worker starts there, which removes it and keeps the directories of
+  the workers still running (#358).
+- Tests: `TestCompressedBlockShapes` (`go/internal/formats/kv`) and
+  `python/tests/test_kv_block_shapes.py` read the same hand-written
+  compressed MRKV blocks: Snappy copies with a 1-, 2- and 4-byte offset and
+  zstd run-length and raw blocks must read back, and their damaged forms
+  must be refused as `bad_block`, in both languages (#358).
+
 - Status page (Go and Python): each job card shows a task timeline, one
   row for each of the job's latest 512 attempts the coordinator saw, to
   scale over the job's run, with a bar for map (blue) and reduce (purple),
@@ -117,6 +127,20 @@ cut a release.
   `python/tests/test_changelog.py` (#305).
 
 ### Changed
+
+- CI: `go/internal/e2e` writes the 48 MB input of its kill and restart
+  tests once, with `strconv`, instead of once per test with `fmt`; the bytes
+  are the same. Under the race detector on two CPUs the package takes about
+  29 s instead of 55 s, on the `go` job's slowest node (#358).
+- CI: `make py-test` measures coverage through `sys.monitoring`
+  (`COVERAGE_CORE=sysmon`) on Python 3.12 and later, which records the same
+  lines; the Python tests take about 36 s instead of 51 s on one CPU.
+  Python 3.11 keeps the default tracer, and a `COVERAGE_CORE` already set
+  wins (#358).
+- Go coverage: `go/cover-floors.txt` raises the floor of the 14 packages
+  that had risen two points or more over it, to one point under the
+  coverage measured on 2026-11-12, for example `cmd/coordinator` from 85 to
+  90 and `internal/split` from 87 to 93 (#358).
 
 - Bench figures: every figure in `bench/evaluation/` is redrawn for
   reading at a glance. Each has a bold title stating its finding, a

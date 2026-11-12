@@ -378,3 +378,62 @@ func TestCodecLimits(t *testing.T) {
 		t.Errorf("S2 block: error = %v, want bad_block", err)
 	}
 }
+
+// TestCompressedBlockShapes reads blocks written byte by byte, in the
+// shapes a compressor may choose and the writer here happens not to: every
+// width of Snappy copy, and a zstd run-length block. Another implementation
+// may write any of them, and the reader walks the compressed bytes itself
+// (snappyOnly, frameLen), so each shape must read back, and the damaged
+// forms beside them must be refused as bad blocks rather than misread.
+func TestCompressedBlockShapes(t *testing.T) {
+	// One record, key "k" and value "abcdabcd", as an 11-byte payload.
+	rec := []record{{[]byte("k"), []byte("abcdabcd")}}
+	literal := []byte{11, 6 << 2, 1, 'k', 8, 'a', 'b', 'c', 'd'} // length 11, then a 7-byte literal
+	snappy := func(copyTag ...byte) []byte { return append(slices.Clone(literal), copyTag...) }
+	// A single-segment zstd frame with a one-byte content size and one last block.
+	zstdFrame := func(contentSize, blockHeader byte, data ...byte) []byte {
+		return append([]byte{0x28, 0xB5, 0x2F, 0xFD, 0x20, contentSize, blockHeader, 0, 0}, data...)
+	}
+	ones := []record{{[]byte{1}, []byte{1}}, {[]byte{1}, []byte{1}}, {[]byte{1}, []byte{1}}}
+	tests := []struct {
+		name    string
+		codec   Codec
+		count   uint32
+		payload []byte
+		want    []record // nil: ErrBadBlock
+	}{
+		// Copies of 4 bytes from 4 bytes back, with a 1-, 2- and 4-byte offset.
+		{"snappy copy, 1-byte offset", CodecSnappy, 1, snappy(0<<2|1, 4), rec},
+		{"snappy copy, 2-byte offset", CodecSnappy, 1, snappy(3<<2|2, 4, 0), rec},
+		{"snappy copy, 4-byte offset", CodecSnappy, 1, snappy(3<<2|3, 4, 0, 0, 0), rec},
+		{"snappy copy, offset 0 (an S2 repeat)", CodecSnappy, 1, snappy(0<<2|1, 0), nil},
+		{"snappy copy, 2-byte offset 0", CodecSnappy, 1, snappy(3<<2|2, 0, 0), nil},
+		{"snappy copy, 4-byte offset 0", CodecSnappy, 1, snappy(3<<2|3, 0, 0, 0, 0), nil},
+		{"snappy copy from before the start", CodecSnappy, 1, snappy(3<<2|2, 8, 0), nil},
+		{"snappy length prefix that never ends", CodecSnappy, 1, bytes.Repeat([]byte{0xFF}, 11), nil},
+		{"snappy shorter than its length", CodecSnappy, 1, literal, nil},
+
+		// 12 bytes of 0x01, three records, as one run-length block and as one raw block.
+		{"zstd run-length block", CodecZstd, 3, zstdFrame(12, 12<<3|1<<1|1, 1), ones},
+		{"zstd raw block", CodecZstd, 3, zstdFrame(12, 12<<3|1, bytes.Repeat([]byte{1}, 12)...), ones},
+		{"zstd content size over the data", CodecZstd, 3, zstdFrame(13, 12<<3|1, bytes.Repeat([]byte{1}, 12)...), nil},
+		{"zstd block cut short", CodecZstd, 3, zstdFrame(12, 12<<3|1, bytes.Repeat([]byte{1}, 11)...), nil},
+		{"zstd frame without its last block", CodecZstd, 3, zstdFrame(12, 12<<3, bytes.Repeat([]byte{1}, 12)...), nil},
+		{"zstd bytes after a run-length block", CodecZstd, 3, zstdFrame(12, 12<<3|1<<1|1, 1, 1), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := file(header(1, byte(tt.codec), 0, 0), block(tt.count, tt.payload), footer(uint64(tt.count), 1))
+			got, err := readAll(bytes.NewReader(data))
+			if tt.want == nil {
+				if !errors.Is(err, ErrBadBlock) {
+					t.Fatalf("read %d records, error = %v; want bad_block", len(got), err)
+				}
+				return
+			}
+			if err != nil || !equalRecords(got, tt.want) {
+				t.Fatalf("read %d records, error = %v; want %d records", len(got), err, len(tt.want))
+			}
+		})
+	}
+}

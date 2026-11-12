@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -32,6 +33,13 @@ var (
 	buildOnce sync.Once
 	binDir    string
 	buildErr  error
+)
+
+// The input of the kill and restart tests, written once (bigInput).
+var (
+	bigOnce sync.Once
+	bigDir  string
+	bigErr  error
 )
 
 // coverDir, from MR_E2E_GOCOVERDIR, is where the commands write their
@@ -78,8 +86,10 @@ func command(t *testing.T, name string, args ...string) *exec.Cmd {
 
 func TestMain(m *testing.M) {
 	code := m.Run()
-	if binDir != "" {
-		_ = os.RemoveAll(binDir)
+	for _, dir := range []string{binDir, bigDir} {
+		if dir != "" {
+			_ = os.RemoveAll(dir)
+		}
 	}
 	os.Exit(code)
 }
@@ -152,12 +162,29 @@ func newCluster(t *testing.T, workers int, wal bool) *cluster {
 		c.dataDir = t.TempDir()
 	}
 	c.startCoordinator()
-	for i := range workers {
-		port := freePort(t)
-		c.workers = append(c.workers, start(t, fmt.Sprintf("worker %d", i), []string{"TMPDIR=" + c.tmp},
-			"-coordinator", c.addr, "-listen", port, "-advertise", port, "-min-free-mib", "1"))
+	for range workers {
+		c.addWorker()
 	}
 	return c
+}
+
+// addWorker starts one more worker, which makes its work directory in c.tmp.
+func (c *cluster) addWorker() {
+	c.t.Helper()
+	port := freePort(c.t)
+	c.workers = append(c.workers, start(c.t, fmt.Sprintf("worker %d", len(c.workers)), []string{"TMPDIR=" + c.tmp},
+		"-coordinator", c.addr, "-listen", port, "-advertise", port, "-min-free-mib", "1"))
+}
+
+// workDirs returns the workers' work directories in c.tmp, sorted.
+func (c *cluster) workDirs() []string {
+	c.t.Helper()
+	dirs, err := filepath.Glob(filepath.Join(c.tmp, "mr-worker-*"))
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	slices.Sort(dirs)
+	return dirs
 }
 
 func (c *cluster) startCoordinator() {
@@ -272,23 +299,33 @@ func abs(t *testing.T, path string) string {
 	return p
 }
 
-// bigInput writes a text of words that keeps a 3-worker job busy for a
-// second or two, and returns its path.
+// bigInput returns the path of a text of words that keeps a 3-worker job
+// busy for a second or two. The text is the same every time, so it is
+// written once for the whole test binary, and the tests only read it.
+// Building it with strconv rather than fmt matters under the race detector,
+// where the 12 million formatted writes took most of the package's time.
 func bigInput(t *testing.T) string {
 	t.Helper()
-	rng := rand.New(rand.NewPCG(1, 2))
-	var b bytes.Buffer
-	for b.Len() < 48<<20 {
-		for range 12 {
-			fmt.Fprintf(&b, "w%d ", int(rng.ExpFloat64()*500))
+	bigOnce.Do(func() {
+		rng := rand.New(rand.NewPCG(1, 2))
+		const size = 48 << 20
+		b := make([]byte, 0, size+256)
+		for len(b) < size {
+			for range 12 {
+				b = append(b, 'w')
+				b = strconv.AppendInt(b, int64(rng.ExpFloat64()*500), 10)
+				b = append(b, ' ')
+			}
+			b = append(b, '\n')
 		}
-		b.WriteByte('\n')
+		if bigDir, bigErr = os.MkdirTemp("", "mr-e2e-input-"); bigErr == nil {
+			bigErr = os.WriteFile(filepath.Join(bigDir, "words.txt"), b, 0o644)
+		}
+	})
+	if bigErr != nil {
+		t.Fatal(bigErr)
 	}
-	path := filepath.Join(t.TempDir(), "words.txt")
-	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return filepath.Join(bigDir, "words.txt")
 }
 
 // reference returns the output of mr run -local over input.
@@ -364,7 +401,9 @@ func TestExamples(t *testing.T) {
 }
 
 // A worker killed with SIGKILL once the job has finished map tasks does not
-// change the output: the coordinator reruns what it lost (§3.3).
+// change the output: the coordinator reruns what it lost (§3.3). The killed
+// worker could not remove its work directory; the next worker to start
+// there removes it, and leaves the directories of the workers still running.
 func TestWorkerKilled(t *testing.T) {
 	t.Parallel()
 	input := bigInput(t)
@@ -376,11 +415,38 @@ func TestWorkerKilled(t *testing.T) {
 	if st["state"] == "SUCCEEDED" {
 		t.Skip("the job finished before a worker could be killed")
 	}
+	before := c.workDirs()
+	if len(before) != 3 {
+		t.Fatalf("work directories of 3 running workers: %v", before)
+	}
 	_ = c.workers[0].stop(t, syscall.SIGKILL, 5*time.Second)
 	if st = c.wait(job, 45*time.Second, nil); st["state"] != "SUCCEEDED" {
 		t.Fatalf("after the kill: %v", st)
 	}
 	sameParts(t, parts(t, out), want)
+
+	if after := c.workDirs(); !slices.Equal(after, before) {
+		t.Fatalf("work directories after the kill: %v, want the same %v: nothing has swept yet", after, before)
+	}
+	c.addWorker()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		after := c.workDirs()
+		kept := 0
+		for _, dir := range after {
+			if slices.Contains(before, dir) {
+				kept++
+			}
+		}
+		// The two survivors' directories and the new worker's.
+		if len(after) == 3 && kept == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("work directories %v after a new worker started; want two of %v and one new", after, before)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // A coordinator killed mid-job and restarted with the same -data-dir
