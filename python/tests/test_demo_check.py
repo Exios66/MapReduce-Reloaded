@@ -89,7 +89,7 @@ def ready_root(tmp_path, sort=True):
     (tmp_path / "data/input/weblog/access.log").write_text("x")
     if sort:
         with open(tmp_path / "data/input/sort-1g.txt", "wb") as f:
-            f.truncate(1_073_741_824)
+            f.truncate(1_073_741_900)  # gen-sort.py: whole 100-byte records
     return tmp_path
 
 
@@ -257,7 +257,7 @@ def test_pinned_limits_match_compose_yaml(dc):
     assert services["coordinator"]["mem_limit"] == "256m"
     assert dc.COORDINATOR_MEMORY == 256 * 1024 * 1024
     assert "-data-dir" in services["coordinator"]["command"]
-    assert services["worker"].get("deploy", {}).get("replicas", dc.WORKERS) == dc.WORKERS
+    assert services["worker"]["deploy"]["replicas"] == dc.WORKERS
 
 
 def test_docker_errors_keep_the_cause_not_the_usage_hint(dc, monkeypatch):
@@ -332,3 +332,54 @@ def test_an_empty_docker_root_is_not_measured_as_the_current_directory(dc, tmp_p
 
     checks(dc, ready_root(tmp_path), docker=docker, free=free)
     assert seen == [str(tmp_path)]
+
+
+def test_the_sort_size_is_what_gen_sort_writes(dc):
+    assert dc.SORT_FILE_BYTES == 1_073_741_900  # ceil(1 GiB / 100) records of 100 bytes
+
+
+def test_an_incomplete_inspect_fails_the_limits(dc, tmp_path):
+    def docker(args):
+        if args[0] == "inspect":
+            return json.dumps(json.loads(fake_docker()(args))[:2])
+        return fake_docker()(args)
+
+    c = by_name(checks(dc, ready_root(tmp_path), docker=docker))
+    assert c["limits"].level == "FAIL"
+    assert "mapreduce-worker-4" in c["limits"].detail
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [["coordinator", "-data-dir", ""], ["coordinator", "-data-dir"], ["coordinator", "-data-dir="]],
+)
+def test_an_empty_log_directory_fails_the_wal(dc, tmp_path, cmd):
+    c = by_name(checks(dc, ready_root(tmp_path), docker=fake_docker(cmd=cmd)))
+    assert c["wal"].level == "FAIL"
+
+
+def test_the_equals_form_of_the_log_flag_passes(dc, tmp_path):
+    cmd = ["coordinator", "-data-dir=/out/wal"]
+    c = by_name(checks(dc, ready_root(tmp_path), docker=fake_docker(cmd=cmd)))
+    assert c["wal"].level == "OK"
+
+
+def test_a_failed_second_measurement_keeps_the_first_failure(dc, tmp_path):
+    def free(path):
+        if str(path) == DOCKER_ROOT:
+            raise PermissionError("denied")
+        return 5 * GB
+
+    c = by_name(checks(dc, ready_root(tmp_path), free=free))
+    assert c["disk"].level == "FAIL"
+
+
+def test_an_unmeasured_docker_disk_is_a_warning(dc, tmp_path):
+    def docker(args):
+        if args[0] == "info":
+            raise RuntimeError("info failed")
+        return fake_docker()(args)
+
+    c = by_name(checks(dc, ready_root(tmp_path), docker=docker))
+    assert c["disk"].level == "WARN"
+    assert "Docker" in c["disk"].detail

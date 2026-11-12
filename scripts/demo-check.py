@@ -33,6 +33,7 @@ HEARTBEAT_LIMIT = 15  # seconds; the coordinator's timeout is 10
 FREE_BYTES = 6_000_000_000  # docs/demo.md: at least 6 GB free
 SORT_INPUT = "data/input/sort-1g.txt"
 SORT_BYTES = 1_073_741_824
+SORT_FILE_BYTES = -(-SORT_BYTES // 100) * 100  # gen-sort.py writes whole 100-byte records
 
 
 class Check(NamedTuple):
@@ -107,10 +108,12 @@ def _cluster(docker: Callable[[list[str]], str]) -> list[Check]:
             Check("FAIL", "wal", f"docker inspect: {e}"),
         ]
     wrong, wal = [], None
+    returned = {(c.get("Name") or "").lstrip("/") for c in inspected}
+    wrong += [f"{n} not inspected" for n in [*coordinators, *workers] if n not in returned]
     for c in inspected:
         name, host = (c.get("Name") or "?").lstrip("/"), c.get("HostConfig") or {}
         if name in coordinators:
-            wal = "-data-dir" in ((c.get("Config") or {}).get("Cmd") or [])
+            wal = _data_dir((c.get("Config") or {}).get("Cmd") or [])
             if host.get("Memory") != COORDINATOR_MEMORY:
                 wrong.append(f"{name} memory {host.get('Memory')}")
         elif host.get("NanoCpus") != WORKER_NANO_CPUS or host.get("Memory") != WORKER_MEMORY:
@@ -132,6 +135,16 @@ def _cluster(docker: Callable[[list[str]], str]) -> list[Check]:
             )
         )
     return out
+
+
+def _data_dir(cmd: list[str]) -> str:
+    """The coordinator's -data-dir value; empty means no write-ahead log."""
+    for i, arg in enumerate(cmd):
+        if arg in ("-data-dir", "--data-dir"):
+            return cmd[i + 1] if i + 1 < len(cmd) else ""
+        if arg.startswith(("-data-dir=", "--data-dir=")):
+            return arg.split("=", 1)[1]
+    return ""
 
 
 def _status(fetch: Callable[[str], bytes], url: str) -> list[Check]:
@@ -173,23 +186,27 @@ def _status(fetch: Callable[[str], bytes], url: str) -> list[Check]:
     return out
 
 
-def _disk(paths: list[Path], free_bytes: Callable[[Path], int]) -> Check:
+def _disk(paths: list[Path], free_bytes: Callable[[Path], int], unmeasured: list[str]) -> Check:
     """Free space where the inputs live and where Docker keeps the job output."""
-    seen, low = [], False
+    seen, low, unmeasured = [], False, list(unmeasured)
     for p in paths:
         try:
             free = free_bytes(p)
         except OSError as e:
-            return Check("WARN", "disk", f"could not measure {p}: {e}")
+            unmeasured.append(f"could not measure {p}: {e}")
+            continue
         low |= free < FREE_BYTES
         seen.append(f"{free / 1e9:.1f} GB free at {p}")
     need = f"(the demo needs {FREE_BYTES / 1e9:.0f} GB)"
-    return Check("FAIL" if low else "OK", "disk", f"{', '.join(seen)} {need}")
+    level = "FAIL" if low else "WARN" if unmeasured else "OK"
+    return Check(level, "disk", "; ".join([*seen, *unmeasured]) + f" {need}")
 
 
-def _host(root: Path, free_bytes: Callable[[Path], int], docker_root: Path | None) -> list[Check]:
+def _host(
+    root: Path, free_bytes: Callable[[Path], int], docker_root: Path | None, docker_known: bool
+) -> list[Check]:
     paths = [root] if docker_root is None else [root, docker_root]
-    out = [_disk(paths, free_bytes)]
+    out = [_disk(paths, free_bytes, [] if docker_known else ["Docker's data directory unknown"])]
     mr = root / "bin/mr"
     if mr.is_file() and mr.stat().st_mode & 0o111:
         out.append(Check("OK", "client", "bin/mr"))
@@ -206,7 +223,7 @@ def _host(root: Path, free_bytes: Callable[[Path], int], docker_root: Path | Non
         out.append(Check("OK", "inputs", "corpus and web log uploaded"))
     sort = root / SORT_INPUT
     gen = f"python3 bench/gen-sort.py {SORT_BYTES} 42 > {SORT_INPUT}"
-    if sort.is_file() and sort.stat().st_size == SORT_BYTES:
+    if sort.is_file() and sort.stat().st_size == SORT_FILE_BYTES:
         out.append(Check("OK", "sort", SORT_INPUT))
     else:
         out.append(
@@ -236,14 +253,16 @@ def run_checks(
 
     section(lambda: _cluster(docker), ["docker", "workers", "coordinator", "limits", "wal"])
     section(lambda: _status(fetch, status_url), ["status", "heartbeat"])
-    docker_root = None
+    docker_root, known = None, True  # Docker down: its own check already fails
     if out and out[0].level == "OK":  # Docker answered: its volumes hold the job output
         try:
             found = docker(["info", "--format", "{{.DockerRootDir}}"]).strip()
-            docker_root = Path(found) if found else None
         except RuntimeError:
-            pass
-    section(lambda: _host(root, free_bytes, docker_root), ["disk", "client", "inputs", "sort"])
+            found = ""
+        docker_root, known = (Path(found), True) if found else (None, False)
+    section(
+        lambda: _host(root, free_bytes, docker_root, known), ["disk", "client", "inputs", "sort"]
+    )
     return out
 
 
