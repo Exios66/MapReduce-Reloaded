@@ -15,6 +15,21 @@ cut a release.
 
 ### Added
 
+- Status page (Go and Python): each job card shows a task timeline, one
+  row for each of the job's latest 512 attempts the coordinator saw, to
+  scale over the job's run, with a bar for map (blue) and reduce (purple),
+  a red outline for attempts that failed or whose worker was lost and an
+  outline for the ones still running; `/status.json` carries the same data
+  as each job's `attempts`, with each attempt's `outcome` (`completed`,
+  `failed`, `superseded` when another attempt of its task won, `lost` when
+  its worker was declared lost, or null while it runs) and a null
+  `started` when its start is unknown. Each row says in words whether the
+  attempt was a backup and how it ended, or that it is running or was
+  abandoned when its job ended, and open timelines and keyboard focus
+  survive the page's refreshes. Attempts with no known start time are left
+  out of the drawing rather than placed at a guess. The history lives in
+  memory: a coordinator restart does not rebuild it from the write-ahead
+  log (#332).
 - Bench: `make figures-check` (`scripts/check-figures.py`) checks the
   evaluation archives against their `SHA256SUMS`, unpacks only the archives
   it lists, redraws every figure in `bench/evaluation/` from them in a

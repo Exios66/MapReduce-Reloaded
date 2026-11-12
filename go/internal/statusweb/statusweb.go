@@ -47,6 +47,13 @@ var tmpl = template.Must(template.New("status").Funcs(template.FuncMap{
 	"fraction": func(f float32) string { return fmt.Sprintf("%d%%", int(float64(f)*100+0.5)) },
 	// state is the job state without its enum prefix, for the badge: "mapping".
 	"state": stateName,
+	// timeline is a job's attempts as bars bounded by the job's run, oldest
+	// first, or nil if the status holds none. Each bar says the attempt,
+	// the window it covers, and its kind (a color).
+	"timeline": func(j *pb.GetJobStatusResponse, now time.Time,
+		attempts map[string][]coordinator.AttemptRange) []attemptBar {
+		return timeline(j, now, attempts)
+	},
 	// heartbeat is how long before now the worker was last seen, "3s ago",
 	// or "" if it never was.
 	"heartbeat": func(now, seen time.Time) string {

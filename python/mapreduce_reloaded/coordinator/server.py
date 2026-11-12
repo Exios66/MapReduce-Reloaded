@@ -162,6 +162,38 @@ class LostWorker(NamedTuple):
     tasks: list[Task]
 
 
+# MAX_ATTEMPTS is the most attempts Status keeps for one job, as
+# go's maxAttempts. A job with more attempts shows only its most recent
+# ones, as the page says, so a status stays small for jobs of any size.
+MAX_ATTEMPTS = 512
+
+
+class AttemptRange(NamedTuple):
+    """One attempt of one task of one job, for the status page's task
+    timeline: when the coordinator started it on its worker, and when it
+    heard that it ended. The times come from the coordinator's clock, as
+    Status's. started is when the coordinator accepts the assignment, not
+    when the worker starts running it (§3.3)."""
+
+    kind: types_pb2.TaskKind
+    index: int
+    attempt: int
+    worker: str
+    started: float | None
+    ended: float | None = None  # None while the attempt is running
+    backup: bool = False  # started while another attempt of the task was running (§3.6)
+    ok: bool = False  # the coordinator accepted its completion report
+    # None while the attempt runs, then one of the OUTCOME_ values: how the
+    # coordinator stopped counting on it, as go's AttemptRange.Outcome.
+    outcome: str | None = None
+
+
+OUTCOME_COMPLETED = "completed"  # its completion report was accepted
+OUTCOME_FAILED = "failed"  # it reported a failure
+OUTCOME_SUPERSEDED = "superseded"  # another attempt of its task completed first
+OUTCOME_LOST = "lost"  # its worker was declared lost
+
+
 class WorkerStatus(NamedTuple):
     """A live worker, last seen by the coordinator's clock (now), and the
     tasks of the active job it is running, with the fraction of each one's
@@ -180,6 +212,10 @@ class Status(NamedTuple):
     jobs: list[coordinator_pb2.GetJobStatusResponse]  # every job kept, in the order submitted
     workers: list[WorkerStatus]  # the live workers, in the order they registered
     lost: list[LostWorker]  # the last MAX_LOST workers lost since the process started
+    # Each job's attempts, for the status page's task timeline. History comes
+    # from the running server's memory: a coordinator restart does not rebuild
+    # it from the write-ahead log, as Go's does not.
+    attempts: dict[str, list[AttemptRange]]
 
 
 @dataclass(eq=False)
@@ -195,6 +231,7 @@ class _Job:
     since: float | None = None  # when the job began holding back tasks, if it has
     err: str = ""  # why the job failed, if it did
     finished: float | None = None  # None while the job runs
+    attempts: list[AttemptRange] = field(default_factory=list)  # of the job, in order
 
     def status(self) -> coordinator_pb2.GetJobStatusResponse:
         """Describes the job's progress."""
@@ -400,7 +437,13 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 tasks = running.get(w.id, [])
                 progress = {t: self._active.tasks.fraction(t, w.id) for t in tasks}
                 workers.append(WorkerStatus(w, tasks, progress))
-            return Status(at, [j.status() for j in self._order], workers, list(self._lost))
+            return Status(
+                at,
+                [j.status() for j in self._order],
+                workers,
+                list(self._lost),
+                {j.id: list(j.attempts) for j in self._order},
+            )
 
     def now(self) -> float:
         """Reads the coordinator's clock: Config.now, or time.time."""
@@ -439,6 +482,9 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                     except RpcError as e:
                         log.error("logging a lost worker: worker %s: %s", w, e)
                     reset = self._active.tasks.reset_worker(w)
+                    self._attempts_stopped(
+                        self._active, lambda a, w=w: a.worker == w, at, OUTCOME_LOST
+                    )
                 self._lost = [*self._lost, LostWorker(w, at, reset)][-MAX_LOST:]
                 log.warning("worker lost: worker %s, %d tasks reset", w, len(reset))
             return dead
@@ -679,22 +725,28 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             j = self._active
             if j is not None and not request.paused:
                 info = self._worker_info(worker)
+                backup = False
                 t = j.tasks.next(lambda i: locality(j.splits[i], info))
                 if t is not None and self._hold_back(t, info, tick):
                     t = None
                 elif t is None and self._cfg.effective_speculation() == SPECULATION_PAPER:
-                    t = j.tasks.backup(worker)
+                    t, backup = j.tasks.backup(worker), True
                 elif t is None and self._cfg.effective_speculation() == SPECULATION_LATE:
-                    t = j.tasks.late_backup(
-                        worker, now, self._cfg.late_params(), len(self._workers)
+                    t, backup = (
+                        j.tasks.late_backup(
+                            worker, now, self._cfg.late_params(), len(self._workers)
+                        ),
+                        True,
                     )
                 if t is not None:
-                    return self._assign(t, worker, now)
+                    return self._assign(t, worker, now, backup)
             resp = coordinator_pb2.RequestTaskResponse(wait=coordinator_pb2.WaitInstruction())
             resp.wait.retry_after.FromNanoseconds(int(self._cfg.retry_after * 1e9))
             return resp
 
-    def _assign(self, t: Task, worker: str, now: float) -> coordinator_pb2.RequestTaskResponse:
+    def _assign(
+        self, t: Task, worker: str, now: float, backup: bool = False
+    ) -> coordinator_pb2.RequestTaskResponse:
         """Starts an attempt at t, a task of the active job, on worker at now
         (Unix seconds), and returns its map or reduce assignment. Raises
         RpcError with Internal if assignment fails or Unavailable if recording
@@ -712,6 +764,7 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         if t.kind == MAP:
             rec.locality = locality(j.splits[t.index], self._worker_info(worker))
         j.placed.setdefault(t, []).append(rec.locality)
+        self._attempt(j, t, attempt, worker, now, backup)
         self._record(log_pb2.LogRecord(task_assigned=rec), now)
         if t.kind == MAP:
             return coordinator_pb2.RequestTaskResponse(
@@ -778,6 +831,46 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
                 j.cleanup()
             return coordinator_pb2.ReportTaskResponse(accepted=accepted)
 
+    def _attempt(self, j: _Job, t: Task, attempt: int, worker: str, now: float, backup: bool):
+        """Records that the coordinator assigned an attempt at t on worker;
+        once a job holds MAX_ATTEMPTS, history drops its oldest start: the
+        page's timeline loses its left edge instead of wrongly shifting."""
+        if len(j.attempts) == MAX_ATTEMPTS:
+            del j.attempts[0]
+        j.attempts.append(
+            AttemptRange(
+                kind=t.kind,
+                index=t.index,
+                attempt=attempt,
+                worker=worker,
+                started=now,
+                backup=backup,
+                ok=False,
+            )
+        )
+
+    def _attempt_end(self, j: _Job, t: Task, attempt: int, at: float | None, outcome: str):
+        """Records the outcome of j's open attempt at (t, attempt), which
+        reports arrive in order (§4.9). A stale or invalid report has already
+        been rejected by the time this is called."""
+        at = self.now() if at is None else at
+        for i in range(len(j.attempts) - 1, -1, -1):
+            a = j.attempts[i]
+            if a.kind == t.kind and a.index == t.index and a.attempt == attempt and a.ended is None:
+                j.attempts[i] = a._replace(
+                    ended=at, ok=outcome == OUTCOME_COMPLETED, outcome=outcome
+                )
+                return
+
+    def _attempts_stopped(self, j: _Job, stopped, at: float | None, outcome: str):
+        """Ends, at at with outcome, every open attempt of j for which
+        stopped is true: the coordinator no longer waits for their reports,
+        so they would otherwise stay open on the timeline for good."""
+        at = self.now() if at is None else at
+        for i, a in enumerate(j.attempts):
+            if a.ended is None and stopped(a):
+                j.attempts[i] = a._replace(ended=at, outcome=outcome)
+
     def _report(self, j: _Job, req, at: float | None) -> tuple[bool, bool]:
         """Applies req, received at at, to j, and says whether it completed
         its task and whether it ended the job. A report for an ended job
@@ -790,6 +883,8 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
         if req.HasField("failure"):
             f = req.failure
             counted = j.tasks.runs(t, id.attempt, req.worker_id)
+            if counted:  # a stale report changes nothing; an ended job's rows stay
+                self._attempt_end(j, t, id.attempt, at, OUTCOME_FAILED)
             j.tasks.fail(t, id.attempt, req.worker_id, f)
             n = j.tasks.failures(t)
             limit = j.spec.max_skipped_records if j.spec.HasField("max_skipped_records") else None
@@ -808,6 +903,11 @@ class Server(coordinator_pb2_grpc.CoordinatorServiceServicer):
             return False, self._active is not j
         accepted = j.tasks.complete(t, id.attempt, req.worker_id, req.success.outputs, at)
         if accepted:
+            self._attempt_end(j, t, id.attempt, at, OUTCOME_COMPLETED)
+            # The task's other attempts stopped counting when this one won.
+            self._attempts_stopped(
+                j, lambda a: (a.kind, a.index) == (t.kind, t.index), at, OUTCOME_SUPERSEDED
+            )
             # A map task run again after its worker died replaces its counts.
             j.counts[t] = dict(req.success.counters.values)
             j.ran[t] = j.placed[t][id.attempt]
