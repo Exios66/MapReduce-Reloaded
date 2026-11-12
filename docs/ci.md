@@ -27,7 +27,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | `go` | `make sh-lint go-lint go-test py-e2e` (shellcheck, gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, and the Python coordinator with the Go commands), split across three nodes (see [Pipeline time](#pipeline-time)) | `cimg/python:3.13`, medium, `parallelism: 3` |
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
-| `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
+| `lint` | `make md-lint docs-test` (the Markdown link and style checks, and the documentation tests in `docs/tests`, which compare the guides with the configuration they describe) | `cimg/python:3.11`, small |
 | `mapping-coverage` | `scripts/ci-params.py --check` (every changed file is mapped, and the jobs received the selection) | `cimg/python:3.11`, small |
 
 The names are set in the workflow, so they do not change when the job
@@ -82,22 +82,29 @@ regex matches it. Three rules keep the selection conservative:
 |---|---|
 | `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod`, `.gitignore` | all (run-all) |
 | any deleted file, any unmapped file | all (run-all) |
-| `go/**`, `*.sh`, `.githooks/**` | go (sh-lint lives in the go job) |
+| `go/**` | go |
+| `*.sh`, `.githooks/**` | the go job's narrow mode (run-sh-lint: `make sh-lint`, which lives in the go job) |
 | `python/**` | python-3.11, python-3.13, and the go job's narrow mode (run-go-python: `make go-python-test py-e2e`) |
 | `proto/**`, `buf.yaml`, `go/gen/**`, `python/mapreduce_reloaded/gen/**` | proto (it regenerates the code and fails if the committed copy differs) |
 | `testdata/**` | go, python-3.11, python-3.13 |
-| `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
-| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `docs/design/0001-*`, `docs/design/0014-*`, `bench/README.md`, `bench/*.py`, `bench/*.sh`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `go/examples/**`, `.coderabbit.yaml`, `.codeant/**` | python-3.11, python-3.13, and lint where the file is docs |
-| files outside `go/` the Go tests read: `README.md`, `docs/paper-mapping.md`, `examples/**`, `bench/jobs/**`, `deploy/compose/monitoring/**` | go, and lint where the file is docs |
+| `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles, `.claude/**`, `go/examples/**` (the documentation tests read the programs it registers) | lint |
+| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/ci.md`, `docs/cluster-vm.md`, `CHANGELOG.md`, `AGENTS.md`, `bench/*.py`, `bench/*.sh`, `bench/fonts/**`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `.coderabbit.yaml`, `.codeant/**`, and the Python files ruff checks outside `python/` (`.claude/**/*.py`, `docs/**/*.py`) | python-3.11, python-3.13, and lint where the file is docs |
+| `README.md`, `docs/paper-mapping.md` (only `cmd/mr` and `papermap` read them) | the go job's narrow mode (run-go-docs: `make go-python-test`), and lint |
+| other files outside `go/` the Go tests read: `examples/**`, `bench/jobs/**`, `deploy/compose/monitoring/**` | go, and lint where the file is docs |
 
 The cross-directory rows come from tracing every file the Go and Python test
 suites open. The Python side checks itself: `python/tests/conftest.py`
 records every tracked file outside `python/` that a test opens, and the
 test run fails, naming the file, if the mapping does not route it to the
 Python jobs. (The whole-repository link sweep is marked `lint_inputs`: it
-reads every Markdown file, which the lint job checks.) For the Go tests, a
-new read of a file outside `go/` needs its line added by hand, and
-`python/tests/test_ci_params.py` lists the known ones.
+reads every Markdown file, which the lint job checks.) The documentation
+tests do the same for the lint job: `docs/tests/conftest.py` fails the run
+if a test there opens a tracked file the mapping does not route to
+`run-lint`. For the Go tests, a new read of a file outside `go/` needs its
+line added by hand, and `python/tests/test_ci_params.py` lists the known
+ones; three Go tests in `go/internal/papermap` fail if a Go test outside
+`cmd/mr` and `papermap` starts to read `python/`, a README or `docs/`, or
+if any Go test names a shell script.
 
 Echo-skip semantics: every job always exists in the workflow, so every
 required check always reports. A job whose inputs did not change runs only
@@ -152,6 +159,38 @@ How each job meets its requirements:
   result from `main` stands. `TestOnlyGoPythonTestPackagesReadPython` fails
   if another Go test starts to read `python/` or run Python. Any other
   implicated file, `run-all`, and `main` run the full mode.
+
+  The narrow mode has two more parts
+  ([ADR 0025](design/0025-narrow-go-modes-and-docs-tests.md)), and a PR
+  runs each part its files implicate:
+
+  | Part | Parameter | Files | Runs |
+  |---|---|---|---|
+  | python | `run-go-python` | `python/**` | `make go-python-test` on node 0, `make py-e2e` on node 2 |
+  | docs | `run-go-docs` | `README.md`, `docs/paper-mapping.md` | `make go-python-test` on node 0 |
+  | sh | `run-sh-lint` | `*.sh`, `.githooks/**` | `make sh-lint` on node 2 |
+
+  Only `cmd/mr` reads the README (its usage text must match) and only
+  `papermap` reads the mapping table, and `make go-python-test` tests both
+  packages. No Go test reads a shell script outside `scripts/`, which runs
+  every job. A PR with the sh part alone installs neither Go nor Python:
+  its nodes check out the repository and node 2 runs shellcheck.
+  `scripts/ci-go-job.sh` reads the parts from `MR_CI_GO_NARROW`, and fails
+  if narrow mode is asked for with no part.
+- **The heap measurements run once.** `TestSortMemoryBounded` and
+  `TestReduceMemoryBounded` measure one goroutine's live heap over 80 MB.
+  They skip themselves under the race detector, which made them ten times
+  slower and has nothing to find in them, and run in the coverage pass on
+  node 1. `TestOnlyTheHeapMeasurementsSkipUnderTheRaceDetector` fails if
+  the coverage pass gains `-race` or `-short`, or if another test uses the
+  same switch.
+- **Documentation tests.** `docs/tests` compares the guides with the
+  configuration they describe: the Compose guide's limits and profiles with
+  `compose.yaml`, this page's job table with the CircleCI config, the
+  examples guide with the programs `go/examples` registers. They import
+  nothing from the package, so the lint job runs them (`make docs-test`)
+  with pytest and PyYAML only, and a PR that changes a guide no other test
+  reads runs lint alone, not the Python jobs.
 - **Go build cache.** The go job restores Go's build cache and
   golangci-lint's analysis cache, so compiled packages (the race-built
   standard library above all) are not rebuilt on every run. Both caches are
@@ -211,6 +250,22 @@ Two later changes shorten the tests themselves, with the same checks
   and later, which records exactly the lines the default tracer does. On
   one CPU the Python 3.13 tests went from 51 s to 36 s. Python 3.11 has no
   `sys.monitoring` and is unchanged.
+
+Whether those changes left the race node shorter than the others was
+checked with an A/B run ([ADR 0025](design/0025-narrow-go-modes-and-docs-tests.md)):
+`main` at `605430b` (A) against this branch (B), on the same machine pinned
+to two CPUs, warm build caches, two runs of each pass in turn:
+
+| Go node | Runs | A | B |
+|---|---|---|---|
+| 0 | `go-test-race` | 203 s, 180 s | 156 s, 136 s |
+| 1 | `go-test-cover` | 103 s, 100 s | 111 s, 100 s |
+| 2 | `go-lint`, `py-e2e` | | 23 s + 49 s |
+
+The race node is about 45 s shorter, but still the slowest by about 40 s,
+so the nodes are not unbalanced the other way, and moving a part between
+nodes would not shorten the job: node 0 runs one make target, and node 2
+has room to spare.
 
 ## Caching
 

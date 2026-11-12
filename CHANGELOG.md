@@ -24,6 +24,15 @@ cut a release.
   compressed MRKV blocks: Snappy copies with a 1-, 2- and 4-byte offset and
   zstd run-length and raw blocks must read back, and their damaged forms
   must be refused as `bad_block`, in both languages (#358).
+- CI: two more narrow parts of the `go` job (ADR 0025). A PR whose Go-side
+  files are only `README.md` or `docs/paper-mapping.md` runs
+  `make go-python-test` (`run-go-docs`), and one whose files are only shell
+  scripts or `.githooks/` runs `make sh-lint` (`run-sh-lint`), instead of
+  the whole Go suite. Guard tests in `go/internal/papermap/cimodes_test.go`
+  fail if another Go test starts to read those files (#358).
+- Lint: the documentation tests moved from `python/tests` to `docs/tests`
+  and run in the lint job with `make docs-test` (also part of `make lint`
+  and `make check`), so a guide-only PR no longer runs the Python jobs (#358).
 
 - Status page (Go and Python): each job card shows a task timeline, one
   row for each of the job's latest 512 attempts the coordinator saw, to
@@ -141,6 +150,10 @@ cut a release.
   that had risen two points or more over it, to one point under the
   coverage measured on 2026-11-12, for example `cmd/coordinator` from 85 to
   90 and `internal/split` from 87 to 93 (#358).
+- Tests: `TestSortMemoryBounded` and `TestReduceMemoryBounded` skip under
+  the race detector and run in the coverage pass; they measure one
+  goroutine's heap, and under `-race` took ten times as long. The race node
+  of the `go` job takes about 140 s instead of 190 s on two CPUs (#358).
 
 - Bench figures: every figure in `bench/evaluation/` is redrawn for
   reading at a glance. Each has a bold title stating its finding, a

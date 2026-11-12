@@ -14,7 +14,7 @@
 | [`check-links.py`](check-links.py) | Checks that every relative link and anchor in the tracked Markdown files resolves. Run by `make md-lint` (#159). |
 | [`check-dark-charts.py`](check-dark-charts.py) | Checks that every bench chart a Markdown page shows has a dark variant that exists. Run by `make md-lint` (#349). |
 | [`check-figures.py`](check-figures.py) | Checks the evaluation archives against their `SHA256SUMS`, redraws every figure in `bench/evaluation/` from them, and compares each with the committed PNG pixel by pixel. Needs matplotlib, so `make check` does not run it: `make figures-check PLOT_PYTHON=...` on the experiment VM. |
-| [`ci-go-job.sh`](ci-go-job.sh) | Runs one CircleCI node's share of the `go` job, which runs on three nodes (ADR 0024). |
+| [`ci-go-job.sh`](ci-go-job.sh) | Runs one CircleCI node's share of the `go` job, which runs on three nodes (ADR 0024), in full or in the narrow mode's parts (ADR 0025). |
 | [`install-tool.sh`](install-tool.sh) | Installs a pinned Go tool for `make tools`, keeping a cached binary that `go version -m` shows was built from the pin (ADR 0024). |
 | [`ci-params.py`](ci-params.py) | Selects the CI jobs a branch's changed files implicate, from `.circleci/mapping.txt`, and checks that selection. See [CI](../docs/ci.md) and ADR 0020. |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |

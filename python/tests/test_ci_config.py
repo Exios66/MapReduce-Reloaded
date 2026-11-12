@@ -26,6 +26,14 @@ MAKEFILE = (ROOT / "Makefile").read_text()
 INSTALL_GO = ROOT / "scripts/ci-install-go.sh"
 
 
+def ci_params_names():
+    """The pipeline parameters, from scripts/ci-params.py."""
+    source = (ROOT / "scripts/ci-params.py").read_text()
+    names = re.findall(r'"(run-[a-z-]+)"', source.split("PARAMETERS = (", 1)[1].split(")", 1)[0])
+    assert len(names) == 8
+    return names
+
+
 def go_mod_version() -> str:
     """The Go release scripts/ci-install-go.sh wants: a toolchain line wins over go."""
     mod = (ROOT / "go/go.mod").read_text()
@@ -54,7 +62,7 @@ def test_circleci_calls_the_make_targets():
         "scripts/ci-go-job.sh full",
         "scripts/ci-go-job.sh narrow",
         "make py-lint py-test PYTHON=python",
-        "make md-lint PYTHON=python",
+        "make md-lint docs-test PYTHON=python",
         "make tools",
     ):
         assert command in CONT
@@ -114,7 +122,7 @@ def test_mapping_coverage_checks_what_the_jobs_received():
     job = CONT.split("\n  mapping-coverage:\n", 1)[1].split("\nworkflows:", 1)[0]
     assert "python3 scripts/ci-params.py --check" in job
     received = re.search(r"MR_CI_PARAMS: '(.+)'", job).group(1)
-    for name in ("run-all", "run-go", "run-go-python", "run-python", "run-proto", "run-lint"):
+    for name in ci_params_names():
         assert f'"{name}": << pipeline.parameters.{name} >>' in received
     # Rendered with booleans, it is the JSON the script reads.
     assert json.loads(re.sub(r"<< pipeline\.parameters\.[a-z-]+ >>", "true", received))
@@ -174,10 +182,27 @@ def test_ci_runs_shellcheck():
 CI_GO_JOB = ROOT / "scripts/ci-go-job.sh"
 # What the go job ran in one step before it was split across nodes.
 FULL = ["sh-lint", "go-lint", "go-test-race", "go-test-cover", "py-e2e"]
-NARROW = ["go-python-test", "py-e2e"]
+# The narrow mode's parts (ADR 0025) and what each combination runs, in order.
+NARROW = {
+    "python": ["go-python-test", "py-e2e"],
+    "docs": ["go-python-test"],
+    "sh": ["sh-lint"],
+    "python docs": ["go-python-test", "py-e2e"],
+    "python sh": ["sh-lint", "go-python-test", "py-e2e"],
+    "docs sh": ["sh-lint", "go-python-test"],
+    "python docs sh": ["sh-lint", "go-python-test", "py-e2e"],
+}
+MODES = [("full", "", FULL), *(("narrow", parts, want) for parts, want in NARROW.items())]
 
 
-def go_job_calls(mode, total, node, check=True):
+def narrow_env(parts):
+    """MR_CI_GO_NARROW as CircleCI renders it from the pipeline parameters."""
+    return " ".join(
+        f"{p}={'true' if p in parts.split() else 'false'}" for p in ("python", "docs", "sh")
+    )
+
+
+def go_job_calls(mode, total, node, check=True, parts="python"):
     """[(make target, MR_REQUIRE_SHELLCHECK)] that one node of the go job runs."""
     stub = Path(tempfile.mkdtemp()) / "make"
     # A stand-in make that prints each target with the shellcheck flag.
@@ -189,6 +214,7 @@ def go_job_calls(mode, total, node, check=True):
         "CIRCLE_NODE_INDEX": str(node),
         "MR_CI_GO_JOB_NO_INSTALL": "1",
         "MAKE": str(stub),
+        "MR_CI_GO_NARROW": narrow_env(parts),
     }
     env.pop("MR_REQUIRE_SHELLCHECK", None)
     out = subprocess.run(
@@ -204,8 +230,8 @@ def go_job_calls(mode, total, node, check=True):
     return calls
 
 
-def go_job_targets(mode, total, node):
-    return [target for target, _ in go_job_calls(mode, total, node)]
+def go_job_targets(mode, total, node, parts="python"):
+    return [target for target, _ in go_job_calls(mode, total, node, parts=parts)]
 
 
 def go_job_parallelism():
@@ -213,19 +239,87 @@ def go_job_parallelism():
     return int(re.search(r"^    parallelism: (\d+)$", go_job, re.M).group(1))
 
 
-@pytest.mark.parametrize("mode, want", [("full", FULL), ("narrow", NARROW)])
-def test_go_job_on_one_node_runs_everything_in_order(mode, want):
-    assert go_job_targets(mode, 1, 0) == want
+@pytest.mark.parametrize("mode, parts, want", MODES)
+def test_go_job_on_one_node_runs_everything_in_order(mode, parts, want):
+    assert go_job_targets(mode, 1, 0, parts) == want
 
 
-@pytest.mark.parametrize("mode, want", [("full", FULL), ("narrow", NARROW)])
-def test_go_job_nodes_together_run_everything_once(mode, want):
+@pytest.mark.parametrize("mode, parts, want", MODES)
+def test_go_job_nodes_together_run_everything_once(mode, parts, want):
     """Split across the job's nodes, the go job still runs every target it ran
     in one step, each exactly once: nothing is dropped and nothing doubled."""
     total = go_job_parallelism()
     assert total == 3
-    runs = [t for node in range(total) for t in go_job_targets(mode, total, node)]
+    runs = [t for node in range(total) for t in go_job_targets(mode, total, node, parts)]
     assert sorted(runs) == sorted(want)
+
+
+def test_narrow_sh_lint_requires_shellcheck_and_runs_on_the_last_node():
+    # The sh-only branch of the go job installs neither Go nor Python, so
+    # sh-lint must be all that its nodes run, with a missing shellcheck fatal.
+    assert go_job_calls("narrow", 3, 0, parts="sh") == []
+    assert go_job_calls("narrow", 3, 1, parts="sh") == []
+    assert go_job_calls("narrow", 3, 2, parts="sh") == [("sh-lint", "1")]
+
+
+def test_narrow_mode_without_a_part_is_an_error():
+    for narrow in ("", "python=false docs=false sh=false", "python=maybe"):
+        result = subprocess.run(
+            [CI_GO_JOB, "narrow"],
+            cwd=ROOT,
+            env={**os.environ, "MR_CI_GO_NARROW": narrow, "MAKE": "true"},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 2 and "narrow mode needs a part" in result.stderr
+
+
+def _holds(condition, on):
+    """Evaluate a CircleCI logic condition with the parameters in `on` true,
+    on a branch that is not main."""
+    if isinstance(condition, str):
+        return re.fullmatch(r"<< pipeline\.parameters\.([a-z-]+) >>", condition).group(1) in on
+    ((op, arg),) = condition.items()
+    if op == "equal":
+        assert arg == ["main", "<< pipeline.git.branch >>"]
+        return False
+    if op == "not":
+        return not _holds(arg, on)
+    return {"or": any, "and": all}[op](_holds(c, on) for c in arg)
+
+
+def test_exactly_one_branch_of_the_go_job_runs_for_every_selection():
+    """The go job's steps are one skip note and three gated branches: the
+    narrow mode with Go tests, sh-lint alone, and the full mode. Whatever the
+    selection, exactly one runs, and it is the one that covers the selection."""
+    import itertools
+
+    import yaml
+
+    steps = yaml.safe_load(CONT)["jobs"]["go"]["steps"]
+    names = ["run-all", "run-go", "run-go-python", "run-go-docs", "run-sh-lint"]
+    for values in itertools.product([False, True], repeat=len(names)):
+        on = {n for n, v in zip(names, values, strict=True) if v}
+        ran = []
+        for step in steps:
+            ((kind, body),) = step.items()
+            if _holds(body["condition"], on) == (kind == "when"):
+                ran.append(yaml.safe_dump(body["steps"], width=10_000))
+        assert len(ran) == 1, on
+        (ran,) = ran
+        if not on:
+            assert "Not implicated" in ran
+        elif on & {"run-all", "run-go"}:
+            assert "scripts/ci-go-job.sh full" in ran
+        elif on == {"run-sh-lint"}:
+            # No Go and no Python: only a checkout and the script.
+            assert "python=false docs=false sh=true" in ran
+            assert "go-toolchain" not in ran and "python-deps" not in ran
+        else:
+            assert "scripts/ci-go-job.sh narrow" in ran and "go-toolchain" in ran
+            assert "python=<< pipeline.parameters.run-go-python >>" in ran
+            assert "docs=<< pipeline.parameters.run-go-docs >>" in ran
+            assert "sh=<< pipeline.parameters.run-sh-lint >>" in ran
 
 
 def test_go_job_rejects_an_unplanned_node_count():
@@ -256,6 +350,31 @@ def test_go_test_runs_the_race_pass_then_the_coverage_pass():
         "scripts/cover.py go",
     ):
         assert part in cover
+    # The two 80 MB heap measurements skip themselves under the race
+    # detector (ADR 0025), so the coverage pass must run without it, and
+    # neither pass may run with -short, which skips them too. The Go test
+    # TestOnlyTheHeapMeasurementsSkipUnderTheRaceDetector checks the tests.
+    assert "-race" not in cover and "-short" not in cover + race
+
+
+def test_the_lint_job_runs_the_documentation_tests():
+    """make lint, and so make check, runs docs-test; CI's lint job runs it
+    with pytest and PyYAML at the versions python[dev] asks for."""
+    assert re.search(r"^lint: .*\bdocs-test\b", MAKEFILE, re.M)
+    target = MAKEFILE.split("\ndocs-test:\n", 1)[1].split("\n\n", 1)[0]
+    assert "-m pytest" in target and "docs/tests" in target
+    lint = CONT.split("\n  lint:\n", 1)[1].split("\n  mapping-coverage:\n", 1)[0]
+    install = re.search(r"command: python -m pip install (.+)$", lint, re.M).group(1)
+    wanted = re.findall(r'"([^"]+)"', install)
+    assert len(wanted) == 3
+    pyproject = (ROOT / "python/pyproject.toml").read_text()
+    dev = pyproject.split("\ndev = [", 1)[1].split("\n]", 1)[0]
+    for requirement in wanted:
+        assert f'"{requirement}"' in dev
+    # The documentation tests are not collected by the Python jobs as well.
+    assert not (ROOT / "python/tests/test_documentation.py").exists()
+    for call in ("ruff format --check", "ruff check"):
+        assert re.search(rf"{call} [^&\n]*\.\./docs/tests", MAKEFILE)
 
 
 def test_each_go_node_keeps_its_own_build_cache():
@@ -411,9 +530,11 @@ def test_main_runs_every_job_unfiltered():
     # so it runs everything.
     conditions = CONT.count("- << pipeline.parameters.run-all >>")
     # proto, go, python, lint: each a when and an unless, plus the go job's
-    # narrow mode, which must not run on main (main runs the full mode).
-    assert conditions == 9
+    # two narrow branches, which must not run on main (main runs the full mode).
+    assert conditions == 10
     assert CONT.count("- equal: [main, << pipeline.git.branch >>]") == conditions
     go = CONT.split("\n  go:\n", 1)[1].split("\n  python:\n", 1)[0]
-    narrow = go.split("- not:\n", 1)[1].split("steps:", 1)[0]
-    assert "run-all" in narrow and "equal: [main," in narrow and "run-go >>" in narrow
+    narrows = [part.split("steps:", 1)[0] for part in go.split("- not:\n")[1:]]
+    assert len(narrows) == 2
+    for narrow in narrows:
+        assert "run-all" in narrow and "equal: [main," in narrow and "run-go >>" in narrow

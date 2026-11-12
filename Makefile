@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint figures-check real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -140,7 +140,7 @@ perf:
 
 test: go-test py-test
 
-lint: go-lint py-lint sh-lint md-lint
+lint: go-lint py-lint sh-lint md-lint docs-test
 
 # shellcheck on every tracked shell script and the git hook (#159). Where it
 # is not installed, it says so and passes, unless MR_REQUIRE_SHELLCHECK is
@@ -177,6 +177,15 @@ md-lint:
 		echo "md-lint: pymarkdown is not installed; skipping style check (install python[dev])"; \
 	fi
 
+# The documentation tests (docs/tests): the guides against the configuration
+# they describe, such as the Compose guide's memory limits against
+# compose.yaml and docs/ci.md's job table against the CircleCI config. They
+# import nothing from the package, so they need only pytest and PyYAML, and
+# CI's lint job runs them: a PR that changes only a guide then runs lint,
+# not the Python jobs (docs/ci.md, ADR 0025).
+docs-test:
+	$(PYTHON) -m pytest -q -p no:cacheprovider docs/tests
+
 # Redraws the evaluation figures from bench/evaluation/rerun-8f0ddb9/archives
 # and compares each with the committed PNG (scripts/check-figures.py). It
 # needs matplotlib, which make venv does not install, so make check does not
@@ -187,7 +196,7 @@ figures-check:
 
 fmt:
 	cd go && gofmt -w .
-	cd python && $(PYTHON) -m ruff format . ../scripts ../bench ../.claude && $(PYTHON) -m ruff check --fix . ../scripts ../bench ../.claude
+	cd python && $(PYTHON) -m ruff format . ../scripts ../bench ../.claude ../docs/tests && $(PYTHON) -m ruff check --fix . ../scripts ../bench ../.claude ../docs/tests
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
@@ -261,10 +270,13 @@ go-test-cover:
 	fi
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
-# The Go tests that read python/: cmd/mr's golden comparison with the Python
-# examples, and papermap's check of the Python test names. CI's go job runs
-# only these (with py-e2e) when a PR changes python/ alone; every other Go
-# package passes with python/ removed (docs/ci.md).
+# The Go tests that read outside go/ what no other Go test does: cmd/mr's
+# golden comparison with the Python examples and its usage text against
+# README.md, and papermap's checks of docs/paper-mapping.md and the Python
+# test names. CI's go job runs only these (with py-e2e) when a PR changes
+# python/ alone, and only these when it changes README.md or
+# docs/paper-mapping.md alone; every other Go package passes with python/
+# and both files removed (docs/ci.md).
 go-python-test:
 	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./cmd/mr && go test -count=1 ./internal/papermap
 
@@ -321,4 +333,4 @@ py-e2e:
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
 
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench ../.claude && $(PYTHON) -m ruff check . ../scripts ../bench ../.claude
+	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench ../.claude ../docs/tests && $(PYTHON) -m ruff check . ../scripts ../bench ../.claude ../docs/tests
