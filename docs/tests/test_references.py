@@ -109,17 +109,23 @@ def make_targets() -> frozenset[str]:
 
 
 def ignored(paths: list[str]) -> set[str]:
-    """Those of paths that .gitignore covers: what a build or a run writes."""
+    """Those of paths that .gitignore covers: what a build or a run writes.
+
+    A pattern for a directory (`.venv/`) matches a path that is not on disk
+    only when the path ends in a slash, and a clean checkout has none of the
+    output, so each path is asked about both as a file and as a directory.
+    """
     if not paths:
         return set()
+    asked = {form: path for path in paths for form in (path, path.rstrip("/") + "/")}
     out = subprocess.run(
         ["git", "check-ignore", "--no-index", "--stdin"],
         cwd=ROOT,
-        input="\n".join(paths),
+        input="\n".join(asked),
         capture_output=True,
         text=True,
     )
-    return set(out.stdout.split())
+    return {asked[form] for form in out.stdout.split() if form in asked}
 
 
 def test_make_targets_named_in_the_guides_exist():
