@@ -189,16 +189,18 @@ tar xzf "$a/E0-isolated.tar.gz" -C "$d/iso" && mv "$d/iso/E0" "$d/E0-isolated"
 python3 bench/plot-experiments.py "$d" bench/evaluation
 ```
 
-Every figure uses the same colors: blue is the system as it ships
+In paired comparisons, blue is the system as it ships
 (combiner on, backups on, no failure, compiled) and orange the changed or
 disturbed setting; a third series, where there is one, is green and labeled
-directly. Each title states the finding, computed from the CSVs. The chart
+directly. E0 instead colors the three workloads. Each title states the finding,
+computed from the CSVs. The chart
 type follows the comparison:
 
 - E0 is a line against the ideal diagonal, because workers are an ordered
-  scale. A whisker right of each dot spans its runs; the one-worker
-  baseline is 1× by definition and has none, and a range narrower than a
-  dot is not drawn.
+  scale. A whisker right of each dot varies the N-worker runs while holding
+  the one-worker median fixed; it does not include variation in the baseline.
+  The one-worker baseline is 1× by definition and has no whisker, and a
+  range narrower than a dot is not drawn.
 - E1 and E6 compare two settings per group, so they are dumbbells: one row
   per group joining the combiner-on and combiner-off medians, labeled with
   the saving. Bytes use a log axis, where a row's length is the factor
@@ -209,7 +211,8 @@ type follows the comparison:
   for backups), or "no clear difference" when the run ranges overlap. Two
   medians too close for two dots are drawn a little above and below the
   row. Beside them is the reason: tasks finished over time for E2 and E4,
-  and the cluster's data rate for E3, with the lost worker shaded.
+  and the cluster's data rate for E3, with the lost worker shaded. Each
+  curve is one valid run selected by median duration, not an aggregate.
 - E5 and `faults.png` compare magnitudes, so they are bars from zero. E5's
   runs all fall within a few percent of their medians, too close for a
   whisker to show, so its subtitle gives that spread instead. E7 compares
@@ -334,7 +337,7 @@ one; on the right are the straggler runs' tasks finished over time.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="evaluation/E3-dark.png">
-  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the normal job time, each a dumbbell from the no-failure median, and the data rate of the median run killed at 50%" src="evaluation/E3.png">
+  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the calibration time, each a dumbbell from the no-failure median, and the data rate of the median run killed at 50%" src="evaluation/E3.png">
 </picture>
 
 Three calibration runs come first; the kill times are 25, 50 and 75% of
@@ -352,10 +355,9 @@ the offset between those two clocks.
 
 - Every job finished on three workers, with its output checksum matching
   the first normal run's; this checks agreement, not independent correctness.
-- Most of the cost is the 10 s it takes the coordinator to declare the
-  worker dead (three missed heartbeats), plus the work that is lost. Killed
-  early, the worker has finished little, and the other three keep working
-  while the coordinator waits, so the cost is a little under the timeout.
+- A worker timeout is 10 s (three missed heartbeats), but a reduce can
+  report missing map output earlier. At 25%, the job finished before the
+  timeout; the other three workers continued while lost work was retried.
 - Killed at 75%, near the end of the map phase, the worker's finished map
   tasks are lost too: their output lived on its disk, so they run again
   (§3.3), and the reduce phase waits for them.
@@ -374,8 +376,9 @@ the offset between those two clocks.
 
 - A restart with the write-ahead log costs 1.2 s (15%). The restarted
   coordinator replays its log and keeps every task that had finished; the
-  plot's flat step at the restart is the time the coordinator was down and
-  the workers' reconnects.
+  plot shows a flat step in the selected run. The historical task samples
+  and restart time use different clocks, so the plot does not place a restart
+  marker or measure its duration.
 - Every run started on a fresh log, so a restart replays its own job only,
   and the restart time is 50% of three calibration runs' median.
 

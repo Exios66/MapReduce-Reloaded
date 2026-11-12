@@ -80,15 +80,15 @@ repeat, and every run's output matched the normal run's.
 | E0: scaling over workers | Word count runs 3.7× faster on 4 workers than on 1, distributed sort 3.1×, grep 2.0× |
 | E1: the combiner | 15× to 78× fewer bytes shuffled, 16–42% less job time, more as the keys get more skewed |
 | E2: backup tasks | With one worker at 0.2 CPU, backups cut 17.9 s to 11.4 s; with no straggler they cost nothing measurable |
-| E3: losing a worker | Every job finishes with the undisturbed run's output; it adds +8 s to +26 s in all: the 10 s timeout, partly overlapped by the other workers, plus the lost work |
+| E3: losing a worker | Every job finishes with the undisturbed run's output; it adds +8 s to +26 s in all; lost work is retried after failed fetches or the worker timeout |
 | E4: a coordinator restart | Recovery from the log costs 1.2 s (15%) and keeps every finished task |
 | E5: an interpreted job file | 2.3× slower than compiled with the helpers `api.Words`/`api.Sum`, 10.2× without them |
-| E6: the combiner on real text | 5.2× fewer bytes and 11% faster on crawled English, 3.2×/8% in every language, 33×/24% on the book (a best case) |
+| E6: the combiner on real text | 5.2× fewer bytes and 11% less job time on crawled English, 3.2×/8% in every language, 33×/24% on the book (a best case) |
 | E7: the paper's backups against LATE | On four workers of mixed speeds, either rule cuts a sort by 32% (25.2 s to about 17 s); LATE needs fewer backups (1 against 5), and the two times overlap |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/faults-dark.png">
-  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart; every run's output matched an undisturbed run's" src="bench/evaluation/faults.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75% of calibration time, and a coordinator restart; every run's output matched an undisturbed run's" src="bench/evaluation/faults.png">
 </picture>
 
 <picture>
@@ -116,9 +116,10 @@ repeat, and every run's output matched the normal run's.
   <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median on a bar spanning its runs" src="bench/evaluation/E7.png">
 </picture>
 
-In every plot, blue is the system as it ships or undisturbed and orange
-the changed or disturbed setting; every bar in the faults summary is a
-disturbance, so every bar is orange. E1 and E6 are dumbbells: each
+In paired comparisons, blue is the system as it ships or undisturbed and
+orange the changed or disturbed setting. E0 colors the three workloads;
+every bar in the faults summary is a disturbance, so every bar is orange.
+E1 and E6 are dumbbells: each
 row joins the combiner-on and combiner-off medians, and bytes use a log
 axis, so a row's length is the factor the combiner saves. The other plots
 (E2–E4), the raw CSVs, the machine and the commands are in

@@ -150,6 +150,11 @@ cut a release.
 
 ### Changed
 
+- Bench figures: clarify the speed-up ranges, elapsed-time savings and
+  example traces in `bench/evaluation/`; E3 labels kill times against
+  calibration, and E4 no longer places a restart on an unaligned clock
+  (#360).
+
 - CI: `go/internal/e2e` writes the 48 MB input of its kill and restart
   tests once, with `strconv`, instead of once per test with `fmt`; the bytes
   are the same. Under the race detector on two CPUs the package takes about
