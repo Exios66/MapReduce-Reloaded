@@ -50,6 +50,13 @@ func TestSortMemoryBounded(t *testing.T) {
 	if testing.Short() {
 		t.Skip("sorts 80 MB")
 	}
+	if raceDetector {
+		// One goroutine does all of it, so the race detector has nothing to
+		// find here and only makes the 80 MB ten times slower. The coverage
+		// pass (make go-test-cover) runs this test without it, and the
+		// package's other tests run the same code under the detector.
+		t.Skip("a single-goroutine heap measurement: run by the pass without the race detector")
+	}
 	defer debug.SetGCPercent(debug.SetGCPercent(-1)) // GC only when sample asks
 	const budget = 4 << 20
 	const input = 20 * budget
