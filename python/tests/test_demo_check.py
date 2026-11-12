@@ -15,6 +15,7 @@ SCRIPT = ROOT / "scripts" / "demo-check.py"
 WORKERS = [f"mapreduce-worker-{i}" for i in range(1, 5)]
 COORD = "mapreduce-coordinator-1"
 GB = 1_000_000_000
+DOCKER_ROOT = "/var/lib/docker"
 
 
 @pytest.fixture
@@ -45,6 +46,8 @@ def fake_docker(ps=None, workers_memory=805_306_368, cmd=None):
     def docker(args):
         if args[0] == "version":
             return "29.8.1\n"
+        if args[0] == "info":
+            return DOCKER_ROOT + "\n"
         if args[0] == "compose":
             return ps if ps is not None else ps_lines()
         if args[0] == "inspect":
@@ -95,7 +98,7 @@ def checks(dc, root, docker=None, fetch=None, free=10 * GB):
         docker or fake_docker(),
         fetch or fake_fetch(),
         root,
-        lambda p: free,
+        free if callable(free) else (lambda p: free),
         "http://127.0.0.1:18780/",
     )
 
@@ -255,3 +258,77 @@ def test_pinned_limits_match_compose_yaml(dc):
     assert dc.COORDINATOR_MEMORY == 256 * 1024 * 1024
     assert "-data-dir" in services["coordinator"]["command"]
     assert services["worker"].get("deploy", {}).get("replicas", dc.WORKERS) == dc.WORKERS
+
+
+def test_docker_errors_keep_the_cause_not_the_usage_hint(dc, monkeypatch):
+    """A VM without the Compose plugin: the cause is the first line."""
+
+    def run(cmd, **kw):
+        err = "docker: 'compose' is not a docker command.\nSee 'docker --help'\n"
+        return subprocess.CompletedProcess(cmd, 1, "", err)
+
+    monkeypatch.setattr(dc.subprocess, "run", run)
+    with pytest.raises(RuntimeError, match="'compose' is not a docker command"):
+        dc.docker(["compose", "ps"])
+
+
+def test_an_http_error_says_the_server_answered(dc, tmp_path):
+    def fetch(url):
+        raise urllib.error.HTTPError(url, 500, "Internal Server Error", {}, None)
+
+    c = by_name(checks(dc, ready_root(tmp_path), fetch=fetch))
+    assert c["status"].level == "FAIL"
+    assert "HTTP 500" in c["status"].detail
+    assert "unreachable" not in c["status"].detail
+
+
+@pytest.mark.parametrize("at", [None, "soon"])
+def test_a_status_without_its_time_cannot_pass_the_heartbeat(dc, tmp_path, at):
+    def fetch(url):
+        ws = [{"id": f"w{i}", "last_seen": 99.0} for i in range(4)]
+        body = {"workers": ws} if at is None else {"at": at, "workers": ws}
+        return json.dumps(body).encode()
+
+    c = by_name(checks(dc, ready_root(tmp_path), fetch=fetch))
+    assert c["heartbeat"].level == "FAIL"
+    assert "time" in c["heartbeat"].detail
+
+
+def test_the_disk_check_measures_dockers_disk_too(dc, tmp_path):
+    root = ready_root(tmp_path)
+
+    def free(path):
+        return 2 * GB if str(path) == DOCKER_ROOT else 10 * GB
+
+    c = by_name(checks(dc, root, free=free))
+    assert c["disk"].level == "FAIL"
+    assert DOCKER_ROOT in c["disk"].detail
+
+
+def test_the_disk_check_falls_back_to_the_repository_without_docker(dc, tmp_path):
+    def docker(args):
+        raise RuntimeError("Cannot connect to the Docker daemon")
+
+    seen = []
+
+    def free(path):
+        seen.append(str(path))
+        return 10 * GB
+
+    c = by_name(checks(dc, ready_root(tmp_path), docker=docker, free=free))
+    assert c["disk"].level == "OK"
+    assert seen == [str(tmp_path)]
+
+
+def test_an_empty_docker_root_is_not_measured_as_the_current_directory(dc, tmp_path):
+    def docker(args):
+        return "\n" if args[0] == "info" else fake_docker()(args)
+
+    seen = []
+
+    def free(path):
+        seen.append(str(path))
+        return 10 * GB
+
+    checks(dc, ready_root(tmp_path), docker=docker, free=free)
+    assert seen == [str(tmp_path)]

@@ -14,6 +14,7 @@ import json
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -48,8 +49,9 @@ def docker(args: list[str]) -> str:
     except (OSError, subprocess.TimeoutExpired) as e:
         raise RuntimeError(str(e)) from e
     if out.returncode != 0:
-        lines = (out.stderr or out.stdout).strip().splitlines()
-        raise RuntimeError(lines[-1] if lines else f"exit {out.returncode}")
+        # The cause comes first; Docker may add a usage hint after it.
+        lines = [s for s in (out.stderr or out.stdout).splitlines() if s.strip()]
+        raise RuntimeError(lines[0].strip() if lines else f"exit {out.returncode}")
     return out.stdout
 
 
@@ -135,6 +137,9 @@ def _cluster(docker: Callable[[list[str]], str]) -> list[Check]:
 def _status(fetch: Callable[[str], bytes], url: str) -> list[Check]:
     try:
         st = json.loads(fetch(url.rstrip("/") + "/status.json"))
+    except urllib.error.HTTPError as e:
+        detail = f"{url} answered HTTP {e.code}: docker logs mapreduce-coordinator-1 says why"
+        return [Check("FAIL", "status", detail), Check("FAIL", "heartbeat", "no status page")]
     except (OSError, ValueError, http.client.HTTPException) as e:
         detail = f"{url} unreachable ({e}): make cluster-up, or start the SSH forward"
         return [Check("FAIL", "status", detail), Check("FAIL", "heartbeat", "no status page")]
@@ -149,7 +154,9 @@ def _status(fetch: Callable[[str], bytes], url: str) -> list[Check]:
             f"{len(workers)} of {WORKERS} workers registered",
         )
     ]
-    at = st.get("at", 0)
+    at = st.get("at")
+    if isinstance(at, bool) or not isinstance(at, (int, float)):
+        return out + [Check("FAIL", "heartbeat", "status.json gives no time to compare with")]
     stale = [w.get("id", "?") for w in workers if at - (w.get("last_seen") or 0) > HEARTBEAT_LIMIT]
     if stale:
         out.append(
@@ -166,15 +173,23 @@ def _status(fetch: Callable[[str], bytes], url: str) -> list[Check]:
     return out
 
 
-def _host(root: Path, free_bytes: Callable[[Path], int]) -> list[Check]:
-    free = free_bytes(root)
-    out = [
-        Check(
-            "OK" if free >= FREE_BYTES else "FAIL",
-            "disk",
-            f"{free / 1e9:.1f} GB free (the demo needs {FREE_BYTES / 1e9:.0f} GB)",
-        )
-    ]
+def _disk(paths: list[Path], free_bytes: Callable[[Path], int]) -> Check:
+    """Free space where the inputs live and where Docker keeps the job output."""
+    seen, low = [], False
+    for p in paths:
+        try:
+            free = free_bytes(p)
+        except OSError as e:
+            return Check("WARN", "disk", f"could not measure {p}: {e}")
+        low |= free < FREE_BYTES
+        seen.append(f"{free / 1e9:.1f} GB free at {p}")
+    need = f"(the demo needs {FREE_BYTES / 1e9:.0f} GB)"
+    return Check("FAIL" if low else "OK", "disk", f"{', '.join(seen)} {need}")
+
+
+def _host(root: Path, free_bytes: Callable[[Path], int], docker_root: Path | None) -> list[Check]:
+    paths = [root] if docker_root is None else [root, docker_root]
+    out = [_disk(paths, free_bytes)]
     mr = root / "bin/mr"
     if mr.is_file() and mr.stat().st_mode & 0o111:
         out.append(Check("OK", "client", "bin/mr"))
@@ -211,17 +226,24 @@ def run_checks(
     free_bytes: Callable[[Path], int],
     status_url: str,
 ) -> list[Check]:
-    sections = [
-        (lambda: _cluster(docker), ["docker", "workers", "coordinator", "limits", "wal"]),
-        (lambda: _status(fetch, status_url), ["status", "heartbeat"]),
-        (lambda: _host(root, free_bytes), ["disk", "client", "inputs", "sort"]),
-    ]
     out = []
-    for section, names in sections:
+
+    def section(run, names):
         try:
-            out += section()
+            out.extend(run())
         except Exception as e:  # one surprise must not hide the other checks
-            out += [Check("FAIL", n, f"check crashed: {e!r}") for n in names]
+            out.extend(Check("FAIL", n, f"check crashed: {e!r}") for n in names)
+
+    section(lambda: _cluster(docker), ["docker", "workers", "coordinator", "limits", "wal"])
+    section(lambda: _status(fetch, status_url), ["status", "heartbeat"])
+    docker_root = None
+    if out and out[0].level == "OK":  # Docker answered: its volumes hold the job output
+        try:
+            found = docker(["info", "--format", "{{.DockerRootDir}}"]).strip()
+            docker_root = Path(found) if found else None
+        except RuntimeError:
+            pass
+    section(lambda: _host(root, free_bytes, docker_root), ["disk", "client", "inputs", "sort"])
     return out
 
 
