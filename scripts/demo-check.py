@@ -9,6 +9,7 @@ Standard library only, so the system python3 runs it.
 """
 
 import argparse
+import http.client
 import json
 import shutil
 import subprocess
@@ -105,9 +106,9 @@ def _cluster(docker: Callable[[list[str]], str]) -> list[Check]:
         ]
     wrong, wal = [], None
     for c in inspected:
-        name, host = c["Name"].lstrip("/"), c["HostConfig"]
+        name, host = (c.get("Name") or "?").lstrip("/"), c.get("HostConfig") or {}
         if name in coordinators:
-            wal = "-data-dir" in (c["Config"].get("Cmd") or [])
+            wal = "-data-dir" in ((c.get("Config") or {}).get("Cmd") or [])
             if host.get("Memory") != COORDINATOR_MEMORY:
                 wrong.append(f"{name} memory {host.get('Memory')}")
         elif host.get("NanoCpus") != WORKER_NANO_CPUS or host.get("Memory") != WORKER_MEMORY:
@@ -118,7 +119,9 @@ def _cluster(docker: Callable[[list[str]], str]) -> list[Check]:
         )
     else:
         out.append(Check("OK", "limits", "workers 1 CPU and 768 MiB, coordinator 256 MiB"))
-    if wal:
+    if not coordinators:
+        out.append(Check("FAIL", "wal", "coordinator not running"))
+    elif wal:
         out.append(Check("OK", "wal", "coordinator runs with -data-dir"))
     else:
         out.append(
@@ -132,10 +135,13 @@ def _cluster(docker: Callable[[list[str]], str]) -> list[Check]:
 def _status(fetch: Callable[[str], bytes], url: str) -> list[Check]:
     try:
         st = json.loads(fetch(url.rstrip("/") + "/status.json"))
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, http.client.HTTPException) as e:
         detail = f"{url} unreachable ({e}): make cluster-up, or start the SSH forward"
         return [Check("FAIL", "status", detail), Check("FAIL", "heartbeat", "no status page")]
-    workers = st.get("workers", [])
+    if not isinstance(st, dict) or not isinstance(st.get("workers"), list):
+        detail = f"{url.rstrip('/')}/status.json is not the coordinator's status"
+        return [Check("FAIL", "status", detail), Check("FAIL", "heartbeat", "no status page")]
+    workers = st["workers"]
     out = [
         Check(
             "OK" if len(workers) == WORKERS else "FAIL",
@@ -205,7 +211,18 @@ def run_checks(
     free_bytes: Callable[[Path], int],
     status_url: str,
 ) -> list[Check]:
-    return _cluster(docker) + _status(fetch, status_url) + _host(root, free_bytes)
+    sections = [
+        (lambda: _cluster(docker), ["docker", "workers", "coordinator", "limits", "wal"]),
+        (lambda: _status(fetch, status_url), ["status", "heartbeat"]),
+        (lambda: _host(root, free_bytes), ["disk", "client", "inputs", "sort"]),
+    ]
+    out = []
+    for section, names in sections:
+        try:
+            out += section()
+        except Exception as e:  # one surprise must not hide the other checks
+            out += [Check("FAIL", n, f"check crashed: {e!r}") for n in names]
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

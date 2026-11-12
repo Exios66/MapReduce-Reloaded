@@ -1,7 +1,9 @@
 """scripts/demo-check.py: the live cluster against what docs/demo.md needs."""
 
+import http.client
 import importlib.util
 import json
+import subprocess
 import urllib.error
 from pathlib import Path
 
@@ -198,10 +200,50 @@ def test_missing_sort_input_is_a_warning_not_a_failure(dc, tmp_path, monkeypatch
 
 
 def test_paths_resolve_from_the_repository_root(dc, tmp_path, monkeypatch):
+    """Run from anywhere: docker runs in the root, so the compose path holds."""
     monkeypatch.chdir(tmp_path)
     assert dc.ROOT == ROOT
-    c = by_name(checks(dc, dc.ROOT))
-    assert ("bin/mr" in c["client"].detail) or c["client"].level == "OK"
+    seen = {}
+
+    def run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, "29.8.1\n", "")
+
+    monkeypatch.setattr(dc.subprocess, "run", run)
+    assert dc.docker(["version"]) == "29.8.1\n"
+    assert seen["cwd"] == ROOT
+
+
+@pytest.mark.parametrize("body", [b"null", b"[]", b'{"at": 1, "workers": null}'])
+def test_a_status_body_of_the_wrong_shape_fails(dc, tmp_path, body):
+    c = by_name(checks(dc, ready_root(tmp_path), fetch=lambda url: body))
+    assert c["status"].level == "FAIL"
+    assert c["heartbeat"].level == "FAIL"
+
+
+def test_a_broken_http_response_fails_without_a_traceback(dc, tmp_path):
+    def fetch(url):
+        raise http.client.BadStatusLine("\x00")
+
+    c = by_name(checks(dc, ready_root(tmp_path), fetch=fetch))
+    assert c["status"].level == "FAIL"
+
+
+def test_unexpected_docker_output_fails_its_checks_not_the_script(dc, tmp_path):
+    def docker(args):
+        return "[{}]" if args[0] == "inspect" else fake_docker()(args)
+
+    result = checks(dc, ready_root(tmp_path), docker=docker)
+    c = by_name(result)
+    assert c["limits"].level == "FAIL"
+    assert c["disk"].level == "OK"  # the other sections still ran
+
+
+def test_a_stopped_coordinator_is_not_blamed_on_the_log(dc, tmp_path):
+    ps = "\n".join(line for line in ps_lines().splitlines() if "coordinator" not in line)
+    c = by_name(checks(dc, ready_root(tmp_path), docker=fake_docker(ps=ps)))
+    assert c["coordinator"].level == "FAIL"
+    assert c["wal"] == dc.Check("FAIL", "wal", "coordinator not running")
 
 
 def test_pinned_limits_match_compose_yaml(dc):
