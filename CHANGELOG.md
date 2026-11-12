@@ -33,6 +33,19 @@ cut a release.
 - Lint: the documentation tests moved from `python/tests` to `docs/tests`
   and run in the lint job with `make docs-test` (also part of `make lint`
   and `make check`), so a guide-only PR no longer runs the Python jobs (#358).
+- Docs tests: `docs/tests/test_references.py` fails when a guide names, in
+  code, a `make` target the Makefile lacks, a repository path that is
+  neither tracked nor git-ignored output, or an ADR that does not exist; when
+  an ADR's title lacks its number or a status, or `docs/README.md` does not
+  index it; when `scripts/README.md` misses a script; and when a skill's
+  `name` differs from its directory or AGENTS.md misses its script. It found
+  and this PR fixes two stale `bench/evaluation/` paths in
+  `docs/evaluation.md`, an unlisted `scripts/golangci-lint.sh` and an
+  un-ignored `bench/plots/` (#358).
+- Docs tests: `test_changelog.py` moved to `docs/tests` and also checks that
+  every entry ends with its PR number, or with its commit when it reached
+  `main` without a PR; four entries that lacked one now cite it. A PR's own
+  CHANGELOG bullet no longer runs the Python jobs (#358).
 
 - Status page (Go and Python): each job card shows a task timeline, one
   row for each of the job's latest 512 attempts the coordinator saw, to
@@ -69,7 +82,7 @@ cut a release.
   reports medians, ranges, slow and invalid runs, and overlaps),
   `analyzing-bench-results` (`compare.py` compares a run with a published
   one) and `checking-campaign-status` (`status.sh` snapshots a running
-  campaign).
+  campaign) (`eb83a5b`, pushed to `main` without a PR).
 - Bench: E0 starts every run with only its own program's input in the page
   cache. Before each warm-up and measured run, `bench/experiments.sh` drops
   every other input in the output volume, the other two E0 inputs and any
@@ -144,8 +157,8 @@ cut a release.
 - CI: `make py-test` measures coverage through `sys.monitoring`
   (`COVERAGE_CORE=sysmon`) on Python 3.12 and later, which records the same
   lines; the Python tests take about 36 s instead of 51 s on one CPU.
-  Python 3.11 keeps the default tracer, and a `COVERAGE_CORE` already set
-  wins. The `dev` extra now needs `coverage` 7.4 or later, the first with
+  On Python 3.11 `COVERAGE_CORE` stays unset, so coverage still picks its
+  own tracer, and a `COVERAGE_CORE` already set wins. The `dev` extra now needs `coverage` 7.4 or later, the first with
   `sys.monitoring` support (#358).
 - Go coverage: `go/cover-floors.txt` raises the floor of the 14 packages
   that had risen two points or more over it, to one point under the
@@ -306,7 +319,7 @@ cut a release.
   `-coverpkg` and `GOCOVERDIR` in `make go-test` (#245).
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
-  LATE speculation cites #284, and E0 to E7 ranges are corrected.
+  LATE speculation cites #284, and E0 to E7 ranges are corrected (#308).
 - Bench: each trial records the page cache's state in `cache.jsonl`, an
   optional `DROP_CACHES=1` makes trials cold, and `begin` says which older
   results it deletes (#310).
@@ -374,7 +387,7 @@ cut a release.
 <!-- coderabbit-ai-generated-section:v1:799b81130e48f9cd94b0adbbd0a0a99101cebc306996bb54bbae62494551351d -->
 
 - Docs: `python/README.md` explains that `-keep-jobs=010` means 10 in
-  Python and 8 in Go.
+  Python and 8 in Go (#341).
 
 <!-- /coderabbit-ai-generated:v1 -->
 <!-- pyml enable md033 -->
@@ -416,7 +429,7 @@ cut a release.
 - The CircleCI badge URL (#261).
 - Worker: a starting worker's sweep could delete a new worker's temporary
   directory, which made it fail with "already locked" (and flaked
-  `internal/e2e`); the lock is now on the directory itself.
+  `internal/e2e`); the lock is now on the directory itself (#309).
 - Bench: `wait_workers` retries when the coordinator is unreachable, instead of
   exiting silently, and saves the logs on a registration timeout (#307).
 

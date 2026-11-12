@@ -59,6 +59,9 @@ def test_comments_and_blank_lines_are_ignored():
         ("scripts/e2e.sh", {"run-all", "run-sh-lint"}),
         # A guide no test outside docs/tests reads: lint only (ADR 0025).
         ("docs/report.md", {"run-lint"}),
+        # Every PR's own entry: the CHANGELOG tests run in the lint job.
+        ("CHANGELOG.md", {"run-lint"}),
+        ("AGENTS.md", {"run-lint"}),
         ("docs/paper-mapping.md", {"run-lint", "run-go-docs"}),
         ("README.md", {"run-lint", "run-python", "run-go-docs"}),
         ("bench/experiments.sh", {"run-lint", "run-python", "run-sh-lint"}),

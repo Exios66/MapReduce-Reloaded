@@ -46,7 +46,11 @@ Each runs in a single goroutine, so the detector has nothing to find in them.
    job with `make docs-test` (pytest and PyYAML only). `docs/tests/conftest.py`
    fails if they read a tracked file that does not map to `run-lint`, as
    `python/tests/conftest.py` does for `run-python`. `make lint` and so
-   `make check` run them.
+   `make check` run them. The CHANGELOG tests move with them, so the
+   CHANGELOG bullet every PR adds no longer runs the Python jobs.
+   `test_references.py` checks that every make target, repository path,
+   ADR, script and skill a guide names as code exists, the stale names a
+   link check cannot see.
 4. **The heap measurements skip under the race detector** through a
    `raceDetector` constant set by build tags, and run in the coverage pass.
    `TestOnlyTheHeapMeasurementsSkipUnderTheRaceDetector` fails if another

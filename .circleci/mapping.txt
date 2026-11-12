@@ -73,8 +73,6 @@
 ^README\.md$ run-python
 ^design\.md$ run-python
 ^docs/README\.md$ run-python
-^CHANGELOG\.md$ run-python
-^AGENTS\.md$ run-python
 ^docs/ci\.md$ run-python
 ^docs/cluster-vm\.md$ run-python
 ^bench/.*\.(py|sh)$ run-python

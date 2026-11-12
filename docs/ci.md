@@ -190,7 +190,14 @@ How each job meets its requirements:
   examples guide with the programs `go/examples` registers. They import
   nothing from the package, so the lint job runs them (`make docs-test`)
   with pytest and PyYAML only, and a PR that changes a guide no other test
-  reads runs lint alone, not the Python jobs.
+  reads runs lint alone, not the Python jobs. `test_references.py` checks
+  every name a guide writes as code, which the link check does not see:
+  each `make` target must be in the Makefile, each repository path tracked
+  (or output `.gitignore` covers), each ADR number an ADR that docs/README.md
+  indexes, each script listed in `scripts/README.md` and each skill's script
+  in AGENTS.md. `test_changelog.py` checks the CHANGELOG's layout and that
+  every entry cites its PR, so a PR's own CHANGELOG bullet runs lint, not the
+  Python jobs.
 - **Go build cache.** The go job restores Go's build cache and
   golangci-lint's analysis cache, so compiled packages (the race-built
   standard library above all) are not rebuilt on every run. Both caches are

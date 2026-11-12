@@ -26,6 +26,7 @@ rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 | Benchmarks | `make perf` against `bench/baseline.txt` | no | #160, `bench/README.md` |
 | Memory and size limits | `go test ./internal/extsort ./internal/task ./internal/formats/kv` | yes; the two 80 MB heap measurements run without the race detector only (ADR 0025) | #160 |
 | Documentation against configuration | `make docs-test` | yes, in `make lint` | `docs/tests`, ADR 0025 |
+| Names in the guides (make targets, paths, ADRs, scripts, skills) and the CHANGELOG's layout and citations | `make docs-test` | yes, in `make lint` | `docs/tests/test_references.py`, `docs/tests/test_changelog.py` |
 
 A failing seeded test names its seed; `-chaos.seed=N -chaos.runs=1` or
 `-model.seed=N -model.runs=1` makes the same choices again.

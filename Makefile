@@ -313,11 +313,14 @@ go-lint:
 
 # On Python 3.12 and later, coverage measures through sys.monitoring
 # (COVERAGE_CORE=sysmon), which records the same lines as the default tracer
-# in about a quarter less test time; 3.11 has no sys.monitoring and keeps
-# the default. A COVERAGE_CORE already in the environment wins.
+# in about a quarter less test time. 3.11 has no sys.monitoring, so there
+# COVERAGE_CORE stays unset and coverage picks its own core (its C tracer,
+# or the Python one where that is not built). A COVERAGE_CORE already in
+# the environment wins.
 py-test:
-	cd python && core=$$($(PYTHON) -c 'import sys; print("sysmon" if sys.version_info >= (3, 12) else "ctrace")') && \
-		COVERAGE_CORE=$${COVERAGE_CORE:-$$core} $(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
+	cd python && if [ -z "$${COVERAGE_CORE:-}" ] && $(PYTHON) -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then \
+		COVERAGE_CORE=sysmon; export COVERAGE_CORE; fi && \
+		$(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
 
 # The tests, then each package's coverage against its floor.
