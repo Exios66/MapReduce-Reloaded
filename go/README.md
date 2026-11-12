@@ -105,5 +105,5 @@ make fuzz FUZZTIME=1m
 go test ./internal/wal -run '^$' -fuzz '^FuzzOpen$' -fuzztime 30s
 ```
 
-A crash is saved under the package's `testdata/fuzz/` and replays as an
+A crash is saved under `<package>/testdata/fuzz/` and replays as an
 ordinary test from then on, so commit it with the fix.

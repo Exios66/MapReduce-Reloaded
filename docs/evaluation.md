@@ -150,7 +150,8 @@ and with no straggler:
 The straggler rows are medians of five runs; the others, of ten pairs of
 runs taken in turn ([bench/README.md](../bench/README.md#e2-backup-tasks-and-a-straggler)).
 The chart uses these same measurements: the no-straggler rows from
-`bench/evaluation/E2-pairs/` and the straggler rows from `bench/evaluation/E2/`,
+`bench/evaluation/rerun-8f0ddb9/E2-pairs/` and the straggler rows from
+`bench/evaluation/rerun-8f0ddb9/E2/`,
 which is why it differs from `E2.png` (that one draws only the main E2 runs,
 where no-straggler with backups on is 7.8 s). The image says so in its
 subtitle, and `bench/plot-experiments.py` redraws it from both directories.

@@ -15,6 +15,38 @@ cut a release.
 
 ### Added
 
+- Tests: `TestWorkerKilled` (`go/internal/e2e`) also checks what a worker
+  killed with SIGKILL leaves behind: its work directory stays until the
+  next worker starts there, which removes it and keeps the directories of
+  the workers still running (#358).
+- Tests: `TestCompressedBlockShapes` (`go/internal/formats/kv`) and
+  `python/tests/test_kv_block_shapes.py` read the same hand-written
+  compressed MRKV blocks: Snappy copies with a 1-, 2- and 4-byte offset and
+  zstd run-length and raw blocks must read back, and their damaged forms
+  must be refused as `bad_block`, in both languages (#358).
+- CI: two more narrow parts of the `go` job (ADR 0025). A PR whose Go-side
+  files are only `README.md` or `docs/paper-mapping.md` runs
+  `make go-python-test` (`run-go-docs`), and one whose files are only shell
+  scripts or `.githooks/` runs `make sh-lint` (`run-sh-lint`), instead of
+  the whole Go suite. Guard tests in `go/internal/papermap/cimodes_test.go`
+  fail if another Go test starts to read those files (#358).
+- Lint: the documentation tests moved from `python/tests` to `docs/tests`
+  and run in the lint job with `make docs-test` (also part of `make lint`
+  and `make check`), so a guide-only PR no longer runs the Python jobs (#358).
+- Docs tests: `docs/tests/test_references.py` fails when a guide names, in
+  code, a `make` target the Makefile lacks, a repository path that is
+  neither tracked nor git-ignored output, or an ADR that does not exist; when
+  an ADR's title lacks its number or a status, or `docs/README.md` does not
+  index it; when `scripts/README.md` misses a script; and when a skill's
+  `name` differs from its directory or AGENTS.md misses its script. It found
+  and this PR fixes two stale `bench/evaluation/` paths in
+  `docs/evaluation.md`, an unlisted `scripts/golangci-lint.sh` and an
+  un-ignored `bench/plots/` (#358).
+- Docs tests: `test_changelog.py` moved to `docs/tests` and also checks that
+  every entry ends with its PR number, or with its commit when it reached
+  `main` without a PR; four entries that lacked one now cite it. A PR's own
+  CHANGELOG bullet no longer runs the Python jobs (#358).
+
 - Status page (Go and Python): each job card shows a task timeline, one
   row for each of the job's latest 512 attempts the coordinator saw, to
   scale over the job's run, with a bar for map (blue) and reduce (purple),
@@ -50,7 +82,7 @@ cut a release.
   reports medians, ranges, slow and invalid runs, and overlaps),
   `analyzing-bench-results` (`compare.py` compares a run with a published
   one) and `checking-campaign-status` (`status.sh` snapshots a running
-  campaign).
+  campaign) (`eb83a5b`, pushed to `main` without a PR).
 - Bench: E0 starts every run with only its own program's input in the page
   cache. Before each warm-up and measured run, `bench/experiments.sh` drops
   every other input in the output volume, the other two E0 inputs and any
@@ -117,6 +149,25 @@ cut a release.
   `python/tests/test_changelog.py` (#305).
 
 ### Changed
+
+- CI: `go/internal/e2e` writes the 48 MB input of its kill and restart
+  tests once, with `strconv`, instead of once per test with `fmt`; the bytes
+  are the same. Under the race detector on two CPUs the package takes about
+  29 s instead of 55 s, on the `go` job's slowest node (#358).
+- CI: `make py-test` measures coverage through `sys.monitoring`
+  (`COVERAGE_CORE=sysmon`) on Python 3.12 and later, which records the same
+  lines; the Python tests take about 36 s instead of 51 s on one CPU.
+  On Python 3.11 `COVERAGE_CORE` stays unset, so coverage still picks its
+  own tracer, and a `COVERAGE_CORE` already set wins. The `dev` extra now needs `coverage` 7.4 or later, the first with
+  `sys.monitoring` support (#358).
+- Go coverage: `go/cover-floors.txt` raises the floor of the 14 packages
+  that had risen two points or more over it, to one point under the
+  coverage measured on 2026-11-12, for example `cmd/coordinator` from 85 to
+  90 and `internal/split` from 87 to 93 (#358).
+- Tests: `TestSortMemoryBounded` and `TestReduceMemoryBounded` skip under
+  the race detector and run in the coverage pass; they measure one
+  goroutine's heap, and under `-race` took ten times as long. The race node
+  of the `go` job takes about 140 s instead of 190 s on two CPUs (#358).
 
 - Bench figures: every figure in `bench/evaluation/` is redrawn for
   reading at a glance. Each has a bold title stating its finding, a
@@ -268,7 +319,7 @@ cut a release.
   `-coverpkg` and `GOCOVERDIR` in `make go-test` (#245).
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
-  LATE speculation cites #284, and E0 to E7 ranges are corrected.
+  LATE speculation cites #284, and E0 to E7 ranges are corrected (#308).
 - Bench: each trial records the page cache's state in `cache.jsonl`, an
   optional `DROP_CACHES=1` makes trials cold, and `begin` says which older
   results it deletes (#310).
@@ -336,7 +387,7 @@ cut a release.
 <!-- coderabbit-ai-generated-section:v1:799b81130e48f9cd94b0adbbd0a0a99101cebc306996bb54bbae62494551351d -->
 
 - Docs: `python/README.md` explains that `-keep-jobs=010` means 10 in
-  Python and 8 in Go.
+  Python and 8 in Go (#341).
 
 <!-- /coderabbit-ai-generated:v1 -->
 <!-- pyml enable md033 -->
@@ -378,7 +429,7 @@ cut a release.
 - The CircleCI badge URL (#261).
 - Worker: a starting worker's sweep could delete a new worker's temporary
   directory, which made it fail with "already locked" (and flaked
-  `internal/e2e`); the lock is now on the directory itself.
+  `internal/e2e`); the lock is now on the directory itself (#309).
 - Bench: `wait_workers` retries when the coordinator is unreachable, instead of
   exiting silently, and saves the logs on a registration timeout (#307).
 

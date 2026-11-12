@@ -11,11 +11,12 @@ rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 | Kind | Command | In `make check` | Where |
 |---|---|---|---|
 | Unit | `cd go && go test ./...`, `cd python && python -m pytest` | yes | next to each package |
+| File format, the same bytes in Go and Python | `go test ./internal/formats/kv`, `python -m pytest tests/test_kv.py tests/test_kv_block_shapes.py` | yes | `testdata/format/`, `TestCompressedBlockShapes` |
 | Golden output, Go against Python | `go test ./cmd/mr -run TestExamples` | yes | `testdata/examples/`, #153 |
 | Cluster in one process | `go test ./internal/worker` | yes | `internal/worker/cluster_test.go` |
 | Chaos, seeded | `go test ./internal/worker -run TestChaos -chaos.runs=50` | 3 seeds | `TestChaos`, `TestChaosPrograms` (#155) |
 | Coordinator model | `go test ./internal/coordinator -run TestModel -model.runs=300` | 15 seeds | `model_test.go` (#154) |
-| Processes on localhost | `go test ./internal/e2e` | yes | #151 |
+| Processes on localhost, with a SIGKILLed worker and coordinator | `go test ./internal/e2e` | yes | #151 |
 | Python coordinator, Go workers | `make py-e2e` | yes, but they skip if Go cannot build them; `make py-e2e`, run by CI's `go` job, sets `MR_REQUIRE_GO`, so a skip fails | `python/tests/test_coordinator_e2e.py`, #36 |
 | Storage contract | `go test ./internal/storage` | yes; `make e2e-s3` adds a real gateway | #156 |
 | Fuzz | `make fuzz` (`FUZZTIME`, default 20s a target) | stored seeds only | #152 |
@@ -23,7 +24,9 @@ rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 | Mutation | `make mutate` | no | `go/tools/mutate`, #161 |
 | Compose cluster | `make e2e`, `make e2e-s3`, `make chaos` | no | `scripts/e2e.sh`, `scripts/chaos.sh` |
 | Benchmarks | `make perf` against `bench/baseline.txt` | no | #160, `bench/README.md` |
-| Memory and size limits | `go test ./internal/extsort ./internal/task ./internal/formats/kv` | yes | #160 |
+| Memory and size limits | `go test ./internal/extsort ./internal/task ./internal/formats/kv` | yes; the two 80 MB heap measurements run without the race detector only (ADR 0025) | #160 |
+| Documentation against configuration | `make docs-test` | yes, in `make lint` | `docs/tests`, ADR 0025 |
+| Names in the guides (make targets, paths, ADRs, scripts, skills) and the CHANGELOG's layout and citations | `make docs-test` | yes, in `make lint` | `docs/tests/test_references.py`, `docs/tests/test_changelog.py` |
 
 A failing seeded test names its seed; `-chaos.seed=N -chaos.runs=1` or
 `-model.seed=N -model.runs=1` makes the same choices again.
@@ -41,7 +44,7 @@ runs the tests and prints each package's coverage beside its floor.
 
 Measured on 2026-11-07:
 
-- Go: 91.7% of 3,234 statements in 31 checked packages. The lowest are
+- Go (measured again on 2026-11-12): 92.0% of 3,315 statements in 31 checked packages. The lowest are
   `tools/mutate` (28.7%; the rest of it runs `go test` on each mutant, in
   `make mutate`), then `internal/wal` (86.9%), `cmd/mr` (88.2%),
   `cmd/worker` (88.5%) and `examples/invertedindex` (89.5%). Unchecked: the generated protobuf code, the S3 test

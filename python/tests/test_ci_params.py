@@ -56,7 +56,16 @@ def test_comments_and_blank_lines_are_ignored():
         ("python/mapreduce_reloaded/local.py", {"run-python", "run-go-python"}),
         ("proto/mapreduce/v1/types.proto", {"run-proto"}),
         ("go/go.mod", {"run-all", "run-go"}),
-        ("scripts/e2e.sh", {"run-all", "run-go"}),
+        ("scripts/e2e.sh", {"run-all", "run-sh-lint"}),
+        # A guide no test outside docs/tests reads: lint only (ADR 0025).
+        ("docs/report.md", {"run-lint"}),
+        # Every PR's own entry: the CHANGELOG tests run in the lint job.
+        ("CHANGELOG.md", {"run-lint"}),
+        ("AGENTS.md", {"run-lint"}),
+        ("docs/paper-mapping.md", {"run-lint", "run-go-docs"}),
+        ("README.md", {"run-lint", "run-python", "run-go-docs"}),
+        ("bench/experiments.sh", {"run-lint", "run-python", "run-sh-lint"}),
+        (".githooks/pre-push", {"run-sh-lint"}),
     ],
 )
 def test_a_change_runs_its_own_job(path, want):
@@ -75,12 +84,19 @@ def test_a_change_runs_its_own_job(path, want):
         ("testdata/corpus/alice.txt", "run-go"),
         ("testdata/corpus/alice.txt", "run-python"),
         ("testdata/format/vectors.json", "run-python"),
-        ("README.md", "run-go"),
+        ("README.md", "run-go-docs"),
         ("examples/wordcount.go", "run-go"),
         ("bench/jobs/wordcount-naive.go", "run-go"),
         ("deploy/compose/monitoring/grafana/dashboards/mapreduce.json", "run-go"),
-        ("docs/paper-mapping.md", "run-go"),
-        (".githooks/pre-push", "run-go"),
+        ("docs/paper-mapping.md", "run-go-docs"),
+        (".githooks/pre-push", "run-sh-lint"),
+        (".claude/skills/saving-ci-credits/preflight.sh", "run-sh-lint"),
+        # The documentation tests run in the lint job and read these.
+        ("go/examples/grep/grep.go", "run-lint"),
+        ("deploy/compose/compose.yaml", "run-lint"),
+        ("docs/tests/test_documentation.py", "run-lint"),
+        # py-lint runs ruff on the documentation tests.
+        ("docs/tests/test_documentation.py", "run-python"),
         (".coderabbit.yaml", "run-python"),
         (".codeant/configuration.json", "run-python"),
         (".github/workflows/ci.yml", "run-python"),
@@ -188,6 +204,8 @@ def test_the_setup_job_gets_every_parameter(offline, capsys):
         "run-all": False,
         "run-go": False,
         "run-go-python": False,
+        "run-go-docs": False,
+        "run-sh-lint": False,
         "run-python": False,
         "run-proto": False,
         "run-lint": True,
@@ -226,11 +244,30 @@ def test_check_accepts_the_full_go_mode_for_the_narrow_one(offline, capsys, monk
     assert run(capsys, "--check")[0] == 0
 
 
-def test_check_does_not_accept_the_narrow_go_mode_for_the_full_one(offline, capsys, monkeypatch):
+@pytest.mark.parametrize("narrow", ["run-go-python", "run-go-docs", "run-sh-lint"])
+def test_check_does_not_accept_the_narrow_go_mode_for_the_full_one(
+    offline, capsys, monkeypatch, narrow
+):
     offline.append(("M", "go/internal/worker/worker.go"))
-    monkeypatch.setenv(
-        "MR_CI_PARAMS", json.dumps({p: p == "run-go-python" for p in ci_params.PARAMETERS})
-    )
+    monkeypatch.setenv("MR_CI_PARAMS", json.dumps({p: p == narrow for p in ci_params.PARAMETERS}))
+    assert run(capsys, "--check")[0] == 1
+
+
+@pytest.mark.parametrize(
+    "path, narrow",
+    [("README.md", "run-go-docs"), ("bench/run.sh", "run-sh-lint")],
+)
+def test_check_accepts_the_full_go_mode_for_every_narrow_part(
+    offline, capsys, monkeypatch, path, narrow
+):
+    offline.append(("M", path))
+    assert narrow in params(path)
+    got = (params(path) - {narrow}) | {"run-go"}
+    monkeypatch.setenv("MR_CI_PARAMS", json.dumps({p: p in got for p in ci_params.PARAMETERS}))
+    assert run(capsys, "--check")[0] == 0
+    # Without the full mode, the narrow part is missed.
+    got.discard("run-go")
+    monkeypatch.setenv("MR_CI_PARAMS", json.dumps({p: p in got for p in ci_params.PARAMETERS}))
     assert run(capsys, "--check")[0] == 1
 
 

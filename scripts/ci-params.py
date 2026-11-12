@@ -32,10 +32,20 @@ import sys
 from pathlib import Path
 
 MAPPING = Path(".circleci/mapping.txt")
-PARAMETERS = ("run-all", "run-go", "run-go-python", "run-python", "run-proto", "run-lint")
-# A parameter whose job mode includes another's: the go job's full mode
-# runs everything its python-only mode runs.
-COVERS = {"run-go": {"run-go-python"}}
+PARAMETERS = (
+    "run-all",
+    "run-go",
+    "run-go-python",
+    "run-go-docs",
+    "run-sh-lint",
+    "run-python",
+    "run-proto",
+    "run-lint",
+)
+# A parameter whose job mode includes others': the go job's full mode runs
+# everything its narrow modes run (python/ only, README.md and
+# docs/paper-mapping.md only, shell scripts only).
+COVERS = {"run-go": {"run-go-python", "run-go-docs", "run-sh-lint"}}
 
 
 def load_mapping(text):

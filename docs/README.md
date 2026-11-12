@@ -70,6 +70,7 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0021](design/0021-no-ci-on-main-pushes.md) | No CI jobs on pushes to main: the merged tree already passed on its PR |
 | [0022](design/0022-status-page-updates-itself.md) | The status page updates itself with one inline script (supersedes part of 0012) |
 | [0024](design/0024-faster-ci-pipeline.md) | A faster CI pipeline that runs the same checks: the go job on three nodes, cached generators kept |
+| [0025](design/0025-narrow-go-modes-and-docs-tests.md) | CI runs what a change can affect: narrow go modes for the README and shell scripts, documentation tests in lint, heap measurements once |
 
 ## Explainers
 

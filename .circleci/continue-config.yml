@@ -47,6 +47,12 @@ parameters:
   run-go-python:
     type: boolean
     default: false
+  run-go-docs:
+    type: boolean
+    default: false
+  run-sh-lint:
+    type: boolean
+    default: false
 
 # Docker executors only, on the Free plan. Python jobs are small; the Go and
 # protobuf jobs compile and run the race detector, so they are medium.
@@ -264,6 +270,13 @@ jobs:
   # Every other Go package passes with python/ deleted and no Python on the
   # PATH, so their result from main stands (docs/ci.md).
   #
+  # The narrow mode has two more parts (ADR 0025). A change to README.md or
+  # docs/paper-mapping.md alone (run-go-docs) runs make go-python-test: only
+  # cmd/mr reads the README and only papermap reads the mapping table. A
+  # change to shell scripts or the git hook alone (run-sh-lint) runs make
+  # sh-lint, which needs neither Go nor Python, so that part installs
+  # neither. scripts/ci-go-job.sh reads the parts from MR_CI_GO_NARROW.
+  #
   # The job runs on three nodes at once (ADR 0024): CircleCI reports them as
   # the one go check, which passes only if every node passes.
   # scripts/ci-go-job.sh gives each node its part of the same make targets:
@@ -286,14 +299,19 @@ jobs:
               - equal: [main, << pipeline.git.branch >>]
               - << pipeline.parameters.run-go >>
               - << pipeline.parameters.run-go-python >>
+              - << pipeline.parameters.run-go-docs >>
+              - << pipeline.parameters.run-sh-lint >>
           steps:
             - run:
                 name: Not implicated — skipping
                 command: 'echo "go: no Go, Python (py-e2e), shell, build, or CI files changed; the go result from main stands (docs/ci.md)."'
+      # The narrow mode with a part that runs Go tests (python or docs).
       - when:
           condition:
             and:
-              - << pipeline.parameters.run-go-python >>
+              - or:
+                  - << pipeline.parameters.run-go-python >>
+                  - << pipeline.parameters.run-go-docs >>
               - not:
                   or:
                     - << pipeline.parameters.run-all >>
@@ -306,9 +324,30 @@ jobs:
                 python: "3.13"
             - go-build-cache-restore
             - run:
-                name: make go-python-test py-e2e (only python/ changed), this node's part
+                name: The narrow mode's parts (go-python-test, py-e2e, sh-lint), this node's share
+                environment:
+                  MR_CI_GO_NARROW: "python=<< pipeline.parameters.run-go-python >> docs=<< pipeline.parameters.run-go-docs >> sh=<< pipeline.parameters.run-sh-lint >>"
                 command: scripts/ci-go-job.sh narrow
                 no_output_timeout: 30m
+      # The narrow mode with sh-lint alone, which needs neither Go nor Python.
+      - when:
+          condition:
+            and:
+              - << pipeline.parameters.run-sh-lint >>
+              - not:
+                  or:
+                    - << pipeline.parameters.run-all >>
+                    - equal: [main, << pipeline.git.branch >>]
+                    - << pipeline.parameters.run-go >>
+                    - << pipeline.parameters.run-go-python >>
+                    - << pipeline.parameters.run-go-docs >>
+          steps:
+            - checkout
+            - run:
+                name: make sh-lint (only shell scripts changed), on this job's last node
+                environment:
+                  MR_CI_GO_NARROW: "python=false docs=false sh=true"
+                command: scripts/ci-go-job.sh narrow
       - when:
           condition:
             or:
@@ -370,10 +409,13 @@ jobs:
             - store_artifacts:
                 path: python/cover.json
 
-  # Markdown link and style checks (check-links.py + pymarkdown). Runs on any
-  # PR that touches Markdown or docs-adjacent files, and on every run-all PR.
-  # It installs only pymarkdown, not the full python[dev] set: check-links.py
-  # needs the standard library only.
+  # Markdown link and style checks (check-links.py + pymarkdown), and the
+  # documentation tests in docs/tests, which compare the guides with the
+  # configuration they describe (make docs-test, ADR 0025). Runs on any PR
+  # that touches Markdown or docs-adjacent files, and on every run-all PR.
+  # It installs only pymarkdown, pytest and PyYAML, at python[dev]'s
+  # versions, not the full python[dev] set: check-links.py needs the
+  # standard library only, and the documentation tests import no package.
   lint:
     executor:
       name: small
@@ -398,11 +440,11 @@ jobs:
           steps:
             - checkout
             - run:
-                name: Install pymarkdown
-                command: python -m pip install pymarkdownlnt==0.9.41
+                name: Install pymarkdown, pytest and PyYAML
+                command: python -m pip install "pymarkdownlnt==0.9.41" "pytest>=8" "PyYAML>=6"
             - run:
-                name: make md-lint
-                command: make md-lint PYTHON=python
+                name: make md-lint docs-test
+                command: make md-lint docs-test PYTHON=python
 
   # Always runs, with no `when` gating: it re-runs the selection and fails
   # the pipeline if any file the PR changes matches no line of
@@ -413,7 +455,7 @@ jobs:
       name: small
       python: "3.11"
     environment:
-      MR_CI_PARAMS: '{"run-all": << pipeline.parameters.run-all >>, "run-go": << pipeline.parameters.run-go >>, "run-python": << pipeline.parameters.run-python >>, "run-proto": << pipeline.parameters.run-proto >>, "run-lint": << pipeline.parameters.run-lint >>, "run-go-python": << pipeline.parameters.run-go-python >>}'
+      MR_CI_PARAMS: '{"run-all": << pipeline.parameters.run-all >>, "run-go": << pipeline.parameters.run-go >>, "run-python": << pipeline.parameters.run-python >>, "run-proto": << pipeline.parameters.run-proto >>, "run-lint": << pipeline.parameters.run-lint >>, "run-go-python": << pipeline.parameters.run-go-python >>, "run-go-docs": << pipeline.parameters.run-go-docs >>, "run-sh-lint": << pipeline.parameters.run-sh-lint >>}'
     steps:
       - checkout
       - run:

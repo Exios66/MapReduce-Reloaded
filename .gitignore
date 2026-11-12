@@ -39,6 +39,7 @@ pip-wheel-metadata/
 /data/
 /bin/
 /bench/results/
+/bench/plots/
 /tmp/
 
 # Local secrets and scratch files
