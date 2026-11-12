@@ -15,6 +15,13 @@ cut a release.
 
 ### Added
 
+- Demo: `make demo-check` (`scripts/demo-check.py`) checks the running
+  cluster against what `docs/demo.md` needs, one `OK`, `WARN` or `FAIL`
+  line each: four running workers at one CPU and 768 MB, the coordinator
+  at 256 MB with its write-ahead log, every worker heartbeating on the
+  status page, 6 GB free both in the repository and in Docker's data
+  directory, `bin/mr`, and the uploaded and sort inputs. Each `FAIL`
+  says what to run (#359).
 - Tests: `TestWorkerKilled` (`go/internal/e2e`) also checks what a worker
   killed with SIGKILL leaves behind: its work directory stays until the
   next worker starts there, which removes it and keeps the directories of

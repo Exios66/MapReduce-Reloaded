@@ -19,6 +19,7 @@
 | [`install-tool.sh`](install-tool.sh) | Installs a pinned Go tool for `make tools`, keeping a cached binary that `go version -m` shows was built from the pin (ADR 0024). |
 | [`ci-params.py`](ci-params.py) | Selects the CI jobs a branch's changed files implicate, from `.circleci/mapping.txt`, and checks that selection. See [CI](../docs/ci.md) and ADR 0020. |
 | [`vm-setup.sh`](vm-setup.sh) | Checks (`make vm-check`) and with `--install` prepares a Linux machine to build and run the cluster. |
+| [`demo-check.py`](demo-check.py) | Checks the running cluster against what the demo needs: four running one-CPU, 768 MB workers, a 256 MB coordinator with its write-ahead log, live heartbeats on the status page, disk, `bin/mr` and the inputs. `make demo-check`; see [docs/demo.md](../docs/demo.md). |
 | [`fetch-corpus.sh`](fetch-corpus.sh) | Fetches the public-domain texts of the golden corpus into `testdata/corpus/`. |
 | [`capture-status-gifs.py`](capture-status-gifs.py) | Captures the status page while one whole real job runs, into dark and light `docs/assets/status-*.gif` with a provenance sidecar per run (commit, machine, job, input, timings). Needs a Chrome-family browser and ffmpeg/ffprobe on `PATH` and a running cluster; see [docs/demo.md](../docs/demo.md). |
 | [`fetch-data.sh`](fetch-data.sh) | Fetches real datasets for the example programs (War and Peace and its chapters, NASA's 1995 web log, Google's 2002 web graph, a Common Crawl WET file) into `data/input/`, each pinned by SHA-256. `make real-data`; see [Data](../docs/data.md). |

@@ -30,6 +30,10 @@ evaluation figures. Timings are for the course VM.
       stays while the second sort peaks at 2.75 GB, and a worker takes no
       task with under 2 GiB free
       ([ADR 0017](design/0017-disk-and-memory-bounds.md)).
+- [ ] `make demo-check` prints no `FAIL` line: four running workers at one
+      CPU and 768 MB, the coordinator at 256 MB with its write-ahead log,
+      every worker heartbeating on the status page, the disk, `bin/mr` and
+      the inputs. Each `FAIL` says what to run.
 - [ ] Rehearse the whole script once, start to finish, with a timer.
 - [ ] After the rehearsal's `make cluster-down`, run `make cluster-up` again,
       then run the notebook top to bottom (*Kernel → Restart & Run All*);
@@ -168,7 +172,7 @@ Each answer has a command or a page to show.
 |---|---|
 | How do you know it is correct? | `make chaos RUNS=5 SEED=1`: seeded worker kills and pauses and coordinator crashes, each run checked against the reference output. [Testing](testing.md) lists the rest: golden vectors shared by Go and Python, a model-based test of the coordinator, fuzzing, mutation testing |
 | Which paper features are built? | [Paper mapping](paper-mapping.md): F1–F24, each with its code and the test that proves it; `internal/papermap` fails the build if one is missing |
-| What about stragglers? | [`faults.png`](../bench/evaluation/faults.png) and [E2](../bench/README.md#evaluation-e0e7): backups cut a straggler's job from 17.9 s to 11.4 s. `deploy/compose/backups-off.yaml` turns them off; `speculation-late.yaml` switches to LATE (ADR 0019) |
+| What about stragglers? | [`faults.png`](../bench/evaluation/faults.png) and [E2](../bench/README.md#evaluation-e0e7): backups cut a straggler's job from 17.9 s to 11.4 s. [E7](../bench/README.md#evaluation-e0e7): on four workers of mixed speeds either rule cuts a sort by 32%; LATE needs fewer backups (1 against 5), and the two times overlap. `deploy/compose/backups-off.yaml` turns them off; `speculation-late.yaml` switches to LATE (ADR 0019) |
 | Does it scale? | [E0](../bench/README.md#evaluation-e0e7): 3.7× for word count on four workers; grep only 2.0×, because a 2.6 s job is mostly fixed costs |
 | Can it use object storage? | `make e2e-s3`: the same job with input and output in an S3-compatible store; the commit is a copy and a delete ([ADR 0013](design/0013-commit-on-object-storage.md)) |
 | Is the Python side real? | `make py-e2e`: the Python coordinator drives Go workers to the same output; local mode in Python writes the same bytes as Go |
@@ -178,6 +182,8 @@ Each answer has a command or a page to show.
 
 ## If something goes wrong
 
+- First run `make demo-check`: each `FAIL` line names what is wrong and
+  what to run.
 - `mr submit` says the coordinator is unavailable: `make cluster-up`. During
   the restart step this is expected for a few seconds; keep polling.
 - A job says `FAILED`: `bin/mr status <id>` prints its counters and error;
