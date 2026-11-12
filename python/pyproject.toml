@@ -21,7 +21,7 @@ dev = [
     "PyYAML>=6",
     "pytest>=8",
     "hypothesis>=6",
-    "coverage>=7",
+    "coverage>=7.4",  # 7.4 adds the sysmon core make py-test asks for
     "ruff>=0.5",
     # Markdown style check for make md-lint (pymarkdown, .pymarkdown.json).
     "pymarkdownlnt==0.9.41",

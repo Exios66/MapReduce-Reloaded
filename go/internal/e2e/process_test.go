@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -142,8 +143,13 @@ type cluster struct {
 	dataDir string // the coordinator's -data-dir, or ""
 	coord   *proc
 	workers []*proc
-	tmp     string // the workers' TMPDIR, where they make their work directories
+	dirs    []string // dirs[i] is workers[i]'s work directory
+	tmp     string   // the workers' TMPDIR, where they make their work directories
 }
+
+// sweeps reports whether a starting worker removes the work directories of
+// dead workers, which it does where it can lock them (cmd/worker).
+func sweeps() bool { return runtime.GOOS == "linux" || runtime.GOOS == "darwin" }
 
 func freePort(t *testing.T) string {
 	t.Helper()
@@ -168,12 +174,31 @@ func newCluster(t *testing.T, workers int, wal bool) *cluster {
 	return c
 }
 
-// addWorker starts one more worker, which makes its work directory in c.tmp.
+// addWorker starts one more worker, and waits until it has made its work
+// directory in c.tmp: a directory that was not there before and, where
+// workers lock theirs, holds the marker written once it is locked.
 func (c *cluster) addWorker() {
 	c.t.Helper()
+	before := c.workDirs()
 	port := freePort(c.t)
 	c.workers = append(c.workers, start(c.t, fmt.Sprintf("worker %d", len(c.workers)), []string{"TMPDIR=" + c.tmp},
 		"-coordinator", c.addr, "-listen", port, "-advertise", port, "-min-free-mib", "1"))
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		for _, dir := range c.workDirs() {
+			if slices.Contains(before, dir) || slices.Contains(c.dirs, dir) {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".lock")); err == nil || !sweeps() {
+				c.dirs = append(c.dirs, dir)
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			c.t.Fatalf("worker %d made no work directory in %s", len(c.workers)-1, c.tmp)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // workDirs returns the workers' work directories in c.tmp, sorted.
@@ -402,8 +427,9 @@ func TestExamples(t *testing.T) {
 
 // A worker killed with SIGKILL once the job has finished map tasks does not
 // change the output: the coordinator reruns what it lost (§3.3). The killed
-// worker could not remove its work directory; the next worker to start
-// there removes it, and leaves the directories of the workers still running.
+// worker could not remove its work directory; on Linux and macOS the next
+// worker to start there removes it, and leaves the directories of the
+// workers still running.
 func TestWorkerKilled(t *testing.T) {
 	t.Parallel()
 	input := bigInput(t)
@@ -419,6 +445,7 @@ func TestWorkerKilled(t *testing.T) {
 	if len(before) != 3 {
 		t.Fatalf("work directories of 3 running workers: %v", before)
 	}
+	killed, survivors := c.dirs[0], c.dirs[1:3]
 	_ = c.workers[0].stop(t, syscall.SIGKILL, 5*time.Second)
 	if st = c.wait(job, 45*time.Second, nil); st["state"] != "SUCCEEDED" {
 		t.Fatalf("after the kill: %v", st)
@@ -428,24 +455,15 @@ func TestWorkerKilled(t *testing.T) {
 	if after := c.workDirs(); !slices.Equal(after, before) {
 		t.Fatalf("work directories after the kill: %v, want the same %v: nothing has swept yet", after, before)
 	}
-	c.addWorker()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		after := c.workDirs()
-		kept := 0
-		for _, dir := range after {
-			if slices.Contains(before, dir) {
-				kept++
-			}
-		}
-		// The two survivors' directories and the new worker's.
-		if len(after) == 3 && kept == 2 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("work directories %v after a new worker started; want two of %v and one new", after, before)
-		}
-		time.Sleep(20 * time.Millisecond)
+	c.addWorker() // which sweeps before it makes its own directory
+	wantDirs := append(slices.Clone(survivors), c.dirs[3])
+	if !sweeps() {
+		wantDirs = append(wantDirs, killed) // nothing finds the dead worker's directory
+	}
+	slices.Sort(wantDirs)
+	if after := c.workDirs(); !slices.Equal(after, wantDirs) {
+		t.Fatalf("work directories %v after a new worker started; want %v: the survivors', the new worker's, and not the killed worker's %s (sweeps: %v)",
+			after, wantDirs, killed, sweeps())
 	}
 }
 

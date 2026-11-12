@@ -145,7 +145,8 @@ cut a release.
   (`COVERAGE_CORE=sysmon`) on Python 3.12 and later, which records the same
   lines; the Python tests take about 36 s instead of 51 s on one CPU.
   Python 3.11 keeps the default tracer, and a `COVERAGE_CORE` already set
-  wins (#358).
+  wins. The `dev` extra now needs `coverage` 7.4 or later, the first with
+  `sys.monitoring` support (#358).
 - Go coverage: `go/cover-floors.txt` raises the floor of the 14 packages
   that had risen two points or more over it, to one point under the
   coverage measured on 2026-11-12, for example `cmd/coordinator` from 85 to
