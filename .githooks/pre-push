@@ -41,5 +41,12 @@ for dir in "$HOME/.local/go/bin" /usr/local/go/bin "$HOME/go/bin" "$PWD/.tools/b
 done
 export PATH
 
+# Git runs hooks with GIT_DIR and its other local variables set to this
+# repository, so a test's git command in a temporary repository would act on
+# this one instead. Clear them; make check finds the repository itself.
+for name in $(git rev-parse --local-env-vars); do
+    unset "$name"
+done
+
 echo "pre-push: running 'make check'..."
 make check

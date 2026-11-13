@@ -369,6 +369,12 @@ cut a release.
 
 ### Fixed
 
+- Hooks: `.githooks/pre-push` clears Git's local environment variables
+  (`GIT_DIR` and the rest) before `make check`, so a test's git command in a
+  temporary repository no longer acts on the repository being pushed;
+  `python/tests/test_pre_push.py` checks it, and that a failed check still
+  blocks the push. A change to the hook now also runs the Python jobs
+  (#361).
 - Docs: the E0-E7 rerun write-ups name `3a907de` wherever they say every
   experiment ran at `8f0ddb9`, say E5's settings rotate rather than reverse,
   compare E0's sort with E2-E4 on one clock, describe E3's cost and E1's

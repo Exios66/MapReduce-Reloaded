@@ -65,7 +65,7 @@ def test_comments_and_blank_lines_are_ignored():
         ("docs/paper-mapping.md", {"run-lint", "run-go-docs"}),
         ("README.md", {"run-lint", "run-python", "run-go-docs"}),
         ("bench/experiments.sh", {"run-lint", "run-python", "run-sh-lint"}),
-        (".githooks/pre-push", {"run-sh-lint"}),
+        (".githooks/pre-push", {"run-sh-lint", "run-python"}),
     ],
 )
 def test_a_change_runs_its_own_job(path, want):
@@ -90,6 +90,7 @@ def test_a_change_runs_its_own_job(path, want):
         ("deploy/compose/monitoring/grafana/dashboards/mapreduce.json", "run-go"),
         ("docs/paper-mapping.md", "run-go-docs"),
         (".githooks/pre-push", "run-sh-lint"),
+        (".githooks/pre-push", "run-python"),
         (".claude/skills/saving-ci-credits/preflight.sh", "run-sh-lint"),
         # The documentation tests run in the lint job and read these.
         ("go/examples/grep/grep.go", "run-lint"),
