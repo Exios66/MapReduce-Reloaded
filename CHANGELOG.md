@@ -166,6 +166,12 @@ cut a release.
   each evaluation figure with its finding from the README. A new section
   15 says what to run when a cell fails. Every cell now has the `id`
   nbformat 4.5 requires (#363).
+- Docs: `testdata/corpus/README.md` gives each book's bytes, words and
+  distinct words, explains what `expected/` holds (the word rule, which
+  part each word goes to, and why part 0 has the most occurrences), and
+  lists every test checked against it. A new test,
+  `python/tests/test_corpus_readme.py`, recomputes each number on the page
+  from the files (#363).
 - Bench: `bench/evaluation/` now holds only the current results, the rerun
   of 11 November 2026 at `8f0ddb9` (E0 at `3a907de`): `E0/` to `E7/` and
   `E2-pairs/` with each experiment's CSVs, `raw/` with the archives the

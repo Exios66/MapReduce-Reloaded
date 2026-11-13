@@ -248,7 +248,7 @@ MapReduce-Reloaded/
 ├── bench/                       # data generators, benchmark harness, evaluation results
 ├── examples/                    # the job file and the demo notebook
 ├── scripts/                     # proto generation, e2e, VM check
-├── testdata/                    # golden outputs and hash vectors
+├── testdata/                    # test corpus, golden outputs, format, hash and message vectors
 └── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
 
