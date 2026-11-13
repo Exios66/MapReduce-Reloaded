@@ -318,7 +318,8 @@ protocol above:
   2-worker runs for this reason.
 - **E1's word count also read from disk in some runs,** up to 1.4 GB
   machine-wide, with the combiner on and off, more often off. The time it saves is
-  far larger than the spread this adds, so E1 was not run again.
+  far larger than the spread this adds, so E1, unlike E0, was not rerun with
+  its input isolated.
 
 ## What scale changes
 
