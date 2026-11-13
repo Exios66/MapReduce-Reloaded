@@ -402,8 +402,10 @@ cut a release.
   still require the stuck task to be won by a backup while the slow
   attempt runs (§3.6); the tests that kill workers keep 100ms (#364).
 - Docs: the demo notebook's introduction no longer says every section's
-  claim is asserted; it names the sections that assert theirs (7 to 11 and
-  13). `testdata/corpus/README.md` names the S3 test by its full path,
+  claim is asserted; it names the sections that assert theirs (7, 8, 10, 11
+  and 13; section 9 checks only that its job succeeds), and says to run one
+  copy at a time, since setup removes earlier runs' directories.
+  `testdata/corpus/README.md` names the S3 test by its full path,
   `go/internal/local/s3_test.go`, since `go/internal/task/` has one too
   (#364).
 - Docs: stale status lines now match the finished evaluation.

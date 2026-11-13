@@ -116,3 +116,43 @@ def test_style_keeps_the_callers_backend_and_figures(monkeypatch):
         assert fig.number in plt.get_fignums()
     finally:
         plt.close(fig)
+
+
+def test_what_is_drawn_is_checked_and_what_is_not_is_skipped():
+    """Offset text is checked; a twin's hidden axis, an annotation's arrow
+    and a clipped-away marker are not; markers are placed by their own
+    transform."""
+    pytest.importorskip("matplotlib")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.plot([0, 1], [0, 3e7])
+    twin = ax.twinx()
+    twin.plot([0, 1], [0, 1])
+    fig.canvas.draw()
+    texts = figkit._texts(fig)
+    assert ax.yaxis.get_offset_text() in texts
+    assert not any(t in texts for t in twin.xaxis.get_ticklabels())
+    assert figkit.check(fig) == []
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 10)
+    ax.plot([0.5], [0.5], "o", markersize=20, transform=ax.transAxes)
+    ax.plot([50], [1000], "o", markersize=20)  # far above the axes: clipped away
+    ax.annotate("over it", (0.5, 0.5), xycoords="axes fraction", ha="center", va="center")
+    ax.annotate(
+        "clear of it",
+        (0.5, 0.5),
+        xycoords="axes fraction",
+        xytext=(0.15, 0.85),
+        textcoords="axes fraction",
+        arrowprops={"arrowstyle": "->"},
+    )
+    found = figkit.check(fig)
+    plt.close(fig)
+    assert len(found) == 1 and found[0].startswith("'over it' covers the marker"), found

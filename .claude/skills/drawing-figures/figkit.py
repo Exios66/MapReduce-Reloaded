@@ -95,16 +95,23 @@ def problems(texts, marks, width, height, pad=1.0):
 
 def _texts(fig):
     """Every visible, nonempty text a reader sees: headings, titles, axis and
-    tick labels, annotations, and legend entries and titles."""
+    tick labels, axis offset text (a multiplier such as 1e6), annotations,
+    and legend entries and titles. A hidden axes or axis, such as the second
+    x-axis of ax.twinx(), contributes nothing."""
     found = list(fig.texts)
     legends = [*fig.legends, *(ax.get_legend() for ax in fig.axes)]
     for legend in legends:
         if legend is not None:
             found += [legend.get_title(), *legend.get_texts()]
     for ax in fig.axes:
+        if not ax.get_visible():
+            continue
         found += [ax.title, getattr(ax, "_left_title", None), getattr(ax, "_right_title", None)]
-        found += [ax.xaxis.label, ax.yaxis.label, *ax.texts]
+        found += ax.texts
         for axis in (ax.xaxis, ax.yaxis):
+            if not ax.axison or not axis.get_visible():
+                continue
+            found += [axis.label, axis.get_offset_text()]
             # Only the ticks in view are drawn; get_ticklabels also returns
             # the ones beyond the axis limits, which would read as off the image.
             for tick in axis._update_ticks():
@@ -112,20 +119,39 @@ def _texts(fig):
     return [t for t in found if t is not None and t.get_visible() and t.get_text().strip()]
 
 
+def _clip(artist, box):
+    """box as drawn after artist's clipping: None if wholly clipped away."""
+    clip = artist.get_clip_box() if artist.get_clip_on() else None
+    if clip is None:
+        return box
+    x0, y0, x1, y1 = (
+        max(box[0], clip.x0),
+        max(box[1], clip.y0),
+        min(box[2], clip.x1),
+        min(box[3], clip.y1),
+    )
+    return (x0, y0, x1, y1) if x0 < x1 and y0 < y1 else None
+
+
 def _marks(fig):
     """The markers drawn in each axes, as small boxes: dots a label must not
     cover. They come from lines with markers (plot, kit.dots) and from scatter
-    plots, whose points are a PathCollection rather than a line."""
+    plots, whose points are a PathCollection rather than a line. Each is
+    placed by its own artist's transform, and cut to its clip region, so a
+    marker clipped away by the axes limits covers nothing."""
     from matplotlib.collections import PathCollection
 
     px = fig.dpi / 72  # pixels per point
-    points = []  # (x, y) in pixels, and the marker's radius in pixels
+    found = []
     for ax in fig.axes:
+        if not ax.get_visible():
+            continue
         for line in ax.get_lines():
             if line.get_marker() in (None, "None", "", " ") or not line.get_visible():
                 continue
-            radius = line.get_markersize() * px / 2
-            points += [(x, y, radius) for x, y in ax.transData.transform(line.get_xydata())]
+            r = line.get_markersize() * px / 2
+            for x, y in line.get_transform().transform(line.get_xydata()):
+                found.append((line, x, y, r))
         for dots in ax.collections:
             if not isinstance(dots, PathCollection) or not dots.get_visible():
                 continue
@@ -133,10 +159,22 @@ def _marks(fig):
             sizes = dots.get_sizes()  # marker areas in square points, one or one per point
             for i, (x, y) in enumerate(offsets):
                 area = sizes[i % len(sizes)] if len(sizes) else 36  # matplotlib's default
-                points.append((x, y, area**0.5 * px / 2))
-    return [
-        (f"the marker at ({x:.0f}, {y:.0f}) px", (x - r, y - r, x + r, y + r)) for x, y, r in points
-    ]
+                found.append((dots, x, y, area**0.5 * px / 2))
+    marks = []
+    for artist, x, y, r in found:
+        box = _clip(artist, (x - r, y - r, x + r, y + r))
+        if box is not None:
+            marks.append((f"the marker at ({x:.0f}, {y:.0f}) px", box))
+    return marks
+
+
+def _extent(text, renderer):
+    """A text's box as drawn. An annotation's own extent includes its arrow;
+    only its words are measured, so an arrow pointing at a marker is no
+    collision."""
+    from matplotlib.text import Text
+
+    return tuple(Text.get_window_extent(text, renderer).extents)
 
 
 def check(fig, slack=2.0):
@@ -148,7 +186,7 @@ def check(fig, slack=2.0):
     about one point and do not collide. A real collision is many points."""
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
-    texts = [(t.get_text(), tuple(t.get_window_extent(renderer).extents)) for t in _texts(fig)]
+    texts = [(t.get_text(), _extent(t, renderer)) for t in _texts(fig)]
     pad = slack * fig.dpi / 72
     return problems(texts, _marks(fig), fig.bbox.width, fig.bbox.height, pad)
 
