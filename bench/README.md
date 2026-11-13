@@ -356,8 +356,11 @@ the offset between those two clocks.
 - Every job finished on three workers, with its output checksum matching
   the first normal run's; this checks agreement, not independent correctness.
 - A worker timeout is 10 s (three missed heartbeats), but a reduce can
-  report missing map output earlier. At 25%, the job finished before the
-  timeout; the other three workers continued while lost work was retried.
+  report missing map output earlier. At 25%, in every run, the reduces
+  reported the killed worker's map output missing about 7 s before the
+  timeout declared it lost, and those map tasks ran again at once on the
+  other three workers; the job still ended 0.5–2.4 s after the timeout
+  (the coordinator's log, in the E3 archive).
 - Killed at 75%, near the end of the map phase, the worker's finished map
   tasks are lost too: their output lived on its disk, so they run again
   (§3.3), and the reduce phase waits for them.
