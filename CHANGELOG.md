@@ -393,6 +393,14 @@ cut a release.
 
 ### Fixed
 
+- Tests: `TestClusterBackupTasks`, `TestClusterLateBackupTasks`,
+  `TestClusterStopsLosingAttempt` and `TestClusterCountersMatchLocal`
+  (`go/internal/worker`) no longer fail on a loaded machine. There a
+  late heartbeat let the coordinator's 100ms timeout declare a live worker
+  dead and run its slow attempt again as an ordinary one, so no backup
+  won. These tests kill no worker, so they now use a 5s worker timeout and
+  still require the stuck task to be won by a backup while the slow
+  attempt runs (§3.6); the tests that kill workers keep 100ms (#364).
 - Docs: the demo notebook's introduction no longer says every section's
   claim is asserted; it names the sections that assert theirs (7 to 11 and
   13). `testdata/corpus/README.md` names the S3 test by its full path,
