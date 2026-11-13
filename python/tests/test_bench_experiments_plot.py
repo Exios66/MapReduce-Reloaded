@@ -377,8 +377,18 @@ def test_e4_does_not_place_restart_on_unaligned_task_clock(plotter, tmp_path):
     left, right = Mock(), Mock()
     left.get_legend_handles_labels.return_value = [], []
     pyplot.subplots.return_value = Mock(), (left, right)
-    rows = [row("normal") | {"run": "1"}, row("restart") | {"run": "1", "event_at": "3.8"}]
+    rows = [
+        row("normal") | {"run": "1", "job": "job-1"},
+        row("restart") | {"run": "1", "event_at": "3.8", "job": "job-1"},
+    ]
+    (tmp_path / "E4").mkdir()
+    for setting in ("normal", "restart"):
+        tasks_file(tmp_path / "E4" / f"tasks-{setting}-1.csv", "job-1", [(10, 0), (12, 4)])
     module.e4(rows, tmp_path, tmp_path / "E4.png", light(module))
+    # The task curves are drawn, on their own clock from the first sample ...
+    assert right.step.call_count == 2
+    assert all(c.args[0] == [0, 2] for c in right.step.call_args_list)
+    # ... and the submission-relative restart time is not placed on them.
     right.axvline.assert_not_called()
     right.set_xlabel.assert_called_once_with("Seconds since first task sample")
 

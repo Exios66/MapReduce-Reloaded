@@ -75,55 +75,88 @@ workers) on 1 GiB inputs with M = 32 and R = 4, at commit `8f0ddb9` (E0 at
 number is the median of five runs, the settings taking turns within each
 repeat, and every run's output matched the normal run's.
 
-| Experiment | Result |
-|---|---|
-| E0: scaling over workers | Word count runs 3.7× faster on 4 workers than on 1, distributed sort 3.1×, grep 2.0× |
-| E1: the combiner | 15× to 78× fewer bytes shuffled, 16–42% less job time, more as the keys get more skewed |
-| E2: backup tasks | With one worker at 0.2 CPU, backups cut 17.9 s to 11.4 s; with no straggler they cost nothing measurable |
-| E3: losing a worker | Every job finishes with the undisturbed run's output; it adds +8 s to +26 s in all; lost work is retried after failed fetches or the worker timeout |
-| E4: a coordinator restart | Recovery from the log costs 1.2 s (15%) and keeps every finished task |
-| E5: an interpreted job file | 2.3× slower than compiled with the helpers `api.Words`/`api.Sum`, 10.2× without them |
-| E6: the combiner on real text | 5.2× fewer bytes and 11% less job time on crawled English, 3.2×/8% in every language, 33×/24% on the book (a best case) |
-| E7: the paper's backups against LATE | On four workers of mixed speeds, either rule cuts a sort by 32% (25.2 s to about 17 s); LATE needs fewer backups (1 against 5), and the two times overlap |
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/faults-dark.png">
-  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75% of calibration time, and a coordinator restart; every run's output matched an undisturbed run's" src="bench/evaluation/faults.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
-  <img alt="E0: speed-up over one worker for grep, distsort and word count on 1, 2 and 4 workers" src="bench/evaluation/E0.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E1-dark.png">
-  <img alt="E1: bytes shuffled (log scale) and job time with the combiner on and off, one row per Zipf exponent, each pair of medians joined by a line labeled with the saving" src="bench/evaluation/E1.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E6-dark.png">
-  <img alt="E6: bytes shuffled (log scale) and job time with the combiner on and off, one row each for crawled English, crawled pages in every language, and the book, each pair joined by a line labeled with the saving" src="bench/evaluation/E6.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E5-dark.png">
-  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="bench/evaluation/E5.png">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E7-dark.png">
-  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median on a bar spanning its runs" src="bench/evaluation/E7.png">
-</picture>
+| Experiment | Result | Figure |
+|---|---|---|
+| E0: scaling over workers | Word count runs 3.7× faster on 4 workers than on 1, distributed sort 3.1×, grep 2.0× | [E0](#e0-scaling-over-workers) |
+| E1: the combiner | 15× to 78× fewer bytes shuffled, 16–42% less job time, more as the keys get more skewed | [E1](#e1-the-combiner) |
+| E2: backup tasks | With one worker at 0.2 CPU, backups cut 17.9 s to 11.4 s; with no straggler they cost nothing measurable | [E2](#e2-backup-tasks), [E2–E4](#e2-to-e4-together-what-each-fault-costs) |
+| E3: losing a worker | Every job finishes with the undisturbed run's output; it adds +8 s to +26 s in all; lost work is retried after failed fetches or the worker timeout | [E3](#e3-losing-a-worker), [E2–E4](#e2-to-e4-together-what-each-fault-costs) |
+| E4: a coordinator restart | Recovery from the log costs 1.2 s (15%) and keeps every finished task | [E4](#e4-a-coordinator-restart), [E2–E4](#e2-to-e4-together-what-each-fault-costs) |
+| E5: an interpreted job file | 2.3× slower than compiled with the helpers `api.Words`/`api.Sum`, 10.2× without them | [E5](#e5-an-interpreted-job-file) |
+| E6: the combiner on real text | 5.2× fewer bytes and 11% less job time on crawled English, 3.2×/8% in every language, 33×/24% on the book (a best case) | [E6](#e6-the-combiner-on-real-text) |
+| E7: the paper's backups against LATE | On four workers of mixed speeds, either rule cuts a sort by 32% (25.2 s to about 17 s); LATE needs fewer backups (1 against 5), and the two times overlap | [E7](#e7-the-papers-backups-against-late) |
 
 In paired comparisons, blue is the system as it ships or undisturbed and
 orange the changed or disturbed setting. E0 colors the three workloads;
 every bar in the faults summary is a disturbance, so every bar is orange.
 E1 and E6 are dumbbells: each
 row joins the combiner-on and combiner-off medians, and bytes use a log
-axis, so a row's length is the factor the combiner saves. The other plots
-(E2–E4), the raw CSVs, the machine and the commands are in
-[`bench/README.md`](bench/README.md#evaluation-e0e7).
+axis, so a row's length is the factor the combiner saves. Each figure's
+table, the raw CSVs, the machine and the commands are in
+[`bench/README.md`](bench/README.md#evaluation-e0e7), in the same order.
+
+### E0: scaling over workers
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E0-dark.png">
+  <img alt="E0: speed-up over one worker for grep, distsort and word count on 1, 2 and 4 workers" src="bench/evaluation/E0.png">
+</picture>
+
+### E1: the combiner
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E1-dark.png">
+  <img alt="E1: bytes shuffled (log scale) and job time with the combiner on and off, one row per Zipf exponent, each pair of medians joined by a line labeled with the saving" src="bench/evaluation/E1.png">
+</picture>
+
+### E2: backup tasks
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E2-dark.png">
+  <img alt="E2: job time with backups on and off, without and with a straggler, and the straggler runs' tasks completed over time" src="bench/evaluation/E2.png">
+</picture>
+
+### E3: losing a worker
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E3-dark.png">
+  <img alt="E3: job time with a worker killed at 25, 50 and 75% of the calibration time, each a dumbbell from the no-failure median, and the data rate of the median run killed at 50%" src="bench/evaluation/E3.png">
+</picture>
+
+### E4: a coordinator restart
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E4-dark.png">
+  <img alt="E4: job time with and without a coordinator restart, and tasks completed over time across the restart" src="bench/evaluation/E4.png">
+</picture>
+
+### E2 to E4 together: what each fault costs
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/faults-dark.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75% of calibration time, and a coordinator restart; every run's output matched an undisturbed run's" src="bench/evaluation/faults.png">
+</picture>
+
+### E5: an interpreted job file
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E5-dark.png">
+  <img alt="E5: job time and map-phase time for word count compiled, as a job file using the compiled helpers, and as a job file with its own word test" src="bench/evaluation/E5.png">
+</picture>
+
+### E6: the combiner on real text
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E6-dark.png">
+  <img alt="E6: bytes shuffled (log scale) and job time with the combiner on and off, one row each for crawled English, crawled pages in every language, and the book, each pair joined by a line labeled with the saving" src="bench/evaluation/E6.png">
+</picture>
+
+### E7: the paper's backups against LATE
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="bench/evaluation/E7-dark.png">
+  <img alt="E7: job time of a sort on four workers of mixed speeds with no backups, the paper's backup rule and LATE, each median on a bar spanning its runs" src="bench/evaluation/E7.png">
+</picture>
 
 ## How a job runs
 
@@ -214,6 +247,7 @@ go run ./cmd/mr run -local -m 3 -r 4 ../examples/wordcount.go /tmp/wc '../testda
 head -3 /tmp/wc/part-r-00000
 
 cd ../python
+python3 -m venv .venv && . .venv/bin/activate   # Ubuntu's Python refuses pip outside a venv
 pip install -e .
 python3 -m mapreduce_reloaded run --local -m 3 -r 4 wordcount /tmp/wc-py '../testdata/corpus/*.txt'
 diff -r /tmp/wc /tmp/wc-py && echo identical

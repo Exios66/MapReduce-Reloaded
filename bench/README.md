@@ -169,19 +169,20 @@ setting alike. Every run
 succeeded, and every run's output matched the first undisturbed run's
 checksum.
 
-[`evaluation/rerun-8f0ddb9/`](evaluation/rerun-8f0ddb9/) has each
-experiment's `runs.csv`, `cache.jsonl` and `machine.json` (with the
-commit), the harness logs in `chain/`, and in `archives/` every run's
-samples and logs, with their SHA-256. E0 is
-[`E0-isolated/`](evaluation/rerun-8f0ddb9/E0-isolated/), rerun so each
-program runs with only its own input in the page cache (#347); its harness
-commit, `3a907de`, adds that to `8f0ddb9` and changes nothing else. The
-first E0 is kept beside it, and its `NOTE.md` says why it was replaced. The
+[`evaluation/`](evaluation/) holds only this rerun's data, which every
+figure below is drawn from; its [README](evaluation/README.md) lists what
+is where. Each experiment's directory, `evaluation/E0/` to `evaluation/E7/`
+and `evaluation/E2-pairs/`, has its `runs.csv`, `cache.jsonl` and
+`machine.json` (with the commit); `logs/` has the harness logs, and `raw/`
+every run's samples and logs as archives, with their SHA-256. E0 was rerun
+so each program runs with only its own input in the page cache (#347); its
+harness commit, `3a907de`, adds that to `8f0ddb9` and changes nothing else.
+Its archive is still named `E0-isolated.tar.gz`, as it was recorded. The
 plots were drawn from the archives, which hold the rate samples the CSVs
 do not:
 
 ```sh
-a=bench/evaluation/rerun-8f0ddb9/archives
+a=bench/evaluation/raw
 d=$(mktemp -d)  # a fresh directory, so no older results are drawn
 mkdir "$d/iso"
 for e in E1 E2 E2-pairs E3 E4 E5 E6 E7; do tar xzf "$a/$e.tar.gz" -C "$d"; done
@@ -221,31 +222,36 @@ type follows the comparison:
 Text is set in Atkinson Hyperlegible, shipped in `bench/fonts/` with its
 license, so the figures look the same whichever machine draws them.
 
-It also draws `faults.png` (and `-dark`), one bar per disturbance in E2, E3
-and E4, each the job time it added against the same experiment's
-undisturbed median; its title claims the undisturbed output only if every
-disturbed run was valid. Valid means the output's checksum matches the
+Every run is checked for validity. Valid means the output's checksum matches the
 first run on that input, an undisturbed one; the harness compares the
 checksums and deletes the output, so `runs.csv`'s `valid` column is the
 record, not the checksums. `make e2e` checks word count against the
 committed golden output independently.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="evaluation/faults-dark.png">
-  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart" src="evaluation/faults.png">
-</picture>
-
-That also draws `E2-comparison.png` (and `-dark`) from two directories: the
+`plot-experiments.py` also draws `E2-comparison.png` (and `-dark`) from two directories: the
 no-straggler rows from `E2-pairs/` and the straggler rows from `E2/`; the
-image's subtitle says so. The two rates plots in `evaluation/paper/` were drawn
-from their `samples.csv` with `plot-rates.py`, whose third argument is the
-identification line in the image.
+image's subtitle says so.
 
 E2 and E5 are timed by the coordinator, from the job's submission to its
 end. E3 and E4 are timed from when `mr submit` returned, which a killed
-worker or a restarted coordinator does not reset. The results published
-before this rerun, at several commits with three runs each, are kept in
-[`evaluation/superseded/before-8f0ddb9/`](evaluation/superseded/before-8f0ddb9/).
+worker or a restarted coordinator does not reset.
+
+Older data is kept, labeled, in [`evaluation/archive/`](evaluation/archive/),
+and none of it is drawn in the figures below: the results published before
+this rerun, at several commits with three runs each; the rerun's first E0,
+which the isolated E0 replaced; and the single grep and sort runs of
+28 October, at commit `2707160`, whose two rates plots in
+[the evaluation against the paper](../docs/evaluation.md) were drawn from
+their `samples.csv` with `plot-rates.py`.
+
+Sort runs faster in this rerun than in the results published before it.
+The undisturbed sort took 12.37 s in E4 at `4b5a235` (three runs), and
+7.95 s in this rerun's E4. [`evaluation/ab/`](evaluation/ab/) shows that
+the code between those two commits does not explain it: on the same VM
+and day, ten sorts each with the system at `4b5a235` and at `8f0ddb9`,
+taking turns, took 7.78 s and 8.02 s, with overlapping ranges, so the
+`4b5a235` system itself now sorts in under 8 s. The A/B compares only
+those two commits; its `NOTE.md` gives the setup.
 
 ### E0: scaling over workers
 
@@ -327,7 +333,7 @@ one; on the right are the straggler runs' tasks finished over time.
 - With no straggler, backups run and never win, and cost nothing
   measurable. Ten pairs taken in turn
   (`REPEAT=10 E2_SETTINGS="normal normal-no-backups"`,
-  [`E2-pairs/`](evaluation/rerun-8f0ddb9/E2-pairs/)) took 7.67 s with
+  [`E2-pairs/`](evaluation/E2-pairs/)) took 7.67 s with
   backups and 7.90 s without, backups faster in 6 of 10 pairs; the mean
   difference is −0.14 s, 95% interval −0.36 to +0.08 s (paired t,
   p = 0.19; Wilcoxon signed-rank, p = 0.23). The interval allows a mean
@@ -384,6 +390,18 @@ the offset between those two clocks.
   marker or measure its duration.
 - Every run started on a fresh log, so a restart replays its own job only,
   and the restart time is 50% of three calibration runs' median.
+
+### E2 to E4 together: what each fault costs
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="evaluation/faults-dark.png">
+  <img alt="Fault tolerance: the job time added by a straggler with backups on and off, a worker killed at 25%, 50% and 75%, and a coordinator restart" src="evaluation/faults.png">
+</picture>
+
+`faults.png` (and `-dark`) recaps E2, E3 and E4: one bar per disturbance,
+each the job time it added against the same experiment's undisturbed
+median, from the tables above. Its title claims the undisturbed output only
+if every disturbed run was valid.
 
 ### E5: what an interpreted job file costs
 
