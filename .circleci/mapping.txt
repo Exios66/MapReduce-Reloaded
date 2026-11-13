@@ -20,10 +20,16 @@
 ^go/go\.mod$ run-all
 ^\.gitignore$ run-all
 
-# Go: the go job (lint, race tests, papermap, coverage floors) and sh-lint.
+# Go: the go job (lint, race tests, papermap, coverage floors).
 ^go/ run-go
-\.sh$ run-go
-^\.githooks/ run-go
+
+# Shell scripts and the git hook: sh-lint, which lives in the go job. A PR
+# that changes only these runs the go job's narrow mode (run-sh-lint): make
+# sh-lint and nothing else. No Go test reads a shell script outside
+# scripts/, which is run-all above; TestNoGoTestReadsAShellScript fails if
+# one starts to.
+\.sh$ run-sh-lint
+^\.githooks/ run-sh-lint
 
 # Python: both Python jobs, and the go job's narrow mode (run-go-python):
 # py-e2e, cmd/mr's golden comparison with the Python examples, and papermap,
@@ -46,7 +52,9 @@
 ^testdata/ run-go
 ^testdata/ run-python
 
-# Markdown and other files no test reads: the lint job (md-lint).
+# Markdown and other files no test reads: the lint job (md-lint), and the
+# files the documentation tests in docs/tests read (docs-test), which
+# docs/tests/conftest.py checks are all routed here.
 \.md$ run-lint
 ^docs/ run-lint
 ^bench/ run-lint
@@ -55,35 +63,39 @@
 ^\.github/ run-lint
 ^LICENSE run-lint
 ^\.[^/]*$ run-lint
+^\.claude/ run-lint
+# docs/tests compares examples/README.md with the programs go/examples registers.
+^go/examples/ run-lint
 
 # Files outside python/ that the Python tests read.
+# A plot test reads the bundled fonts' licence.
+^bench/fonts/ run-python
 ^README\.md$ run-python
 ^design\.md$ run-python
 ^docs/README\.md$ run-python
-^docs/design/0001-languages-and-shared-contract\.md$ run-python
-^CHANGELOG\.md$ run-python
-^AGENTS\.md$ run-python
-^docs/design/0014-ci-on-pull-requests\.md$ run-python
-^docs/roadmap\.md$ run-python
-^docs/roadmap-explained\.md$ run-python
-^docs/report\.md$ run-python
 ^docs/ci\.md$ run-python
 ^docs/cluster-vm\.md$ run-python
-^docs/paper-mapping\.md$ run-python
-^bench/README\.md$ run-python
 ^bench/.*\.(py|sh)$ run-python
+# The agent skills' scripts and the documentation tests: py-lint runs ruff
+# on them (#351).
+^\.claude/.*\.py$ run-python
+^docs/.*\.py$ run-python
 ^deploy/compose/README\.md$ run-python
 ^deploy/compose/.*\.yaml$ run-python
 ^deploy/compose/monitoring/ run-python
 ^examples/ run-python
-^go/examples/ run-python
 ^\.github/workflows/ run-python
 ^\.coderabbit\.yaml$ run-python
 ^\.codeant/ run-python
 
 # Files outside go/ that the Go tests read.
-^README\.md$ run-go
-^docs/paper-mapping\.md$ run-go
+# Only cmd/mr reads README.md (its usage text) and only papermap reads
+# docs/paper-mapping.md, so a PR that changes just these runs the go job's
+# narrow mode (run-go-docs): make go-python-test, which tests those two
+# packages. TestOnlyGoPythonTestPackagesReadTheDocs fails if another Go
+# test starts to read them.
+^README\.md$ run-go-docs
+^docs/paper-mapping\.md$ run-go-docs
 ^examples/ run-go
 ^bench/jobs/ run-go
 ^deploy/compose/monitoring/ run-go

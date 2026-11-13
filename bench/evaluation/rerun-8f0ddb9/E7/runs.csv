@@ -1,0 +1,16 @@
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E7,mixed-paper,distsort,4,1,1073741824,32,4,,SUCCEEDED,16.875,16.787,5,3,1084682711,1,job-1
+E7,mixed-late,distsort,4,1,1073741824,32,4,,SUCCEEDED,16.975,17.074,1,1,1084682711,1,job-2
+E7,mixed-off,distsort,4,1,1073741824,32,4,,SUCCEEDED,26.070,26.031,0,0,1084682711,1,job-3
+E7,mixed-off,distsort,4,2,1073741824,32,4,,SUCCEEDED,25.165,25.183,0,0,1084682711,1,job-4
+E7,mixed-late,distsort,4,2,1073741824,32,4,,SUCCEEDED,16.991,17.002,1,1,1084682711,1,job-5
+E7,mixed-paper,distsort,4,2,1073741824,32,4,,SUCCEEDED,19.603,19.697,5,2,1084682711,1,job-6
+E7,mixed-paper,distsort,4,3,1073741824,32,4,,SUCCEEDED,16.648,16.551,5,3,1084682711,1,job-7
+E7,mixed-late,distsort,4,3,1073741824,32,4,,SUCCEEDED,19.128,19.139,2,1,1084682711,1,job-8
+E7,mixed-off,distsort,4,3,1073741824,32,4,,SUCCEEDED,24.479,24.399,0,0,1084682711,1,job-9
+E7,mixed-off,distsort,4,4,1073741824,32,4,,SUCCEEDED,25.681,25.758,0,0,1084682711,1,job-10
+E7,mixed-late,distsort,4,4,1073741824,32,4,,SUCCEEDED,17.043,16.998,1,1,1084682711,1,job-11
+E7,mixed-paper,distsort,4,4,1073741824,32,4,,SUCCEEDED,17.235,17.291,4,3,1084682711,1,job-12
+E7,mixed-paper,distsort,4,5,1073741824,32,4,,SUCCEEDED,19.572,19.700,4,1,1084682711,1,job-13
+E7,mixed-late,distsort,4,5,1073741824,32,4,,SUCCEEDED,20.044,20.011,2,1,1084682711,1,job-14
+E7,mixed-off,distsort,4,5,1073741824,32,4,,SUCCEEDED,24.914,24.921,0,0,1084682711,1,job-15

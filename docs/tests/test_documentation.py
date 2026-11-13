@@ -3,6 +3,10 @@
 These checks cover the status corrections and new guides in PR #283. Historical
 roadmap entries and external facts (GitHub settings, PR counts, VM measurements)
 are deliberately not inferred from the checkout.
+
+They import nothing from the package, so CI's lint job runs them (make
+docs-test, ADR 0025), and conftest.py checks that every file they read is
+routed to that job.
 """
 
 import re

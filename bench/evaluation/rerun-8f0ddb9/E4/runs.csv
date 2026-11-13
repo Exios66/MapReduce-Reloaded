@@ -1,0 +1,14 @@
+experiment,setting,program,workers,run,input_bytes,m,r,event_at,state,seconds,wall_seconds,backups,backups_won,map_output_bytes,valid,job
+E4,calibrate,distsort,4,1,1073741824,32,4,,SUCCEEDED,7.607,7.630,6,0,1084682711,1,job-1
+E4,calibrate,distsort,4,2,1073741824,32,4,,SUCCEEDED,7.836,7.852,6,0,1084682711,1,job-1
+E4,calibrate,distsort,4,3,1073741824,32,4,,SUCCEEDED,7.783,7.667,6,0,1084682711,1,job-1
+E4,normal,distsort,4,1,1073741824,32,4,,SUCCEEDED,8.000,7.954,6,0,1084682711,1,job-1
+E4,restart,distsort,4,1,1073741824,32,4,3.8,SUCCEEDED,9.356,9.239,7,0,1084682711,1,job-1
+E4,restart,distsort,4,2,1073741824,32,4,3.8,SUCCEEDED,8.994,8.901,6,0,1084682711,1,job-1
+E4,normal,distsort,4,2,1073741824,32,4,,SUCCEEDED,8.203,8.127,5,0,1084682711,1,job-1
+E4,normal,distsort,4,3,1073741824,32,4,,SUCCEEDED,7.780,7.899,5,0,1084682711,1,job-1
+E4,restart,distsort,4,3,1073741824,32,4,3.8,SUCCEEDED,9.297,9.183,6,0,1084682711,1,job-1
+E4,restart,distsort,4,4,1073741824,32,4,3.8,SUCCEEDED,9.729,9.740,5,0,1084682711,1,job-1
+E4,normal,distsort,4,4,1073741824,32,4,,SUCCEEDED,7.604,7.579,5,0,1084682711,1,job-1
+E4,normal,distsort,4,5,1073741824,32,4,,SUCCEEDED,8.082,8.108,4,0,1084682711,1,job-1
+E4,restart,distsort,4,5,1073741824,32,4,3.8,SUCCEEDED,8.847,8.911,5,0,1084682711,1,job-1

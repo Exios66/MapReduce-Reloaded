@@ -20,7 +20,7 @@ requirements come before the stretch phases of this roadmap.
 |---|---|---|
 | Nov 1 | Email Tyler that this is a solo team, with the repository link (the repository is public, so no invite is needed) | to confirm |
 | Nov 6 | [design.md](../design.md#key-decisions) answers the design questions | done |
-| Nov 16 | Final code merged to `main` through pull requests | in progress |
+| Nov 16 | Final code merged to `main` through pull requests | in progress; the demo checklist is in [demo.md](demo.md#before-the-day) |
 | Nov 17–20 | Demo with Tyler, scheduled by me | — |
 | After finishing | Submit the course's end-of-project form | — |
 
@@ -44,7 +44,7 @@ before it merges ([design.md](../design.md#process)):
 7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation
    (done).
 8. **Coordinator recovery in Compose:** `-data-dir` on a volume (done).
-9. **Evaluation:** experiments E0–E5 of
+9. **Evaluation:** experiments E0–E6 of
    [design.md](../design.md#performance-evaluation), with plots in
    `bench/README.md`.
 10. **README:** what to build, what to install, how to upload the example
@@ -54,7 +54,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179). Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
+Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179) and E6 in #247. Item 11 is open: comments on the agent-written #185 and #219 exist, and a review with inline comments before an agent-written PR merges is tracked in #269. Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
 
 ## Context
 
@@ -97,7 +97,7 @@ week-by-week schedule and a plain-language walkthrough, is in
   - #35, #37–#39: Python distributed parity;
   - #43–#55: the remaining modern extensions;
   - #59: evaluation of the extensions. LATE (#284, tracked in #45) is built; its experiment
-    E7 is wired and has not been run.
+    E7 ran in #349: either backup rule cuts a mixed-speed sort by 32%, with no clear difference between them.
 - **Cluster host:** the course VM (Ubuntu 24.04.4 LTS, 4 vCPUs, 8 GB RAM, 35 GB disk with a 33 GB root, shared). The whole
   cluster runs there under Docker Compose, with each worker limited to one
   CPU and every service to a memory limit; see
@@ -168,7 +168,7 @@ Ranked by value. Tiers A and B are the "improve and fit modern use" deliverable.
 **Tier B — robustness and operations**
 
 - **Coordinator high availability**: leader election via an etcd lease, or embedded Raft (`hashicorp/raft`). This builds on the F9 WAL.
-- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); its evaluation is pending in #59 (experiment E7, not yet run).
+- **Smarter speculation**: LATE-style straggler detection that compares task progress rates, instead of a fixed "end of job" threshold. Implemented as the opt-in `-speculation=late` beside the paper's rule (#45, [ADR 0019](design/0019-late-speculation.md)); E7 measured it against the paper's rule (#349): on mixed-speed workers the two times overlap, and LATE launches fewer backups.
 - **Skew handling**: sample-based range partitioner (TeraSort-style) and hot-key salting.
 - **Memory-aware spilling**: a bounded sort buffer that spills to disk under memory pressure.
 - **Observability**: Prometheus metrics, OpenTelemetry traces, structured JSON logs. A React or HTMX UI replaces the static status page.
@@ -235,20 +235,24 @@ MapReduce-Reloaded/
 │   ├── internal/shuffle/        # FetchPartition server and client
 │   ├── internal/wal/            # append-only, checksummed log
 │   ├── internal/{split,partition,extsort,combine,formats,local}/
+│   ├── internal/{storage,jobfile}/           # local and S3 files; user job files
 │   ├── internal/{statusweb,promtext,logs}/   # status page, /metrics, slog
-│   ├── internal/{wire,contract,papermap}/    # proto conversion and doc checks
+│   ├── internal/{memlimit,rpcguard}/         # container memory limit; handler panic guard
+│   ├── internal/{wire,contract,papermap,e2e}/ # proto conversion, doc and process checks
 │   └── examples/                # wordcount, grep, urlfreq, reverselinks, termvector, invertedindex, distsort
 ├── python/
 │   ├── pyproject.toml           # package: mapreduce_reloaded
-│   ├── mapreduce_reloaded/      # api, split, partition, formats, extsort, combine, local, examples
+│   ├── mapreduce_reloaded/      # api, split, partition, formats, extsort, combine, local, wal, coordinator, examples
 │   └── tests/
 ├── deploy/{docker,compose}/     # images; 1 coordinator + 4 workers, monitoring profile
+├── bench/                       # data generators, benchmark harness, evaluation results
+├── examples/                    # the job file and the demo notebook
 ├── scripts/                     # proto generation, e2e, VM check
 ├── testdata/                    # golden outputs and hash vectors
 └── Makefile                     # check, proto, test, lint, cluster-up, e2e
 ```
 
-`tests/interop/` (Phase 5) does not exist yet; the Python-coordinator interop coverage that does exist lives in `python/tests/test_coordinator_e2e.py` (`make py-e2e`). `bench/` came with #57.
+`tests/interop/` (Phase 5) does not exist yet; the Python-coordinator interop coverage that does exist lives in `python/tests/test_coordinator_e2e.py` (`make py-e2e`).
 
 ---
 
@@ -292,7 +296,7 @@ Each phase ends in a runnable, tested state.
 
 **Phase 6 — Modern extensions (Tier A → B → C)**
 
-- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; evaluation pending, #59) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
+- In order: S3 storage → compression and checksums → external shuffle mode → coordinator HA (etcd lease) → LATE speculation (done, #284; measured by E7, #349) → skew/range partitioner → mTLS → Helm + KEDA → Parquet/JSONL → pipelines/DAG → incremental mode.
 
 **Phase 7 — Evaluation & write-up**
 
@@ -307,7 +311,7 @@ Each phase ends in a runnable, tested state.
 ## 6. Key technical choices
 
 - **Go libraries:** `google.golang.org/grpc`, `google.golang.org/protobuf`, `aws-sdk-go-v2` for the s3 backend (with `gofakes3` as its test server), `klauspost/compress` for the zstd and Snappy codecs (#42), and the standard library. `log/slog` for logs; `/metrics` is written by `internal/promtext`, not `prometheus/client_golang`; the WAL is one file of checksummed records (`internal/wal`), not `bbolt`. Planned: `hashicorp/raft` or `etcd/client/v3` (Tier B).
-- **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `zstandard`, `pyarrow`.
+- **Python libraries:** `grpcio` and `protobuf`, with `pytest`, `hypothesis` and `ruff` for development. `zstandard` and `python-snappy` are its optional `compression` extra. Planned: `asyncio` for the Phase 5 cluster, `boto3`, `pyarrow`.
 - **Determinism:** the hash partitioner uses a fixed, language-independent hash (FNV-1a 64 over key bytes), so Go and Python place the same key in the same partition.
 - **Exactly-once output:** a task attempt ID goes into temp filenames. The coordinator accepts only the first `ReportTask(COMPLETED)` per task; later attempts are discarded.
 

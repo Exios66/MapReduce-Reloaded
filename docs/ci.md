@@ -24,10 +24,10 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 | Check name | Make targets | Image, resource class |
 |---|---|---|
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
-| `go` | `make go-lint go-test py-e2e` (gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, then the Python coordinator with the Go commands) | `cimg/python:3.13`, medium |
+| `go` | `make sh-lint go-lint go-test py-e2e` (shellcheck, gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, and the Python coordinator with the Go commands), split across three nodes (see [Pipeline time](#pipeline-time)) | `cimg/python:3.13`, medium, `parallelism: 3` |
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
 | `python-3.13` | `make py-lint py-test` | `cimg/python:3.13`, small |
-| `lint` | `make md-lint` (the Markdown link and style checks) | `cimg/python:3.11`, small |
+| `lint` | `make md-lint docs-test` (the Markdown link and style checks, and the documentation tests in `docs/tests`, which compare the guides with the configuration they describe) | `cimg/python:3.11`, small |
 | `mapping-coverage` | `scripts/ci-params.py --check` (every changed file is mapped, and the jobs received the selection) | `cimg/python:3.11`, small |
 
 The names are set in the workflow, so they do not change when the job
@@ -82,22 +82,29 @@ regex matches it. Three rules keep the selection conservative:
 |---|---|
 | `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod`, `.gitignore` | all (run-all) |
 | any deleted file, any unmapped file | all (run-all) |
-| `go/**`, `*.sh`, `.githooks/**` | go (sh-lint lives in the go job) |
+| `go/**` | go |
+| `*.sh`, `.githooks/**` | the go job's narrow mode (run-sh-lint: `make sh-lint`, which lives in the go job) |
 | `python/**` | python-3.11, python-3.13, and the go job's narrow mode (run-go-python: `make go-python-test py-e2e`) |
 | `proto/**`, `buf.yaml`, `go/gen/**`, `python/mapreduce_reloaded/gen/**` | proto (it regenerates the code and fails if the committed copy differs) |
 | `testdata/**` | go, python-3.11, python-3.13 |
-| `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles | lint |
-| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/paper-mapping.md`, `docs/roadmap.md`, `docs/roadmap-explained.md`, `docs/report.md`, `docs/ci.md`, `docs/cluster-vm.md`, `docs/design/0001-*`, `docs/design/0014-*`, `bench/README.md`, `bench/*.py`, `bench/*.sh`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `go/examples/**`, `.coderabbit.yaml`, `.codeant/**` | python-3.11, python-3.13, and lint where the file is docs |
-| files outside `go/` the Go tests read: `README.md`, `docs/paper-mapping.md`, `examples/**`, `bench/jobs/**`, `deploy/compose/monitoring/**` | go, and lint where the file is docs |
+| `*.md`, `docs/**`, `bench/**`, `examples/**`, `deploy/**`, `.github/**`, `LICENSE*`, root dotfiles, `.claude/**`, `go/examples/**` (the documentation tests read the programs it registers) | lint |
+| files outside `python/` the Python tests read: `README.md`, `design.md`, `docs/README.md`, `docs/ci.md`, `docs/cluster-vm.md`, `CHANGELOG.md`, `AGENTS.md`, `bench/*.py`, `bench/*.sh`, `bench/fonts/**`, `deploy/compose/*.yaml`, `deploy/compose/README.md`, `deploy/compose/monitoring/**`, `examples/**`, `.coderabbit.yaml`, `.codeant/**`, and the Python files ruff checks outside `python/` (`.claude/**/*.py`, `docs/**/*.py`) | python-3.11, python-3.13, and lint where the file is docs |
+| `README.md`, `docs/paper-mapping.md` (only `cmd/mr` and `papermap` read them) | the go job's narrow mode (run-go-docs: `make go-python-test`), and lint |
+| other files outside `go/` the Go tests read: `examples/**`, `bench/jobs/**`, `deploy/compose/monitoring/**` | go, and lint where the file is docs |
 
 The cross-directory rows come from tracing every file the Go and Python test
 suites open. The Python side checks itself: `python/tests/conftest.py`
 records every tracked file outside `python/` that a test opens, and the
 test run fails, naming the file, if the mapping does not route it to the
 Python jobs. (The whole-repository link sweep is marked `lint_inputs`: it
-reads every Markdown file, which the lint job checks.) For the Go tests, a
-new read of a file outside `go/` needs its line added by hand, and
-`python/tests/test_ci_params.py` lists the known ones.
+reads every Markdown file, which the lint job checks.) The documentation
+tests do the same for the lint job: `docs/tests/conftest.py` fails the run
+if a test there opens a tracked file the mapping does not route to
+`run-lint`. For the Go tests, a new read of a file outside `go/` needs its
+line added by hand, and `python/tests/test_ci_params.py` lists the known
+ones; three Go tests in `go/internal/papermap` fail if a Go test outside
+`cmd/mr` and `papermap` starts to read `python/`, a README or `docs/`, or
+if any Go test names a shell script.
 
 Echo-skip semantics: every job always exists in the workflow, so every
 required check always reports. A job whose inputs did not change runs only
@@ -127,8 +134,9 @@ How each job meets its requirements:
   `CGO_ENABLED=1`; `cimg/python` images include a C compiler.
 - **golangci-lint.** Built from source by the job's Go, at the version in
   `scripts/vm-setup.sh` (`GOLANGCI_VERSION`, currently v2.14.0). The workflow
-  and the VM setup use the same pin, and a test fails if they drift.
-- **shellcheck.** The `go` job installs the release pinned in
+  and the VM setup use the same pin, and a test fails if they drift. Locally,
+  `make go-lint` applies the same rule through `scripts/golangci-lint.sh`.
+- **shellcheck.** The `go` job's lint node installs the release pinned in
   `scripts/vm-setup.sh` (`--shellcheck`, which checks its SHA-256 sum) and
   runs `make sh-lint` with `MR_REQUIRE_SHELLCHECK=1`. Locally, `make lint`
   skips shellcheck with a message if it is not installed; in CI a missing
@@ -143,35 +151,149 @@ How each job meets its requirements:
   fails; the check is never skipped. A fork's build has no deploy key, so the
   job falls back to the public HTTPS URL.
 - **Narrow Go mode.** A PR whose Go-side inputs are only `python/` runs
-  `make go-python-test py-e2e` in the go job instead of the whole Go suite:
+  `make go-python-test py-e2e` in the go job instead of the whole Go suite
+  (node 0 runs `go-python-test`, node 2 `py-e2e`, node 1 nothing):
   `cmd/mr` (its golden tests compare the Go examples with Python's),
   `papermap` (it reads the Python test names) and `py-e2e`. Every other Go
   package passes with `python/` deleted and no Python on the PATH, so its
   result from `main` stands. `TestOnlyGoPythonTestPackagesReadPython` fails
   if another Go test starts to read `python/` or run Python. Any other
   implicated file, `run-all`, and `main` run the full mode.
+
+  The narrow mode has two more parts
+  ([ADR 0025](design/0025-narrow-go-modes-and-docs-tests.md)), and a PR
+  runs each part its files implicate:
+
+  | Part | Parameter | Files | Runs |
+  |---|---|---|---|
+  | python | `run-go-python` | `python/**` | `make go-python-test` on node 0, `make py-e2e` on node 2 |
+  | docs | `run-go-docs` | `README.md`, `docs/paper-mapping.md` | `make go-python-test` on node 0 |
+  | sh | `run-sh-lint` | `*.sh`, `.githooks/**` | `make sh-lint` on node 2 |
+
+  Only `cmd/mr` reads the README (its usage text must match) and only
+  `papermap` reads the mapping table, and `make go-python-test` tests both
+  packages. No Go test reads a shell script outside `scripts/`, which runs
+  every job. A PR with the sh part alone installs neither Go nor Python:
+  its nodes check out the repository and node 2 runs shellcheck.
+  `scripts/ci-go-job.sh` reads the parts from `MR_CI_GO_NARROW`, and fails
+  if narrow mode is asked for with no part.
+- **The heap measurements run once.** `TestSortMemoryBounded` and
+  `TestReduceMemoryBounded` measure one goroutine's live heap over 80 MB.
+  They skip themselves under the race detector, which made them ten times
+  slower and has nothing to find in them, and run in the coverage pass on
+  node 1. `TestOnlyTheHeapMeasurementsSkipUnderTheRaceDetector` fails if
+  the coverage pass gains `-race` or `-short`, or if another test uses the
+  same switch.
+- **Documentation tests.** `docs/tests` compares the guides with the
+  configuration they describe: the Compose guide's limits and profiles with
+  `compose.yaml`, this page's job table with the CircleCI config, the
+  examples guide with the programs `go/examples` registers. They import
+  nothing from the package, so the lint job runs them (`make docs-test`)
+  with pytest and PyYAML only, and a PR that changes a guide no other test
+  reads runs lint alone, not the Python jobs. `test_references.py` checks
+  every name a guide writes as code, which the link check does not see:
+  each `make` target must be in the Makefile, each repository path tracked
+  (or output `.gitignore` covers), each ADR number an ADR that docs/README.md
+  indexes, each script listed in `scripts/README.md` and each skill's script
+  in AGENTS.md. `test_changelog.py` checks the CHANGELOG's layout and that
+  every entry cites its PR, so a PR's own CHANGELOG bullet runs lint, not the
+  Python jobs.
 - **Go build cache.** The go job restores Go's build cache and
   golangci-lint's analysis cache, so compiled packages (the race-built
   standard library above all) are not rebuilt on every run. Both caches are
   keyed by content, so an entry is reused only for identical input, and the
   job sets `GOFLAGS=-count=1`, so test results are never cached: every test
   runs every time. The key changes with the Go release, `go.sum` and the ISO
-  week, so the cache is saved about once a week, not on every run.
-- **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
+  week, so the cache is saved about once a week, not on every run. Each of
+  the go job's three nodes compiles different things (race-instrumented
+  packages, coverage-instrumented packages, vet and lint), so each node
+  keeps its own cache, keyed by `CIRCLE_NODE_INDEX`, and a new week starts
+  from that node's last one.
+- **Artifacts.** `go/cover.out`, `python/cover.json` and the JUnit
+  reports (below) are kept.
 
 ## Test results and artifacts
 
 The `go` and `python` jobs set `JUNIT_DIR=/tmp/test-results`, so `make`
-writes JUnit XML there: `gotestsum` runs the Go tests with separate reports
-for the race, coverage and uncached passes (`go-test-race.xml`,
-`go-test-coverage.xml`, `go-test-uncached.xml`), and pytest gets
-`--junitxml` (`py-test.xml`, `py-e2e.xml`). The jobs hand the
-directory to CircleCI's `store_test_results`, even when a test failed, so
-the Tests tab lists every test with its time and failures, and CircleCI's
-flaky-test and timing insights work. The full Go and Python jobs also keep
-the same files as artifacts under `test-results/`, with `go/cover.out` and
-`python/cover.json`. Without
-`JUNIT_DIR`, as in `make check`, the tests run as before.
+writes JUnit XML there, one report per test pass, named after its make
+target. `gotestsum` (v1.13.0; v1.12.0 does not build on Go 1.26) runs the
+Go tests and writes into `go/` under that directory: `go-test-race.xml`
+for the race pass, `go-test-cover.xml` and `go-test-cover-uncached.xml`
+for the coverage pass and its uncached rerun of `papermap` and
+`statusweb`, and, in the go job's narrow mode, `go-python-test-mr.xml`
+and `go-python-test-papermap.xml`. pytest gets `--junitxml` and writes
+`py-test.xml` and `py-e2e.xml` into `python/` under it. Each pass
+has its own report, so a pass that fails is never hidden by an earlier one
+that passed. Every step that runs tests, in the go job's full and narrow
+modes and in the python job, hands the directory to CircleCI's
+`store_test_results` and keeps it as artifacts under `test-results/`, even
+when a test failed, so the Tests tab lists every test with its time and
+failures, and CircleCI's flaky-test and timing insights work. `JUNIT_DIR`
+may be relative to the repository root and may contain spaces. Without it,
+as in `make check`, the tests run with `go test` and pytest as before.
+
+## Pipeline time
+
+The six jobs start together, so a PR's pipeline takes as long as its slowest
+job ([ADR 0024](design/0024-faster-ci-pipeline.md)). Before ADR 0024 that
+was always `go`, which ran its parts in series in one step. Measured on
+#352's final run (head `db396e8`, CircleCI jobs 620-625, every job
+implicated):
+
+| Job | Before | Longest step |
+|---|---|---|
+| `go` | 395 s | `make go-lint go-test py-e2e`, 366 s |
+| `proto` | 180 s | `make tools` rebuilding buf, 151 s |
+| `python-3.13` | 103 s | `make py-lint py-test`, 69 s |
+| `python-3.11` | 98 s | `make py-lint py-test`, 79 s |
+| `lint` | 18 s | `make md-lint`, 9 s |
+| `mapping-coverage` | 7 s | |
+
+The go job's parts, timed on the course VM pinned to two CPUs (the medium
+class's count) with a warm build cache, two runs each: `go-test-race`
+149-151 s, `go-test-cover` 85-89 s, `py-e2e` 45-46 s, `go-lint` and
+`sh-lint` 1-2 s. In series that is about 290 s, against 366 s on CircleCI,
+so CircleCI ran about 1.27 times slower. Split across the three nodes, each
+with about 30 s of setup:
+
+| Go node | Runs | Estimated |
+|---|---|---|
+| 0 | `go-test-race` | about 220 s |
+| 1 | `go-test-cover` | about 140 s |
+| 2 | `sh-lint`, `go-lint`, `py-e2e` | about 100 s |
+
+So the estimate for the full pipeline is about 220 s instead of about 400 s,
+with `go` node 0 still the slowest, then the Python jobs. `proto` drops to
+about 30 s, since `make tools` keeps the cached generators. The PR that made
+the change records the first CircleCI run's times.
+
+Two later changes shorten the tests themselves, with the same checks
+(#358), timed on a development machine pinned as the CircleCI classes are:
+
+- `internal/e2e`, the slowest package of the race node, spent most of its
+  time writing the 48 MB input of its kill and restart tests, once per
+  test, in a loop the race detector instruments. It now writes the same
+  bytes once. On two CPUs the package's race run went from 55 s to 29 s.
+- `make py-test` measures coverage through `sys.monitoring` on Python 3.12
+  and later, which records exactly the lines the default tracer does. On
+  one CPU the Python 3.13 tests went from 51 s to 36 s. Python 3.11 has no
+  `sys.monitoring` and is unchanged.
+
+Whether those changes left the race node shorter than the others was
+checked with an A/B run ([ADR 0025](design/0025-narrow-go-modes-and-docs-tests.md)):
+`main` at `605430b` (A) against this branch (B), on the same machine pinned
+to two CPUs, warm build caches, two runs of each pass in turn:
+
+| Go node | Runs | A | B |
+|---|---|---|---|
+| 0 | `go-test-race` | 203 s, 180 s | 156 s, 136 s |
+| 1 | `go-test-cover` | 103 s, 100 s | 111 s, 100 s |
+| 2 | `go-lint`, `py-e2e` | | 23 s + 49 s |
+
+The race node is about 45 s shorter, but still the slowest by about 40 s,
+so the nodes are not unbalanced the other way, and moving a part between
+nodes would not shorten the job: node 0 runs one make target, and node 2
+has room to spare.
 
 ## Caching
 
@@ -182,7 +304,7 @@ Caches only save time; none of them replaces a check.
 | pip downloads | Python version, `python/pyproject.toml` | Downloads. `pip install` still runs. |
 | Go toolchain | architecture, Go version | The download. The script runs the restored `go` and rejects a wrong version. |
 | Go modules | `go/go.sum` | Downloads. `go mod download` still runs. |
-| Generators in `.tools/bin` | the `@v` pins in the `Makefile`, Go version | Compiling. `make tools` still runs. |
+| Generators in `.tools/bin` | the `@v` pins in the `Makefile`, Go version | Compiling. `make tools` still runs: `scripts/install-tool.sh` keeps a binary only if `go version -m` shows it was built from the pinned package and version, and installs any other. |
 | golangci-lint | the pin, Go version | Compiling. The job rebuilds a binary whose version or Go build differs. |
 
 Bump a `-v1-` in a key to throw a cache away.
@@ -226,7 +348,8 @@ combined, cannot both land.
 ## Free plan
 
 The setup uses only what the Free plan includes: Docker executors with the
-`small` and `medium` resource classes. It does not use remote Docker (`setup_remote_docker`), Docker
+`small` and `medium` resource classes, and job parallelism (the `go` job's
+three nodes). It does not use remote Docker (`setup_remote_docker`), Docker
 layer caching, machine executors, larger resource classes, or a paid plan, and
 there is no payment method on the account.
 
@@ -298,9 +421,14 @@ that does not depend on any hosted service.
   check, and open an issue.
 - **`go` fails with a Go version mismatch.** A cache or the image supplied a
   different Go. Bump `go-toolchain-v1` in `.circleci/continue-config.yml`.
-- **`go` fails in `golangci-lint`.** Run `make go-lint` locally with
-  golangci-lint built by the Go in `go/go.mod`. A linter built by an older Go
-  cannot lint newer code.
+- **`go` fails in `golangci-lint`.** Run `make go-lint` locally. It runs
+  `scripts/golangci-lint.sh`, which uses the golangci-lint on `PATH` only if
+  it is the pinned version built by a Go no older than `go/go.mod`'s, and
+  otherwise builds the pin into `.tools/bin` once. A linter built by an older
+  Go cannot lint newer code, so `make check` and the pre-push hook need no
+  `PATH` setup. The hook also appends `~/.local/go/bin`, `/usr/local/go/bin`,
+  `~/go/bin`, `.tools/bin` and `~/.local/bin` to `PATH` when they exist, for
+  git clients that run hooks without a login shell's `PATH`.
 - **Race detector missing.** `CGO_ENABLED=1` and a C compiler are required;
   the `medium` executor sets the first, the image has the second.
 - **A job fails to start with a credits message.** The monthly allowance is

@@ -15,12 +15,12 @@ provides a coordinator server, and for
 the same uncompressed job both produce the same bytes. All 24 of the
 paper's features (F1–F24) are built and each is named with the test that
 proves it. The paper's §5 experiments (grep, sort, backups, failures) were reproduced
-on the VM, alongside further experiments E0, E1, and E4–E6.
+on the VM, alongside further experiments E0, E1, and E4–E7.
 The mechanisms behave as the paper says: phases overlap, backups cut a
-straggler's tail (17.6 s without them, 11.2 s with), and a job survives a
+straggler's tail (17.9 s without them, 11.4 s with), and a job survives a
 lost worker or a restarted coordinator with the same output. What changes
 at four workers is the size of fixed costs: startup, heartbeats and the
-10 s failure timeout are a large share of a 10-second job.
+10 s failure timeout are a large share of an 8-second job.
 
 ## Architecture
 
@@ -40,7 +40,7 @@ and the job continues.
 - [Design](../design.md): the assignment's design questions, one job from
   submission to completion, and sequence diagrams for scheduling, the
   shuffle, failure recovery and the commit.
-- [Design records](README.md#design-records): nineteen ADRs, one per
+- [Design records](README.md#design-records): 22 ADRs, one per
   decision.
 - [Explainers](README.md#explainers): one page per component.
 
@@ -91,16 +91,17 @@ change behavior:
 |---|---|
 | §5.2 Grep, 10 GB | 18.3 s; the input rate rises, plateaus near one disk's rate, and falls, as in Figure 2 |
 | §5.3 Sort, 1 GiB | 7.8 s; map, shuffle and output overlap as in Figure 3(a) |
-| §5.4 and E2: backup tasks | With one worker at 0.2 CPU, 11.2 s with backups and 17.6 s without (+56%; the paper saw +44%). With no straggler, no significant cost over ten interleaved pairs |
-| §5.5 and E3: losing a worker | Every job finished, and its output checksum matched a normal run's; +79% to +232%, because one of four workers is a quarter of the cluster and the 10 s timeout is most of a 12 s job |
-| E0: scaling | 3.8× on four workers for word count, 2.9× for sort, 2.3× for grep |
-| E1: combiner | 15× to 78× fewer bytes shuffled, 18–44% faster |
-| E4: coordinator restart | 1.6 s, every finished task kept |
-| E5: interpreted job file | 2.4× slower than compiled with the compiled helpers, 10.5× without |
-| E6: combiner on real text | 5.2× fewer bytes shuffled and 14% faster on crawled English, 3.2× and 7% in every language, 33× and 22% on the book (a best case) |
+| §5.4 and E2: backup tasks | With one worker at 0.2 CPU, 11.4 s with backups and 17.9 s without (+58%; the paper saw +44%). With no straggler, no significant cost over ten interleaved pairs |
+| §5.5 and E3: losing a worker | Every job finished, and its output checksum matched a normal run's; +101% to +333%, because one of four workers is a quarter of the cluster and the 10 s timeout is longer than the 7.9 s job |
+| E0: scaling | 3.7× on four workers for word count, 3.1× for sort, 2.0× for grep |
+| E1: combiner | 15× to 78× fewer bytes shuffled, 16–42% faster |
+| E4: coordinator restart | 1.2 s, every finished task kept |
+| E5: interpreted job file | 2.3× slower than compiled with the compiled helpers, 10.2× without |
+| E6: combiner on real text | 5.2× fewer bytes shuffled and 11% faster on crawled English, 3.2× and 8% in every language, 33× and 24% on the book (a best case) |
+| E7: paper's backups against LATE | On four workers of mixed speeds, either rule cuts a sort by 32%; LATE uses fewer backups (1 against 5), and the two times overlap |
 
 [Evaluation](evaluation.md) compares each run with the paper's figure;
-[bench/README.md](../bench/README.md#evaluation-e0e6) has the plots, the
+[bench/README.md](../bench/README.md#evaluation-e0e7) has the plots, the
 tables and the commands, and `bench/evaluation/` has the data.
 
 ## How it is tested
@@ -110,22 +111,44 @@ short: unit tests in both languages, golden vectors shared by Go and
 Python for the file format, the hash and the messages, in-process cluster
 tests, a seeded chaos test that kills workers and restarts the
 coordinator, fuzzing of the decoders, a model-based test of the
-coordinator's RPCs, coverage floors per package (Go 83–99%, Python 99%),
+coordinator's RPCs, coverage floors per package (Go 83–99% outside `tools/mutate`, Python 99%),
 and mutation testing of the core packages. `make check` runs the fast set
 locally and CircleCI runs it on every pull request.
 
 ## The demo
 
-About five minutes, following the [runbook](runbook.md#5-the-demo):
+About six minutes, following the [demo script](demo.md); the
+[notebook](../examples/demo.ipynb) runs the same steps, each checked by an
+`assert`:
 
-1. Show the four workers limited to one CPU each (§5.1).
-2. Upload the example data, submit `examples/wordcount.go` with `mr
-   submit`, and read the output (§5.3).
-3. Submit a sort and kill a worker in the middle; show the status page
-   marking it dead, the lost tasks running again, and the output matching
-   (§5.4).
-4. Show a benchmark's rates over time and the evaluation plots (§5.5,
-   §5.6).
+1. Show the four workers limited to one CPU each and the status page.
+2. Submit `examples/wordcount.go`, a job file the workers interpret, with
+   `mr submit`, then again with `-combiner=false`: the same output, 2.6×
+   more bytes shuffled.
+3. Read the output and show it is byte for byte the local oracle's.
+4. Sort 1 GiB and kill a worker in the middle: the job succeeds, and the
+   coordinator's log says how many tasks ran again.
+5. Sort again and restart the coordinator in the middle: the job resumes
+   from the write-ahead log and writes the same output as step 4.
+6. Show the fault-tolerance summary and the evaluation figures.
+
+## Process and review
+
+The assignment grades the engineering process as well as the code. Solo,
+an AI agent plays the teammate, as the assignment allows
+([design.md](../design.md#process)).
+
+| Practice | How it is enforced | Evidence |
+|---|---|---|
+| Never push to `main` | Branch protection on `main`: a pull request is required, the branch must be up to date, and the CircleCI checks must pass | Rule verified on 2026-10-29 (#267, #269) |
+| CI runs tests on pull requests | Six CircleCI checks are required to merge: `proto`, `go`, `python-3.11`, `python-3.13`, `lint` and `mapping-coverage`. Each runs its tests when the pull request touches its inputs; otherwise it passes after a skip note (ADR 0020). Running CI once, on each PR's final head, is the project's policy (AGENTS.md), not something CircleCI enforces. `make check` runs the protobuf, lint, Go and Python checks locally and in the pre-push hook, on one Python version and without the mapping-selection check | [CI](ci.md), [ADR 0014](design/0014-ci-on-pull-requests.md), [ADR 0020](design/0020-implicated-only-ci.md) |
+| Many small pull requests | One concern each, from the templates in `.github/`, each with its changelog entry | 199 merged pull requests by 10 November 2026; [changelog](../CHANGELOG.md) |
+| Feedback sought | CodeRabbit and CodeAnt review every pull request I open, with inline comments; each thread gets a fix or a reason before merging | Resolved CodeRabbit thread on #264, CodeAnt thread on #263 |
+| Feedback given | I review pull requests written by an AI agent and comment on them | Comments on the agent-written #185 and #219, each closed with the reason it was superseded (#213, #216, #217). A review with inline comments before an agent-written PR merges is still open in #269 |
+
+Several real bugs were found in review rather than by the tests; the
+"Coverage is not test strength" lesson below came from the same habit of
+checking claims instead of trusting them.
 
 ## Lessons learned
 
@@ -147,9 +170,10 @@ About five minutes, following the [runbook](runbook.md#5-the-demo):
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests.** 180 merged pull requests (as of 30 October 2026).
-  The documented process calls for AI review and CI before merging; several
-  real bugs were found in review, not by tests.
+- **Small pull requests.** 199 merged pull requests by 10 November 2026,
+  each reviewed by an AI agent and tested in CI before merging
+  ([Process and review](#process-and-review)); several real bugs were found
+  in review, not by tests.
 
 ## Future work
 
@@ -161,7 +185,8 @@ Kept open as `[stretch]` issues:
 - **Modern extensions (#43–#55):** an external shuffle service,
   coordinator high availability, LATE-style speculation (built as an
   opt-in coordinator mode, [ADR 0019](design/0019-late-speculation.md), and
-  not yet evaluated), skew handling, memory-aware spilling, tracing, mTLS,
+  measured by E7 against the paper's rule: no clear difference in time,
+  fewer backups), skew handling, memory-aware spilling, tracing, mTLS,
   Kubernetes, Parquet and JSON Lines, a job service, job DAGs, incremental execution and WebAssembly
   user functions.
 - **Their evaluation (#59)** against this baseline.

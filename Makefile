@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check demo-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -15,11 +15,15 @@ PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 BASE_PYTHON ?= python3
 
 # When JUNIT_DIR is set (CI sets it), the Go and Python tests also write JUnit
-# XML there, for CircleCI's test results: gotestsum runs `go test` and
-# pytest gets --junitxml. Left unset, they run as before.
+# XML there, for CircleCI's test results: gotestsum runs `go test`, one report
+# per pass, and pytest gets --junitxml. Left unset, they run as before.
+# JUNIT_ABS is JUNIT_DIR made absolute once, before any recipe changes
+# directory; recipes quote it, so a directory name may contain spaces.
 JUNIT_DIR ?=
-GOTEST = $(if $(JUNIT_DIR),gotestsum --junitfile $(abspath $(JUNIT_DIR))/go/$@$(if $(1),-$(1)).xml --format standard-quiet --,go test)
-PYTEST_JUNIT = $(if $(JUNIT_DIR),--junitxml=$(abspath $(JUNIT_DIR))/python/$@.xml)
+JUNIT_ABS = $(if $(filter /%,$(firstword $(JUNIT_DIR))),$(JUNIT_DIR),$(CURDIR)/$(JUNIT_DIR))
+GOTEST = $(if $(JUNIT_DIR),gotestsum --junitfile "$(JUNIT_ABS)/go/$@$(if $(1),-$(1)).xml" --format standard-quiet --,go test)
+PYTEST_JUNIT = $(if $(JUNIT_DIR),"--junitxml=$(JUNIT_ABS)/python/$@.xml")
+JUNIT_MKDIR = $(if $(JUNIT_DIR),mkdir -p "$(JUNIT_ABS)/$(1)")
 
 all: check
 
@@ -50,6 +54,12 @@ hooks:
 # Report whether this machine can build and run the cluster (docs/cluster-vm.md).
 vm-check:
 	scripts/vm-setup.sh --check
+
+# Check the running cluster against what docs/demo.md needs: one OK, WARN or
+# FAIL line per check (scripts/demo-check.py). The system python3 runs it,
+# since it needs only the standard library.
+demo-check:
+	python3 scripts/demo-check.py
 
 # The Compose cluster (deploy/compose, docs/cluster-vm.md). Its project is
 # named mapreduce, so cluster-down removes only this project's containers.
@@ -147,7 +157,7 @@ perf:
 
 test: go-test py-test
 
-lint: go-lint py-lint sh-lint md-lint
+lint: go-lint py-lint sh-lint md-lint docs-test
 
 # shellcheck on every tracked shell script and the git hook (#159). Where it
 # is not installed, it says so and passes, unless MR_REQUIRE_SHELLCHECK is
@@ -164,9 +174,10 @@ sh-lint:
 	fi
 
 # Every relative link and anchor in the tracked Markdown files resolves
-# (scripts/check-links.py, #159), and the Markdown style passes pymarkdown
-# (.pymarkdown.json: line length off, picture/sub HTML allowed). CI's
-# Python jobs run it; pymarkdown comes with python[dev]. Where it is not
+# (scripts/check-links.py, #159), every bench chart a page shows has its
+# dark variant (scripts/check-dark-charts.py, #349), and the Markdown style
+# passes pymarkdown (.pymarkdown.json: line length off, picture/sub HTML
+# allowed). CI's Python jobs run it; pymarkdown comes with python[dev]. Where it is not
 # installed, the style check is skipped unless MR_REQUIRE_PYMARKDOWN is set,
 # mirroring sh-lint's shellcheck handling.
 # PR templates live under .github and use HTML comments by design, so the
@@ -174,6 +185,7 @@ sh-lint:
 MD_FILES = $(shell git ls-files '*.md' | grep -v '^\.github/')
 md-lint:
 	$(PYTHON) scripts/check-links.py
+	$(PYTHON) scripts/check-dark-charts.py
 	@if $(PYTHON) -m pymarkdown --help >/dev/null 2>&1; then \
 		$(PYTHON) -m pymarkdown --config .pymarkdown.json scan $(MD_FILES); \
 	elif [ -n "$$MR_REQUIRE_PYMARKDOWN" ]; then \
@@ -182,16 +194,36 @@ md-lint:
 		echo "md-lint: pymarkdown is not installed; skipping style check (install python[dev])"; \
 	fi
 
+# The documentation tests (docs/tests): the guides against the configuration
+# they describe, such as the Compose guide's memory limits against
+# compose.yaml and docs/ci.md's job table against the CircleCI config. They
+# import nothing from the package, so they need only pytest and PyYAML, and
+# CI's lint job runs them: a PR that changes only a guide then runs lint,
+# not the Python jobs (docs/ci.md, ADR 0025).
+docs-test:
+	$(PYTHON) -m pytest -q -p no:cacheprovider docs/tests
+
+# Redraws the evaluation figures from bench/evaluation/rerun-8f0ddb9/archives
+# and compares each with the committed PNG (scripts/check-figures.py). It
+# needs matplotlib, which make venv does not install, so make check does not
+# run it: PLOT_PYTHON names a Python that has it, on the experiment VM.
+PLOT_PYTHON ?= python3
+figures-check:
+	$(PLOT_PYTHON) scripts/check-figures.py
+
 fmt:
 	cd go && gofmt -w .
-	cd python && $(PYTHON) -m ruff format . ../scripts ../bench && $(PYTHON) -m ruff check --fix . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format . ../scripts ../bench ../.claude ../docs/tests && $(PYTHON) -m ruff check --fix . ../scripts ../bench ../.claude ../docs/tests
 
 # Pinned code-generation tools, installed into .tools/bin (git-ignored).
 TOOLS := $(CURDIR)/.tools/bin
+# scripts/install-tool.sh keeps a binary that `go version -m` shows was built
+# from the pin, and go installs any other, so CI's cached .tools/bin skips
+# the build.
 tools:
-	GOBIN=$(TOOLS) go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
-	GOBIN=$(TOOLS) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
-	GOBIN=$(TOOLS) go install github.com/bufbuild/buf/cmd/buf@v1.74.0
+	GOBIN=$(TOOLS) scripts/install-tool.sh google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+	GOBIN=$(TOOLS) scripts/install-tool.sh google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+	GOBIN=$(TOOLS) scripts/install-tool.sh github.com/bufbuild/buf/cmd/buf@v1.74.0
 
 # Regenerate Go and Python code from proto/.
 proto:
@@ -237,23 +269,36 @@ proto-check: proto-lint proto-breaking proto
 # GO_COVERDIR; go/cover.out holds both. The race detector runs in a pass of
 # its own: with -coverpkg it makes every package's counters atomic, which
 # slows the cluster tests past their deadlines on a 2-CPU runner.
+# go-test runs the two passes in turn, go-test-race then go-test-cover; CI's
+# go job runs them on separate nodes at the same time (docs/ci.md).
 GO_COVERDIR = $(CURDIR)/go/.cover
 go-test:
-	$(if $(JUNIT_DIR),mkdir -p $(abspath $(JUNIT_DIR))/go)
+	$(MAKE) go-test-race
+	$(MAKE) go-test-cover
+
+go-test-race:
+	$(call JUNIT_MKDIR,go)
+	cd go && MR_PYTHON=$(PYTHON) $(GOTEST) -race -shuffle=on ./...
+
+go-test-cover:
+	$(call JUNIT_MKDIR,go)
 	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
-	cd go && MR_PYTHON=$(PYTHON) $(call GOTEST,race) -race -shuffle=on ./...
-	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) $(call GOTEST,coverage) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && $(call GOTEST,uncached) -count=1 ./internal/papermap ./internal/statusweb
+	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) $(GOTEST) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && $(call GOTEST,uncached) -count=1 ./internal/papermap ./internal/statusweb
 	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
 		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
 	fi
 	$(PYTHON) scripts/cover.py go go/cover.out go/cover-floors.txt
 
-# The Go tests that read python/: cmd/mr's golden comparison with the Python
-# examples, and papermap's check of the Python test names. CI's go job runs
-# only these (with py-e2e) when a PR changes python/ alone; every other Go
-# package passes with python/ removed (docs/ci.md).
+# The Go tests that read outside go/ what no other Go test does: cmd/mr's
+# golden comparison with the Python examples and its usage text against
+# README.md, and papermap's checks of docs/paper-mapping.md and the Python
+# test names. CI's go job runs only these (with py-e2e) when a PR changes
+# python/ alone, and only these when it changes README.md or
+# docs/paper-mapping.md alone; every other Go package passes with python/
+# and both files removed (docs/ci.md).
 go-python-test:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./cmd/mr && go test -count=1 ./internal/papermap
+	$(call JUNIT_MKDIR,go)
+	cd go && MR_PYTHON=$(PYTHON) $(call GOTEST,mr) -race -shuffle=on ./cmd/mr && $(call GOTEST,papermap) -count=1 ./internal/papermap
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
@@ -280,12 +325,23 @@ mutate:
 mutate-py:
 	cd python && $(PYTHON) -m mutmut run && $(PYTHON) -m mutmut results
 
+# golangci-lint at the pinned version, built by this module's Go release;
+# scripts/golangci-lint.sh builds it into .tools/bin when PATH has no such
+# binary, as CI does, so the pre-push hook needs no PATH setup.
 go-lint:
-	cd go && test -z "$$(gofmt -l .)" && go vet ./... && golangci-lint run ./...
+	cd go && test -z "$$(gofmt -l .)" && go vet ./... && ../scripts/golangci-lint.sh run ./...
 
+# On Python 3.12 and later, coverage measures through sys.monitoring
+# (COVERAGE_CORE=sysmon), which records the same lines as the default tracer
+# in about a quarter less test time. 3.11 has no sys.monitoring, so there
+# COVERAGE_CORE stays unset and coverage picks its own core (its C tracer,
+# or the Python one where that is not built). A COVERAGE_CORE already in
+# the environment wins.
 py-test:
-	$(if $(JUNIT_DIR),mkdir -p $(abspath $(JUNIT_DIR))/python)
-	cd python && $(PYTHON) -m coverage run -m pytest -q $(PYTEST_JUNIT) && $(PYTHON) -m coverage json -q -o cover.json
+	$(call JUNIT_MKDIR,python)
+	cd python && if [ -z "$${COVERAGE_CORE:-}" ] && $(PYTHON) -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then \
+		COVERAGE_CORE=sysmon; export COVERAGE_CORE; fi && \
+		$(PYTHON) -m coverage run -m pytest -q $(PYTEST_JUNIT) && $(PYTHON) -m coverage json -q -o cover.json
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
 
 # The tests, then each package's coverage against its floor.
@@ -298,8 +354,8 @@ cover: test
 # jobs; CI's go job runs them here, and MR_REQUIRE_GO makes a skip a
 # failure, so the integration is checked on every pull request.
 py-e2e:
-	$(if $(JUNIT_DIR),mkdir -p $(abspath $(JUNIT_DIR))/python)
+	$(call JUNIT_MKDIR,python)
 	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q $(PYTEST_JUNIT) tests/test_coordinator_e2e.py
 
 py-lint:
-	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench && $(PYTHON) -m ruff check . ../scripts ../bench
+	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench ../.claude ../docs/tests && $(PYTHON) -m ruff check . ../scripts ../bench ../.claude ../docs/tests

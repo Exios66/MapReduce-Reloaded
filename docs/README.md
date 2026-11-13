@@ -24,8 +24,11 @@ Where to start depends on the question.
 - **What was built, how does it compare, and what was learned?** The
   [final report](report.md): the summary of everything below, with the
   demo.
+- **I am reviewing the code: where do I start?** [Reviewing the code](reviewing.md):
+  a reading order, where each part lives, how to check each claim, and the
+  known limits.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
-  The five-minute walkthrough for a review is [the demo](demo.md). A notebook
+  The six-minute walkthrough for a review is [the demo](demo.md). A notebook
   version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
@@ -66,6 +69,8 @@ Short ADRs: the decision, the alternatives, and what follows from it.
 | [0020](design/0020-implicated-only-ci.md) | Implicated-only CI: dynamic config runs only the jobs a PR's files implicate |
 | [0021](design/0021-no-ci-on-main-pushes.md) | No CI jobs on pushes to main: the merged tree already passed on its PR |
 | [0022](design/0022-status-page-updates-itself.md) | The status page updates itself with one inline script (supersedes part of 0012) |
+| [0024](design/0024-faster-ci-pipeline.md) | A faster CI pipeline that runs the same checks: the go job on three nodes, cached generators kept |
+| [0025](design/0025-narrow-go-modes-and-docs-tests.md) | CI runs what a change can affect: narrow go modes for the README and shell scripts, documentation tests in lint, heap measurements once |
 
 ## Explainers
 

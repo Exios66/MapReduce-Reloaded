@@ -25,6 +25,13 @@ func TestReduceMemoryBounded(t *testing.T) {
 	if testing.Short() {
 		t.Skip("merges 80 MB")
 	}
+	if raceDetector {
+		// One goroutine does all of it, so the race detector has nothing to
+		// find here and only makes the 80 MB ten times slower. The coverage
+		// pass (make go-test-cover) runs this test without it, and the
+		// package's other tests run the same code under the detector.
+		t.Skip("a single-goroutine heap measurement: run by the pass without the race detector")
+	}
 	const sources, perSource = 100, 8000 // records of 100 bytes
 	dir := t.TempDir()
 	rng := rand.New(rand.NewPCG(1, 2))

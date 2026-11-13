@@ -17,8 +17,105 @@ cut a release.
 
 - CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
   Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
-  `Makefile`) with `store_test_results`, so CircleCI shows each test, its
-  time and its failures, and keep them as artifacts (#314).
+  `Makefile`, one report per test pass) with `store_test_results`, in the
+  go job's narrow mode too, so CircleCI shows each test, its time and its
+  failures, and keep them as artifacts; `docs/ci.md` lists the reports
+  (#314).
+- Demo: `make demo-check` (`scripts/demo-check.py`) checks the running
+  cluster against what `docs/demo.md` needs, one `OK`, `WARN` or `FAIL`
+  line each: four running workers at one CPU and 768 MB, the coordinator
+  at 256 MB with its write-ahead log, every worker heartbeating on the
+  status page, 6 GB free both in the repository and in Docker's data
+  directory, `bin/mr`, and the uploaded and sort inputs. Each `FAIL`
+  says what to run (#359).
+- Tests: `TestWorkerKilled` (`go/internal/e2e`) also checks what a worker
+  killed with SIGKILL leaves behind: its work directory stays until the
+  next worker starts there, which removes it and keeps the directories of
+  the workers still running (#358).
+- Tests: `TestCompressedBlockShapes` (`go/internal/formats/kv`) and
+  `python/tests/test_kv_block_shapes.py` read the same hand-written
+  compressed MRKV blocks: Snappy copies with a 1-, 2- and 4-byte offset and
+  zstd run-length and raw blocks must read back, and their damaged forms
+  must be refused as `bad_block`, in both languages (#358).
+- CI: two more narrow parts of the `go` job (ADR 0025). A PR whose Go-side
+  files are only `README.md` or `docs/paper-mapping.md` runs
+  `make go-python-test` (`run-go-docs`), and one whose files are only shell
+  scripts or `.githooks/` runs `make sh-lint` (`run-sh-lint`), instead of
+  the whole Go suite. Guard tests in `go/internal/papermap/cimodes_test.go`
+  fail if another Go test starts to read those files (#358).
+- Lint: the documentation tests moved from `python/tests` to `docs/tests`
+  and run in the lint job with `make docs-test` (also part of `make lint`
+  and `make check`), so a guide-only PR no longer runs the Python jobs (#358).
+- Docs tests: `docs/tests/test_references.py` fails when a guide names, in
+  code, a `make` target the Makefile lacks, a repository path that is
+  neither tracked nor git-ignored output, or an ADR that does not exist; when
+  an ADR's title lacks its number or a status, or `docs/README.md` does not
+  index it; when `scripts/README.md` misses a script; and when a skill's
+  `name` differs from its directory or AGENTS.md misses its script. It found
+  and this PR fixes two stale `bench/evaluation/` paths in
+  `docs/evaluation.md`, an unlisted `scripts/golangci-lint.sh` and an
+  un-ignored `bench/plots/` (#358).
+- Docs tests: `test_changelog.py` moved to `docs/tests` and also checks that
+  every entry ends with its PR number, or with its commit when it reached
+  `main` without a PR; four entries that lacked one now cite it. A PR's own
+  CHANGELOG bullet no longer runs the Python jobs (#358).
+
+- Status page (Go and Python): each job card shows a task timeline, one
+  row for each of the job's latest 512 attempts the coordinator saw, to
+  scale over the job's run, with a bar for map (blue) and reduce (purple),
+  a red outline for attempts that failed or whose worker was lost and an
+  outline for the ones still running; `/status.json` carries the same data
+  as each job's `attempts`, with each attempt's `outcome` (`completed`,
+  `failed`, `superseded` when another attempt of its task won, `lost` when
+  its worker was declared lost, or null while it runs) and a null
+  `started` when its start is unknown. Each row says in words whether the
+  attempt was a backup and how it ended, or that it is running or was
+  abandoned when its job ended, and open timelines and keyboard focus
+  survive the page's refreshes. Attempts with no known start time are left
+  out of the drawing rather than placed at a guess. The history lives in
+  memory: a coordinator restart does not rebuild it from the write-ahead
+  log (#332).
+- Bench: `make figures-check` (`scripts/check-figures.py`) checks the
+  evaluation archives against their `SHA256SUMS`, unpacks only the archives
+  it lists, redraws every figure in `bench/evaluation/` from them in a
+  temporary directory, and compares each
+  with the committed PNG pixel by pixel. It needs matplotlib, so it runs on
+  the experiment VM with `PLOT_PYTHON`, not in `make check` (#357).
+- Lint: `make md-lint` runs `scripts/check-dark-charts.py`, which fails if
+  a Markdown page shows a bench chart without its dark variant. It runs in
+  the lint job, not the Python tests, so a Markdown-only change still runs
+  only the lint job (#349).
+- Bench figures: E7 (`E7.png` and `E7-dark.png`): job time on workers of
+  mixed speeds with no backups, the paper's backup rule and LATE, each
+  run's ring beside its median, the backups each rule launched and won, and
+  the time each saves in the title (#343, #349).
+- Agent tooling: four skills in `.claude/skills/`, listed in AGENTS.md:
+  `saving-ci-credits` (`preflight.sh` checks identity, CHANGELOG and
+  `[skip ci]` before a push), `interpreting-bench-results` (`summarize.py`
+  reports medians, ranges, slow and invalid runs, and overlaps),
+  `analyzing-bench-results` (`compare.py` compares a run with a published
+  one) and `checking-campaign-status` (`status.sh` snapshots a running
+  campaign) (`eb83a5b`, pushed to `main` without a PR).
+- Bench: E0 starts every run with only its own program's input in the page
+  cache. Before each warm-up and measured run, `bench/experiments.sh` drops
+  every other input in the output volume, the other two E0 inputs and any
+  word count inputs E1 and E6 left, with the new `bench/drop-cache.py`
+  (`posix_fadvise`, run in a container, no root needed) and reads the
+  run's own input. `E0_ISOLATE=0` restores the old order. In the reruns at
+  `8f0ddb9`, E0's sort runs read 0.75–1.84 GiB (803–1,971 MB) from disk,
+  machine-wide, against about 0.1 GiB for the same job in E2–E4 (#347,
+  #349).
+- Bench: `bench/evaluation/faults.png` (and `-dark`), the job time each
+  disturbance in E2, E3 and E4 added, on one axis; its title says every
+  disturbed run gave an undisturbed run's output only when every one was
+  valid. The README's results lead with it (#342).
+- Notebook: `examples/demo.ipynb` shows the combiner (the same output with
+  `-combiner=false`, and the bytes shuffled), the 1 GiB sort surviving a
+  coordinator restart with output identical to the worker-kill run, and the
+  evaluation figures (#342).
+- Docs: `docs/reviewing.md`, a reviewer's path through the code: a reading
+  order, where each part lives, how to check each claim, and the known
+  limits (#342).
 - Docs/scripts: `scripts/capture-status-gifs.py` regenerates the README
   status-page GIFs from one real job's whole run, in the page's dark and
   light variants, with a provenance sidecar (commit, machine, job, input,
@@ -66,6 +163,154 @@ cut a release.
 
 ### Changed
 
+- Bench figures: clarify the speed-up ranges, elapsed-time savings and
+  example traces in `bench/evaluation/`; E3 labels kill times against
+  calibration, and E4 no longer places a restart on an unaligned clock
+  (#360).
+
+- CI: `go/internal/e2e` writes the 48 MB input of its kill and restart
+  tests once, with `strconv`, instead of once per test with `fmt`; the bytes
+  are the same. Under the race detector on two CPUs the package takes about
+  29 s instead of 55 s, on the `go` job's slowest node (#358).
+- CI: `make py-test` measures coverage through `sys.monitoring`
+  (`COVERAGE_CORE=sysmon`) on Python 3.12 and later, which records the same
+  lines; the Python tests take about 36 s instead of 51 s on one CPU.
+  On Python 3.11 `COVERAGE_CORE` stays unset, so coverage still picks its
+  own tracer, and a `COVERAGE_CORE` already set wins. The `dev` extra now needs `coverage` 7.4 or later, the first with
+  `sys.monitoring` support (#358).
+- Go coverage: `go/cover-floors.txt` raises the floor of the 14 packages
+  that had risen two points or more over it, to one point under the
+  coverage measured on 2026-11-12, for example `cmd/coordinator` from 85 to
+  90 and `internal/split` from 87 to 93 (#358).
+- Tests: `TestSortMemoryBounded` and `TestReduceMemoryBounded` skip under
+  the race detector and run in the coverage pass; they measure one
+  goroutine's heap, and under `-race` took ten times as long. The race node
+  of the `go` job takes about 140 s instead of 190 s on two CPUs (#358).
+
+- Bench figures: every figure in `bench/evaluation/` is redrawn for
+  reading at a glance. Each has a bold title stating its finding, a
+  subtitle with the setup, a rule, then its legend; panel titles name what
+  they measure and whether lower or higher is better. Blue is the system
+  as it ships or undisturbed, orange the changed or disturbed setting.
+  E1, E6 and E2 to E4 compare two medians per row as dumbbells labeled with
+  the saving or the time added, or "no clear difference" when the run
+  ranges overlap, and nudge two dots apart vertically when their medians
+  are too close to show both. E2 and E4 pair that with tasks finished over
+  time, and E3 with the cluster's data rate, the lost worker shaded. E5 is
+  one bar per setting, labeled with how many times slower than compiled
+  it is and its map phase. The faults summary heads each experiment's
+  group of bars. E0 draws whiskers right of each dot and none at the
+  one-worker baseline. No figure marks single runs any more, and none
+  draws a whisker too short to see: E0 and E5 say so in their subtitles.
+  The titles also give the range of job time added and say outputs were
+  unchanged (faults), that E3 and E4 time from when `mr submit` returned,
+  and that E7's backup counts are medians. E1 and E6's titles claim a
+  saving only when no pair's run ranges overlap (#357).
+- Bench figures: every figure, including the paper's rate plots in
+  `bench/evaluation/paper/`, is set in Atkinson Hyperlegible, shipped in
+  `bench/fonts/` under the SIL Open Font License in place of Inter. The
+  rate plots' titles, and those `bench/run.sh` draws, no longer name the
+  commit, which `result.json` records (#357).
+- Agent tooling: the `interpreting-bench-results` skill states which
+  experiments report wall time, which commit the reported E0 ran at, how
+  each experiment orders its runs, and that `valid` is the only record of
+  an output check; its `summarize.py` also flags a group whose bytes
+  shuffled differ between runs and a setting with fewer valid runs than the
+  rest, and reports `wall_seconds` for E3 and E4 in its medians, ranges,
+  slow runs and overlaps. `analyzing-bench-results` documents `make figures-check`;
+  `saving-ci-credits` describes the three-node `go` job and cold cache runs,
+  and its `preflight.sh` names the PR's likely number so the CHANGELOG can
+  cite it before the PR opens, as `AGENTS.md` now allows. `scripts/README.md`
+  lists `check-dark-charts.py`, `check-figures.py`, `ci-go-job.sh` and
+  `install-tool.sh`. `preflight.sh` counts discussions, which share the
+  number sequence, when it predicts the PR's number, and gives no prediction
+  when a lookup fails (#357).
+- CI: the `go` job runs on three nodes at once (`parallelism: 3`), still
+  one `go` check: `scripts/ci-go-job.sh` gives the race tests, the coverage
+  tests, and sh-lint, go-lint and py-e2e a node each, the same make targets
+  as before (`make go-test` is now `go-test-race` then `go-test-cover`).
+  `make tools` keeps a cached generator that `scripts/install-tool.sh`
+  finds was built from its pin, so `proto` no longer rebuilds buf on every
+  run. The full pipeline should drop from about 400 s to about 220 s with
+  no check removed; see docs/ci.md, Pipeline time, and ADR 0024 (#354).
+- Bench: E7 records its workers' CPU limits in `cpus.txt`, which
+  `bench/plot-experiments.py` names in the E7 subtitle; `DROP_CACHES=1`
+  turns E0's input isolation off by default, and E0 refuses an explicit
+  `E0_ISOLATE=1` with it, which the cache drop would undo;
+  `bench/drop-cache.py` flushes each input before dropping it. The
+  QUALITY tables label their columns `bk med` and `won sum` (#349).
+- Bench: E3 (`bench/experiments.sh E3`) takes its kill times from
+  `E3_CALIBRATE` runs (default 3) of a separate `calibrate` setting, which
+  the figures leave out, then runs `normal`, `kill-25`, `kill-50` and
+  `kill-75` in turn within each repeat, reversed on even repeats, as E2 and
+  E7 do. Before, it ran each setting as a block, so drift in the machine
+  could fall on one setting (#282, #348).
+- Bench: E4 (`bench/experiments.sh E4`) does the same: `E4_CALIBRATE`
+  runs (default 3) of a `calibrate` setting set the restart time, then
+  `normal` and `restart` take turns. Every E4 run now starts with a fresh
+  write-ahead log, so each restart replays only its own job instead of
+  every job before it. Its restart cost is therefore a new measurement, not
+  comparable with the published 1.6 s, which replayed three to five earlier
+  jobs (#282, #348).
+- Bench: E0 (`bench/experiments.sh E0`) first runs each program
+  `E0_WARMUP` times (default 1) as a `warmup` setting, which the E0 figure
+  leaves out, so no measured run is the first to read its input. Then all
+  nine program and worker-count settings take turns within each repeat,
+  reversed on even repeats; before, each ran as a block (#282, #348).
+- Bench figures: E0 draws a run as a cross instead of a ring when the
+  machine read at least a quarter of the input more from disk during it
+  than during the median run of its program and worker count. The caption
+  states only that measurement, not a cause: the counter in `cache.jsonl`
+  counts the whole machine's reads, and sort's re-reads under the worker
+  memory limit are one cause besides a cold input (#347, #349).
+- Bench figures: one look across all of them. The fault-tolerance summary
+  (`faults.png`) groups its bars by experiment, as each has its own
+  undisturbed baseline, gives each bar its range, and colors backups on
+  and off as E2 does instead of hatching. E0's legend is a row above the
+  plot; E0, E1 and E6 draw each run's ring beside its median instead of
+  behind it; E1 and E6's log axes drop their minor ticks. E2's job-time
+  bars set the no-straggler runs apart with a gap instead of hatching, bars
+  are thinner, text is at least 9 points and figures at most 10 inches wide
+  so they stay legible scaled into a page, and the fault summary says which
+  clock each experiment uses. Every figure is set in Inter, shipped in
+  `bench/fonts/` under the SIL Open Font License, so they look the same
+  whichever machine draws them (#349).
+- Docs: every result in `README.md`, `bench/README.md` (now "Evaluation
+  (E0–E7)"), `docs/evaluation.md`, `docs/report.md`, `docs/demo.md`,
+  `design.md`, `docs/language-choice.md`, `docs/reviewing.md` and the demo
+  notebook comes from the rerun at `8f0ddb9`: five runs per setting, taken
+  in turn. E7's results replace "not yet run", the README and notebook show
+  the E5 and E7 figures, and `docs/evaluation.md` records the isolated E0
+  rerun and the worker memory limit's share of sort's disk reads (#343,
+  #344, #346, #347, #349).
+- Bench results: every figure in `bench/evaluation/` is drawn from the
+  rerun at `8f0ddb9` in `bench/evaluation/rerun-8f0ddb9/`: E0–E7 at one
+  commit, five interleaved repeats each, with their archives and harness
+  logs. E0 comes from `E0-isolated/`, rerun so each program runs with only
+  its own input in the page cache; `bench/plot-experiments.py` reads it in
+  place of the first E0, which a `NOTE.md` marks superseded. The E0–E6
+  results published before move to
+  `bench/evaluation/superseded/before-8f0ddb9/` (#344, #347, #349).
+- Bench figures: `bench/plot-rates.py OUT.png` also writes `OUT-dark.png`,
+  and `docs/evaluation.md` shows the dark variant of the grep and sort rate
+  plots and of E3. A test checks that every chart a page shows has a dark
+  variant (#349).
+- Bench figures: every title states its finding in one short line,
+  computed from the CSVs (for example "E2: backups cut a straggler's job
+  from 17.6 s to 11.2 s"), and every figure uses one scheme: blue is the system
+  as it ships, orange the changed or disturbed setting. E0 draws each run
+  as a ring instead of a range bar that one cold grep run stretched to
+  0.35×, and names that run (#342).
+- Bench figures: E1 and E6 are dumbbells instead of grouped bars, one row
+  per group joining the combiner-on and combiner-off medians, with bytes on
+  a log axis so a row's length is the factor saved; E3 draws each kill point
+  as a stem from the no-failure baseline instead of a line joining separate
+  settings. `bench/README.md` gives the reason for each figure's chart type
+  (#342).
+- Docs: `docs/demo.md` restarts the coordinator live, shows the combiner,
+  maps each moment to the requirement it meets, and adds a checklist for
+  the day and answers for questions; `docs/report.md` gains a "Process and
+  review" section and follows the new demo (#342).
 - Docs: the README's status-page GIFs (`docs/assets/status-*.gif`) show one
   whole 1 GiB word count, M = 32, R = 4, on four workers, from its first map
   task to the end state, replacing the 8-second seeded chaos loop; a
@@ -92,7 +337,7 @@ cut a release.
   `-coverpkg` and `GOCOVERDIR` in `make go-test` (#245).
 - Docs: a stale-claim sweep. CI is described as six jobs with no run on
   pushes to `main`, the pull-request count and coverage floors are current,
-  LATE speculation cites #284, and E0 to E7 ranges are corrected.
+  LATE speculation cites #284, and E0 to E7 ranges are corrected (#308).
 - Bench: each trial records the page cache's state in `cache.jsonl`, an
   optional `DROP_CACHES=1` makes trials cold, and `begin` says which older
   results it deletes (#310).
@@ -108,8 +353,79 @@ cut a release.
 
 ### Fixed
 
-- CI: preserve separate Go test reports and publish Python integration test
-  results on Python-only changes, including failures.
+- Docs: the E0-E7 rerun write-ups name `3a907de` wherever they say every
+  experiment ran at `8f0ddb9`, say E5's settings rotate rather than reverse,
+  compare E0's sort with E2-E4 on one clock, describe E3's cost and E1's
+  disk reads as measured, and say that `runs.csv`'s `valid` column, not a
+  stored checksum, records each output check (`README.md`, `design.md`,
+  `docs/evaluation.md`, `bench/README.md`) (#355).
+- Bench figures: the fault summary keeps zero in view when every
+  disturbance sped its job up, and E7's title claims a cut only when no
+  backup rule was slower (#349).
+- Tests: `TestClusterReregistersOnHeartbeat` uses a 1 s worker timeout, so
+  a heartbeat delayed on a loaded CI runner no longer costs the worker a
+  third registration (#349).
+- CI: `.circleci/mapping.txt` maps `.claude/` to the lint job, so the
+  agent skills' Python scripts no longer fail `mapping-coverage` and
+  `make check` with "unmapped file" (#352).
+- CI: `make py-lint` and `make fmt` run ruff on the agent skills' Python
+  scripts under `.claude/` too, and `.circleci/mapping.txt` maps a change
+  to them to the Python jobs, which run `py-lint`. Before, a syntax error
+  in one of them passed CI, as #351 reports (#352).
+- Go coordinator: deleting a job's `_temporary` directory no longer gives
+  up after 100 quick retries while attempts keep creating files in it. It
+  now retries for up to 10 seconds, pausing a millisecond between tries
+  after the first ten. On a loaded CI machine the old limit made
+  `TestLocalDeleteAllConcurrentCreates` fail now and then (#352).
+- Go coordinator: a succeeded job's output no longer keeps a stray
+  `_temporary` directory when a losing backup reduce attempt creates its
+  file while the job is cleaning up. The local file system's delete now
+  retries until the directory is gone, after which no attempt can create
+  it again (#345, #348).
+- Tooling: `make go-lint`, and so `make check` and the pre-push hook, no
+  longer fail when the `golangci-lint` on `PATH` was built by an older Go
+  than `go/go.mod` needs. `scripts/golangci-lint.sh` uses the pinned version
+  from `PATH` only if a new enough Go built it, and otherwise builds it into
+  `.tools/bin` once, as CI does. The pre-push hook also finds Go and the
+  tools in their usual install directories when a git client runs it
+  without a login shell's `PATH` (#342).
+- Notebook: the worker-kill cell no longer reads an unset reply when the
+  kill fails; it stops the client and restores the worker (#342).
+- Notebook: the setup cell removes the outputs and corpus that an earlier,
+  interrupted run left in `data/out` and `data/input`, so retries after a
+  failing cell no longer fill the disk (#342).
+- Bench figures: E0's title names the largest worker count measured instead
+  of always "four"; E1 and E6 label a combiner that costs time "slower", not
+  "faster"; and `faults.png` draws a disturbance that sped a job up left of
+  zero instead of clipping it (#342).
+
+<!-- pyml disable md033 -->
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:799b81130e48f9cd94b0adbbd0a0a99101cebc306996bb54bbae62494551351d -->
+
+- Docs: `python/README.md` explains that `-keep-jobs=010` means 10 in
+  Python and 8 in Go (#341).
+
+<!-- /coderabbit-ai-generated:v1 -->
+<!-- pyml enable md033 -->
+
+- Docs: a second stale-claim sweep of the numbers. `bench/README.md` gave the
+  E6 crawled-English bytes ratio as 5.2% (it is 19.3%; 5.2 is the factor);
+  `docs/testing.md` now has today's coverage figures and mutation scores
+  (`tasktable.go` 91.9%, `task.go` 91.2%, down from 96.3% and 93.2% as
+  LATE speculation and progress reports were added) and says that a Go
+  package's coverage counts every test in the module and the e2e commands;
+  `docs/report.md` counts 22 ADRs and 198 merged pull requests;
+  `docs/evaluation.md` says E0 to E6 are the course evaluation; `design.md`
+  no longer promises items marked "planned" (#341).
+- Docs: commands and lists that no longer matched the code. `make bench`
+  also takes `SCENARIO=book`; the Python coordinator has no `-log-level`;
+  `scripts/README.md`, `go/README.md` and the roadmap's layout list the
+  scripts and Go packages they omitted; the capture-GIF commands in
+  `docs/demo.md` create the input directory; `README.md` shows what
+  `mr submit -wait` prints and counts Phase 7 as done; `AGENTS.md`'s heading
+  levels pass `make md-lint` again (#341).
 - Build: `make` uses `python/.venv` when it exists, `make venv` creates it
   with the package and every dev tool, and `scripts/gen-proto.sh` says how to
   fix a Python that lacks `grpcio-tools`, instead of failing in
@@ -131,7 +447,7 @@ cut a release.
 - The CircleCI badge URL (#261).
 - Worker: a starting worker's sweep could delete a new worker's temporary
   directory, which made it fail with "already locked" (and flaked
-  `internal/e2e`); the lock is now on the directory itself.
+  `internal/e2e`); the lock is now on the directory itself (#309).
 - Bench: `wait_workers` retries when the coordinator is unreachable, instead of
   exiting silently, and saves the logs on a registration timeout (#307).
 

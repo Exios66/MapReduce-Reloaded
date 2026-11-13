@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"syscall"
+	"time"
 )
 
 // Local stores files in the local file system, or a volume shared by every
@@ -73,4 +74,41 @@ func (l Local) MkdirAll(ctx context.Context, dir string) error {
 	return os.Chmod(dir, 0o777)
 }
 
-func (Local) DeleteAll(_ context.Context, dir string) error { return os.RemoveAll(dir) }
+// removeAll is os.RemoveAll; tests replace it to stage a race.
+var removeAll = os.RemoveAll
+
+// deleteFor bounds how long DeleteAll retries, and deleteSpin how many of
+// its retries are immediate. Each retry follows a file that someone created
+// during the last one, and nobody can create one once dir is gone, so
+// DeleteAll wins once the writers stop. A fixed count of retries was not
+// enough: busy writers on a loaded machine won more than 100 in a row. Tests
+// shorten deleteFor.
+var deleteFor = 10 * time.Second
+
+const deleteSpin = 10
+
+// DeleteAll retries when a file appears in dir after os.RemoveAll has read
+// its last entries but before it removes dir: a losing backup attempt
+// creating its file in a finished job's TempDir (#345). Nobody creates a
+// file in dir once dir is gone, as attempts never create TempDir. After
+// deleteSpin immediate retries it sleeps a millisecond between tries, and it
+// gives up with the last error after deleteFor. A cancelled ctx stops the
+// retries.
+func (Local) DeleteAll(ctx context.Context, dir string) error {
+	deadline := time.Now().Add(deleteFor)
+	for try := 1; ; try++ {
+		err := removeAll(dir)
+		if !errors.Is(err, syscall.ENOTEMPTY) {
+			return err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return errors.Join(err, ctxErr)
+		}
+		if time.Now().After(deadline) {
+			return err
+		}
+		if try >= deleteSpin {
+			time.Sleep(time.Millisecond)
+		}
+	}
+}

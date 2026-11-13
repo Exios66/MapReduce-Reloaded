@@ -8,3 +8,6 @@ In short: commit with no excess footers & frontmatter, add every PR's entry
 to `CHANGELOG.md` under `## [Unreleased]`, and run the full CI suite on the
 PR's final head, rerunning it after a failed final pipeline or after updating
 the branch when `main` moves. AGENTS.md has the details.
+
+Skills for CI credits, reading and comparing bench results, and campaign
+status live in `.claude/skills/`; AGENTS.md lists their scripts.

@@ -40,7 +40,7 @@ Status: `planned` → `in progress` → `done`.
 | F21 | HTTP status pages | §4.8 | 4 | `go/internal/statusweb`, `go/cmd/coordinator` | — | `TestStatus`, `TestPage`, `TestMetrics`, `TestClusterReportsProgress`, `scripts/e2e.sh` | done |
 | F22 | Counters (de-duplicated) | §4.9 | 3 | `go/internal/coordinator`, `go/internal/task` | `mapreduce_reloaded/local.py` | `TestClusterCountersMatchLocal`, `test_wordcount_golden`, `TestChaos` | done |
 | F23 | Paper example programs | §2.3 | 4 | `go/examples` | `mapreduce_reloaded/examples` | `TestWordCountGolden`, `TestGrep`, `TestURLFreq`, `TestReverseLinks`, `TestSort`, `TestInvertedIndex`, `TestTermVector`, `test_wordcount_golden`, `test_grep`, `test_urlfreq`, `test_reverselinks`, `test_distsort`, `test_invertedindex`, `test_termvector` | done |
-| F24 | Performance experiments (grep, sort, backups, killed workers) | §5 | 7 | — | — | `bench/run.sh`, `bench/experiments.sh`, `docs/evaluation.md`, `test_input_is_accessible_to_nonroot_workers`, `test_e2_draws_four_settings_in_two_colors` | done |
+| F24 | Performance experiments (grep, sort, backups, killed workers) | §5 | 7 | — | — | `bench/run.sh`, `bench/experiments.sh`, `docs/evaluation.md`, `test_input_is_accessible_to_nonroot_workers`, `test_e2_compares_backups_on_and_off_and_draws_the_straggler_timeline` | done |
 
 ## Notes
 

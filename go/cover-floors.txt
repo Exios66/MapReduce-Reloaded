@@ -1,11 +1,12 @@
 # Coverage floors for make check (scripts/cover.py, #161): each package's
-# statements covered by its own tests, one point under the value measured
-# on 2026-10-27, rounded down. Raise a floor when a package's coverage
-# rises; lowering one needs a reason in the commit. "-" leaves a package
-# unchecked.
-cmd/coordinator 85
-cmd/mr 85
-cmd/worker 83
+# statements covered by every test in the module, one point under the value
+# measured, rounded down: on 2026-10-27, and again on 2026-11-12 for the 14
+# packages that had risen two points or more over their floor. Raise a floor
+# when a package's coverage rises; lowering one needs a reason in the commit.
+# "-" leaves a package unchecked.
+cmd/coordinator 90
+cmd/mr 87
+cmd/worker 87
 examples/distsort 99
 examples/grep 89
 examples/internal/run -  # run by every example's tests
@@ -16,25 +17,25 @@ examples/urlfreq 99
 examples/wordcount -  # the oracle of the cluster, local and golden tests
 gen/mapreduce/v1 -  # generated
 internal/combine 99
-internal/coordinator 93
-internal/extsort 90
-internal/formats 87
-internal/formats/kv 89
-internal/jobfile 91
-internal/local 89
+internal/coordinator 96
+internal/extsort 94
+internal/formats 90
+internal/formats/kv 93
+internal/jobfile 95
+internal/local 91
 internal/logs 99
 internal/memlimit 91
 internal/partition 99
 internal/promtext 99
 internal/rpcguard 99
-internal/shuffle 91
-internal/split 87
+internal/shuffle 95
+internal/split 93
 internal/statusweb 96
 internal/storage 93
 internal/storage/s3test -  # a test helper
-internal/task 88
-internal/wal 84
+internal/task 92
+internal/wal 85
 internal/wire 93
-internal/worker 92
+internal/worker 94
 pkg/api 97
 tools/mutate 27  # the rest runs go test on each mutant: make mutate

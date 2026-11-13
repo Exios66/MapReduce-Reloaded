@@ -159,15 +159,16 @@ type Server struct {
 const healEvery = time.Second
 
 type job struct {
-	id     string
-	spec   *pb.JobSpec // sent with every task
-	splits []*pb.InputSplit
-	tasks  *TaskTable
-	counts map[Task]map[string]int64 // of each task's accepted attempt
-	placed map[Task][]pb.Locality    // of each attempt, by number
-	ran    map[Task]pb.Locality      // of each task's accepted attempt
-	since  time.Time                 // when the job began holding back tasks, if it has
-	err    string                    // why the job failed, if it did
+	id       string
+	spec     *pb.JobSpec // sent with every task
+	splits   []*pb.InputSplit
+	tasks    *TaskTable
+	counts   map[Task]map[string]int64 // of each task's accepted attempt
+	placed   map[Task][]pb.Locality    // of each attempt, by number
+	ran      map[Task]pb.Locality      // of each task's accepted attempt
+	since    time.Time                 // when the job began holding back tasks, if it has
+	err      string                    // why the job failed, if it did
+	attempts []AttemptRange            // of the job, attempted in order by the coordinator's clock
 
 	submitted, finished time.Time // finished is zero while the job runs
 }
@@ -209,6 +210,7 @@ func (s *Server) Expire(now time.Time) []string {
 				slog.Error("logging a lost worker", "worker", w, "err", err)
 			}
 			reset = s.active.tasks.ResetWorker(w)
+			s.active.attemptsStopped(func(a AttemptRange) bool { return a.Worker == w }, at, OutcomeLost)
 		}
 		s.lost = append(s.lost, LostWorker{ID: w, At: now, Tasks: reset})
 		s.lost = s.lost[max(0, len(s.lost)-maxLost):]
@@ -528,6 +530,7 @@ func (s *Server) assign(t Task, worker string, now time.Time, backup bool) (*pb.
 		rec.Locality = locality(j.splits[t.Index], s.workerInfo(worker))
 	}
 	j.placed[t] = append(j.placed[t], rec.GetLocality())
+	j.attempt(t, attempt, worker, now, backup)
 	if err := s.record(&pb.LogRecord{Record: &pb.LogRecord_TaskAssigned{TaskAssigned: rec}}, now); err != nil {
 		return nil, err
 	}
@@ -671,6 +674,9 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 	t := Task{id.GetTask().GetKind(), id.GetTask().GetIndex()}
 	if f := req.GetFailure(); f != nil {
 		counted := j.tasks.Runs(t, id.GetAttempt(), req.GetWorkerId())
+		if counted { // a stale report changes nothing; an ended job's rows stay
+			j.attemptEnded(t, id.GetAttempt(), at, OutcomeFailed)
+		}
 		err := j.tasks.Fail(t, id.GetAttempt(), req.GetWorkerId(), f)
 		n := j.tasks.Failures(t)
 		switch limit := j.spec.MaxSkippedRecords; {
@@ -686,6 +692,9 @@ func (s *Server) report(j *job, req *pb.ReportTaskRequest, at time.Time) (accept
 	}
 	accepted, err = j.tasks.CompleteAt(t, id.GetAttempt(), req.GetWorkerId(), req.GetSuccess().GetOutputs(), at)
 	if accepted {
+		j.attemptEnded(t, id.GetAttempt(), at, OutcomeCompleted)
+		// The task's other attempts stopped counting when this one won.
+		j.attemptsStopped(func(a AttemptRange) bool { return a.Kind == t.Kind && a.Index == t.Index }, at, OutcomeSuperseded)
 		// A map task run again after its worker died replaces its counts.
 		j.counts[t] = req.GetSuccess().GetCounters().GetValues()
 		j.ran[t] = j.placed[t][id.GetAttempt()]
@@ -877,6 +886,9 @@ func (s *Server) Close() error {
 // output. It runs under the lock, once the log holds the job's end, so that
 // the job is never reported done before its output is clean; the directory holds at most R
 // files. The job's outcome is already decided, so an error is only logged.
+// Its context never cancels, so storage's deleteFor (10 s) bounds how long
+// the lock is held when late attempts keep writing into TempDir; every RPC
+// waits behind it for that long.
 func (j *job) cleanup() {
 	path, err := wire.Path(j.spec.GetOutput())
 	if err == nil {

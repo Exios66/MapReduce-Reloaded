@@ -11,11 +11,12 @@ rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 | Kind | Command | In `make check` | Where |
 |---|---|---|---|
 | Unit | `cd go && go test ./...`, `cd python && python -m pytest` | yes | next to each package |
+| File format, the same bytes in Go and Python | `go test ./internal/formats/kv`, `python -m pytest tests/test_kv.py tests/test_kv_block_shapes.py` | yes | `testdata/format/`, `TestCompressedBlockShapes` |
 | Golden output, Go against Python | `go test ./cmd/mr -run TestExamples` | yes | `testdata/examples/`, #153 |
 | Cluster in one process | `go test ./internal/worker` | yes | `internal/worker/cluster_test.go` |
 | Chaos, seeded | `go test ./internal/worker -run TestChaos -chaos.runs=50` | 3 seeds | `TestChaos`, `TestChaosPrograms` (#155) |
 | Coordinator model | `go test ./internal/coordinator -run TestModel -model.runs=300` | 15 seeds | `model_test.go` (#154) |
-| Processes on localhost | `go test ./internal/e2e` | yes | #151 |
+| Processes on localhost, with a SIGKILLed worker and coordinator | `go test ./internal/e2e` | yes | #151 |
 | Python coordinator, Go workers | `make py-e2e` | yes, but they skip if Go cannot build them; `make py-e2e`, run by CI's `go` job, sets `MR_REQUIRE_GO`, so a skip fails | `python/tests/test_coordinator_e2e.py`, #36 |
 | Storage contract | `go test ./internal/storage` | yes; `make e2e-s3` adds a real gateway | #156 |
 | Fuzz | `make fuzz` (`FUZZTIME`, default 20s a target) | stored seeds only | #152 |
@@ -23,7 +24,9 @@ rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 | Mutation | `make mutate` | no | `go/tools/mutate`, #161 |
 | Compose cluster | `make e2e`, `make e2e-s3`, `make chaos` | no | `scripts/e2e.sh`, `scripts/chaos.sh` |
 | Benchmarks | `make perf` against `bench/baseline.txt` | no | #160, `bench/README.md` |
-| Memory and size limits | `go test ./internal/extsort ./internal/task ./internal/formats/kv` | yes | #160 |
+| Memory and size limits | `go test ./internal/extsort ./internal/task ./internal/formats/kv` | yes; the two 80 MB heap measurements run without the race detector only (ADR 0025) | #160 |
+| Documentation against configuration | `make docs-test` | yes, in `make lint` | `docs/tests`, ADR 0025 |
+| Names in the guides (make targets, paths, ADRs, scripts, skills) and the CHANGELOG's layout and citations | `make docs-test` | yes, in `make lint` | `docs/tests/test_references.py`, `docs/tests/test_changelog.py` |
 
 A failing seeded test names its seed; `-chaos.seed=N -chaos.runs=1` or
 `-model.seed=N -model.runs=1` makes the same choices again.
@@ -32,19 +35,22 @@ A failing seeded test names its seed; `-chaos.seed=N -chaos.runs=1` or
 
 `make check` fails if a package's statement coverage falls under its floor
 in `go/cover-floors.txt` or `python/cover-floors.txt`
-(`scripts/cover.py`). A Go package counts only its own tests; a package
-with no floor fails too, so a new one must be given one. Each floor is one
+(`scripts/cover.py`). A Go package's coverage counts every test in the
+module and the commands that `internal/e2e` builds and runs, not only its
+own tests; a package with no floor fails too, so a new one must be given
+one. Each floor is one
 point under the value measured when it was set, rounded down. `make cover`
 runs the tests and prints each package's coverage beside its floor.
 
-Measured on 2026-10-29:
+Measured on 2026-11-07:
 
-- Go: 90.3% of 3,150 statements in 31 checked packages. The lowest are
-  `cmd/worker` (85.6%), `internal/wal` (86.0%), `cmd/coordinator` (86.8%)
-  and `cmd/mr` (87.7%). Unchecked: the generated protobuf code, the S3 test
+- Go (measured again on 2026-11-12): 92.0% of 3,315 statements in 31 checked packages. The lowest are
+  `tools/mutate` (28.7%; the rest of it runs `go test` on each mutant, in
+  `make mutate`), then `internal/wal` (86.9%), `cmd/mr` (88.2%),
+  `cmd/worker` (88.5%) and `examples/invertedindex` (89.5%). Unchecked: the generated protobuf code, the S3 test
   server, `examples/internal/run` (a test helper) and `examples/wordcount`,
   which the cluster, local and golden tests run as their reference.
-- Python: 99.8% of 2,172 statements in 5 checked packages, the generated
+- Python: 99.8% of 2,192 statements in 5 checked packages, the generated
   protobuf code left out. The four lines missed are the IPv6 listener in
   `coordinator/statusweb.py`, which `test_serve_ipv6` reaches only on a host
   with an IPv6 loopback address.
@@ -64,17 +70,24 @@ and prints the changes no test caught. A mutant that survives is either a
 missing test or a change that makes no difference. It takes several minutes
 a package; run it on the VM.
 
-Measured on 2026-10-28, on the course VM:
+Measured on 2026-11-07:
 
 | Package, files | Killed | Survived | Score |
 |---|---|---|---|
 | `internal/partition`, `hash.go` | 7 | 0 | 100% |
 | `internal/extsort`, `merge.go sorter.go` | 71 | 5 | 93.4% |
-| `internal/coordinator`, `tasktable.go` | 103 | 4 | 96.3% |
-| `internal/task`, `task.go` | 55 | 4 | 93.2% |
+| `internal/coordinator`, `tasktable.go` | 171 | 15 | 91.9% |
+| `internal/task`, `task.go` | 62 | 6 | 91.2% |
 
-The first run left 36 survivors (77.6% to 89.8%). Tests now kill all of
-them except the 13 below. These make no difference that a test could see:
+The first run, on 2026-10-28, left 36 survivors (77.6% to 89.8%), and tests
+were added until 13 were left, which were judged to make no difference
+that a test could see. Their counterparts are listed first; one of them,
+the sort budget, is observable and is listed with the missing tests. The
+other missing tests are in code added since, which the tests pin less
+tightly: the progress reports that `task.go` sends and LATE speculation in
+`tasktable.go` (ADR 0019).
+
+Survivors that make no difference a test could see:
 
 - `extsort`: the tuning constants `DefaultBudget` and `recordOverhead`
   (`sorter.go:30,33`); `s.arena[:1]` for `s.arena[:0]` after a spill
@@ -82,14 +95,24 @@ them except the 13 below. These make no difference that a test could see:
   `index <= index` for `<` in the merge's tie break (`merge.go:61`), since
   no two streams share an index.
 - `coordinator/tasktable.go`: -2 for the -1 that means "none yet"
-  (lines 96 and 125), and a starting best rank of 1 (125), which the first
-  candidate overwrites; `stopped := true` (406), which matters only for a
+  (lines 114, 209 and 274), and a starting best rank of 1 (274), which the
+  first candidate overwrites; `stopped := true` (619), which matters only for a
   task in progress with no attempt, a state the table never leaves a task
   in.
-- `task/task.go`: `writeKV`'s size on an error (lines 219, 225, 229), which
-  its caller discards; and each partition's sort budget,
-  `DefaultBudget * R` for `/ R` (85), which changes only memory use, and
-  would need a map task of over 64 MB to see.
+- `task/task.go`: `writeKV`'s size on an error (lines 241, 247, 251), which
+  its caller discards.
+
+Survivors that mark a missing test:
+
+- `coordinator/tasktable.go`, in LATE speculation: the mean of a worker's
+  task speeds (88), the checks on a running attempt's age and progress
+  (196, 199, 200, 201), the percentile used for "slow" (247, 254), and the
+  speed recorded when an attempt ends (379, 396).
+- `task/task.go`: the condition under which a map task reports its
+  progress (129), and each partition's sort budget, `DefaultBudget * R` for
+  `/ R` (100). The mutant changes memory use, and also when a map task
+  spills: with R = 2 and two partitions, a partition holding 40 MiB spills
+  under the real 32 MiB budget but not under the mutant's 128 MiB.
 
 `make mutate-py` does the same for the Python MRKV format and partition
 function with [mutmut](https://github.com/boxed/mutmut), installed by
