@@ -44,7 +44,7 @@ before it merges ([design.md](../design.md#process)):
 7. **Combiner switch:** `mr submit -combiner=false`, for the evaluation
    (done).
 8. **Coordinator recovery in Compose:** `-data-dir` on a volume (done).
-9. **Evaluation:** experiments E0–E6 of
+9. **Evaluation:** experiments E0–E7 of
    [design.md](../design.md#performance-evaluation), with plots in
    `bench/README.md`.
 10. **README:** what to build, what to install, how to upload the example
@@ -54,7 +54,7 @@ before it merges ([design.md](../design.md#process)):
 
 Items 1 and 2 are done (#164, #165), items 3, 4, 5 and 10 in #188, and
 item 8 in #177: Compose runs the coordinator with `-data-dir /out/wal`.
-Item 9 is done: E0–E5 ran with `bench/experiments.sh` (#179) and E6 in #247. Item 11 is open: comments on the agent-written #185 and #219 exist, and a review with inline comments before an agent-written PR merges is tracked in #269. Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7, its evaluation, is wired but not run.
+Item 9 is done: E0–E6 were rerun and E7 run for the first time, all at one commit, `8f0ddb9` (E0 at `3a907de`), with five interleaved repeats (#344, #343, #349); the runs first published, E0–E5 in #179 and E6 in #247, are archived in `bench/evaluation/archive/`. Item 11 is open: comments on the agent-written #185 and #219 exist, and a review with inline comments before an agent-written PR merges is tracked in #269. Phase 5, the rest of Phase 6 and #59 stay stretch goals; LATE speculation (#284, tracked in #45) is built, and E7 measured it against the paper's rule (#349).
 
 ## Context
 

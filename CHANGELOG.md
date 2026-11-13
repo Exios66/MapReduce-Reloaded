@@ -369,6 +369,12 @@ cut a release.
 
 ### Fixed
 
+- Docs: stale status lines now match the finished evaluation.
+  `docs/roadmap.md` says E0–E6 were rerun and E7 run for the first time
+  at `8f0ddb9`, not that E7 was "wired but not run";
+  `docs/language-choice.md` and the PR template name E0–E7; and
+  `docs/evaluation.md` says E1 was not rerun with its input isolated,
+  rather than not rerun at all (#362).
 - Hooks: `.githooks/pre-push` clears Git's local environment variables
   (`GIT_DIR` and the rest) before `make check`, so a test's git command in a
   temporary repository no longer acts on the repository being pushed;
