@@ -203,6 +203,10 @@ is at `127.0.0.1:13000` and Prometheus at `127.0.0.1:19090`:
 - The Compose project is named `mapreduce`. `make cluster-down` therefore only
   removes containers, networks and volumes with that name, and never touches
   course containers.
+- Each checkout of this repository has its own output volume, so a second
+  checkout's `make cluster-down` cannot delete the first one's experiments
+  ([Docker topology](docker-topology.md#4-volumes)). The containers are
+  still shared: run one checkout's cluster at a time.
 - Published ports use the 18xxx range (for example, the status page at
   18780), away from the common 8080/9000-style ports that course work uses.
 - Check memory use at any time with `docker stats`. The #21 end-to-end test

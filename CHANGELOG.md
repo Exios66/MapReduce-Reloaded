@@ -166,14 +166,18 @@ cut a release.
 
 ### Changed
 
-- Compose: the output volume is named `mapreduce_cluster_output` in
-  `deploy/compose/compose.yaml`, not left to the project name. Every
-  checkout on a machine shares the project `mapreduce`, so each one's
-  `make cluster-up` mounted the same `mapreduce_output` volume and
-  `make cluster-down` in any of them deleted it, with another checkout's
-  experiments in it. The Makefile and bench scripts use the new name;
-  the old volume is no longer touched, and `docs/docker-topology.md` says
-  how to remove it (#365).
+- Compose: each checkout has its own output volume,
+  `mapreduce_output_<directory>_<hash>`, instead of one named after the
+  project. Every checkout on a machine shares the project `mapreduce`, so
+  each one's `make cluster-up` mounted the same `mapreduce_output` volume,
+  replaying another checkout's write-ahead log, and `make cluster-down` in
+  any of them deleted it. `scripts/output-volume.sh` derives the name and
+  writes it to `deploy/compose/.env`, which every `docker compose` command
+  on `deploy/compose/compose.yaml` reads; the Makefile, bench scripts and
+  `scripts/{chaos,e2e,soak}.sh` run it. Compose stops if the name is unset
+  rather than share a volume. Containers are still shared, so one
+  checkout's cluster runs at a time, and the old `mapreduce_output` is left
+  for its owner to remove (`docs/docker-topology.md`) (#365).
 - Notebook: `examples/demo.ipynb` explains more as it runs, for the demo.
   The introduction sketches how the client, coordinator and workers fit
   together. Section 2 lists the workers as the coordinator sees them, with

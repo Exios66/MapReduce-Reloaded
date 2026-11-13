@@ -34,6 +34,8 @@
 # with mr's status.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# This checkout's output volume, unless make already exported it.
+export MR_OUTPUT_VOLUME="${MR_OUTPUT_VOLUME:-$(scripts/output-volume.sh)}"
 
 scenario=${1:-}
 case $scenario in
@@ -62,7 +64,7 @@ dir=bench/results/$scenario-$stamp
 out=/out/bench-$scenario-$stamp
 scraper=
 # shellcheck disable=SC2317,SC2329 # called by cleanup, from the EXIT trap
-rm_out() { docker run --rm -v mapreduce_cluster_output:/out golang:1.26-alpine rm -rf "$@"; }
+rm_out() { docker run --rm -v "$MR_OUTPUT_VOLUME":/out golang:1.26-alpine rm -rf "$@"; }
 # shellcheck disable=SC2317,SC2329 # called by the EXIT trap
 cleanup() {
     [ -z "$scraper" ] || kill "$scraper" 2>/dev/null || true

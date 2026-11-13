@@ -69,3 +69,6 @@ Thumbs.db
 
 # chunk local pool state
 .chunk/*-pool.json
+
+# This checkout's output volume name, written by scripts/output-volume.sh
+deploy/compose/.env

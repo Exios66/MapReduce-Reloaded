@@ -34,15 +34,42 @@ def documented_limits(text):
     return limits
 
 
-def test_output_volume_has_its_own_name():
-    # Named after the project, the volume would be mapreduce_output: shared
-    # by every checkout on the machine, and deleted by any one's cluster-down.
-    compose = load(COMPOSE)
-    assert compose["volumes"]["output"] == {"name": "mapreduce_cluster_output"}
-    for path in ["Makefile", "bench/codecs.sh", "bench/experiments.sh", "bench/run.sh"]:
+def output_volume(checkout):
+    """Runs a copy of scripts/output-volume.sh as if it were in checkout."""
+    (checkout / "scripts").mkdir(parents=True, exist_ok=True)
+    (checkout / "deploy/compose").mkdir(parents=True, exist_ok=True)
+    script = checkout / "scripts/output-volume.sh"
+    shutil.copy(ROOT / "scripts/output-volume.sh", script)
+    return subprocess.run(
+        ["sh", str(script)], check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def test_each_checkout_gets_its_own_output_volume(tmp_path):
+    # A project-named volume was shared by every checkout on the machine and
+    # deleted by any one's cluster-down; each checkout now names its own.
+    first = output_volume(tmp_path / "mr one")
+    again = output_volume(tmp_path / "mr one")
+    other = output_volume(tmp_path / "elsewhere" / "mr one")
+    assert first == again
+    assert first != other
+    for name in (first, other):
+        assert re.fullmatch(r"mapreduce_output_mr_one_[0-9a-f]{8}", name), name
+    assert (tmp_path / "mr one/deploy/compose/.env").read_text() == f"MR_OUTPUT_VOLUME={first}\n"
+
+
+def test_output_volume_is_never_a_fixed_name():
+    # Compose takes the name from MR_OUTPUT_VOLUME and stops without it, and
+    # nothing mounts a volume by a literal name.
+    name = load(COMPOSE)["volumes"]["output"]["name"]
+    assert name.startswith("${MR_OUTPUT_VOLUME:?"), name
+    paths = ["Makefile", "bench/codecs.sh", "bench/experiments.sh", "bench/run.sh"]
+    for path in paths:
         text = (ROOT / path).read_text()
-        assert "mapreduce_output" not in text, path
-        assert "-v mapreduce_cluster_output:/out" in text, path
+        assert not re.search(r"-v mapreduce_[A-Za-z_-]*:/out", text), path
+        assert "MR_OUTPUT_VOLUME" in text, path
+    for path in [*paths[1:], "scripts/chaos.sh", "scripts/e2e.sh", "scripts/soak.sh"]:
+        assert "scripts/output-volume.sh" in (ROOT / path).read_text(), path
 
 
 def test_compose_memory_limits_match_vm_documentation():
@@ -119,6 +146,8 @@ def docker_compose():
     )
     if version.returncode:
         pytest.skip(f"Docker Compose plugin unavailable: {version.stderr.strip()}")
+    # compose.yaml stops without a volume name; make exports this checkout's.
+    os.environ.setdefault("MR_OUTPUT_VOLUME", "mapreduce_output_test")
     return [docker, "compose", "-f", str(COMPOSE)]
 
 

@@ -224,15 +224,28 @@ Rules behind the table:
 |---|---|---|---|---|
 | `../../data` | bind mount of the repository's `data/` | `/data` in the coordinator, workers and `mr` | Job input and output: the shared storage | yes |
 | `../../testdata/corpus` | bind mount, read-only | `/corpus` in the same three; `/data/corpus` in `s3` | The four-book test corpus | yes: it is in the repository |
-| `output` | named volume, `mapreduce_cluster_output` | `/out` in the same three | The write-ahead log at `/out/wal`; the experiments' inputs and outputs | no |
+| `output` | named volume, one per checkout: `mapreduce_output_<directory>_<hash>` | `/out` in the same three | The write-ahead log at `/out/wal`; the experiments' inputs and outputs | no |
 | `s3-output` | named volume, `mapreduce_s3-output` | `/data/out` in `s3` | Job output written as `s3://out/...` | no |
 
-The `output` volume is named in `compose.yaml` rather than after the
-project. Every checkout on a machine uses the project name `mapreduce`, and
-earlier versions named the volume `mapreduce_output`; that volume may still
-hold another checkout's experiments. `make cluster-up` no longer mounts it
-and `make cluster-down` no longer deletes it. Remove it yourself, with
-`docker volume rm mapreduce_output`, once nothing in it is needed.
+The `output` volume belongs to one checkout, not to the project. Every
+checkout on a machine uses the project name `mapreduce`, so a volume named
+after the project would be shared: one checkout's cluster would replay
+another's write-ahead log, and `make cluster-down` in any of them would
+delete the others' experiments. `scripts/output-volume.sh` names the volume
+after the checkout's directory and a hash of its path, and writes the name
+to `deploy/compose/.env` (ignored by git), which every `docker compose -f
+deploy/compose/compose.yaml` command reads, including the notebook's and
+ones typed by hand. Make and the bench scripts run it for you. Without the
+name, Compose stops with an error instead of falling back to a shared
+volume.
+
+Still shared between checkouts: the project's containers and network, so
+only one checkout's cluster runs at a time, and `make cluster-down` in one
+removes another's containers (never its volume); and the `s3` profile's
+`mapreduce_s3-output`. Moving a checkout gives it a new, empty volume.
+Earlier versions named the volume `mapreduce_output`; nothing mounts or
+deletes that volume now. Remove it yourself, with `docker volume rm
+mapreduce_output`, once nothing in it is needed.
 
 ### Why each mount
 
@@ -355,7 +368,7 @@ $COMPOSE ps                  # which services are running, with their ports
 # ... workers 2 to 4
 
 docker stats --no-stream     # memory and CPU against each limit
-docker volume ls --filter name=mapreduce      # mapreduce_cluster_output, and mapreduce_s3-output if s3 ran
+docker volume ls --filter name=mapreduce      # each checkout's mapreduce_output_<directory>_<hash>, and mapreduce_s3-output if s3 ran
 docker network inspect mapreduce_default      # who is on the network, and their addresses
 docker image inspect --format '{{.Config.User}}' mapreduce-reloaded   # a non-root user
 $COMPOSE logs coordinator    # the coordinator's log, newest last

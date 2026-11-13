@@ -128,11 +128,12 @@ services:
     depends_on: [prometheus]
 
 volumes:
-  # Named explicitly, not after the project: every checkout on a machine
-  # shares the project name, and the earlier default name
-  # (mapreduce_output) may still hold another checkout's experiments.
-  # Under this name, cluster-up never mounts that volume and cluster-down
-  # never deletes it.
+  # One volume per checkout, not per project: every checkout on a machine
+  # shares the project name, so a project-named volume (the earlier
+  # mapreduce_output) was shared, and any checkout's cluster-down deleted
+  # it. scripts/output-volume.sh derives the name from the checkout's path
+  # and writes it to .env beside this file, which Compose reads. With no
+  # name, Compose stops here rather than fall back to a shared one.
   output:
-    name: mapreduce_cluster_output
+    name: ${MR_OUTPUT_VOLUME:?run make cluster-up, or scripts/output-volume.sh, to name this checkout's volume}
   s3-output:

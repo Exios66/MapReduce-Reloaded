@@ -53,6 +53,9 @@ demo-check:
 # The Compose cluster (deploy/compose, docs/cluster-vm.md). Its project is
 # named mapreduce, so cluster-down removes only this project's containers.
 COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
+# This checkout's output volume (scripts/output-volume.sh), exported to every
+# recipe; the script also writes deploy/compose/.env for direct Compose calls.
+export MR_OUTPUT_VOLUME := $(shell scripts/output-volume.sh)
 
 # The shared storage mounted at /data in every container (ADR 0016).
 # Distroless workers run as UID 65532 and need to write output here.
@@ -95,7 +98,7 @@ cluster-down:
 export CLEAN_OUTPUTS
 clean-output:
 	@test -n "$$CLEAN_OUTPUTS" || { echo 'select completed output directories with CLEAN_OUTPUTS' >&2; exit 1; }
-	set -f; docker run --rm -v mapreduce_cluster_output:/out golang:1.26-alpine \
+	set -f; docker run --rm -v "$$MR_OUTPUT_VOLUME":/out golang:1.26-alpine \
 		sh -eu -c 'for name do case "$$name" in \
 			wal|exp-input-*|sort-1g.txt|*[!a-zA-Z0-9_.-]*|""|.|..|[-_]*) echo "invalid output directory: $$name" >&2; exit 1;; \
 		esac; done; for name do find /out -mindepth 1 -maxdepth 1 -type d -name "$$name" -exec rm -rf {} +; done' \
