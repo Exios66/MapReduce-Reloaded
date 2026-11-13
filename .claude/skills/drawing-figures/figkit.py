@@ -76,10 +76,12 @@ def inside(a, b, pad=0.0):
 def problems(texts, marks, width, height, pad=1.0):
     """Layout problems among named boxes, in pixels, as sentences.
 
-    texts and marks are lists of (name, (x0, y0, x1, y1)); width and height
-    are the image's. Reports two texts that overlap, a text over a mark (but
-    not one set wholly inside it, like a value in its square), and a text not
-    wholly inside the image. pad forgives touching edges."""
+    texts are (name, (x0, y0, x1, y1)); marks are the same, or carry a third
+    item, the matplotlib Path in pixels a mark is clipped to. width and
+    height are the image's. Reports two texts that overlap, a text over a
+    mark (but not one set wholly inside it, like a value in its square, nor
+    one whose overlap with the mark lies outside the mark's clip path), and a
+    text not wholly inside the image. pad forgives touching edges."""
     found = []
     for i, (name, box) in enumerate(texts):
         if box[0] < -pad or box[1] < -pad or box[2] > width + pad or box[3] > height + pad:
@@ -87,10 +89,19 @@ def problems(texts, marks, width, height, pad=1.0):
         for other, other_box in texts[i + 1 :]:
             if overlaps(box, other_box, pad):
                 found.append(f"{name!r} overlaps {other!r}")
-        for mark, mark_box in marks:
+        for mark, mark_box, *shape in marks:
             if overlaps(box, mark_box, pad) and not inside(box, mark_box, pad):
-                found.append(f"{name!r} covers {mark}")
+                if not shape or shape[0] is None or _meets(shape[0], box, mark_box):
+                    found.append(f"{name!r} covers {mark}")
     return found
+
+
+def _meets(path, a, b):
+    """Whether the overlap of boxes a and b meets the filled path."""
+    from matplotlib.transforms import Bbox
+
+    overlap = Bbox.from_extents(max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
+    return path.intersects_bbox(overlap, filled=True)
 
 
 def _texts(fig):
@@ -120,19 +131,19 @@ def _texts(fig):
 
 
 def _clip(artist, box):
-    """box as drawn after artist's clipping, by its clip box and any clip
-    path (a circle, a polar axes): None if wholly clipped away. A box that
-    meets a clip path is cut to the path's extent."""
+    """box as drawn after artist's clipping, and the clip path in pixels (a
+    circle, a polar axes) or None: (box, path), or None if wholly clipped
+    away. The box is cut to the clip box and to the path's extent; problems
+    tests the path's shape."""
     from matplotlib.transforms import Bbox
 
     if not artist.get_clip_on():
-        return box
-    clips = []
+        return box, None
+    clips, path = [], None
     if artist.get_clip_box() is not None:
         clips.append(artist.get_clip_box())
-    clip_path = artist.get_clip_path()
-    if clip_path is not None:
-        path, affine = clip_path.get_transformed_path_and_affine()
+    if artist.get_clip_path() is not None:
+        path, affine = artist.get_clip_path().get_transformed_path_and_affine()
         path = affine.transform_path(path)
         if not path.intersects_bbox(Bbox.from_extents(*box), filled=True):
             return None
@@ -146,7 +157,7 @@ def _clip(artist, box):
         )
         if box[0] >= box[2] or box[1] >= box[3]:
             return None
-    return box
+    return box, path
 
 
 def _marks(fig):
@@ -154,7 +165,7 @@ def _marks(fig):
     cover. They come from lines with markers (plot, kit.dots) and from scatter
     plots, whose points are a PathCollection rather than a line. Each is
     placed by its own artist's transform, and cut to its clip region, so a
-    marker clipped away by the axes limits covers nothing."""
+    marker clipped away by the axes limits or a clip path covers nothing."""
     from matplotlib.collections import PathCollection
 
     px = fig.dpi / 72  # pixels per point
@@ -178,9 +189,9 @@ def _marks(fig):
                 found.append((dots, x, y, area**0.5 * px / 2))
     marks = []
     for artist, x, y, r in found:
-        box = _clip(artist, (x - r, y - r, x + r, y + r))
-        if box is not None:
-            marks.append((f"the marker at ({x:.0f}, {y:.0f}) px", box))
+        drawn = _clip(artist, (x - r, y - r, x + r, y + r))
+        if drawn is not None:
+            marks.append((f"the marker at ({x:.0f}, {y:.0f}) px", *drawn))
     return marks
 
 
