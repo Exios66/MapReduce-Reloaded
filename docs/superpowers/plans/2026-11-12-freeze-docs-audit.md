@@ -166,13 +166,15 @@ are computed), and **the notebook's text cells**.
 ```python
 def test_scripts_named_with_arguments_accept_them():
     """`scripts/fetch-data.sh NAME` in a guide names a dataset the script knows."""
-    known = set(re.findall(r"^\s*([a-z0-9|-]+)\)", (ROOT / "scripts/fetch-data.sh").read_text(), re.M))
-    names = {n for arm in known for n in arm.split("|")}
+    # case arms such as `warpeace | all)`: alternatives may be spaced
+    arms = re.findall(r"^\s*([a-z0-9][a-z0-9| -]*)\)", (ROOT / "scripts/fetch-data.sh").read_text(), re.M)
+    names = {n.strip() for arm in arms for n in arm.split("|")}
+    assert "warpeace" in names, "the case arms were not parsed"
     cited = {m for text in guides().values() for m in re.findall(r"scripts/fetch-data\.sh\s+([a-z0-9-]+)", text)}
     assert cited <= names, sorted(cited - names)
 ```
 
-  Run `python -m pytest docs/tests/test_references.py -k fetch_data -q`.
+  Run `python -m pytest docs/tests/test_references.py -k scripts_named_with_arguments -q`.
   Expected: PASS if no page is wrong. If none is wrong, keep the test anyway as
   a guard, and confirm it fails by citing a fake name in a scratch copy.
 
@@ -188,9 +190,10 @@ def test_scripts_named_with_arguments_accept_them():
 
 - Modify: `README.md` ("Local mode", "Development"), `examples/README.md`, `docs/testing.md` as needed
 
-- [ ] **Step 1:** In a fresh clone of `origin/main` under `/tmp/claude-0/fresh`
-  with a clean `PATH`, run the README "Local mode" block line by line in
-  `bash`. Expected: `identical`. Record the output.
+- [ ] **Step 1:** In a fresh clone checked out at this PR's head commit
+  under `/tmp/claude-0/fresh`, with a clean `PATH`, run the README "Local
+  mode" block line by line in `bash`, and again after every edit to it.
+  Expected: `identical`. Record the output.
 - [ ] **Step 2:** Run the same block in `sh` (dash). If `sort -t$'\t'` or
   anything else breaks, the README says "in bash" before the block (Review
   Focus 1).
@@ -282,13 +285,14 @@ def test_scripts_named_with_arguments_accept_them():
 Not code: a checklist posted as a comment on #272. Each item's output is
 its evidence.
 
+- [ ] First, before choosing the freeze commit: update the merged-PR count
+  in `docs/report.md`, so the checks below cover the report as frozen.
 - [ ] At the freeze commit, from a fresh clone: run the README quick start
   verbatim, then `make e2e`, `make py-e2e` and `make check`.
 - [ ] `make vm-check` and `make demo-check` outputs go to #272 and #276 item 6.
 - [ ] A timed rehearsal of `docs/demo.md`, and `examples/demo.ipynb` run top to bottom.
 - [ ] Click the links marked "unverified (proxy)" in Task 1 and the
   `security/advisories/new` link while signed in.
-- [ ] Fill `TODO(freeze)`: the merged-PR count in `docs/report.md`.
 - [ ] Decide each open PR before the freeze:
   - #254 (10 GB campaign): merge or defer, per #273.
   - #339, #336, #333, #314: these conflict with `main`. Close #336 if

@@ -244,12 +244,14 @@ which the isolated E0 replaced; and the single grep and sort runs of
 [the evaluation against the paper](../docs/evaluation.md) were drawn from
 their `samples.csv` with `plot-rates.py`.
 
-Sort runs faster in this rerun than in the results published before it:
-E2's undisturbed sort took 9.10 s at `ca082a3` and takes 7.83 s here.
-[`evaluation/ab/`](evaluation/ab/) shows the code does not explain that: on
-the same VM, ten sorts each with the system at `4b5a235` and at `8f0ddb9`,
-taking turns, took 7.78 s and 8.02 s, with overlapping ranges; its
-`NOTE.md` gives the setup.
+Sort runs faster in this rerun than in the results published before it.
+The undisturbed sort took 12.37 s in E4 at `4b5a235` (three runs), and
+7.95 s in this rerun's E4. [`evaluation/ab/`](evaluation/ab/) shows that
+the code between those two commits does not explain it: on the same VM
+and day, ten sorts each with the system at `4b5a235` and at `8f0ddb9`,
+taking turns, took 7.78 s and 8.02 s, with overlapping ranges, so the
+`4b5a235` system itself now sorts in under 8 s. The A/B compares only
+those two commits; its `NOTE.md` gives the setup.
 
 ### E0: scaling over workers
 

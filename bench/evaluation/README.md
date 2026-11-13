@@ -34,8 +34,9 @@ Each figure has a `-dark` variant beside it.
 - [`logs/`](logs/) has the harness logs: one per experiment,
   `chain.log` for the whole run, and `inputs.sha256` for the inputs.
 - [`ab/`](ab/) is an A/B check, not an experiment: ten sorts each with the
-  system at `4b5a235` and at `8f0ddb9`, on the same VM, which shows the code
-  does not explain why sort is faster in this rerun than before it. Its
+  system at `4b5a235` and at `8f0ddb9`, on the same VM and day, which shows
+  the code changes between those two commits do not explain why sort is
+  faster in this rerun than in the `4b5a235` results before it. Its
   `NOTE.md` gives the setup.
 - [`archive/`](archive/) has every older run, labeled with its commit and
   date. None of it is current or drawn in a figure.
