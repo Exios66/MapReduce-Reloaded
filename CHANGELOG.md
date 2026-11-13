@@ -15,6 +15,15 @@ cut a release.
 
 ### Added
 
+- Agent tooling: a `drawing-figures` skill in `.claude/skills/`, for any
+  new or redrawn figure. It gives the project's values for the `dataviz`
+  method (themes, series slots and the fourth slot's limits, type sizes,
+  file names) and the mistakes made drawing figures here. Its
+  `figkit.py` loads the evaluation figures' style from
+  `bench/plot-experiments.py` without redrawing anything, and refuses to
+  save a figure whose labels overlap, cover a marker or run off the image.
+  Drawn through it, the published figures are pixel for pixel the same,
+  and none is refused (#364).
 - Demo: `make demo-check` (`scripts/demo-check.py`) checks the running
   cluster against what `docs/demo.md` needs, one `OK`, `WARN` or `FAIL`
   line each: four running workers at one CPU and 768 MB, the coordinator
