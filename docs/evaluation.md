@@ -14,13 +14,18 @@ had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 
 | §  | Paper | Here | Data |
 |---|---|---|---|
-| 5.2 Grep | 1 TB, M = 15,000, R = 1: 150 s | 10 GB, M = 160, R = 1: 18.3 s | [`paper/grep`](../bench/evaluation/paper/grep) |
-| 5.3 Sort | 1 TB, M = 15,000, R = 4,000: 891 s | 1 GiB, M = 32, R = 4: 7.8 s | [`paper/sort`](../bench/evaluation/paper/sort), E0 |
+| 5.2 Grep | 1 TB, M = 15,000, R = 1: 150 s | 10 GB, M = 160, R = 1: 18.3 s (one run, 28 Oct, archived) | [`archive/paper-2707160/grep`](../bench/evaluation/archive/paper-2707160/grep) |
+| 5.3 Sort | 1 TB, M = 15,000, R = 4,000: 891 s | 1 GiB, M = 32, R = 4: 8.1 s (E0, four workers); 7.8 s in the archived run | E0, [`archive/paper-2707160/sort`](../bench/evaluation/archive/paper-2707160/sort) |
 | 5.4 No backup tasks | +44% (1,283 s) | +58% with a straggler; no statistically significant cost without one | E2 |
 | 5.5 Machine failures | 200 of 1,746 killed: +5% (933 s) | 1 of 4 killed: +101% to +333% | E3 |
 
-The grep and sort rows ran with `bench/run.sh` at commit `2707160`; their
-directories hold the samples, the rates, the counters and the machine. E0 to E7 are the course evaluation in
+The grep row, the sort row's 7.8 s and the two rates plots below are from
+older single runs, on 28 October 2026 with `bench/run.sh` at commit
+`2707160`, archived in
+[`bench/evaluation/archive/paper-2707160/`](../bench/evaluation/archive/paper-2707160/); those directories hold
+the samples, the rates, the counters and the machine. They were not rerun
+at `8f0ddb9`; no newer run records rate samples for grep over 10 GB or for
+a single sort. The sort row's 8.1 s is the rerun's E0. E0 to E7 are the course evaluation in
 [bench/README.md](../bench/README.md#evaluation-e0e7), all with the system at
 commit `8f0ddb9` except E0, rerun at `3a907de` (below), each the median of
 five runs (E2-pairs is ten alternating pairs).
@@ -42,9 +47,12 @@ book-only result overstated what real text saves.
 
 ## Grep (§5.2)
 
+This section's plot and numbers are from one archived run of 28 October
+2026, at commit `2707160`, not the rerun at `8f0ddb9` (above).
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/paper/grep/rates-dark.png">
-  <img alt="Grep over 10 GB: input, shuffle and output rates" src="../bench/evaluation/paper/grep/rates.png" width="480">
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/archive/paper-2707160/grep/rates-dark.png">
+  <img alt="Grep over 10 GB: input, shuffle and output rates, one archived run at commit 2707160" src="../bench/evaluation/archive/paper-2707160/grep/rates.png" width="480">
 </picture>
 
 ```sh
@@ -79,9 +87,12 @@ won.
 
 ## Sort (§5.3)
 
+This section's plot and numbers are from one archived run of 28 October
+2026, at commit `2707160`, not the rerun at `8f0ddb9` (above).
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/paper/sort/rates-dark.png">
-  <img alt="Sort of 1 GiB: input, shuffle and output rates" src="../bench/evaluation/paper/sort/rates.png" width="480">
+  <source media="(prefers-color-scheme: dark)" srcset="../bench/evaluation/archive/paper-2707160/sort/rates-dark.png">
+  <img alt="Sort of 1 GiB: input, shuffle and output rates, one archived run at commit 2707160" src="../bench/evaluation/archive/paper-2707160/sort/rates.png" width="480">
 </picture>
 
 ```sh
@@ -150,8 +161,8 @@ and with no straggler:
 The straggler rows are medians of five runs; the others, of ten pairs of
 runs taken in turn ([bench/README.md](../bench/README.md#e2-backup-tasks-and-a-straggler)).
 The chart uses these same measurements: the no-straggler rows from
-`bench/evaluation/rerun-8f0ddb9/E2-pairs/` and the straggler rows from
-`bench/evaluation/rerun-8f0ddb9/E2/`,
+`bench/evaluation/E2-pairs/` and the straggler rows from
+`bench/evaluation/E2/`,
 which is why it differs from `E2.png` (that one draws only the main E2 runs,
 where no-straggler with backups on is 7.8 s). The image says so in its
 subtitle, and `bench/plot-experiments.py` redraws it from both directories.
@@ -279,7 +290,8 @@ records `3a907de`.
   difference. E7 was run for the first time.
 
 The data, the archives and the harness logs are in
-[`bench/evaluation/rerun-8f0ddb9/`](../bench/evaluation/rerun-8f0ddb9/).
+[`bench/evaluation/`](../bench/evaluation/), which holds only this rerun;
+older runs are in its labeled `archive/`.
 Two things were found after the data was taken, and are not part of the
 protocol above:
 

@@ -214,17 +214,17 @@ def test_scripts_named_with_arguments_accept_them():
 
 - Modify: `README.md` "Results", `docs/report.md` results table, `docs/demo.md`, `docs/evaluation.md`, `bench/README.md`, `examples/demo.ipynb` markdown cells
 - Read: the data paths listed in the rerun tracking issue #347 (its
-  2026-11-11 comments): every chunk under `bench/evaluation/rerun-8f0ddb9/`
-  (`runs.csv`, `machine.json`, `cache.jsonl`, `QUALITY.txt`), and E0 from
-  `bench/evaluation/rerun-8f0ddb9/E0-isolated/`, recorded at `3a907de`
-  (tag `e0-isolated-run-3a907de`), which supersedes the chain's `E0`.
-  Do not use the `bench/evaluation/E*` paths in #344's plan: the data
-  did not land there.
+  2026-11-11 comments), which named them under a rerun-8f0ddb9 directory,
+  with an E0-isolated directory beside them. On 13 November they moved to the core location,
+  `bench/evaluation/E0/` to `E7/` and `E2-pairs/` (`runs.csv`,
+  `machine.json`, `cache.jsonl`, `QUALITY.txt`), with E0 the isolated one,
+  recorded at `3a907de` (tag `e0-isolated-run-3a907de`). The chain's first
+  E0 is in `bench/evaluation/archive/8f0ddb9-E0-first/`.
 
 - [ ] **Step 1:** Run
   `summarize.py` from `.claude/skills/interpreting-bench-results/` on
-  `bench/evaluation/rerun-8f0ddb9/E0-isolated` and the `E1`–`E7` and
-  `E2-pairs` directories beside it.
+  `bench/evaluation/E0` and the `E1`–`E7` and `E2-pairs` directories
+  beside it.
 - [ ] **Step 2:** Compare each chunk's summary with the numbers #347's
   comments posted (including its corrections of 2026-11-11 15:58 and
   16:59). A difference is a finding, not a fix: report it.

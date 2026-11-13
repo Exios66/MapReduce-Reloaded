@@ -192,7 +192,7 @@ md-lint:
 docs-test:
 	$(PYTHON) -m pytest -q -p no:cacheprovider docs/tests
 
-# Redraws the evaluation figures from bench/evaluation/rerun-8f0ddb9/archives
+# Redraws the evaluation figures from the archives in bench/evaluation/raw
 # and compares each with the committed PNG (scripts/check-figures.py). It
 # needs matplotlib, which make venv does not install, so make check does not
 # run it: PLOT_PYTHON names a Python that has it, on the experiment VM.

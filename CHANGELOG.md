@@ -157,6 +157,28 @@ cut a release.
 
 ### Changed
 
+- Bench: `bench/evaluation/` now holds only the current results, the rerun
+  of 11 November 2026 at `8f0ddb9` (E0 at `3a907de`): `E0/` to `E7/` and
+  `E2-pairs/` with each experiment's CSVs, `raw/` with the archives the
+  figures are drawn from, `logs/` with the harness logs, and a new
+  `README.md` listing each experiment's data, run count and figure. The
+  rerun's isolated E0 is now `E0/`. Everything older moved to
+  `bench/evaluation/archive/`, labeled by commit and date: the results
+  published before the rerun, the rerun's first E0
+  (`archive/8f0ddb9-E0-first/`) and the single grep and sort runs of
+  28 October (`archive/paper-2707160/`, formerly `paper/`).
+  `scripts/check-figures.py` reads `bench/evaluation/raw` by default, and
+  every figure redraws unchanged from it (#361).
+- Docs: the evaluation figures run E0 to E7 on every page, with the E2–E4
+  fault recap after E4. `README.md`'s Results table links each row to its
+  figure and now shows E2, E3 and E4 too; `bench/README.md` cites the A/B
+  in `bench/evaluation/ab/`; `docs/report.md` lists E0 to E7 in order and
+  labels its grep and sort rows, and `docs/evaluation.md` its rates plots,
+  as archived runs at `2707160`; `examples/demo.ipynb` shows every figure
+  in that order (#361).
+- Docs: `README.md`'s local mode creates `python/.venv` before
+  `pip install -e .`, which the course VM's Ubuntu Python refuses outside a
+  virtual environment (#361).
 - Bench figures: clarify the speed-up ranges, elapsed-time savings and
   example traces in `bench/evaluation/`; E3 labels kill times against
   calibration, and E4 no longer places a restart on an unaligned clock
