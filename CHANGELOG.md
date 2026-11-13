@@ -15,6 +15,15 @@ cut a release.
 
 ### Added
 
+- Agent tooling: a `drawing-figures` skill in `.claude/skills/`, for any
+  new or redrawn figure. It gives the project's values for the `dataviz`
+  method (themes, series slots and the fourth slot's limits, type sizes,
+  file names) and the mistakes made drawing figures here. Its
+  `figkit.py` loads the evaluation figures' style from
+  `bench/plot-experiments.py` without redrawing anything, and refuses to
+  save a figure whose labels overlap, cover a marker or run off the image.
+  Drawn through it, the published figures are pixel for pixel the same,
+  and none is refused (#364).
 - Demo: `make demo-check` (`scripts/demo-check.py`) checks the running
   cluster against what `docs/demo.md` needs, one `OK`, `WARN` or `FAIL`
   line each: four running workers at one CPU and 768 MB, the coordinator
@@ -392,6 +401,21 @@ cut a release.
 
 ### Fixed
 
+- Tests: `TestClusterBackupTasks`, `TestClusterLateBackupTasks`,
+  `TestClusterStopsLosingAttempt` and `TestClusterCountersMatchLocal`
+  (`go/internal/worker`) no longer fail on a loaded machine. There a
+  late heartbeat let the coordinator's 100ms timeout declare a live worker
+  dead and run its slow attempt again as an ordinary one, so no backup
+  won. These tests kill no worker, so they now use a 5s worker timeout and
+  still require the stuck task to be won by a backup while the slow
+  attempt runs (§3.6); the tests that kill workers keep 100ms (#364).
+- Docs: the demo notebook's introduction no longer says every section's
+  claim is asserted; it names the sections that assert theirs (7, 8, 10, 11
+  and 13; section 9 checks only that its job succeeds), and says to run one
+  copy at a time, since setup removes earlier runs' directories.
+  `testdata/corpus/README.md` names the S3 test by its full path,
+  `go/internal/local/s3_test.go`, since `go/internal/task/` has one too
+  (#364).
 - Docs: stale status lines now match the finished evaluation.
   `docs/roadmap.md` says E0–E6 were rerun and E7 run for the first time
   at `8f0ddb9`, not that E7 was "wired but not run";
