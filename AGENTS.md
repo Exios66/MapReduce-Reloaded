@@ -131,5 +131,9 @@ Each skill's `SKILL.md` gives the rules for reading the output.
 ## Commits and PRs
 
 Every commit is authored and committed as the repository owner,
-`Jack J Burleson`. Never commit under an
-agent's or a tool's identity, except for the accepted contributor listed.
+`Jack J Burleson`, known by email: `exios4@protonmail.com` or the GitHub
+no-reply address `148591095+Exios66@users.noreply.github.com`, under any
+spelling of the name. GitHub may commit a merge or squash made in its web
+interface, as long as the owner authored it. Never commit under an agent's
+or a tool's identity, except for the accepted contributor listed. The
+preflight script checks this.
