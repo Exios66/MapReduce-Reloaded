@@ -2,6 +2,7 @@
 
 import ast
 import json
+import re
 from pathlib import Path
 
 NOTEBOOK = Path(__file__).resolve().parents[2] / "examples" / "demo.ipynb"
@@ -75,10 +76,10 @@ def test_the_notebook_is_committed_without_outputs():
 
 
 def test_the_evaluation_figures_it_shows_exist():
-    """Section 14 displays committed figures, in both themes."""
+    """Section 14 displays committed figures, in both themes, each under
+    its finding."""
     source = next(cell["source"] for cell in cells() if "display(Image(" in cell["source"])
-    names = source.split("for name in (", 1)[1].split(")", 1)[0]
-    figures = [name.strip(' "') for name in names.split(",") if name.strip()]
+    figures = re.findall(r'^    "([\w-]+)": "', source, re.MULTILINE)
     # E5 (#346) and E7 (#343) are results too, not only the README's.
     assert {"faults", "E0", "E1", "E5", "E7"} <= set(figures)
     for name in figures:
@@ -99,3 +100,28 @@ def test_setup_clears_what_an_interrupted_run_left():
             line for s in code for line in s.splitlines() if line.startswith(f"{name} = ")
         )
         assert "data/out/notebook-" in assignment, assignment
+
+
+def test_every_cell_has_a_unique_id():
+    """nbformat 4.5 requires an id on every cell; without one, nbformat warns
+    now and will refuse the notebook later."""
+    document = json.loads(NOTEBOOK.read_text())
+    assert (document["nbformat"], document["nbformat_minor"]) >= (4, 5)
+    ids = [cell.get("id") for cell in document["cells"]]
+    assert all(ids) and len(set(ids)) == len(ids), ids
+    assert all(re.fullmatch(r"[A-Za-z0-9_-]{1,64}", cell_id) for cell_id in ids)
+
+
+def test_the_troubleshooting_section_names_real_targets_and_messages():
+    """Each make target section 15 tells the presenter to run exists, and
+    each message it quotes is one a code cell raises."""
+    markdown = next(
+        c["source"] for c in cells() if c["source"].startswith("## 15. If a cell fails")
+    )
+    makefile = (NOTEBOOK.parents[1] / "Makefile").read_text()
+    for target in set(re.findall(r"`make ([\w-]+)", markdown)):
+        assert re.search(rf"^{re.escape(target)}:", makefile, re.MULTILINE), target
+    code = "\n".join(c["source"] for c in cells() if c["cell_type"] == "code")
+    rows = [line.split("|")[1] for line in markdown.splitlines() if line.startswith("| `")]
+    for _, quoted in re.findall(r"(`+)(.+?)\1", "".join(rows)):
+        assert quoted in code, quoted
