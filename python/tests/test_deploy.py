@@ -34,6 +34,17 @@ def documented_limits(text):
     return limits
 
 
+def test_output_volume_has_its_own_name():
+    # Named after the project, the volume would be mapreduce_output: shared
+    # by every checkout on the machine, and deleted by any one's cluster-down.
+    compose = load(COMPOSE)
+    assert compose["volumes"]["output"] == {"name": "mapreduce_cluster_output"}
+    for path in ["Makefile", "bench/codecs.sh", "bench/experiments.sh", "bench/run.sh"]:
+        text = (ROOT / path).read_text()
+        assert "mapreduce_output" not in text, path
+        assert "-v mapreduce_cluster_output:/out" in text, path
+
+
 def test_compose_memory_limits_match_vm_documentation():
     services = load(COMPOSE)["services"]
     documented = documented_limits((ROOT / "docs/cluster-vm.md").read_text())

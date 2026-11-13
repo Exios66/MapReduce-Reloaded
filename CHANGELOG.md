@@ -157,6 +157,14 @@ cut a release.
 
 ### Changed
 
+- Compose: the output volume is named `mapreduce_cluster_output` in
+  `deploy/compose/compose.yaml`, not left to the project name. Every
+  checkout on a machine shares the project `mapreduce`, so each one's
+  `make cluster-up` mounted the same `mapreduce_output` volume and
+  `make cluster-down` in any of them deleted it, with another checkout's
+  experiments in it. The Makefile and bench scripts use the new name;
+  the old volume is no longer touched, and `docs/docker-topology.md` says
+  how to remove it (#365).
 - Notebook: `examples/demo.ipynb` explains more as it runs, for the demo.
   The introduction sketches how the client, coordinator and workers fit
   together. Section 2 lists the workers as the coordinator sees them, with

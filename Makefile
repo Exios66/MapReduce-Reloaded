@@ -95,7 +95,7 @@ cluster-down:
 export CLEAN_OUTPUTS
 clean-output:
 	@test -n "$$CLEAN_OUTPUTS" || { echo 'select completed output directories with CLEAN_OUTPUTS' >&2; exit 1; }
-	set -f; docker run --rm -v mapreduce_output:/out golang:1.26-alpine \
+	set -f; docker run --rm -v mapreduce_cluster_output:/out golang:1.26-alpine \
 		sh -eu -c 'for name do case "$$name" in \
 			wal|exp-input-*|sort-1g.txt|*[!a-zA-Z0-9_.-]*|""|.|..|[-_]*) echo "invalid output directory: $$name" >&2; exit 1;; \
 		esac; done; for name do find /out -mindepth 1 -maxdepth 1 -type d -name "$$name" -exec rm -rf {} +; done' \

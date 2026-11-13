@@ -82,7 +82,7 @@ trap cleanup EXIT
 (cd go && go build -o "$tmp/mr" ./cmd/mr)
 mr=$tmp/mr
 
-in_volume() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine "$@"; }
+in_volume() { docker run --rm -v mapreduce_cluster_output:/out golang:1.26-alpine "$@"; }
 log() { echo "[$(date +%T)] $*" >&2; }
 
 # save_logs FILE SINCE: saves what the cluster's containers logged since
@@ -426,7 +426,7 @@ fi
 # drop_cache PATH...: drops the volume's files at PATH from the page cache.
 # The files are root's, so bench/drop-cache.py runs in a container.
 drop_cache() {
-    docker run --rm -v mapreduce_output:/out -v "$PWD/bench:/bench:ro" \
+    docker run --rm -v mapreduce_cluster_output:/out -v "$PWD/bench:/bench:ro" \
         python:3.13-alpine python /bench/drop-cache.py "$@"
 }
 

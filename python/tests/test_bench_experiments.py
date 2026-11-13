@@ -1445,7 +1445,7 @@ def test_drop_cache_runs_the_script_on_the_volume(experiment, tmp_path):
         after="drop_cache /out/a /out/b",
     )
     assert log.read_text().splitlines() == [
-        f"docker|run --rm -v mapreduce_output:/out -v {tmp_path}/bench:/bench:ro "
+        f"docker|run --rm -v mapreduce_cluster_output:/out -v {tmp_path}/bench:/bench:ro "
         "python:3.13-alpine python /bench/drop-cache.py /out/a /out/b"
     ]
 

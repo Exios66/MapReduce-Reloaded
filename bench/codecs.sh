@@ -21,7 +21,7 @@ results=bench/results/codecs.csv
 tmp=$(mktemp -d)
 # Removes paths from the output volume; the build image is there after
 # make cluster-up.
-rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$@"; }
+rm_out() { docker run --rm -v mapreduce_cluster_output:/out golang:1.26-alpine rm -rf "$@"; }
 trap 'rm -rf "$tmp"; rm_out /out/bench-input.txt' EXIT
 
 python3 bench/gen-words.py "$size" > "$tmp/input.txt"

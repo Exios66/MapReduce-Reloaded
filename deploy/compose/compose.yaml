@@ -128,5 +128,11 @@ services:
     depends_on: [prometheus]
 
 volumes:
+  # Named explicitly, not after the project: every checkout on a machine
+  # shares the project name, and the earlier default name
+  # (mapreduce_output) may still hold another checkout's experiments.
+  # Under this name, cluster-up never mounts that volume and cluster-down
+  # never deletes it.
   output:
+    name: mapreduce_cluster_output
   s3-output:
