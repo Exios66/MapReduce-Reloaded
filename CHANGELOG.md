@@ -15,6 +15,12 @@ cut a release.
 
 ### Added
 
+- CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
+  Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
+  `Makefile`, one report per test pass) with `store_test_results`, in the
+  go job's narrow mode too, so CircleCI shows each test, its time and its
+  failures, and keep them as artifacts; `docs/ci.md` lists the reports
+  (#314).
 - Demo: `make demo-check` (`scripts/demo-check.py`) checks the running
   cluster against what `docs/demo.md` needs, one `OK`, `WARN` or `FAIL`
   line each: four running workers at one CPU and 768 MB, the coordinator

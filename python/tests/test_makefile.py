@@ -256,3 +256,85 @@ def test_clean_output_rejects_protected_or_unsafe_names_before_deleting(cleanup_
     result = make("clean-output", f"CLEAN_OUTPUTS=done-1 {name}", check=False)
     assert result.returncode != 0
     assert (volume / "done-1/part-r-00000").read_text() == "done-1"
+
+
+@pytest.mark.parametrize(
+    "directory", ["results", "absolute", "test results", "absolute with spaces"]
+)
+def test_junit_reports_use_one_directory_and_separate_go_passes(make_project, directory):
+    """Every Go pass writes its own report, so a failing later pass is not
+    hidden by an earlier passing one, and a relative JUNIT_DIR, or one with
+    spaces, still means one directory under the project root."""
+    project, make, log = make_project
+    (project / "go").mkdir()
+    (project / "python").mkdir()
+    for name, script in {
+        "gotestsum": """#!/bin/sh
+set -eu
+printf 'gotestsum %s\\n' "$*" >> "$CALL_LOG"
+test "$1" = --junitfile
+printf 'report\\n' > "$2"
+""",
+        "python": """#!/bin/sh
+set -eu
+printf 'python %s\\n' "$*" >> "$CALL_LOG"
+for arg in "$@"; do
+    case "$arg" in --junitxml=*) printf 'report\\n' > "${arg#--junitxml=}" ;; esac
+done
+""",
+    }.items():
+        tool = project / "bin" / name
+        tool.write_text(script)
+        tool.chmod(0o755)
+
+    name = directory.replace("absolute", "results").replace(" with ", " ")
+    destination = project / name
+    argument = str(destination) if directory.startswith("absolute") else name
+    make(
+        "go-test-race",
+        "go-test-cover",
+        "go-python-test",
+        "py-test",
+        "py-e2e",
+        f"JUNIT_DIR={argument}",
+        "PYTHON=python",
+    )
+
+    assert {p.relative_to(project).as_posix() for p in project.rglob("*.xml")} == {
+        f"{name}/{report}"
+        for report in (
+            "go/go-test-race.xml",
+            "go/go-test-cover.xml",
+            "go/go-test-cover-uncached.xml",
+            "go/go-python-test-mr.xml",
+            "go/go-python-test-papermap.xml",
+            "python/py-test.xml",
+            "python/py-e2e.xml",
+        )
+    }
+    calls = log.read_text().splitlines()
+    assert any("-race -shuffle=on ./..." in call for call in calls)
+    assert any("-coverpkg=./... -coverprofile=cover.out ./..." in call for call in calls)
+    assert any("-count=1 ./internal/papermap ./internal/statusweb" in call for call in calls)
+
+
+def test_go_tests_without_junit_use_the_original_go_commands(make_project, monkeypatch):
+    project, make, log = make_project
+    (project / "go").mkdir()
+    for name in ("go", "python"):
+        tool = project / "bin" / name
+        tool.write_text(f'#!/bin/sh\nprintf "{name} %s\\n" "$*" >> "$CALL_LOG"\n')
+        tool.chmod(0o755)
+    monkeypatch.delenv("JUNIT_DIR", raising=False)
+
+    make("go-test-race", "go-test-cover", "go-python-test", "PYTHON=python")
+
+    calls = log.read_text().splitlines()
+    assert [call for call in calls if call.startswith("go ")] == [
+        "go test -race -shuffle=on ./...",
+        "go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./...",
+        "go test -count=1 ./internal/papermap ./internal/statusweb",
+        "go test -race -shuffle=on ./cmd/mr",
+        "go test -count=1 ./internal/papermap",
+    ]
+    assert not (project / "results").exists()

@@ -209,7 +209,28 @@ How each job meets its requirements:
   packages, coverage-instrumented packages, vet and lint), so each node
   keeps its own cache, keyed by `CIRCLE_NODE_INDEX`, and a new week starts
   from that node's last one.
-- **Artifacts.** Only `go/cover.out` and `python/cover.json` are kept.
+- **Artifacts.** `go/cover.out`, `python/cover.json` and the JUnit
+  reports (below) are kept.
+
+## Test results and artifacts
+
+The `go` and `python` jobs set `JUNIT_DIR=/tmp/test-results`, so `make`
+writes JUnit XML there, one report per test pass, named after its make
+target. `gotestsum` (v1.13.0; v1.12.0 does not build on Go 1.26) runs the
+Go tests and writes into `go/` under that directory: `go-test-race.xml`
+for the race pass, `go-test-cover.xml` and `go-test-cover-uncached.xml`
+for the coverage pass and its uncached rerun of `papermap` and
+`statusweb`, and, in the go job's narrow mode, `go-python-test-mr.xml`
+and `go-python-test-papermap.xml`. pytest gets `--junitxml` and writes
+`py-test.xml` and `py-e2e.xml` into `python/` under it. Each pass
+has its own report, so a pass that fails is never hidden by an earlier one
+that passed. Every step that runs tests, in the go job's full and narrow
+modes and in the python job, hands the directory to CircleCI's
+`store_test_results` and keeps it as artifacts under `test-results/`, even
+when a test failed, so the Tests tab lists every test with its time and
+failures, and CircleCI's flaky-test and timing insights work. `JUNIT_DIR`
+may be relative to the repository root and may contain spaces. Without it,
+as in `make check`, the tests run with `go test` and pytest as before.
 
 ## Pipeline time
 

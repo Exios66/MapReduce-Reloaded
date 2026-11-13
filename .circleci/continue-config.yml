@@ -205,6 +205,15 @@ commands:
             - go-build-v2-{{ arch }}-node{{ .Environment.CIRCLE_NODE_INDEX }}-{{ checksum "/tmp/go-build-key" }}-
             - go-build-v2-{{ arch }}-node{{ .Environment.CIRCLE_NODE_INDEX }}-
 
+  # gotestsum runs `go test` and writes JUnit XML when JUNIT_DIR is set
+  # (Makefile). v1.12.0's x/tools v0.19.0 does not build on the pinned Go
+  # 1.26 (`invalid array length -delta * delta`); v1.13.0 does.
+  gotestsum:
+    steps:
+      - run:
+          name: Install gotestsum
+          command: go install gotest.tools/gotestsum@v1.13.0
+
   go-build-cache-save:
     steps:
       - save_cache:
@@ -323,12 +332,21 @@ jobs:
             - python-deps:
                 python: "3.13"
             - go-build-cache-restore
+            - gotestsum
             - run:
                 name: The narrow mode's parts (go-python-test, py-e2e, sh-lint), this node's share
                 environment:
                   MR_CI_GO_NARROW: "python=<< pipeline.parameters.run-go-python >> docs=<< pipeline.parameters.run-go-docs >> sh=<< pipeline.parameters.run-sh-lint >>"
+                  JUNIT_DIR: /tmp/test-results
                 command: scripts/ci-go-job.sh narrow
                 no_output_timeout: 30m
+            - store_test_results:
+                path: /tmp/test-results
+                when: always
+            - store_artifacts:
+                path: /tmp/test-results
+                destination: test-results
+                when: always
       # The narrow mode with sh-lint alone, which needs neither Go nor Python.
       - when:
           condition:
@@ -361,14 +379,24 @@ jobs:
                 python: "3.13"
             - go-build-cache-restore
             - golangci-lint
+            - gotestsum
             # Node 2 installs shellcheck (scripts/vm-setup.sh --shellcheck)
             # and runs sh-lint with MR_REQUIRE_SHELLCHECK=1, so a missing
             # shellcheck fails the job.
             - run:
                 name: make sh-lint go-lint go-test py-e2e, this node's part
+                environment:
+                  JUNIT_DIR: /tmp/test-results
                 command: scripts/ci-go-job.sh full
                 no_output_timeout: 30m
             - go-build-cache-save
+            - store_test_results:
+                path: /tmp/test-results
+                when: always
+            - store_artifacts:
+                path: /tmp/test-results
+                destination: test-results
+                when: always
             - store_artifacts:
                 path: go/cover.out
 
@@ -405,7 +433,16 @@ jobs:
                 python: << parameters.version >>
             - run:
                 name: make py-lint py-test
+                environment:
+                  JUNIT_DIR: /tmp/test-results
                 command: make py-lint py-test PYTHON=python
+            - store_test_results:
+                path: /tmp/test-results
+                when: always
+            - store_artifacts:
+                path: /tmp/test-results
+                destination: test-results
+                when: always
             - store_artifacts:
                 path: python/cover.json
 

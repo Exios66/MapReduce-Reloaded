@@ -14,6 +14,17 @@ PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 # until grpcio-tools ships wheels for newer Pythons, e.g. BASE_PYTHON=python3.13.
 BASE_PYTHON ?= python3
 
+# When JUNIT_DIR is set (CI sets it), the Go and Python tests also write JUnit
+# XML there, for CircleCI's test results: gotestsum runs `go test`, one report
+# per pass, and pytest gets --junitxml. Left unset, they run as before.
+# JUNIT_ABS is JUNIT_DIR made absolute once, before any recipe changes
+# directory; recipes quote it, so a directory name may contain spaces.
+JUNIT_DIR ?=
+JUNIT_ABS = $(if $(filter /%,$(firstword $(JUNIT_DIR))),$(JUNIT_DIR),$(CURDIR)/$(JUNIT_DIR))
+GOTEST = $(if $(JUNIT_DIR),gotestsum --junitfile "$(JUNIT_ABS)/go/$@$(if $(1),-$(1)).xml" --format standard-quiet --,go test)
+PYTEST_JUNIT = $(if $(JUNIT_DIR),"--junitxml=$(JUNIT_ABS)/python/$@.xml")
+JUNIT_MKDIR = $(if $(JUNIT_DIR),mkdir -p "$(JUNIT_ABS)/$(1)")
+
 all: check
 
 # Run the three stages one after another, even under `make -j`: code
@@ -266,11 +277,13 @@ go-test:
 	$(MAKE) go-test-cover
 
 go-test-race:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./...
+	$(call JUNIT_MKDIR,go)
+	cd go && MR_PYTHON=$(PYTHON) $(GOTEST) -race -shuffle=on ./...
 
 go-test-cover:
+	$(call JUNIT_MKDIR,go)
 	rm -rf "$(GO_COVERDIR)" && mkdir -p "$(GO_COVERDIR)"
-	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && go test -count=1 ./internal/papermap ./internal/statusweb
+	cd go && MR_E2E_GOCOVERDIR="$(GO_COVERDIR)" MR_PYTHON=$(PYTHON) $(GOTEST) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./... && $(call GOTEST,uncached) -count=1 ./internal/papermap ./internal/statusweb
 	if ls "$(GO_COVERDIR)"/covcounters.* >/dev/null 2>&1; then \
 		cd go && go tool covdata textfmt -i="$(GO_COVERDIR)" -o "$(GO_COVERDIR)/e2e.out" && tail -n +2 "$(GO_COVERDIR)/e2e.out" >> cover.out; \
 	fi
@@ -284,7 +297,8 @@ go-test-cover:
 # docs/paper-mapping.md alone; every other Go package passes with python/
 # and both files removed (docs/ci.md).
 go-python-test:
-	cd go && MR_PYTHON=$(PYTHON) go test -race -shuffle=on ./cmd/mr && go test -count=1 ./internal/papermap
+	$(call JUNIT_MKDIR,go)
+	cd go && MR_PYTHON=$(PYTHON) $(call GOTEST,mr) -race -shuffle=on ./cmd/mr && $(call GOTEST,papermap) -count=1 ./internal/papermap
 
 # Run the coordinator, worker and command tests 20 times in random orders,
 # by hand before a release, to find flaky tests (#157). It takes a while.
@@ -324,9 +338,10 @@ go-lint:
 # or the Python one where that is not built). A COVERAGE_CORE already in
 # the environment wins.
 py-test:
+	$(call JUNIT_MKDIR,python)
 	cd python && if [ -z "$${COVERAGE_CORE:-}" ] && $(PYTHON) -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then \
 		COVERAGE_CORE=sysmon; export COVERAGE_CORE; fi && \
-		$(PYTHON) -m coverage run -m pytest -q && $(PYTHON) -m coverage json -q -o cover.json
+		$(PYTHON) -m coverage run -m pytest -q $(PYTEST_JUNIT) && $(PYTHON) -m coverage json -q -o cover.json
 	$(PYTHON) scripts/cover.py python python/cover.json python/cover-floors.txt
 
 # The tests, then each package's coverage against its floor.
@@ -339,7 +354,8 @@ cover: test
 # jobs; CI's go job runs them here, and MR_REQUIRE_GO makes a skip a
 # failure, so the integration is checked on every pull request.
 py-e2e:
-	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q tests/test_coordinator_e2e.py
+	$(call JUNIT_MKDIR,python)
+	cd python && MR_REQUIRE_GO=1 $(PYTHON) -m pytest -q $(PYTEST_JUNIT) tests/test_coordinator_e2e.py
 
 py-lint:
 	cd python && $(PYTHON) -m ruff format --check . ../scripts ../bench ../.claude ../docs/tests && $(PYTHON) -m ruff check . ../scripts ../bench ../.claude ../docs/tests
