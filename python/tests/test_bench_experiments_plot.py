@@ -122,9 +122,9 @@ def test_e1_dumbbells_use_valid_medians_runs_and_decimal_megabytes(plotter, tmp_
     # Each median is labeled, and each row with both medians is labeled with the saving.
     assert notes(shuffled, "fewer") == ["3× fewer", "3× fewer"]
     # S = 0.5: on 2-10 s and off 6-8 s overlap; S = 1.5 does not.
-    assert notes(seconds, "faster", "difference") == ["no clear difference", "67% faster"]
+    assert notes(seconds, "less time", "difference") == ["no clear difference", "67% less time"]
     # The title claims the bytes saved, but no job-time saving while a pair overlaps.
-    assert "faster" not in titles(figure)[0]
+    assert "less time" not in titles(figure)[0]
     assert "fewer bytes" in titles(figure)[0]
     values = [c.args[0] for c in shuffled.annotate.call_args_list if c.args[0].isdigit()]
     assert values == ["4", "13", "7", "20"]
@@ -198,7 +198,7 @@ def test_e6_puts_the_three_inputs_in_order_top_to_bottom(plotter, tmp_path):
     assert medians(seconds, "combiner on") == (pytest.approx([3, 5, 1]), [2, 1, 0])
     assert medians(seconds, "combiner off") == (pytest.approx([4, 6, 2]), [2, 1, 0])
     assert notes(shuffled, "fewer") == ["4× fewer", "3× fewer", "10× fewer"]
-    assert notes(seconds, "faster") == ["25% faster", "17% faster", "50% faster"]
+    assert notes(seconds, "less time") == ["25% less time", "17% less time", "50% less time"]
 
 
 def test_e1_table_reports_coordinator_time_and_invalid_run_counts(plotter, capsys):
@@ -325,6 +325,21 @@ def test_failure_interval_requires_a_recorded_transition(plotter, tmp_path, coun
     assert module.failure_interval(samples, 4) is None
 
 
+def test_e3_does_not_claim_a_kill_when_only_normal_samples_exist(plotter, tmp_path, monkeypatch):
+    """An incomplete dataset can draw the normal trace without a killed trace."""
+    module, pyplot = plotter
+    figure, left, right = Mock(), Mock(), Mock()
+    left.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = figure, (left, right)
+    samples = tmp_path / "E3"
+    samples.mkdir()
+    (samples / "samples-normal-1.csv").touch()
+    monkeypatch.setattr(module, "total_rate", lambda path: ([0, 1], [0, 10]))
+    module.e3([row("normal") | {"run": "1"}], tmp_path, tmp_path / "E3.png", light(module))
+    right.plot.assert_called_once()
+    right.set_title.assert_called_once_with("Data rate: median-duration runs")
+
+
 def test_e0_skips_a_program_with_a_zero_time(plotter, tmp_path):
     """A program with a zero job time has no speed-up and is left out."""
     module, pyplot = plotter
@@ -354,6 +369,18 @@ def test_fault_figures_with_no_valid_run_draw_no_rows(plotter, tmp_path, exp):
     left.hlines.assert_not_called()
     right.step.assert_not_called()
     left.set_xlim.assert_called_once_with(0, pytest.approx(1.3))
+
+
+def test_e4_does_not_place_restart_on_unaligned_task_clock(plotter, tmp_path):
+    """Submission-relative restart times cannot mark sample-relative task curves."""
+    module, pyplot = plotter
+    left, right = Mock(), Mock()
+    left.get_legend_handles_labels.return_value = [], []
+    pyplot.subplots.return_value = Mock(), (left, right)
+    rows = [row("normal") | {"run": "1"}, row("restart") | {"run": "1", "event_at": "3.8"}]
+    module.e4(rows, tmp_path, tmp_path / "E4.png", light(module))
+    right.axvline.assert_not_called()
+    right.set_xlabel.assert_called_once_with("Seconds since first task sample")
 
 
 def test_e2_compares_backups_on_and_off_and_draws_the_straggler_timeline(plotter, tmp_path):
@@ -661,7 +688,7 @@ def test_e0_titles_the_best_speed_up_and_draws_each_programs_range(plotter, tmp_
         "Speed-up = job time on 1 worker ÷ job time on N workers."
         " Grep takes 2.0 s on one worker, so fixed per-job costs cap its speed-up."
     )
-    assert "whiskers span the range" in second
+    assert "holding the one-worker median fixed" in second
     assert notes(axis, "run") == []
     grep = axis.errorbar.call_args_list[0]
     assert grep.kwargs["ecolor"] == t["series"][0]
@@ -736,7 +763,7 @@ def test_e1_title_states_the_byte_and_time_savings(plotter, tmp_path):
         row("s1.5-off", 40, 1_560_000_000),
     ]
     module.e1(rows, tmp_path / "E1.png", light(module))
-    assert titles(figure)[0] == "E1: the combiner shuffles 15–78× fewer bytes, 25–50% faster"
+    assert titles(figure)[0] == "E1: the combiner shuffles 15–78× fewer bytes, 25–50% less time"
 
 
 def fault_rows():
@@ -766,7 +793,7 @@ def test_faults_draws_the_time_each_disturbance_adds(plotter, tmp_path):
     assert axis.barh.call_args.kwargs["color"] == t["series"][1]
     assert [c.args[2] for c in axis.text.call_args_list] == [
         "E2: one worker slowed to 0.2 CPU",
-        "E3: one of four workers killed",
+        "E3: worker killed (% of calibration time)",
         "E4: the coordinator restarted",
     ]
     assert axis.errorbar.called, "each bar has its range"
@@ -845,7 +872,7 @@ def test_e1_calls_a_combiner_that_costs_time_slower_not_faster(plotter, tmp_path
     pyplot.subplots.return_value = figure, (left, right)
     rows = [row("s0.5-on", 12, 1_000_000), row("s0.5-off", 10, 5_000_000)]
     module.e1(rows, tmp_path / "E1.png", light(module))
-    assert notes(right, "faster", "slower") == ["20% slower"]
+    assert notes(right, "less time", "more time") == ["20% more time"]
     assert titles(figure)[0] == "E1: the combiner shuffles 5× fewer bytes"
 
 

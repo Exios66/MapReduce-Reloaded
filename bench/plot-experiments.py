@@ -7,8 +7,8 @@ exists, this writes OUT_DIR/EXPERIMENT.png on a light background and
 OUT_DIR/EXPERIMENT-dark.png on a dark one. Each title states the finding,
 computed from the data. Points are medians of the valid runs only; runs
 whose output differed from the undisturbed run's (valid=0) are left out and
-counted in the table. Blue is the system as it ships or undisturbed, orange
-the changed or disturbed setting, in every figure.
+counted in the table. In paired comparisons blue marks the shipped or
+undisturbed setting and orange the changed setting; E0 colors workloads.
 
 - E0: speed-up over one worker against workers, one line per program with
   whiskers right of each dot spanning its runs (none at the one-worker
@@ -29,7 +29,7 @@ the changed or disturbed setting, in every figure.
   time for the median undisturbed run and the median run killed at 50%,
   with the loss marked.
 - E4: job time with and without a coordinator restart as a dumbbell, and
-  tasks finished against time with the restart marked.
+  tasks finished against time for each median-duration run.
 - E5: job time of the compiled program and the two job files the workers
   interpret, as horizontal bars labeled with their multiple and map phase.
 - E6: bytes shuffled and job time per input (crawled English, crawled pages
@@ -454,7 +454,7 @@ def e0(rows, out, t):
         note
         + "\n"
         + label_note(rows, ranges=False)
-        + "; whiskers span the range where wider than a dot.",
+        + "; whiskers vary N-worker times, holding the one-worker median fixed.",
         key=ax.get_legend_handles_labels(),
     )
     finish(fig, out)
@@ -608,7 +608,9 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
             1,
             False,
             "Job time, seconds (lower is better)",
-            lambda on, off: f"{abs(1 - on / off):.0%} " + ("faster" if on <= off else "slower"),
+            lambda on, off: (
+                f"{abs(1 - on / off):.0%} " + ("less time" if on <= off else "more time")
+            ),
         ),
     ):
         on = [spread(valid(rows, setting=f"{g}-on"), field) for g in groups]
@@ -647,7 +649,7 @@ def combiner_dumbbells(rows, out, t, groups, ticks, ylabel, title):
             bytes=span(found["bytes"], lambda x: f"{x:.0f}") + "×",
             time=span(times, lambda x: f"{x:.0%}".rstrip("%")) + "%",
         )
-        # A saving below zero is not "faster", and an overlap is no claim.
+        # A negative saving or an overlap cannot support a reduction claim.
         if not clear["time"] or min(found["time"]) < 0:
             title = title.split(",", 1)[0]
     else:
@@ -681,7 +683,7 @@ def e1(rows, out, t):
         exponents,
         [f"S = {e[1:]}" for e in exponents],
         "Zipf exponent (higher: more skew)",
-        "E1: the combiner shuffles {bytes} fewer bytes, {time} faster",
+        "E1: the combiner shuffles {bytes} fewer bytes, {time} less time",
     )
 
 
@@ -703,11 +705,11 @@ def e6(rows, out, t):
         inputs,
         ["crawled\nEnglish", "crawled,\nevery language", "book"],
         "Word count's input",
-        "E6: on real text, {bytes} fewer bytes, {time} faster",
+        "E6: on real text, {bytes} fewer bytes, {time} less time",
     )
 
 
-def timeline(ax, t, rows, results, exp, settings, field, event=None):
+def timeline(ax, t, rows, results, exp, settings, field):
     """Tasks finished against time for each setting's median run, ending
     at its first maximum finished-task count, on ax.
 
@@ -715,12 +717,9 @@ def timeline(ax, t, rows, results, exp, settings, field, event=None):
     count; even run counts select the lower median run. Task CSVs are read
     from results/exp as tasks-SETTING-RUN.csv, or from results/_dir for a
     row with a "_dir" key; a missing file omits only that curve. Timeline
-    seconds start at the job's first recorded sample. event labels the
-    first selected run with a nonempty event_at, in seconds since
-    submission, with a dashed vertical rule. Colors match the left panel's,
-    whose legend the figure shows, so the timeline draws none. Missing
+    seconds start at the job's first recorded sample. Colors match the left
+    panel's legend, so the timeline draws none. Missing
     fields, invalid numbers and file errors propagate."""
-    marked = False
     for setting, (label, slot) in settings.items():
         color = t["series"][slot]
         runs = valid(rows, setting=setting)
@@ -736,21 +735,7 @@ def timeline(ax, t, rows, results, exp, settings, field, event=None):
             ax.step(xs, done[:end], where="post", color=color, label=label, zorder=3)
             if xs:
                 dots(ax, t, [xs[-1]], [done[end - 1]], color)
-        if event and run["event_at"] and not marked:
-            at = float(run["event_at"])
-            ax.axvline(at, color=t["muted"], linewidth=1, linestyle="--", zorder=1)
-            ax.annotate(
-                event,
-                (at, 1),
-                xycoords=("data", "axes fraction"),
-                xytext=(5, -4),
-                textcoords="offset points",
-                va="top",
-                color=t["ink2"],
-                fontsize=NOTE,
-            )
-            marked = True
-    ax.set_xlabel("Seconds since the job started")
+    ax.set_xlabel("Seconds since first task sample")
     ax.set_ylabel("Tasks finished (map + reduce)")
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
@@ -844,7 +829,7 @@ def backups_figure(rows, results, out, t, title, note):
         },
         "seconds",
     )
-    right.set_title("With the straggler: tasks finished over time")
+    right.set_title("Straggler: tasks finished, median-duration runs")
     heading(
         fig,
         t,
@@ -950,7 +935,7 @@ def e3(rows, results, out, t):
         t,
         rows,
         "wall_seconds",
-        [(f"killed {p}% of\nthe way through", "normal", f"kill-{p}") for p in pcts],
+        [(f"killed at {p}% of\ncalibration time", "normal", f"kill-{p}") for p in pcts],
         ("no failure", "one worker killed"),
         added,
     )
@@ -987,7 +972,7 @@ def e3(rows, results, out, t):
         right.set_xlabel("Seconds since sampling began")
         right.set_ylabel("MB/s read + shuffled + written")
         right.set_ylim(bottom=0)
-        right.set_title("Why: the killed run stalls, then redoes lost work")
+        right.set_title("Data rate: median-duration runs")
     title = "E3: losing a worker during distributed sort"
     if pairs and all(a and b for a, b in pairs):
         cost = [b[0] - a[0] for a, b in pairs]
@@ -999,8 +984,8 @@ def e3(rows, results, out, t):
         fig,
         t,
         title,
-        "One of four workers is killed partway through; the coordinator notices after a 10 s"
-        " timeout and reruns its work.\n"
+        "One of four workers is killed; a failed fetch or worker timeout triggers lost work"
+        " to rerun.\n"
         + label_note(rows, ranges=False)
         + ". Job time runs from when mr submit returned.",
         key=left.get_legend_handles_labels(),
@@ -1023,8 +1008,9 @@ def e4(rows, results, out, t):
     Top: a dumbbell from the median wall time without a restart (blue) to
     the median with the coordinator restarted mid-job (orange), labeled
     with the time added; one comparison needs only a short strip. Below:
-    tasks finished over time for the median run of each, the restart
-    marked. Only valid="1" runs count.
+    tasks finished over time for the median run of each. The restart is not
+    marked because its clock cannot be aligned with the task samples. Only
+    valid="1" runs count.
     Task CSVs are read from results / "E4"; missing files omit only curves.
     Missing fields, invalid numbers, and file or plotting errors propagate.
     """
@@ -1048,9 +1034,8 @@ def e4(rows, results, out, t):
         "E4",
         {"normal": ("no failure", 0), "restart": ("coordinator restarted", 1)},
         "wall_seconds",
-        "restart",
     )
-    right.set_title("Why: finished tasks survive the restart")
+    right.set_title("Tasks finished: median-duration runs")
     heading(
         fig,
         t,
@@ -1208,7 +1193,7 @@ def faults(e2_rows, e3_rows, e4_rows, out, t):
             ],
         ),
         (
-            "E3: one of four workers killed",
+            "E3: worker killed (% of calibration time)",
             e3_rows,
             "wall_seconds",
             "normal",
