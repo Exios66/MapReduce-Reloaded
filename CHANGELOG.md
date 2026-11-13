@@ -157,6 +157,15 @@ cut a release.
 
 ### Changed
 
+- Notebook: `examples/demo.ipynb` explains more as it runs, for the demo.
+  The introduction sketches how the client, coordinator and workers fit
+  together. Section 2 lists the workers as the coordinator sees them, with
+  their containers and last heartbeats. Section 10 checks that the worker
+  the coordinator lost is the one it killed, and says what was rerun.
+  Section 12 tabulates every job the run submitted, and section 14 heads
+  each evaluation figure with its finding from the README. A new section
+  15 says what to run when a cell fails. Every cell now has the `id`
+  nbformat 4.5 requires (#363).
 - Bench: `bench/evaluation/` now holds only the current results, the rerun
   of 11 November 2026 at `8f0ddb9` (E0 at `3a907de`): `E0/` to `E7/` and
   `E2-pairs/` with each experiment's CSVs, `raw/` with the archives the
