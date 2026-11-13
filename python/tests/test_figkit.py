@@ -47,11 +47,15 @@ def test_a_label_over_a_marker_part_clipped_away_counts_only_where_it_is_drawn()
     from matplotlib.path import Path as MplPath
 
     circle = MplPath.circle((200, 200), 100)
-    marks = [("the marker at (285, 285) px", (250, 250, 320, 320), circle)]
-    clear = [("outside", (280, 280, 310, 310))]  # all of it beyond the circle
+    # The marker box (250, 250, 320, 320) as _clip leaves it: cut to the
+    # circle's extent, which ends at 300.
+    box = (250, 250, 300, 300)
+    name = "the marker at (285, 285) px"
+    clear = [("outside", (280, 280, 310, 310))]  # overlaps the box only beyond the circle
     over = [("over", (240, 240, 270, 270))]  # overlaps it at (250, 250), in the circle
-    assert figkit.problems(clear, marks, 400, 400) == []
-    assert figkit.problems(over, marks, 400, 400) == ["'over' covers the marker at (285, 285) px"]
+    assert figkit.problems(clear, [(name, box, circle)], 400, 400) == []
+    assert figkit.problems(clear, [(name, box)], 400, 400) == [f"'outside' covers {name}"]
+    assert figkit.problems(over, [(name, box, circle)], 400, 400) == [f"'over' covers {name}"]
 
 
 def test_theme_suffixes_name_the_files_side_by_side():
