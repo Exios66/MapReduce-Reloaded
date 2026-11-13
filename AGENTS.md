@@ -115,6 +115,7 @@ Skills in `.claude/skills/` hold checked scripts for recurring work. Claude
 Code loads them by name; any other agent runs the scripts directly. They
 read files, git and the experiment host, and change nothing; so does
 `make figures-check`, which writes only to a temporary directory.
+`figkit.py` writes only the figure its caller names.
 
 | Task | Run |
 | --- | --- |
@@ -123,6 +124,7 @@ read files, git and the experiment host, and change nothing; so does
 | Compare a new run with a published one | `python3 .claude/skills/analyzing-bench-results/compare.py OLD_DIR NEW_DIR` |
 | Snapshot a running campaign on the experiment host | `bash .claude/skills/checking-campaign-status/status.sh HOST` |
 | Redraw the evaluation figures from their archives and compare them with the committed ones (needs matplotlib; on the VM) | `make figures-check PLOT_PYTHON=...` |
+| Draw a new figure in the evaluation figures' style, in both themes, refusing colliding or clipped labels (needs matplotlib) | `import figkit` from `.claude/skills/drawing-figures/figkit.py` |
 
 Each skill's `SKILL.md` gives the rules for reading the output.
 
