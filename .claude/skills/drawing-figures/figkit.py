@@ -44,8 +44,14 @@ def style():
     It has THEMES, rc, heading, stack_heading, finish, dots and the type
     sizes (TITLE, SUBTITLE, PANEL, LABEL, TICK, NOTE). Importing the script
     runs its main, which redraws bench/results; this points main at an empty
-    directory, so it draws and prints nothing."""
-    argv = sys.argv
+    directory, so it draws and prints nothing. The script also selects the
+    Agg backend; a caller that already chose one, such as a notebook drawing
+    inline, keeps it. Call it once, from the thread that draws."""
+    import matplotlib
+
+    argv, use = sys.argv, matplotlib.use
+    if "matplotlib.pyplot" in sys.modules:  # the caller has a backend: keep it
+        matplotlib.use = lambda *args, **kwargs: None
     with tempfile.TemporaryDirectory() as empty, contextlib.redirect_stdout(io.StringIO()):
         sys.argv = [str(SCRIPT), empty, empty]
         try:
@@ -53,7 +59,7 @@ def style():
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         finally:
-            sys.argv = argv
+            sys.argv, matplotlib.use = argv, use
     return module
 
 
@@ -89,10 +95,12 @@ def problems(texts, marks, width, height, pad=1.0):
 
 def _texts(fig):
     """Every visible, nonempty text a reader sees: headings, titles, axis and
-    tick labels, annotations and legend entries."""
+    tick labels, annotations, and legend entries and titles."""
     found = list(fig.texts)
-    for legend in fig.legends:
-        found += legend.get_texts()
+    legends = [*fig.legends, *(ax.get_legend() for ax in fig.axes)]
+    for legend in legends:
+        if legend is not None:
+            found += [legend.get_title(), *legend.get_texts()]
     for ax in fig.axes:
         found += [ax.title, getattr(ax, "_left_title", None), getattr(ax, "_right_title", None)]
         found += [ax.xaxis.label, ax.yaxis.label, *ax.texts]
@@ -101,23 +109,34 @@ def _texts(fig):
             # the ones beyond the axis limits, which would read as off the image.
             for tick in axis._update_ticks():
                 found += [tick.label1, tick.label2]
-        if ax.get_legend():
-            found += ax.get_legend().get_texts()
     return [t for t in found if t is not None and t.get_visible() and t.get_text().strip()]
 
 
 def _marks(fig):
-    """The markers drawn in each axes, as small boxes: dots a label must not cover."""
-    found = []
+    """The markers drawn in each axes, as small boxes: dots a label must not
+    cover. They come from lines with markers (plot, kit.dots) and from scatter
+    plots, whose points are a PathCollection rather than a line."""
+    from matplotlib.collections import PathCollection
+
+    px = fig.dpi / 72  # pixels per point
+    points = []  # (x, y) in pixels, and the marker's radius in pixels
     for ax in fig.axes:
         for line in ax.get_lines():
             if line.get_marker() in (None, "None", "", " ") or not line.get_visible():
                 continue
-            radius = line.get_markersize() * fig.dpi / 72 / 2
-            for x, y in ax.transData.transform(line.get_xydata()):
-                name = f"the marker at ({x:.0f}, {y:.0f}) px"
-                found.append((name, (x - radius, y - radius, x + radius, y + radius)))
-    return found
+            radius = line.get_markersize() * px / 2
+            points += [(x, y, radius) for x, y in ax.transData.transform(line.get_xydata())]
+        for dots in ax.collections:
+            if not isinstance(dots, PathCollection) or not dots.get_visible():
+                continue
+            offsets = dots.get_offset_transform().transform(dots.get_offsets())
+            sizes = dots.get_sizes()  # marker areas in square points, one or one per point
+            for i, (x, y) in enumerate(offsets):
+                area = sizes[i % len(sizes)] if len(sizes) else 36  # matplotlib's default
+                points.append((x, y, area**0.5 * px / 2))
+    return [
+        (f"the marker at ({x:.0f}, {y:.0f}) px", (x - r, y - r, x + r, y + r)) for x, y, r in points
+    ]
 
 
 def check(fig, slack=2.0):

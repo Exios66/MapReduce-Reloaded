@@ -73,3 +73,46 @@ def test_finish_refuses_colliding_labels_and_saves_clear_ones(tmp_path, monkeypa
     draw(((-10, -10), "right"), ((10, 10), "left"), tmp_path / "apart.png")
     assert (tmp_path / "apart.png").stat().st_size > 0
     assert sys.argv == ["pytest"], "style() restores sys.argv"
+
+
+def test_scatter_points_and_legend_titles_are_checked(tmp_path, monkeypatch):
+    """A label over a scatter point, and a legend title, are seen, not only
+    lines' markers and legend entries."""
+    pytest.importorskip("matplotlib")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.scatter([5], [5], s=400)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 10)
+    ax.annotate("over the dot", (5, 5), ha="center", va="center")
+    ax.legend(*ax.get_legend_handles_labels(), title="A legend title")
+    found = figkit.check(fig)
+    plt.close(fig)
+    assert any(p.startswith("'over the dot' covers the marker") for p in found), found
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.plot([0, 1], [0, 1], label="line")
+    legend = ax.legend(title="A legend title")
+    fig.canvas.draw()
+    assert legend.get_title() in figkit._texts(fig)
+    plt.close(fig)
+
+
+def test_style_keeps_the_callers_backend_and_figures(monkeypatch):
+    """A notebook that already draws keeps its backend and open figures."""
+    pytest.importorskip("matplotlib")
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    monkeypatch.setattr(sys, "argv", ["pytest"])
+    before = matplotlib.get_backend()
+    fig = plt.figure()
+    try:
+        figkit.style()
+        assert matplotlib.get_backend() == before
+        assert fig.number in plt.get_fignums()
+    finally:
+        plt.close(fig)
