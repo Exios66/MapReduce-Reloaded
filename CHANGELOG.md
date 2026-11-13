@@ -393,6 +393,11 @@ cut a release.
 
 ### Fixed
 
+- Docs: the demo notebook's introduction no longer says every section's
+  claim is asserted; it names the sections that assert theirs (7 to 11 and
+  13). `testdata/corpus/README.md` names the S3 test by its full path,
+  `go/internal/local/s3_test.go`, since `go/internal/task/` has one too
+  (#364).
 - Docs: stale status lines now match the finished evaluation.
   `docs/roadmap.md` says E0–E6 were rerun and E7 run for the first time
   at `8f0ddb9`, not that E7 was "wired but not run";

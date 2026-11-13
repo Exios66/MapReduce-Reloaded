@@ -54,7 +54,7 @@ against the files.
 
 | Where it runs | Test |
 |---|---|
-| Local mode, Go, for several values of M, and with input and output in S3 | `go/internal/local/local_test.go`, `s3_test.go` |
+| Local mode, Go, for several values of M, and with input and output in S3 | `go/internal/local/local_test.go`, `go/internal/local/s3_test.go` |
 | Local mode, Python | `python/tests/test_local.py` |
 | The `mr` command, and the job file `examples/wordcount.go` interpreted | `go/cmd/mr/main_test.go`, `go/internal/jobfile/jobfile_test.go` |
 | A coordinator and workers in one process | `go/internal/worker/cluster_test.go` |
