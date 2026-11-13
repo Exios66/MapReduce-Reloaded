@@ -285,7 +285,12 @@ def test_scripts_named_with_arguments_accept_them():
   `docs/paper-mapping.md`. So expect more than the lint job.
 - [ ] **Step 3:** After review, add `(#NNN)` to the bullets, merge `main`,
   run `make check`, and run `preflight.sh --final`. Then push without
-  `[skip ci]`. Expected: every required check green on the head.
+  `[skip ci]`. Expected: all six required checks green on the head. That
+  is the full required suite as `docs/ci.md` defines it (ADR 0020): a job
+  this diff does not implicate, such as `proto` here, passes by reporting
+  that `main`'s result stands, and the go job runs its narrow mode.
+  Green on all six is the evidence ADR 0020 asks for; no run with every
+  job doing its work is needed.
 
 ### Task 7: Owner's freeze-day runbook (course VM; this session cannot run it)
 
@@ -303,7 +308,8 @@ its evidence.
 - [ ] At the freeze commit, from a fresh clone: run the README quick start
   verbatim, then `make e2e`, `make py-e2e` and `make check`. If anything
   merges into `main` after this, the new head is the freeze commit: run
-  these again on it.
+  these again on it, and repeat the timed rehearsal, `make vm-check`,
+  `make demo-check` and the `examples/demo.ipynb` run on it.
 - [ ] `make vm-check` and `make demo-check` outputs go to #272 and #276 item 6.
 - [ ] A timed rehearsal of `docs/demo.md`, and `examples/demo.ipynb` run top to bottom.
 - [ ] Click the links marked "unverified (proxy)" in Task 1 and the
