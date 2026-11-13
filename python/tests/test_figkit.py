@@ -156,3 +156,34 @@ def test_what_is_drawn_is_checked_and_what_is_not_is_skipped():
     found = figkit.check(fig)
     plt.close(fig)
     assert len(found) == 1 and found[0].startswith("'over it' covers the marker"), found
+
+
+def test_a_label_over_a_clipped_away_marker_is_not_reported():
+    """A marker cut away by the axes limits or by a clip path draws nothing,
+    so a label over where it would be is clear; the same label over a drawn
+    marker is not."""
+    pytest.importorskip("matplotlib")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+
+    def found(clip):
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax.set_xlim(0, 100)
+        ax.set_ylim(0, 10)
+        # Just above the axes: clipped by the limits unless clipping is off.
+        (above,) = ax.plot([50], [11], "o", markersize=12, clip_on=clip)
+        ax.annotate("above", (50, 11), ha="center", va="center", annotation_clip=False)
+        # Inside the axes, but outside a small circle it is clipped to.
+        (inside,) = ax.plot([20], [5], "o", markersize=12)
+        if clip:
+            inside.set_clip_path(Circle((80, 5), 3, transform=ax.transData))
+        ax.annotate("inside", (20, 5), ha="center", va="center")
+        problems = figkit.check(fig)
+        plt.close(fig)
+        return sorted(p.split(" covers")[0] for p in problems)
+
+    assert found(clip=True) == []
+    assert found(clip=False) == ["'above'", "'inside'"]

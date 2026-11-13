@@ -120,17 +120,33 @@ def _texts(fig):
 
 
 def _clip(artist, box):
-    """box as drawn after artist's clipping: None if wholly clipped away."""
-    clip = artist.get_clip_box() if artist.get_clip_on() else None
-    if clip is None:
+    """box as drawn after artist's clipping, by its clip box and any clip
+    path (a circle, a polar axes): None if wholly clipped away. A box that
+    meets a clip path is cut to the path's extent."""
+    from matplotlib.transforms import Bbox
+
+    if not artist.get_clip_on():
         return box
-    x0, y0, x1, y1 = (
-        max(box[0], clip.x0),
-        max(box[1], clip.y0),
-        min(box[2], clip.x1),
-        min(box[3], clip.y1),
-    )
-    return (x0, y0, x1, y1) if x0 < x1 and y0 < y1 else None
+    clips = []
+    if artist.get_clip_box() is not None:
+        clips.append(artist.get_clip_box())
+    clip_path = artist.get_clip_path()
+    if clip_path is not None:
+        path, affine = clip_path.get_transformed_path_and_affine()
+        path = affine.transform_path(path)
+        if not path.intersects_bbox(Bbox.from_extents(*box), filled=True):
+            return None
+        clips.append(path.get_extents())
+    for clip in clips:
+        box = (
+            max(box[0], clip.x0),
+            max(box[1], clip.y0),
+            min(box[2], clip.x1),
+            min(box[3], clip.y1),
+        )
+        if box[0] >= box[2] or box[1] >= box[3]:
+            return None
+    return box
 
 
 def _marks(fig):
