@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check demo-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -43,6 +43,12 @@ hooks:
 # Report whether this machine can build and run the cluster (docs/cluster-vm.md).
 vm-check:
 	scripts/vm-setup.sh --check
+
+# Check the running cluster against what docs/demo.md needs: one OK, WARN or
+# FAIL line per check (scripts/demo-check.py). The system python3 runs it,
+# since it needs only the standard library.
+demo-check:
+	python3 scripts/demo-check.py
 
 # The Compose cluster (deploy/compose, docs/cluster-vm.md). Its project is
 # named mapreduce, so cluster-down removes only this project's containers.
