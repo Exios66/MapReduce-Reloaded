@@ -370,8 +370,8 @@ cut a release.
 ### Fixed
 
 - Docs: stale status lines now match the finished evaluation.
-  `docs/roadmap.md` says E0–E7 were rerun at `8f0ddb9` and that E7
-  measured LATE, not that it was "wired but not run";
+  `docs/roadmap.md` says E0–E6 were rerun and E7 run for the first time
+  at `8f0ddb9`, not that E7 was "wired but not run";
   `docs/language-choice.md` and the PR template name E0–E7; and
   `docs/evaluation.md` says E1 was not rerun with its input isolated,
   rather than not rerun at all (#362).
