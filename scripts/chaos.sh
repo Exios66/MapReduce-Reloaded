@@ -12,6 +12,8 @@
 # scripts/chaos.sh 1 SEED. SIZE (default 256 MiB) sets the input's size.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# This checkout's output volume, unless make already exported it.
+export MR_OUTPUT_VOLUME="${MR_OUTPUT_VOLUME:-$(scripts/output-volume.sh)}"
 
 runs=${1:-5}
 seed=${2:-1}

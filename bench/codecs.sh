@@ -13,6 +13,8 @@
 # since the cluster images have no shell.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# This checkout's output volume, unless make already exported it.
+export MR_OUTPUT_VOLUME="${MR_OUTPUT_VOLUME:-$(scripts/output-volume.sh)}"
 
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
 size=${SIZE:-67108864}
@@ -21,7 +23,7 @@ results=bench/results/codecs.csv
 tmp=$(mktemp -d)
 # Removes paths from the output volume; the build image is there after
 # make cluster-up.
-rm_out() { docker run --rm -v mapreduce_output:/out golang:1.26-alpine rm -rf "$@"; }
+rm_out() { docker run --rm -v "$MR_OUTPUT_VOLUME":/out golang:1.26-alpine rm -rf "$@"; }
 trap 'rm -rf "$tmp"; rm_out /out/bench-input.txt' EXIT
 
 python3 bench/gen-words.py "$size" > "$tmp/input.txt"
