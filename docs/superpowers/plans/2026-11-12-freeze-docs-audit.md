@@ -41,8 +41,10 @@ issues #347 (status 2026-11-12), #272 (freeze gate), #269, #276 item 6.
   `wall_seconds`). Overlapping ranges read "no clear difference".
 - Do not edit `docs/design/` ADRs or past `CHANGELOG.md` entries: they record
   history, not the current state.
-- No network checks inside `make check` or CI: external URLs are checked once
-  by hand, here and again at the freeze.
+- No external-link checks inside `make check` or CI: external URLs are
+  checked once by hand, here and again at the freeze. `make check` is not
+  network-free, though: its `proto-breaking` step fetches `origin/main`
+  (`PROTO_FETCH=false` turns that off).
 
 ## Scope: the consumer-facing pages
 
@@ -275,7 +277,12 @@ def test_scripts_named_with_arguments_accept_them():
   then push with `[skip ci]`, then open the PR from
   `.github/pull_request_template.md`. Put the URL audit, the numbers table
   and the commands run (Tasks 1–4) in its Verification section. Opening runs one
-  pipeline. Docs-only, so the lint job only (ADR 0025).
+  pipeline, and `.circleci/mapping.txt` picks its jobs: `lint` for any
+  Markdown or `docs/` change; both `python` jobs too when the PR changes
+  `README.md`, `docs/README.md`, `docs/ci.md`, `docs/cluster-vm.md` or a
+  test such as `docs/tests/test_references.py`; and the go job's narrow
+  mode (`go-python-test`) when it changes `README.md` or
+  `docs/paper-mapping.md`. So expect more than the lint job.
 - [ ] **Step 3:** After review, add `(#NNN)` to the bullets, merge `main`,
   run `make check`, and run `preflight.sh --final`. Then push without
   `[skip ci]`. Expected: every required check green on the head.
@@ -285,19 +292,22 @@ def test_scripts_named_with_arguments_accept_them():
 Not code: a checklist posted as a comment on #272. Each item's output is
 its evidence.
 
-- [ ] First, before choosing the freeze commit: update the merged-PR count
-  in `docs/report.md`, so the checks below cover the report as frozen.
-- [ ] At the freeze commit, from a fresh clone: run the README quick start
-  verbatim, then `make e2e`, `make py-e2e` and `make check`.
-- [ ] `make vm-check` and `make demo-check` outputs go to #272 and #276 item 6.
-- [ ] A timed rehearsal of `docs/demo.md`, and `examples/demo.ipynb` run top to bottom.
-- [ ] Click the links marked "unverified (proxy)" in Task 1 and the
-  `security/advisories/new` link while signed in.
-- [ ] Decide each open PR before the freeze:
+- [ ] Decide each open PR first, since a merge changes `main` and so the
+  commit to freeze:
   - #254 (10 GB campaign): merge or defer, per #273.
   - #339, #336, #333, #314: these conflict with `main`. Close #336 if
     superseded by ADR 0020 and #354, or rebase.
 - [ ] Close #351 with a link to #352, which fixed it.
+- [ ] Then, before choosing the freeze commit: update the merged-PR count
+  in `docs/report.md`, so the checks below cover the report as frozen.
+- [ ] At the freeze commit, from a fresh clone: run the README quick start
+  verbatim, then `make e2e`, `make py-e2e` and `make check`. If anything
+  merges into `main` after this, the new head is the freeze commit: run
+  these again on it.
+- [ ] `make vm-check` and `make demo-check` outputs go to #272 and #276 item 6.
+- [ ] A timed rehearsal of `docs/demo.md`, and `examples/demo.ipynb` run top to bottom.
+- [ ] Click the links marked "unverified (proxy)" in Task 1 and the
+  `security/advisories/new` link while signed in.
 - [ ] #269: the email, demo scheduling and end form.
 
 ## Self-review notes
