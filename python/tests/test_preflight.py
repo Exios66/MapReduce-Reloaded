@@ -68,11 +68,13 @@ def test_owner_under_any_name_and_github_web_merges_pass(branch):
         "Jack J Burleson",
         "Jack J Burleson // LJM",
         "Jack J Burleson // Lucius Morningstar",
+        "Jack | LJM",  # a name may hold the old field separator
     ]:
         commit(who=(name, OWNER[1]), by=(name, OWNER[1]))
     commit(who=("Lucius Morningstar", "148591095+Exios66@users.noreply.github.com"))
     commit(by=GITHUB)  # a merge or squash made in GitHub's web interface
     commit(who=CODERABBIT, by=CODERABBIT)
+    commit(who=CODERABBIT)  # the owner commits CodeRabbit's suggestion
     code, identity = run()
     assert code == 0, identity
     assert "  ok    commits: authored and committed by the owner" in identity
@@ -85,6 +87,7 @@ def test_owner_under_any_name_and_github_web_merges_pass(branch):
         (OWNER, AGENT),
         (AGENT, OWNER),
         (("Jack J Burleson", "someone@example.com"), OWNER),
+        (CODERABBIT, AGENT),
     ],
 )
 def test_any_other_identity_fails(branch, who, by):
