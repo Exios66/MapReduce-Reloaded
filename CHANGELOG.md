@@ -393,6 +393,14 @@ cut a release.
 
 ### Fixed
 
+- Agent tooling: `.claude/skills/saving-ci-credits/preflight.sh` knows the
+  owner by email (`exios4@protonmail.com` or the owner's GitHub no-reply
+  address), not by the exact name `Jack J Burleson`, so commits signed
+  `Jack J Burleson // LJM` and other spellings, and merges GitHub commits
+  from its web interface, no longer fail the identity check; an agent's
+  identity still does. It no longer prints the identity line as `ok` after
+  failing it. `AGENTS.md` states the rule, and `test_preflight.py` checks
+  it (#367).
 - Tests: `TestClusterBackupTasks`, `TestClusterLateBackupTasks`,
   `TestClusterStopsLosingAttempt` and `TestClusterCountersMatchLocal`
   (`go/internal/worker`) no longer fail on a loaded machine. There a

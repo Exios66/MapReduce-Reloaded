@@ -23,17 +23,33 @@ echo "preflight: $branch ($(git rev-parse --short HEAD)), $([ "$final" = true ] 
 
 if [ "$branch" != main ]; then ok "not on main"; else bad "on main: branch first; main changes only through a PR"; fi
 
-# Identity and footers (AGENTS.md "Commits and PRs").
-while IFS='|' read -r sha author committer; do
-    case "$author|$committer" in
-    "Jack J Burleson|Jack J Burleson" | "coderabbitai[bot]|"*) ;;
-    *) bad "$sha is authored by '$author', committed by '$committer'; every commit is the owner's" ;;
-    esac
-done < <(git log --format='%h|%an|%cn' "$base..HEAD")
+# Identity and footers (AGENTS.md "Commits and PRs"). The owner is known by
+# email, not by name: the same person commits as "Jack J Burleson", "Jack J
+# Burleson // LJM" and other spellings, and through GitHub's no-reply address.
+# GitHub itself commits a merge or squash made in its web interface; the
+# author is still checked. CodeRabbit is the accepted contributor: it may
+# author a commit, which it, the owner or GitHub commits. Fields are
+# NUL-separated, since a name may contain any other character.
+owner_emails=" exios4@protonmail.com 148591095+Exios66@users.noreply.github.com "
+coderabbit="136622811+coderabbitai[bot]@users.noreply.github.com"
+owner() { [[ "$owner_emails" == *" $1 "* ]]; }
+identity_ok=true
+while IFS= read -r -d '' sha && IFS= read -r -d '' author && IFS= read -r -d '' author_email &&
+    IFS= read -r -d '' committer && IFS= read -r -d '' committer_email; do
+    sha=${sha#$'\n'}
+    if { owner "$author_email" || [ "$author_email" = "$coderabbit" ]; } &&
+        { owner "$committer_email" || [ "$committer_email" = noreply@github.com ] ||
+            { [ "$author_email" = "$coderabbit" ] && [ "$committer_email" = "$coderabbit" ]; }; }; then
+        continue
+    fi
+    bad "$sha is authored by '$author <$author_email>', committed by '$committer <$committer_email>'; every commit is the owner's"
+    identity_ok=false
+done < <(git log --format='%h%x00%an%x00%ae%x00%cn%x00%ce%x00' "$base..HEAD")
+[ "$identity_ok" = true ] && ok "commits: authored and committed by the owner"
 if git log --format=%B "$base..HEAD" | grep -qiE '^(Co-Authored-By:|.*Generated with)'; then
     bad "a commit carries a Co-Authored-By or 'Generated with' line"
 else
-    ok "commits: owner identity, no attribution footers"
+    ok "commits: no attribution footers"
 fi
 
 # Which jobs the change implicates (docs/ci.md, ADR 0020).

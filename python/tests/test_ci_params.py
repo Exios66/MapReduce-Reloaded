@@ -92,6 +92,7 @@ def test_a_change_runs_its_own_job(path, want):
         (".githooks/pre-push", "run-sh-lint"),
         (".githooks/pre-push", "run-python"),
         (".claude/skills/saving-ci-credits/preflight.sh", "run-sh-lint"),
+        (".claude/skills/saving-ci-credits/preflight.sh", "run-python"),
         # The documentation tests run in the lint job and read these.
         ("go/examples/grep/grep.go", "run-lint"),
         ("deploy/compose/compose.yaml", "run-lint"),
