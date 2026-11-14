@@ -177,7 +177,10 @@ cut a release.
   `scripts/{chaos,e2e,soak}.sh` run it. Compose stops if the name is unset
   rather than share a volume. Containers are still shared, so one
   checkout's cluster runs at a time, and the old `mapreduce_output` is left
-  for its owner to remove (`docs/docker-topology.md`) (#365).
+  for its owner to remove (`docs/docker-topology.md`). `make cluster-down`
+  now keeps the volumes, so the write-ahead log and the demo's and
+  experiments' data survive a shutdown; the new `make cluster-clean` also
+  deletes them, as `cluster-down` used to (#365).
 - Notebook: `examples/demo.ipynb` explains more as it runs, for the demo.
   The introduction sketches how the client, coordinator and workers fit
   together. Section 2 lists the workers as the coordinator sees them, with

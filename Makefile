@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check demo-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check demo-check data mr upload-example cluster-up cluster-down cluster-clean clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -89,7 +89,13 @@ upload-example: data mr
 cluster-up: data
 	$(COMPOSE) up -d --build
 
+# cluster-down keeps the volumes: this checkout's output volume (the
+# write-ahead log and the experiments' data) and s3-output. The next
+# cluster-up replays the log. cluster-clean deletes them as well.
 cluster-down:
+	$(COMPOSE) --profile monitoring --profile s3 down --remove-orphans
+
+cluster-clean:
 	$(COMPOSE) --profile monitoring --profile s3 down -v --remove-orphans
 
 # Select completed job directory names explicitly, e.g.

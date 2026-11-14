@@ -249,9 +249,12 @@ About five minutes.
 make cluster-down
 ```
 
-This removes only this project's containers and its `output` and
-`s3-output` volumes, with the experiments' inputs and outputs. It never
-touches other coursework containers, and it keeps `data/`: job output in
+This removes only this project's containers. It keeps this checkout's
+`output` volume (the write-ahead log and the experiments' inputs and
+outputs) and `s3-output`, so the next `make cluster-up` knows the old jobs.
+`make cluster-clean` does the same and also deletes those volumes; copy out
+anything in `/out` you need first. Neither touches other coursework
+containers, and both keep `data/`: job output in
 `data/out/` and inputs in `data/input/` are yours to delete with `rm -r`,
 for example `rm -r data/out/sort-kill-* data/input/sort-1g.txt`. Delete old
 `bench/results/` directories as you go to keep disk free. To drop old
@@ -269,6 +272,6 @@ write-ahead log, and all unselected directories are preserved.
 | `ssh: Could not resolve hostname` or a timeout | Connect to the VPN |
 | A container exits with `OOMKilled` | Check `free -m`; stop other coursework containers, or skip the monitoring profile |
 | `shared storage data is not a directory` | Run `bin/mr` from the repository root, after `make cluster-up` |
-| `no space left on device` | `rm -r data/out/<old jobs>`; `make clean-output CLEAN_OUTPUTS='completed-directory'`; if that is not enough, `make cluster-down`, delete `bench/results/*`, then `docker image prune` |
+| `no space left on device` | `rm -r data/out/<old jobs>`; `make clean-output CLEAN_OUTPUTS='completed-directory'`; if that is not enough, `make cluster-clean` (it deletes the output volume), delete `bench/results/*`, then `docker image prune` |
 | A worker logs `disk nearly full; not taking tasks` | Free space as above; the worker resumes by itself |
 | The status page does not load on the laptop | Reconnect with the `-L 18780:...` forward from step 1 |

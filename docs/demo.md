@@ -190,8 +190,9 @@ Each answer has a command or a page to show.
   `docker logs mapreduce-coordinator-1` and the workers' logs say why.
 - The status page shows fewer than four live workers after a step:
   `docker compose -p mapreduce -f deploy/compose/compose.yaml up -d worker`.
-- Disk: `df -h /`; the experiments' inputs and outputs live in the Compose
-  `output` volume, and `make cluster-down` removes it.
+- Disk: `df -h /`; the experiments' inputs and outputs live in this
+  checkout's Compose `output` volume. `make cluster-down` keeps it;
+  `make cluster-clean` deletes it, so copy out anything you need first.
 
 ## Recording the README GIFs
 

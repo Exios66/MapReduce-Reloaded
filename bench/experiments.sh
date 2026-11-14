@@ -46,7 +46,7 @@
 # The inputs stay in the output volume at /out/exp-input-PROGRAM-SIZE.txt
 # (-SIZE-S.txt for word count's Zipf exponent S, -SIZE-TEXT.txt for E6's
 # book, crawl and crawl-eng) between
-# experiments, and make cluster-down removes them.
+# experiments; make cluster-down keeps them and make cluster-clean removes them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # This checkout's output volume, unless make already exported it.

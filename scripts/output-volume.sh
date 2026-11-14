@@ -5,7 +5,7 @@
 # all mount the same volume.
 #
 # Every checkout on a machine shares the Compose project `mapreduce`, so a
-# volume named after the project would be shared too, and `make cluster-down`
+# volume named after the project would be shared too, and `make cluster-clean`
 # (down -v) in any checkout would delete another's write-ahead log and
 # experiments. The name is the checkout's directory name and a hash of its
 # path instead: stable for one checkout, different for two. A checkout that
