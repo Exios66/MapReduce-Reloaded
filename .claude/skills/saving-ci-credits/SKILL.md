@@ -14,7 +14,7 @@ bash .claude/skills/saving-ci-credits/preflight.sh          # an in-progress pus
 bash .claude/skills/saving-ci-credits/preflight.sh --final  # the one push that runs CI
 ```
 
-It checks the owner identity and the absence of attribution footers, lists the jobs the diff implicates (`scripts/ci-params.py`), checks the CHANGELOG bullet and its `(#NNN)`, how far the branch is behind `origin/main`, and whether the head's `[skip ci]` matches the kind of push. Exit 1 means do not push yet.
+It checks that every commit is the owner's, by email (AGENTS.md "Commits and PRs"), and the absence of attribution footers, lists the jobs the diff implicates (`scripts/ci-params.py`), checks the CHANGELOG bullet and its `(#NNN)`, how far the branch is behind `origin/main`, and whether the head's `[skip ci]` matches the kind of push. Exit 1 means do not push yet.
 
 ## Which push is which
 

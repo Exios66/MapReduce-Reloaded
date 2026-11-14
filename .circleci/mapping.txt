@@ -70,6 +70,8 @@
 # Files outside python/ that the Python tests read.
 # test_pre_push.py runs the pre-push hook.
 ^\.githooks/pre-push$ run-python
+# test_preflight.py runs the preflight script.
+^\.claude/skills/saving-ci-credits/preflight\.sh$ run-python
 # A plot test reads the bundled fonts' licence.
 ^bench/fonts/ run-python
 ^README\.md$ run-python
