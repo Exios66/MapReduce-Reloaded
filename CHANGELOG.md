@@ -394,10 +394,11 @@ cut a release.
 ### Fixed
 
 - Docs: `docs/demo.md`'s notebook step now says to install the `notebook`
-  pip extra (`make venv` leaves out matplotlib), the README states that
-  `make cluster-down` also removes the network and the WAL/log volume, and
-  the freeze audit plan records that its checklist landed in #352, #362,
-  #363 and #364 and that the VM runbook had its first run (#368).
+  pip extra into a venv `make venv` creates if absent (`make venv` leaves
+  out matplotlib), the README states that `make cluster-down` also removes
+  the network and the named volumes, and the freeze audit plan records that
+  its checklist landed in #352, #362, #363 and #364 and that the VM runbook
+  had its first run (#368).
 - Agent tooling: `.claude/skills/saving-ci-credits/preflight.sh` knows the
   owner by email (`exios4@protonmail.com` or the owner's GitHub no-reply
   address), not by the exact name `Jack J Burleson`, so commits signed
