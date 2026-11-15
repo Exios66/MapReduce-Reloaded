@@ -109,6 +109,20 @@ def test_setup_clears_what_an_interrupted_run_left():
         assert "data/out/notebook-" in assignment, assignment
 
 
+def test_setup_refuses_a_bare_or_stale_checkout():
+    """§1 checks that the checkout is a work tree on main, current with
+    origin/main, and says what to do otherwise."""
+    source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
+    for pattern in (
+        "--is-inside-work-tree",
+        "a bare copy cannot run the demo",
+        "the demo runs from main",
+        "HEAD..origin/main",
+        "restart the kernel and run again",
+    ):
+        assert pattern in source, pattern
+
+
 def test_cleanup_removes_only_what_earlier_sections_defined():
     """The last cell runs even when a section before it was skipped, and
     removes the path of the one section that did run."""
