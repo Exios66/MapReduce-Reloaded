@@ -31,12 +31,12 @@ ssh -L 8888:127.0.0.1:8888 -L 18780:127.0.0.1:18780 -L 13000:127.0.0.1:13000 mr-
 
 ## 2. One-time setup on the VM
 
-Skip this section if `~/MapReduce-Reloaded` already exists.
+Skip this section if `~/mr-checkout` already exists.
 
 ```sh
 sudo apt-get install -y make gcc             # not on the VM by default; gcc is for go test -race
-git clone https://github.com/Exios66/MapReduce-Reloaded.git
-cd MapReduce-Reloaded
+git clone https://github.com/Exios66/MapReduce-Reloaded.git ~/mr-checkout
+cd ~/mr-checkout
 scripts/vm-setup.sh --install                # Go, the Python venv, golangci-lint, shellcheck, buf
 echo 'export PATH="$HOME/.local/go/bin:$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
@@ -49,7 +49,7 @@ No reboot is needed after installing `make` or Go.
 ## 3. Start of every session
 
 ```sh
-cd ~/MapReduce-Reloaded
+cd ~/mr-checkout
 git pull
 scripts/vm-setup.sh          # checks memory and disk too; read any WARN lines
 free -m && df -h /           # other coursework shares the VM
