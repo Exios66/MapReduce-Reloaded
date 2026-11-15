@@ -3,15 +3,22 @@
 import ast
 import json
 import re
+import shutil
 from pathlib import Path
+from tempfile import mkdtemp
 
 NOTEBOOK = Path(__file__).resolve().parents[2] / "examples" / "demo.ipynb"
 
 
 def cells():
-    """The notebook's cells, after checking its nbformat version."""
+    """The notebook's cells, after checking its nbformat version. A source
+    saved as a list of lines is joined, so a Jupyter or VS Code save keeps
+    the tests working."""
     document = json.loads(NOTEBOOK.read_text())
     assert document["nbformat"] == 4
+    for cell in document["cells"]:
+        if isinstance(cell["source"], list):
+            cell["source"] = "".join(cell["source"])
     return document["cells"]
 
 
@@ -100,6 +107,50 @@ def test_setup_clears_what_an_interrupted_run_left():
             line for s in code for line in s.splitlines() if line.startswith(f"{name} = ")
         )
         assert "data/out/notebook-" in assignment, assignment
+
+
+def test_setup_refuses_a_bare_or_stale_checkout():
+    """§1 checks that the checkout is a work tree on main, current with
+    origin/main, and says what to do otherwise."""
+    source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
+    for pattern in (
+        "--is-inside-work-tree",
+        "a bare copy cannot run the demo",
+        "the demo runs from main",
+        "HEAD..origin/main",
+        "restart the kernel and run again",
+    ):
+        assert pattern in source, pattern
+
+
+def test_setup_defines_run_before_the_checkout_checks_use_it():
+    """The checkout checks call run(); the def must come first in execution
+    order, or a fresh kernel raises NameError."""
+    source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
+    tree = ast.parse(source)
+    defined = min(
+        n.lineno for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "run"
+    )
+    used = min(
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and any(
+            isinstance(a, ast.Constant) and a.value == "--is-inside-work-tree" for a in ast.walk(n)
+        )
+    )
+    assert defined < used, "run() is used before it is defined in the setup cell"
+
+
+def test_cleanup_removes_only_what_earlier_sections_defined():
+    """The last cell runs even when a section before it was skipped, and
+    removes the path of the one section that did run."""
+    code = next(c["source"] for c in cells() if "removed this run" in c["source"])
+    root = Path(mkdtemp())
+    exec(code, {"shutil": shutil, "ROOT": root})  # no section ran: no NameError
+    (root / "data/out/notebook-x").mkdir(parents=True)
+    exec(code, {"shutil": shutil, "ROOT": root, "WC": "/data/out/notebook-x"})
+    assert not (root / "data/out/notebook-x").exists()
 
 
 def test_every_cell_has_a_unique_id():

@@ -22,11 +22,11 @@ Host mr-vm
     User <your-username>
 ```
 
-Then connect, forwarding the status page (18780) and Grafana (13000) so
-they open in your laptop's browser:
+Then connect, forwarding Jupyter (8888), the status page (18780) and
+Grafana (13000) so they open in your laptop's browser:
 
 ```sh
-ssh -L 18780:127.0.0.1:18780 -L 13000:127.0.0.1:13000 mr-vm
+ssh -L 8888:127.0.0.1:8888 -L 18780:127.0.0.1:18780 -L 13000:127.0.0.1:13000 mr-vm
 ```
 
 ## 2. One-time setup on the VM
