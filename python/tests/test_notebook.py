@@ -123,6 +123,25 @@ def test_setup_refuses_a_bare_or_stale_checkout():
         assert pattern in source, pattern
 
 
+def test_setup_defines_run_before_the_checkout_checks_use_it():
+    """The checkout checks call run(); the def must come first in execution
+    order, or a fresh kernel raises NameError."""
+    source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
+    tree = ast.parse(source)
+    defined = min(
+        n.lineno for n in ast.walk(tree)
+        if isinstance(n, ast.FunctionDef) and n.name == "run"
+    )
+    used = min(
+        n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
+        and any(
+            isinstance(a, ast.Constant) and a.value == "--is-inside-work-tree"
+            for a in ast.walk(n)
+        )
+    )
+    assert defined < used, "run() is used before it is defined in the setup cell"
+
+
 def test_cleanup_removes_only_what_earlier_sections_defined():
     """The last cell runs even when a section before it was skipped, and
     removes the path of the one section that did run."""
