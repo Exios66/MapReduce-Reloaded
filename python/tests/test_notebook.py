@@ -129,14 +129,14 @@ def test_setup_defines_run_before_the_checkout_checks_use_it():
     source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
     tree = ast.parse(source)
     defined = min(
-        n.lineno for n in ast.walk(tree)
-        if isinstance(n, ast.FunctionDef) and n.name == "run"
+        n.lineno for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "run"
     )
     used = min(
-        n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
         and any(
-            isinstance(a, ast.Constant) and a.value == "--is-inside-work-tree"
-            for a in ast.walk(n)
+            isinstance(a, ast.Constant) and a.value == "--is-inside-work-tree" for a in ast.walk(n)
         )
     )
     assert defined < used, "run() is used before it is defined in the setup cell"
