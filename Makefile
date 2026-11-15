@@ -2,7 +2,7 @@
 # every linter and test, and the pre-push hook runs it before each push.
 # (See docs/design/0002-local-quality-gate.md.)
 
-.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check demo-check data mr upload-example cluster-up cluster-down clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
+.PHONY: all check venv flaky fuzz mutate mutate-py hooks vm-check demo-check data mr upload-example cluster-up cluster-down cluster-clean clean-output monitoring-up e2e e2e-s3 soak chaos bench bench-codecs perf cover tools proto proto-lint proto-breaking proto-check test lint fmt ci-report go-test go-test-race go-test-cover go-python-test go-lint py-test py-lint py-e2e sh-lint md-lint docs-test figures-check real-data
 
 # Python interpreter. Use the project venv (make venv) when it exists, since
 # the system python3 usually lacks the dev tools (grpcio-tools, ruff, pytest).
@@ -64,6 +64,9 @@ demo-check:
 # The Compose cluster (deploy/compose, docs/cluster-vm.md). Its project is
 # named mapreduce, so cluster-down removes only this project's containers.
 COMPOSE = docker compose -p mapreduce -f deploy/compose/compose.yaml
+# This checkout's output volume (scripts/output-volume.sh), exported to every
+# recipe; the script also writes deploy/compose/.env for direct Compose calls.
+export MR_OUTPUT_VOLUME := $(shell scripts/output-volume.sh)
 
 # The shared storage mounted at /data in every container (ADR 0016).
 # Distroless workers run as UID 65532 and need to write output here.
@@ -97,7 +100,13 @@ upload-example: data mr
 cluster-up: data
 	$(COMPOSE) up -d --build
 
+# cluster-down keeps the volumes: this checkout's output volume (the
+# write-ahead log and the experiments' data) and s3-output. The next
+# cluster-up replays the log. cluster-clean deletes them as well.
 cluster-down:
+	$(COMPOSE) --profile monitoring --profile s3 down --remove-orphans
+
+cluster-clean:
 	$(COMPOSE) --profile monitoring --profile s3 down -v --remove-orphans
 
 # Select completed job directory names explicitly, e.g.
@@ -106,7 +115,7 @@ cluster-down:
 export CLEAN_OUTPUTS
 clean-output:
 	@test -n "$$CLEAN_OUTPUTS" || { echo 'select completed output directories with CLEAN_OUTPUTS' >&2; exit 1; }
-	set -f; docker run --rm -v mapreduce_output:/out golang:1.26-alpine \
+	set -f; docker run --rm -v "$$MR_OUTPUT_VOLUME":/out golang:1.26-alpine \
 		sh -eu -c 'for name do case "$$name" in \
 			wal|exp-input-*|sort-1g.txt|*[!a-zA-Z0-9_.-]*|""|.|..|[-_]*) echo "invalid output directory: $$name" >&2; exit 1;; \
 		esac; done; for name do find /out -mindepth 1 -maxdepth 1 -type d -name "$$name" -exec rm -rf {} +; done' \
@@ -203,7 +212,7 @@ md-lint:
 docs-test:
 	$(PYTHON) -m pytest -q -p no:cacheprovider docs/tests
 
-# Redraws the evaluation figures from bench/evaluation/rerun-8f0ddb9/archives
+# Redraws the evaluation figures from the archives in bench/evaluation/raw
 # and compares each with the committed PNG (scripts/check-figures.py). It
 # needs matplotlib, which make venv does not install, so make check does not
 # run it: PLOT_PYTHON names a Python that has it, on the experiment VM.

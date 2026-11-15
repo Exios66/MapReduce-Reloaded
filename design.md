@@ -297,7 +297,7 @@ words, so any exponent works, 0.5 included.
 
 The plots and their tables are in
 [`bench/README.md`](bench/README.md#evaluation-e0e7), with the commands that
-made them; the data is in `bench/evaluation/rerun-8f0ddb9/`. What they showed
+made them; the data is in `bench/evaluation/`. What they showed
 (course VM, every experiment at commit `8f0ddb9` but E0, rerun at `3a907de`,
 which adds only input isolation; five runs per setting taken in turn): every run succeeded, and each disturbed run's output checksum
 matched its experiment's first undisturbed run. E0 scaled 3.7× on four

@@ -9,6 +9,8 @@
 # it, so delete data/input/ by hand to free the disk. Size and workers can be overridden: SIZE=... WORKERS=... make soak.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# This checkout's output volume, unless make already exported it.
+export MR_OUTPUT_VOLUME="${MR_OUTPUT_VOLUME:-$(scripts/output-volume.sh)}"
 
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml -f deploy/compose/soak.yaml)
 size=${SIZE:-1073741824}

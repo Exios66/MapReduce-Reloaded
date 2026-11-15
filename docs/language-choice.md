@@ -100,7 +100,7 @@ claims it does.
 
 ### Garbage collection
 
-Garbage collection is **not measured separately** in E0 to E6. No
+Garbage collection is **not measured separately** in E0 to E7. No
 experiment turns it off, changes its settings or reports pause times. Its CPU
 time is charged to the same one-CPU quota as the tasks, so it is inside
 every worker number on this page, and its share is unknown.

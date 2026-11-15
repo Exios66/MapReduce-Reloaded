@@ -45,7 +45,7 @@ Titles are computed from the CSVs; check each against interpreting-bench-results
 make figures-check PLOT_PYTHON=/tmp/plotvenv/bin/python
 ```
 
-It checks the archives in `bench/evaluation/rerun-8f0ddb9/archives/` against their `SHA256SUMS`, unpacks them into a new temporary directory, redraws every figure and compares each with the committed PNG pixel by pixel (`scripts/check-figures.py`). A figure that differs was drawn from other data or by another version of the plot script: redraw and commit it, or find out why.
+It checks the archives in `bench/evaluation/raw/` against their `SHA256SUMS`, unpacks them into a new temporary directory, redraws every figure and compares each with the committed PNG pixel by pixel (`scripts/check-figures.py`). A figure that differs was drawn from other data or by another version of the plot script: redraw and commit it, or find out why.
 
 ## Common mistakes
 

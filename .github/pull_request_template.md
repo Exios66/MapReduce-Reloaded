@@ -26,7 +26,7 @@ Touched areas:
 - Related issues:
 - Roadmap phase:
 - Paper features (F1–F24):
-- Experiments (E0–E6):
+- Experiments (E0–E7):
 - Design docs (ADRs):
 - Course deliverable (design.md / demo / freeze):
 

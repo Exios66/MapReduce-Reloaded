@@ -218,6 +218,14 @@ func newCluster(t *testing.T, configure ...func(*coordinator.Config)) *cluster {
 	return c
 }
 
+// steadyWorkers is for tests in which no worker dies, so none may be
+// declared dead. Under load, a live worker's heartbeat can come later than the
+// cluster's 100ms timeout, and the coordinator then resets its tasks and runs
+// them again elsewhere, which changes what such tests assert. 5s is far above
+// such pauses, yet a worker that truly stalls is still recovered well within
+// the cluster's 30s deadline. Tests that kill workers keep the short timeout.
+func steadyWorkers(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second }
+
 // start starts the coordinator from its log, on c.addr once it has one.
 func (c *cluster) start() {
 	srv, log, err := coordinator.Recover(c.cfg, filepath.Join(c.workDir, "coordinator.log"))
@@ -332,7 +340,7 @@ func runJob(t *testing.T, program string, n int) (*cluster, string, *pb.GetJobSt
 	t.Helper()
 	// A late heartbeat on a loaded CI runner must not lose the worker, or
 	// its re-registration changes the counts the tests assert.
-	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second })
+	c := newCluster(t, steadyWorkers)
 	job := c.submit(program)
 	for range n {
 		c.addWorker()
@@ -425,12 +433,9 @@ func TestClusterSkipsBadRecords(t *testing.T) {
 // The cluster's map output is byte for byte what local mode writes for the
 // same splits, however the tasks were spread over the workers.
 func TestClusterMapOutputMatchesLocal(t *testing.T) {
-	// No worker dies here, so none may be declared dead: under load the
-	// cluster's 100ms timeout can expire a live worker, and the map task run
-	// again on another leaves a second copy of its output (CircleCI job 172).
-	// 5s is far above such pauses, yet a worker that truly stalls is still
-	// recovered well within the cluster's 30s deadline.
-	c := newCluster(t, func(cfg *coordinator.Config) { cfg.WorkerTimeout = 5 * time.Second })
+	// A worker declared dead would have its map task run again on another,
+	// leaving a second copy of its output (CircleCI job 172).
+	c := newCluster(t, steadyWorkers)
 	c.keep = true
 	job := c.submit("wordcount")
 	for range 3 {
@@ -445,7 +450,7 @@ func TestClusterMapOutputMatchesLocal(t *testing.T) {
 // backup that wins and an attempt that fails late, they match local mode
 // (§4.9).
 func TestClusterCountersMatchLocal(t *testing.T) {
-	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Backups = true })
+	c := newCluster(t, steadyWorkers, func(cfg *coordinator.Config) { cfg.Backups = true })
 	job := c.submit("test.pause-map")
 	c.addWorker()
 	c.addWorker()
@@ -513,7 +518,11 @@ func TestClusterSurvivesWorkerLoss(t *testing.T) {
 func TestClusterBackupTasks(t *testing.T) {
 	for program, stuck := range map[string]chan struct{}{"test.pause-map": mapStuck, "test.pause-reduce": reduceStuck} {
 		t.Run(program, func(t *testing.T) {
-			c := newCluster(t, func(cfg *coordinator.Config) { cfg.Backups = true })
+			// The slow attempt must still be running when its backup wins.
+			// Were its worker declared dead, the coordinator would reset
+			// the task and run it again as an ordinary attempt, and no
+			// backup would win.
+			c := newCluster(t, steadyWorkers, func(cfg *coordinator.Config) { cfg.Backups = true })
 			job := c.submit(program)
 			c.addWorker()
 			c.addWorker()
@@ -533,7 +542,7 @@ func TestClusterBackupTasks(t *testing.T) {
 // a worker with nothing else to do, which finishes it while the slow attempt
 // is still running.
 func TestClusterLateBackupTasks(t *testing.T) {
-	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Speculation = coordinator.SpeculationLate })
+	c := newCluster(t, steadyWorkers, func(cfg *coordinator.Config) { cfg.Speculation = coordinator.SpeculationLate })
 	job := c.submit("test.slow-map")
 	c.addWorker()
 	<-mapStuck
@@ -549,7 +558,7 @@ func TestClusterLateBackupTasks(t *testing.T) {
 // The losing attempt of a backed-up task is stopped once its twin finishes
 // (§3.6), so its worker is free again and exits when the job ends.
 func TestClusterStopsLosingAttempt(t *testing.T) {
-	c := newCluster(t, func(cfg *coordinator.Config) { cfg.Backups = true })
+	c := newCluster(t, steadyWorkers, func(cfg *coordinator.Config) { cfg.Backups = true })
 	job := c.submit("test.slow-map")
 	c.addWorker()
 	<-mapStuck

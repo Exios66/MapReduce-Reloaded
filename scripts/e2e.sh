@@ -12,6 +12,8 @@
 # must still report the job SUCCEEDED, read back from its write-ahead log.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# This checkout's output volume, unless make already exported it.
+export MR_OUTPUT_VOLUME="${MR_OUTPUT_VOLUME:-$(scripts/output-volume.sh)}"
 
 compose=(docker compose -p mapreduce -f deploy/compose/compose.yaml)
 name=e2e-$(date +%s)

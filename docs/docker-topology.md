@@ -224,8 +224,28 @@ Rules behind the table:
 |---|---|---|---|---|
 | `../../data` | bind mount of the repository's `data/` | `/data` in the coordinator, workers and `mr` | Job input and output: the shared storage | yes |
 | `../../testdata/corpus` | bind mount, read-only | `/corpus` in the same three; `/data/corpus` in `s3` | The four-book test corpus | yes: it is in the repository |
-| `output` | named volume, `mapreduce_output` | `/out` in the same three | The write-ahead log at `/out/wal`; the experiments' inputs and outputs | no |
-| `s3-output` | named volume, `mapreduce_s3-output` | `/data/out` in `s3` | Job output written as `s3://out/...` | no |
+| `output` | named volume, one per checkout: `mapreduce_output_<directory>_<hash>` | `/out` in the same three | The write-ahead log at `/out/wal`; the experiments' inputs and outputs | yes; `make cluster-clean` deletes it |
+| `s3-output` | named volume, `mapreduce_s3-output` | `/data/out` in `s3` | Job output written as `s3://out/...` | yes; `make cluster-clean` deletes it |
+
+The `output` volume belongs to one checkout, not to the project. Every
+checkout on a machine uses the project name `mapreduce`, so a volume named
+after the project would be shared: one checkout's cluster would replay
+another's write-ahead log, and `make cluster-clean` in any of them would
+delete the others' experiments. `scripts/output-volume.sh` names the volume
+after the checkout's directory and a hash of its path, and writes the name
+to `deploy/compose/.env` (ignored by git), which every `docker compose -f
+deploy/compose/compose.yaml` command reads, including the notebook's and
+ones typed by hand. Make and the bench scripts run it for you. Without the
+name, Compose stops with an error instead of falling back to a shared
+volume.
+
+Still shared between checkouts: the project's containers and network, so
+only one checkout's cluster runs at a time, and `make cluster-down` in one
+removes another's containers (never its volume); and the `s3` profile's
+`mapreduce_s3-output`, which any checkout's `make cluster-clean` deletes. Moving a checkout gives it a new, empty volume.
+Earlier versions named the volume `mapreduce_output`; nothing mounts or
+deletes that volume now. Remove it yourself, with `docker volume rm
+mapreduce_output`, once nothing in it is needed.
 
 ### Why each mount
 
@@ -248,12 +268,14 @@ Rules behind the table:
   and needs no host access. Each directory in the store's `/data` is a
   bucket: `corpus` and `out` ([ADR 0013](design/0013-commit-on-object-storage.md)).
 
-### The write-ahead log and `cluster-down`
+### The write-ahead log, `cluster-down` and `cluster-clean`
 
 The coordinator logs every decision to `/out/wal` before it replies. A
 restart replays the log and resumes the job. The log lives in the `output`
-volume, and `make cluster-down` runs `docker compose ... down -v`, which
-deletes named volumes. So `cluster-down` deletes the log, and the next
+volume. `make cluster-down` runs `docker compose ... down` without `-v`, so
+it keeps the volume, and the next `cluster-up` replays the log and knows the
+old jobs. `make cluster-clean` runs `down -v`, which deletes named volumes:
+the log, the experiments' inputs and outputs, and `s3-output`, so the next
 `cluster-up` starts with no memory of old jobs. `data/` is kept: its job
 output and input are yours to delete ([runbook](runbook.md#6-shut-down)).
 Prometheus's samples have no volume named in the Compose file, so they go
@@ -295,7 +317,7 @@ reducers read from the machine that did the map. Three consequences:
 | Metrics storage | Prometheus `--storage.tsdb.retention.size=512MB` | The default retention | It is a target, not a hard limit: the write-ahead log and head chunks can exceed it, so leave extra space | [ADR 0017](design/0017-disk-and-memory-bounds.md); Compose comment |
 | Optional services | Profiles `tools`, `s3` and `monitoring`, all off by default | Always on | The core cluster is 3.3 GB of the VM's 8 GB. Everything together is 4.2 GB, leaving about 3.8 GB | [Cluster VM](cluster-vm.md#memory-budget) |
 | Ports | Published on `127.0.0.1` in the 18xxx range | All interfaces; common ports | The RPCs are unauthenticated, and the VM is shared | [ADR 0018](design/0018-trust-model.md) |
-| Project name | `mapreduce` | The directory name | `make cluster-down` removes only this project's containers, networks and volumes | [Cluster VM](cluster-vm.md#living-alongside-other-coursework) |
+| Project name | `mapreduce` | The directory name | `make cluster-down` and `make cluster-clean` remove only this project's containers and networks, and `cluster-clean` its volumes | [Cluster VM](cluster-vm.md#living-alongside-other-coursework) |
 | Intermediate data | On each worker, fetched over gRPC | A shared volume | It is the paper's design, and the coordinator stays free of data | [ADR 0008](design/0008-shuffle.md) |
 
 ## 6. Build and lifecycle
@@ -327,7 +349,8 @@ final stage's layers end up in the image: the compiler stays in `build`.
 | `make e2e` | `cluster-up`, then `make mr` (builds the host client `bin/mr`), then `scripts/e2e.sh`. The script checks that the image runs as a non-root user and that `coordinator`, `worker` and `mr status` print usage; uploads the corpus; submits word count with `bin/mr` (M = 7, R = 4); checks that no container was OOM-killed; compares the output with the golden files and deletes it; checks the coordinator's `/metrics` for 4 completed reduce tasks; starts Prometheus and queries it for the job's series; then kills the coordinator with `docker kill`, starts it, and checks the job still reports `SUCCEEDED` |
 | `make monitoring-up` | `up -d prometheus grafana` with the `monitoring` profile on |
 | `make e2e-s3` | `cluster-up`, starts `s3` with `--wait`, runs `scripts/e2e.sh s3` (the job is submitted from the `mr` container, with `s3://` input and output), then a Go storage test against `127.0.0.1:18790` |
-| `make cluster-down` | `docker compose ... --profile monitoring --profile s3 down -v --remove-orphans`: removes this project's containers and network, and its named volumes. It keeps `data/` and the built image |
+| `make cluster-down` | `docker compose ... --profile monitoring --profile s3 down --remove-orphans`: removes this project's containers and network. It keeps the named volumes, `data/` and the built image |
+| `make cluster-clean` | The same with `-v`: also deletes this checkout's `output` volume and `s3-output`, with the write-ahead log and the experiments' data. It keeps `data/` and the built image |
 
 The script and the Makefile are the source; read them before relying on a
 detail here.
@@ -348,7 +371,7 @@ $COMPOSE ps                  # which services are running, with their ports
 # ... workers 2 to 4
 
 docker stats --no-stream     # memory and CPU against each limit
-docker volume ls --filter name=mapreduce      # mapreduce_output, and mapreduce_s3-output if s3 ran
+docker volume ls --filter name=mapreduce      # each checkout's mapreduce_output_<directory>_<hash>, and mapreduce_s3-output if s3 ran
 docker network inspect mapreduce_default      # who is on the network, and their addresses
 docker image inspect --format '{{.Config.User}}' mapreduce-reloaded   # a non-root user
 $COMPOSE logs coordinator    # the coordinator's log, newest last
@@ -368,7 +391,7 @@ the status page and `/metrics` instead.
 | `bin/mr` cannot connect to the coordinator, or reports it unavailable | The cluster is not running, or the coordinator exited. Or you ran `mr` inside a container with the host address: there, `127.0.0.1` is the container | On the host: `$COMPOSE ps`, then `make cluster-up`. In a container: `-coordinator coordinator:7070` |
 | Prometheus, Grafana or the `s3` store is missing from `docker compose ps` | They have profiles, which are off by default. This is by design | `make monitoring-up` for the first two; `$COMPOSE --profile s3 up -d --wait s3` for the store. `run --rm mr` works without a profile flag |
 | A job fails with `permission denied` under `/data/out`, or you cannot delete its output | `data/` was created by Docker as root, because the cluster was started with a bare `docker compose up`, which skips `make data` | Remove or `chown` the root-owned `data/` with `sudo`, then run `make cluster-up` |
-| After `make cluster-down` and `make cluster-up`, `mr status job-1` does not know the job | `cluster-down` deletes the `output` volume, and the write-ahead log with it. Files under `data/` are still there | Expected. Keep `data/out/...` output you need; do not expect job history across `cluster-down` |
+| After `make cluster-clean` and `make cluster-up`, `mr status job-1` does not know the job | `cluster-clean` deletes the `output` volume, and the write-ahead log with it. Files under `data/` are still there | Expected. Keep `data/out/...` output you need; use `make cluster-down` to keep job history |
 | You changed Go code and the cluster behaves as before | The containers still run the old image | `make cluster-up`: it rebuilds the image and recreates containers whose image changed. A change to a job file needs no rebuild, since `mr submit` sends the source with the job |
 
 ## 8. Learning checklist
@@ -381,7 +404,7 @@ You understand this setup when you can do each of these:
 - [ ] Say what `127.0.0.1` means in a container and on the host.
 - [ ] Say which of `/data`, `/corpus` and `/out` is a bind mount and which
   a named volume, and why `/out` is the named one.
-- [ ] Explain what `make cluster-down` deletes and what it keeps.
+- [ ] Explain what `make cluster-down` and `make cluster-clean` delete and what they keep.
 - [ ] Explain why map output is on no volume, and where it goes.
 - [ ] Name the three profiles and start one.
 - [ ] Read `docker stats` against the memory table in section 2.
@@ -406,7 +429,7 @@ Official pages, each with what it explains about this setup.
 - [Build cache](https://docs.docker.com/build/cache/): why `go mod download`
   comes before the source copy.
 - [Volumes](https://docs.docker.com/engine/storage/volumes/): the `output`
-  and `s3-output` volumes, and why `down -v` deletes them.
+  and `s3-output` volumes, and why `down -v` (`make cluster-clean`) deletes them.
 - [Bind mounts](https://docs.docker.com/engine/storage/bind-mounts/): the
   `data/` and `corpus` mounts, and the ownership they keep.
 - [Networking overview](https://docs.docker.com/engine/network/): the

@@ -2,11 +2,11 @@
 
 Usage: check-figures.py [--archives DIR] [--figures DIR] [--keep]
 
-Defaults: --archives bench/evaluation/rerun-8f0ddb9/archives and
---figures bench/evaluation. It checks every archive against the directory's
-SHA256SUMS, unpacks them into a new temporary directory in the layout
-bench/plot-experiments.py reads (E0 from E0-isolated.tar.gz, as
-bench/README.md does; the superseded E0.tar.gz is not drawn), draws every
+Defaults: --archives bench/evaluation/raw and --figures bench/evaluation.
+It checks every archive against the directory's SHA256SUMS, unpacks them
+into a new temporary directory in the layout bench/plot-experiments.py
+reads (E0 from E0-isolated.tar.gz, as bench/README.md does; the replaced
+E0.tar.gz, archived in bench/evaluation/archive/, is never drawn), draws every
 figure from them, and compares each drawn PNG with the committed one pixel
 by pixel. Only archives SHA256SUMS lists are unpacked. It prints one line
 per figure and exits 1 if an archive's checksum differs, an archive is not
@@ -103,9 +103,7 @@ def differs(drawn: Path, committed: Path) -> str | None:
 
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument(
-        "--archives", type=Path, default=ROOT / "bench/evaluation/rerun-8f0ddb9/archives"
-    )
+    p.add_argument("--archives", type=Path, default=ROOT / "bench/evaluation/raw")
     p.add_argument("--figures", type=Path, default=ROOT / "bench/evaluation")
     p.add_argument("--keep", action="store_true")
     args = p.parse_args(argv)

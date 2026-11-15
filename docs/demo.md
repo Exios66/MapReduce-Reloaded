@@ -35,9 +35,17 @@ evaluation figures. Timings are for the course VM.
       every worker heartbeating on the status page, the disk, `bin/mr` and
       the inputs. Each `FAIL` says what to run.
 - [ ] Rehearse the whole script once, start to finish, with a timer.
-- [ ] After the rehearsal's `make cluster-down`, run `make cluster-up` again,
-      then run the notebook top to bottom (*Kernel → Restart & Run All*);
-      every cell's `assert` passes.
+- [ ] After the rehearsal, run `make cluster-clean`, not `cluster-down`:
+      `cluster-down` keeps the write-ahead log, so the next `cluster-up`
+      would bring the rehearsal's jobs back onto the status page.
+      `cluster-clean` deletes this checkout's output volume, so copy out
+      anything in `/out` you want to keep first. Then run `make cluster-up`
+      again and run the notebook top to bottom (*Kernel → Restart & Run
+      All*); every cell's `assert` passes, and the status page lists only
+      its jobs. The notebook's plots need the `notebook` extra, which
+      `make venv` leaves out — run `make venv` first if `python/.venv` is
+      absent — then `python/.venv/bin/pip install -e 'python[notebook]'`
+      ([examples/README.md](../examples/README.md)).
 - [ ] Open the status page, <http://127.0.0.1:18780/>, through the SSH
       forward, and this page, the README's results, and
       [`bench/evaluation/faults.png`](../bench/evaluation/faults.png) in tabs.
@@ -161,7 +169,7 @@ the jobs just run.
 ```sh
 rm -r "data/out/${OUT#/data/out/}" "data/out/${OUT#/data/out/}-nocombiner" \
   "data/out/${KILLED#/data/out/}" "data/out/${RESTARTED#/data/out/}" /tmp/demo-local
-make cluster-down
+make cluster-down    # keeps the output volume: the demo's write-ahead log and data
 ```
 
 ## Questions and the feature tour
@@ -190,8 +198,9 @@ Each answer has a command or a page to show.
   `docker logs mapreduce-coordinator-1` and the workers' logs say why.
 - The status page shows fewer than four live workers after a step:
   `docker compose -p mapreduce -f deploy/compose/compose.yaml up -d worker`.
-- Disk: `df -h /`; the experiments' inputs and outputs live in the Compose
-  `output` volume, and `make cluster-down` removes it.
+- Disk: `df -h /`; the experiments' inputs and outputs live in this
+  checkout's Compose `output` volume. `make cluster-down` keeps it;
+  `make cluster-clean` deletes it, so copy out anything you need first.
 
 ## Recording the README GIFs
 

@@ -36,7 +36,8 @@ make cluster-up       # build and start the coordinator and 4 workers
 make e2e              # word count on the cluster, compared with the golden output
 make e2e-s3           # the same, with input and output in the s3 profile's store
 make monitoring-up    # add Prometheus and Grafana
-make cluster-down     # remove this project's containers and volumes, and nothing else
+make cluster-down     # remove this project's containers; keep its volumes
+make cluster-clean    # the same, and delete this checkout's volumes
 ```
 
 The project name `mapreduce` keeps `cluster-down` from touching other

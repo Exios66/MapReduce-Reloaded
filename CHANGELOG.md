@@ -21,6 +21,15 @@ cut a release.
   go job's narrow mode too, so CircleCI shows each test, its time and its
   failures, and keep them as artifacts; `docs/ci.md` lists the reports
   (#314).
+- Agent tooling: a `drawing-figures` skill in `.claude/skills/`, for any
+  new or redrawn figure. It gives the project's values for the `dataviz`
+  method (themes, series slots and the fourth slot's limits, type sizes,
+  file names) and the mistakes made drawing figures here. Its
+  `figkit.py` loads the evaluation figures' style from
+  `bench/plot-experiments.py` without redrawing anything, and refuses to
+  save a figure whose labels overlap, cover a marker or run off the image.
+  Drawn through it, the published figures are pixel for pixel the same,
+  and none is refused (#364).
 - Demo: `make demo-check` (`scripts/demo-check.py`) checks the running
   cluster against what `docs/demo.md` needs, one `OK`, `WARN` or `FAIL`
   line each: four running workers at one CPU and 768 MB, the coordinator
@@ -163,6 +172,58 @@ cut a release.
 
 ### Changed
 
+- Compose: each checkout has its own output volume,
+  `mapreduce_output_<directory>_<hash>`, instead of one named after the
+  project. Every checkout on a machine shares the project `mapreduce`, so
+  each one's `make cluster-up` mounted the same `mapreduce_output` volume,
+  replaying another checkout's write-ahead log, and `make cluster-down` in
+  any of them deleted it. `scripts/output-volume.sh` derives the name and
+  writes it to `deploy/compose/.env`, which every `docker compose` command
+  on `deploy/compose/compose.yaml` reads; the Makefile, bench scripts and
+  `scripts/{chaos,e2e,soak}.sh` run it. Compose stops if the name is unset
+  rather than share a volume. Containers are still shared, so one
+  checkout's cluster runs at a time, and the old `mapreduce_output` is left
+  for its owner to remove (`docs/docker-topology.md`). `make cluster-down`
+  now keeps the volumes, so the write-ahead log and the demo's and
+  experiments' data survive a shutdown; the new `make cluster-clean` also
+  deletes them, as `cluster-down` used to (#365).
+- Notebook: `examples/demo.ipynb` explains more as it runs, for the demo.
+  The introduction sketches how the client, coordinator and workers fit
+  together. Section 2 lists the workers as the coordinator sees them, with
+  their containers and last heartbeats. Section 10 checks that the worker
+  the coordinator lost is the one it killed, and says what was rerun.
+  Section 12 tabulates every job the run submitted, and section 14 heads
+  each evaluation figure with its finding from the README. A new section
+  15 says what to run when a cell fails. Every cell now has the `id`
+  nbformat 4.5 requires (#363).
+- Docs: `testdata/corpus/README.md` gives each book's bytes, words and
+  distinct words, explains what `expected/` holds (the word rule, which
+  part each word goes to, and why part 0 has the most occurrences), and
+  lists every test checked against it. A new test,
+  `python/tests/test_corpus_readme.py`, recomputes each number on the page
+  from the files (#363).
+- Bench: `bench/evaluation/` now holds only the current results, the rerun
+  of 11 November 2026 at `8f0ddb9` (E0 at `3a907de`): `E0/` to `E7/` and
+  `E2-pairs/` with each experiment's CSVs, `raw/` with the archives the
+  figures are drawn from, `logs/` with the harness logs, and a new
+  `README.md` listing each experiment's data, run count and figure. The
+  rerun's isolated E0 is now `E0/`. Everything older moved to
+  `bench/evaluation/archive/`, labeled by commit and date: the results
+  published before the rerun, the rerun's first E0
+  (`archive/8f0ddb9-E0-first/`) and the single grep and sort runs of
+  28 October (`archive/paper-2707160/`, formerly `paper/`).
+  `scripts/check-figures.py` reads `bench/evaluation/raw` by default, and
+  every figure redraws unchanged from it (#361).
+- Docs: the evaluation figures run E0 to E7 on every page, with the E2–E4
+  fault recap after E4. `README.md`'s Results table links each row to its
+  figure and now shows E2, E3 and E4 too; `bench/README.md` cites the A/B
+  in `bench/evaluation/ab/`; `docs/report.md` lists E0 to E7 in order and
+  labels its grep and sort rows, and `docs/evaluation.md` its rates plots,
+  as archived runs at `2707160`; `examples/demo.ipynb` shows every figure
+  in that order (#361).
+- Docs: `README.md`'s local mode creates `python/.venv` before
+  `pip install -e .`, which the course VM's Ubuntu Python refuses outside a
+  virtual environment (#361).
 - Bench figures: clarify the speed-up ranges, elapsed-time savings and
   example traces in `bench/evaluation/`; E3 labels kill times against
   calibration, and E4 no longer places a restart on an unaligned clock
@@ -353,6 +414,47 @@ cut a release.
 
 ### Fixed
 
+- Docs: `docs/demo.md`'s notebook step now says to install the `notebook`
+  pip extra into a venv `make venv` creates if absent (`make venv` leaves
+  out matplotlib), the README states that `make cluster-down` also removes
+  the network, and the freeze audit plan records that
+  its checklist landed in #352, #362, #363 and #364 and that the VM runbook
+  had its first run (#368).
+- Agent tooling: `.claude/skills/saving-ci-credits/preflight.sh` knows the
+  owner by email (`exios4@protonmail.com` or the owner's GitHub no-reply
+  address), not by the exact name `Jack J Burleson`, so commits signed
+  `Jack J Burleson // LJM` and other spellings, and merges GitHub commits
+  from its web interface, no longer fail the identity check; an agent's
+  identity still does. It no longer prints the identity line as `ok` after
+  failing it. `AGENTS.md` states the rule, and `test_preflight.py` checks
+  it (#367).
+- Tests: `TestClusterBackupTasks`, `TestClusterLateBackupTasks`,
+  `TestClusterStopsLosingAttempt` and `TestClusterCountersMatchLocal`
+  (`go/internal/worker`) no longer fail on a loaded machine. There a
+  late heartbeat let the coordinator's 100ms timeout declare a live worker
+  dead and run its slow attempt again as an ordinary one, so no backup
+  won. These tests kill no worker, so they now use a 5s worker timeout and
+  still require the stuck task to be won by a backup while the slow
+  attempt runs (§3.6); the tests that kill workers keep 100ms (#364).
+- Docs: the demo notebook's introduction no longer says every section's
+  claim is asserted; it names the sections that assert theirs (7, 8, 10, 11
+  and 13; section 9 checks only that its job succeeds), and says to run one
+  copy at a time, since setup removes earlier runs' directories.
+  `testdata/corpus/README.md` names the S3 test by its full path,
+  `go/internal/local/s3_test.go`, since `go/internal/task/` has one too
+  (#364).
+- Docs: stale status lines now match the finished evaluation.
+  `docs/roadmap.md` says E0–E6 were rerun and E7 run for the first time
+  at `8f0ddb9`, not that E7 was "wired but not run";
+  `docs/language-choice.md` and the PR template name E0–E7; and
+  `docs/evaluation.md` says E1 was not rerun with its input isolated,
+  rather than not rerun at all (#362).
+- Hooks: `.githooks/pre-push` clears Git's local environment variables
+  (`GIT_DIR` and the rest) before `make check`, so a test's git command in a
+  temporary repository no longer acts on the repository being pushed;
+  `python/tests/test_pre_push.py` checks it, and that a failed check still
+  blocks the push. A change to the hook now also runs the Python jobs
+  (#361).
 - Docs: the E0-E7 rerun write-ups name `3a907de` wherever they say every
   experiment ran at `8f0ddb9`, say E5's settings rotate rather than reverse,
   compare E0's sort with E2-E4 on one clock, describe E3's cost and E1's

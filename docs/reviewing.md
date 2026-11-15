@@ -50,7 +50,7 @@ test for each of the paper's features F1–F24.
 | Failures do not change the output | `make chaos RUNS=5 SEED=1`: seeded worker kills, pauses and coordinator crashes; a failing seed replays with `scripts/chaos.sh 1 SEED` |
 | Go and Python agree | [`testdata/`](../testdata/README.md): the file format, hash, message and example-output vectors both test suites read; `make py-e2e` runs the Python coordinator with Go workers |
 | The paper mapping is accurate | `(cd go && go test -count=1 ./internal/papermap)` checks each feature's status and fails if the mapping names a file or test that does not exist; the named code and tests are the evidence that a feature is built |
-| The evaluation's numbers | `bench/evaluation/rerun-8f0ddb9/` holds each experiment's CSVs, `machine.json` with the commit, and the harness logs; the [archive commands](../bench/README.md#evaluation-e0e7) redraw every figure and print every table |
+| The evaluation's numbers | `bench/evaluation/` holds each experiment's CSVs and `machine.json` with the commit (`E0/` to `E7/`), the harness logs (`logs/`) and the archives (`raw/`), and nothing older: that is in `bench/evaluation/archive/`, labeled; the [archive commands](../bench/README.md#evaluation-e0e7) redraw every figure and print every table |
 | The tests check results, not only run code | `make mutate` mutates core packages (the partition hash, the external sort, and more) and reports the survivors ([Testing](testing.md)) |
 
 ## Known limits

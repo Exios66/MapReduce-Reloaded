@@ -115,6 +115,7 @@ Skills in `.claude/skills/` hold checked scripts for recurring work. Claude
 Code loads them by name; any other agent runs the scripts directly. They
 read files, git and the experiment host, and change nothing; so does
 `make figures-check`, which writes only to a temporary directory.
+`figkit.py` writes only the figure its caller names.
 
 | Task | Run |
 | --- | --- |
@@ -123,11 +124,16 @@ read files, git and the experiment host, and change nothing; so does
 | Compare a new run with a published one | `python3 .claude/skills/analyzing-bench-results/compare.py OLD_DIR NEW_DIR` |
 | Snapshot a running campaign on the experiment host | `bash .claude/skills/checking-campaign-status/status.sh HOST` |
 | Redraw the evaluation figures from their archives and compare them with the committed ones (needs matplotlib; on the VM) | `make figures-check PLOT_PYTHON=...` |
+| Draw a new figure in the evaluation figures' style, in both themes, refusing colliding or clipped labels (needs matplotlib) | `import figkit` from `.claude/skills/drawing-figures/figkit.py` |
 
 Each skill's `SKILL.md` gives the rules for reading the output.
 
 ## Commits and PRs
 
 Every commit is authored and committed as the repository owner,
-`Jack J Burleson`. Never commit under an
-agent's or a tool's identity, except for the accepted contributor listed.
+`Jack J Burleson`, known by email: `exios4@protonmail.com` or the GitHub
+no-reply address `148591095+Exios66@users.noreply.github.com`, under any
+spelling of the name. GitHub may commit a merge or squash made in its web
+interface, as long as the owner authored it. Never commit under an agent's
+or a tool's identity, except for the accepted contributor listed. The
+preflight script checks this.
