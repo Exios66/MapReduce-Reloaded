@@ -42,7 +42,7 @@ func TestOnlyGoPythonTestPackagesReadPython(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := regexp.MustCompile(`(?m)^go-python-test:\n\t(.*)$`).FindSubmatch(makefile)
+	target := regexp.MustCompile(`(?m)^go-python-test:\n((?:\t.*\n)+)`).FindSubmatch(makefile)
 	if target == nil {
 		t.Fatal("the Makefile has no go-python-test target")
 	}

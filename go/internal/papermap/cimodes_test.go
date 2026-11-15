@@ -108,7 +108,8 @@ func TestOnlyTheHeapMeasurementsSkipUnderTheRaceDetector(t *testing.T) {
 		t.Fatal("the Makefile has no go-test-cover target")
 	}
 	recipe := string(cover[1])
-	if !strings.Contains(recipe, "go test -shuffle=on -coverpkg=./... -coverprofile=cover.out ./...") {
+	// $(GOTEST) is `go test`, or gotestsum when JUNIT_DIR asks for reports.
+	if !strings.Contains(recipe, "$(GOTEST) -shuffle=on -coverpkg=./... -coverprofile=cover.out ./...") {
 		t.Errorf("make go-test-cover does not test every package:\n%s", recipe)
 	}
 	for _, flag := range []string{"-race", "-short"} {

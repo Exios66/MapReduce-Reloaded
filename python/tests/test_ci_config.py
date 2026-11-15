@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CIRCLE = (ROOT / ".circleci/config.yml").read_text()
@@ -151,6 +152,43 @@ def test_ci_runs_the_python_coordinator_with_go_workers():
     assert "py-e2e" in go_job_targets("full", 3, 2)
     target = MAKEFILE.split("\npy-e2e:\n", 1)[1].split("\n\n", 1)[0]
     assert "MR_REQUIRE_GO=1" in target and "tests/test_coordinator_e2e.py" in target
+
+
+def test_every_go_and_python_test_step_publishes_junit_results():
+    """Each CI step that runs Go or Python tests sets JUNIT_DIR, has gotestsum
+    for the Go passes, and stores the reports even when the tests fail: the
+    go job's full and narrow modes, and the python job."""
+    jobs = yaml.safe_load(CONT)["jobs"]
+    branches = [step["when"]["steps"] for step in jobs["go"]["steps"] if "when" in step]
+    branches += [step["when"]["steps"] for step in jobs["python"]["steps"] if "when" in step]
+    tested = 0
+    for steps in branches:
+        runs = [i for i, step in enumerate(steps) if isinstance(step, dict) and "run" in step]
+        test_runs = [i for i in runs if "sh-lint (only" not in steps[i]["run"]["name"]]
+        if not test_runs:
+            continue
+        (index,) = test_runs
+        tested += 1
+        run = steps[index]["run"]
+        assert run["environment"]["JUNIT_DIR"] == "/tmp/test-results", run["name"]
+        after = steps[index + 1 :]
+        assert {"store_test_results": {"path": "/tmp/test-results", "when": "always"}} in after
+        assert {
+            "store_artifacts": {
+                "path": "/tmp/test-results",
+                "destination": "test-results",
+                "when": "always",
+            }
+        } in after
+        if "ci-go-job.sh" in run["command"]:
+            assert "gotestsum" in steps[:index], run["name"]
+    assert tested == 3
+
+
+def test_gotestsum_is_pinned_to_a_version_that_builds_on_our_go():
+    """v1.12.0 does not build on Go 1.26; the job's install step pins v1.13.0."""
+    install = yaml.safe_load(CONT)["commands"]["gotestsum"]["steps"][0]["run"]["command"]
+    assert install == "go install gotest.tools/gotestsum@v1.13.0"
 
 
 def test_make_lint_runs_shellcheck_on_every_script():
@@ -342,7 +380,8 @@ def test_go_test_runs_the_race_pass_then_the_coverage_pass():
     recipe = MAKEFILE.split("\ngo-test:\n", 1)[1].split("\n\n", 1)[0]
     assert recipe.splitlines() == ["\t$(MAKE) go-test-race", "\t$(MAKE) go-test-cover"]
     race = MAKEFILE.split("\ngo-test-race:\n", 1)[1].split("\n\n", 1)[0]
-    assert "go test -race -shuffle=on ./..." in race
+    # $(GOTEST) is `go test`, or gotestsum when JUNIT_DIR asks for reports.
+    assert "$(GOTEST) -race -shuffle=on ./..." in race
     cover = MAKEFILE.split("\ngo-test-cover:\n", 1)[1].split("\n\n", 1)[0]
     for part in (
         "-coverpkg=./...",

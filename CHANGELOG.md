@@ -15,6 +15,12 @@ cut a release.
 
 ### Added
 
+- CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
+  Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
+  `Makefile`, one report per test pass) with `store_test_results`, in the
+  go job's narrow mode too, so CircleCI shows each test, its time and its
+  failures, and keep them as artifacts; `docs/ci.md` lists the reports
+  (#314).
 - Agent tooling: a `drawing-figures` skill in `.claude/skills/`, for any
   new or redrawn figure. It gives the project's values for the `dataviz`
   method (themes, series slots and the fourth slot's limits, type sizes,
