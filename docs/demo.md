@@ -42,7 +42,10 @@ evaluation figures. Timings are for the course VM.
       anything in `/out` you want to keep first. Then run `make cluster-up`
       again and run the notebook top to bottom (*Kernel → Restart & Run
       All*); every cell's `assert` passes, and the status page lists only
-      its jobs.
+      its jobs. The notebook's plots need the `notebook` extra, which
+      `make venv` leaves out — run `make venv` first if `python/.venv` is
+      absent — then `python/.venv/bin/pip install -e 'python[notebook]'`
+      ([examples/README.md](../examples/README.md)).
 - [ ] Open the status page, <http://127.0.0.1:18780/>, through the SSH
       forward, and this page, the README's results, and
       [`bench/evaluation/faults.png`](../bench/evaluation/faults.png) in tabs.
