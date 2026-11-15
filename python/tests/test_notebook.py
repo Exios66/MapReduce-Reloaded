@@ -5,7 +5,7 @@ import json
 import re
 import shutil
 from pathlib import Path
-from tempfile import mkdtemp
+from tempfile import TemporaryDirectory
 
 NOTEBOOK = Path(__file__).resolve().parents[2] / "examples" / "demo.ipynb"
 
@@ -146,11 +146,12 @@ def test_cleanup_removes_only_what_earlier_sections_defined():
     """The last cell runs even when a section before it was skipped, and
     removes the path of the one section that did run."""
     code = next(c["source"] for c in cells() if "removed this run" in c["source"])
-    root = Path(mkdtemp())
-    exec(code, {"shutil": shutil, "ROOT": root})  # no section ran: no NameError
-    (root / "data/out/notebook-x").mkdir(parents=True)
-    exec(code, {"shutil": shutil, "ROOT": root, "WC": "/data/out/notebook-x"})
-    assert not (root / "data/out/notebook-x").exists()
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        exec(code, {"shutil": shutil, "ROOT": root})  # no section ran: no NameError
+        (root / "data/out/notebook-x").mkdir(parents=True)
+        exec(code, {"shutil": shutil, "ROOT": root, "WC": "/data/out/notebook-x"})
+        assert not (root / "data/out/notebook-x").exists()
 
 
 def test_every_cell_has_a_unique_id():

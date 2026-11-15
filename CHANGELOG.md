@@ -414,6 +414,11 @@ cut a release.
 
 ### Fixed
 
+- Docs: the runbook's one-time VM setup and session start use `~/mr-checkout`,
+  the checkout every demo document and the prepared VM already use, instead
+  of cloning into `~/MapReduce-Reloaded` (#371).
+- Tests: the notebook tests' cleanup check removes its temporary directory
+  after the run instead of leaving it in the system temp directory (#371).
 - Docs: `docs/demo.md`'s checklist now gives the laptop's port-forward
   command (Jupyter 8888, status page 18780, Grafana 13000) instead of only
   mentioning the forward (#370).
