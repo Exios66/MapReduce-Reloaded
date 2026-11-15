@@ -414,6 +414,13 @@ cut a release.
 
 ### Fixed
 
+- Docs: the demo notebook's last cell removes only the paths earlier
+  sections defined, so running it after a skipped section no longer raises
+  `NameError`; §1 refuses a bare or out-of-date checkout (a stale clone
+  fails fast with the reason), and the notebook tells the presenter how to
+  open it on the course VM (launch from `~/mr-checkout`, the three-port
+  SSH tunnel, the token URL), and the runbook forwards Jupyter's port with
+  the others (#369).
 - Docs: `docs/demo.md`'s notebook step now says to install the `notebook`
   pip extra into a venv `make venv` creates if absent (`make venv` leaves
   out matplotlib), the README states that `make cluster-down` also removes
