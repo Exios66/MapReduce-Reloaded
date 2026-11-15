@@ -166,6 +166,21 @@ cut a release.
 
 ### Changed
 
+- Compose: each checkout has its own output volume,
+  `mapreduce_output_<directory>_<hash>`, instead of one named after the
+  project. Every checkout on a machine shares the project `mapreduce`, so
+  each one's `make cluster-up` mounted the same `mapreduce_output` volume,
+  replaying another checkout's write-ahead log, and `make cluster-down` in
+  any of them deleted it. `scripts/output-volume.sh` derives the name and
+  writes it to `deploy/compose/.env`, which every `docker compose` command
+  on `deploy/compose/compose.yaml` reads; the Makefile, bench scripts and
+  `scripts/{chaos,e2e,soak}.sh` run it. Compose stops if the name is unset
+  rather than share a volume. Containers are still shared, so one
+  checkout's cluster runs at a time, and the old `mapreduce_output` is left
+  for its owner to remove (`docs/docker-topology.md`). `make cluster-down`
+  now keeps the volumes, so the write-ahead log and the demo's and
+  experiments' data survive a shutdown; the new `make cluster-clean` also
+  deletes them, as `cluster-down` used to (#365).
 - Notebook: `examples/demo.ipynb` explains more as it runs, for the demo.
   The introduction sketches how the client, coordinator and workers fit
   together. Section 2 lists the workers as the coordinator sees them, with
@@ -396,7 +411,7 @@ cut a release.
 - Docs: `docs/demo.md`'s notebook step now says to install the `notebook`
   pip extra into a venv `make venv` creates if absent (`make venv` leaves
   out matplotlib), the README states that `make cluster-down` also removes
-  the network and the named volumes, and the freeze audit plan records that
+  the network, and the freeze audit plan records that
   its checklist landed in #352, #362, #363 and #364 and that the VM runbook
   had its first run (#368).
 - Agent tooling: `.claude/skills/saving-ci-credits/preflight.sh` knows the

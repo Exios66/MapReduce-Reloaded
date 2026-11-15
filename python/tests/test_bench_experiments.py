@@ -26,6 +26,7 @@ def experiment(tmp_path, monkeypatch):
     log = tmp_path / "calls"
     log.touch()
     monkeypatch.setenv("CALL_LOG", str(log))
+    monkeypatch.setenv("MR_OUTPUT_VOLUME", "mapreduce_output_test")
     for name, value in {"REPEAT": "3", "SIZE": "100", "M": "2", "R": "3"}.items():
         monkeypatch.setenv(name, value)
 
@@ -1445,7 +1446,7 @@ def test_drop_cache_runs_the_script_on_the_volume(experiment, tmp_path):
         after="drop_cache /out/a /out/b",
     )
     assert log.read_text().splitlines() == [
-        f"docker|run --rm -v mapreduce_output:/out -v {tmp_path}/bench:/bench:ro "
+        f"docker|run --rm -v mapreduce_output_test:/out -v {tmp_path}/bench:/bench:ro "
         "python:3.13-alpine python /bench/drop-cache.py /out/a /out/b"
     ]
 

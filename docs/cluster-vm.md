@@ -165,7 +165,7 @@ make cluster-up      # build the image, start the coordinator and 4 workers
 make e2e             # run word count and compare with the golden output
 make e2e-s3          # the same, with input and output in the S3 store
 make bench-codecs     # bytes shuffled and job time per codec (bench/README.md)
-make cluster-down    # stop and remove only this project's containers and volume
+make cluster-down    # stop and remove only this project's containers; keep its volume
 ```
 
 Run `mr` on the VM itself: `make mr` builds it into `bin/mr`, and
@@ -203,6 +203,10 @@ is at `127.0.0.1:13000` and Prometheus at `127.0.0.1:19090`:
 - The Compose project is named `mapreduce`. `make cluster-down` therefore only
   removes containers, networks and volumes with that name, and never touches
   course containers.
+- Each checkout of this repository has its own output volume, so a second
+  checkout's `make cluster-clean` cannot delete the first one's experiments
+  ([Docker topology](docker-topology.md#4-volumes)). The containers are
+  still shared: run one checkout's cluster at a time.
 - Published ports use the 18xxx range (for example, the status page at
   18780), away from the common 8080/9000-style ports that course work uses.
 - Check memory use at any time with `docker stats`. The #21 end-to-end test

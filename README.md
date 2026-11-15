@@ -41,7 +41,8 @@ While a job runs, <http://127.0.0.1:18780/> shows the same status, the
 workers and their running tasks; `bin/mr status <id>` prints it again.
 `make e2e` runs the whole job and compares the output with the golden files;
 `make monitoring-up` adds Prometheus and Grafana; `make cluster-down`
-removes the containers, network and named volumes, and keeps `data/`.
+removes the containers and network and keeps `data/` and the named
+volumes.
 
 <picture>
   <source srcset="docs/assets/status-wordcount-1g-dark.gif" media="(prefers-color-scheme: dark)">

@@ -126,6 +126,23 @@ def test_cluster_up_prepares_data_before_starting_compose(make_project):
     ]
 
 
+def test_cluster_down_keeps_volumes_and_cluster_clean_deletes_them(make_project):
+    # down -v deleted the output volume, and with it the write-ahead log and
+    # the demo's and experiments' data; only cluster-clean may do that.
+    _, make, log = make_project
+    make("data")  # the fake docker expects the cluster's data/ directories
+    make("cluster-down")
+    make("cluster-clean")
+    compose = (
+        "docker compose -p mapreduce -f deploy/compose/compose.yaml"
+        " --profile monitoring --profile s3"
+    )
+    assert log.read_text().splitlines() == [
+        f"{compose} down --remove-orphans",
+        f"{compose} down -v --remove-orphans",
+    ]
+
+
 def test_cluster_up_does_not_start_when_data_preparation_fails(make_project):
     project, make, log = make_project
     (project / "data").write_text("a file blocks directory creation")
