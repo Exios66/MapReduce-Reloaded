@@ -414,6 +414,9 @@ cut a release.
 
 ### Fixed
 
+- Docs: `docs/demo.md`'s checklist now gives the laptop's port-forward
+  command (Jupyter 8888, status page 18780, Grafana 13000) instead of only
+  mentioning the forward (#370).
 - Docs: the demo notebook's last cell removes only the paths earlier
   sections defined, so running it after a skipped section no longer raises
   `NameError`; §1 refuses a bare or out-of-date checkout (a stale clone

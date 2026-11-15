@@ -46,6 +46,10 @@ evaluation figures. Timings are for the course VM.
       `make venv` leaves out — run `make venv` first if `python/.venv` is
       absent — then `python/.venv/bin/pip install -e 'python[notebook]'`
       ([examples/README.md](../examples/README.md)).
+- [ ] On the laptop, open the port forwards the notebook and the status
+      page ride (Jupyter 8888, status page 18780, Grafana 13000), with the
+      runbook's `mr-vm` alias:
+      `ssh -L 8888:127.0.0.1:8888 -L 18780:127.0.0.1:18780 -L 13000:127.0.0.1:13000 mr-vm`
 - [ ] Open the status page, <http://127.0.0.1:18780/>, through the SSH
       forward, and this page, the README's results, and
       [`bench/evaluation/faults.png`](../bench/evaluation/faults.png) in tabs.
