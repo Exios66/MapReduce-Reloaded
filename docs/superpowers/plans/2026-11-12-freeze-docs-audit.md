@@ -2,6 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status (2026-11-14).** Lane A's fixes landed in #352, #362, #363 and
+#364; the checkboxes below were not ticked as each PR merged, so they do
+not measure remaining work — read the four PRs instead. Task 7's freeze-day
+runbook had its first run on the course VM on 2026-11-14 (`make check`, a
+whole-notebook rehearsal, and freeing disk to above the worker's 2 GiB
+floor); its rerun at the freeze commit is still due (#347, #272).
+
 **Goal:** Before the Nov 16 code freeze, every consumer-facing page (README
 and the guides a user, grader or demo audience reads) cites only links,
 commands, flags, numbers and instructions that work at the freeze commit. The
