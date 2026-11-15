@@ -38,7 +38,8 @@ evaluation figures. Timings are for the course VM.
 - [ ] After the rehearsal's `make cluster-down`, run `make cluster-up` again,
       then run the notebook top to bottom (*Kernel → Restart & Run All*);
       every cell's `assert` passes. The notebook's plots need the `notebook`
-      extra, which `make venv` leaves out:
+      extra, which `make venv` leaves out — run `make venv` first if
+      `python/.venv` is absent — then
       `python/.venv/bin/pip install -e 'python[notebook]'`
       ([examples/README.md](../examples/README.md)).
 - [ ] Open the status page, <http://127.0.0.1:18780/>, through the SSH
