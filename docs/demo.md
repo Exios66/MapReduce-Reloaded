@@ -6,7 +6,9 @@ coordinator. The core runs in about six minutes;
 [questions and the feature tour](#questions-and-the-feature-tour) can fill
 any time left. [`examples/demo.ipynb`](../examples/demo.ipynb) runs the same
 sequence cell by cell, each claim checked by an `assert`, and ends with the
-evaluation figures. Timings are for the course VM.
+evaluation figures; a narration note before each section's code says what
+the cell does, what to point at and what to say. Timings are for the
+course VM.
 
 ## What each moment shows
 

@@ -16,11 +16,16 @@ example programs (those live in `go/examples/`).
   cluster (`make cluster-up mr`), the example data (`make upload-example`)
   and the `notebook` extra (`pip install -e 'python[notebook]'`). It submits
   the compiled `wordcount` and `urlfreq` programs by name and this
-  directory's job file, kills a worker during a 1 GiB sort
-  (`KILL_WORKER = False` skips it), and ends by checking local mode, the
-  cluster and `testdata/corpus/expected` against each other, byte for byte.
-  It runs from any directory in the repository, in about a minute. The
-  [demo](../docs/demo.md) is the script for a live review, with timings.
+  directory's job file, with the combiner on and off; kills a worker during
+  a 1 GiB sort and crashes the coordinator during another
+  (`KILL_WORKER = False` and `RESTART_COORDINATOR = False` skip them);
+  checks local mode, the cluster and `testdata/corpus/expected` against
+  each other, byte for byte; and ends with the evaluation figures. Before
+  each section's code, a narration note says what the cell does, what to
+  point at in its output, and what to say. It runs from the checkout's
+  `examples/` directory, on `main` and current with `origin/main`, in about
+  two minutes on the course VM. The [demo](../docs/demo.md) is the script
+  for a live review, with timings.
 
 To run either, start with the commands in the README's
 [quick start](../README.md#quick-start).

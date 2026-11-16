@@ -40,7 +40,7 @@ and the job continues.
 - [Design](../design.md): the assignment's design questions, one job from
   submission to completion, and sequence diagrams for scheduling, the
   shuffle, failure recovery and the commit.
-- [Design records](README.md#design-records): 22 ADRs, one per
+- [Design records](README.md#design-records): 24 ADRs, one per
   decision.
 - [Explainers](README.md#explainers): one page per component.
 
@@ -144,7 +144,7 @@ an AI agent plays the teammate, as the assignment allows
 |---|---|---|
 | Never push to `main` | Branch protection on `main`: a pull request is required, the branch must be up to date, and the CircleCI checks must pass | Rule verified on 2026-10-29 (#267, #269) |
 | CI runs tests on pull requests | Six CircleCI checks are required to merge: `proto`, `go`, `python-3.11`, `python-3.13`, `lint` and `mapping-coverage`. Each runs its tests when the pull request touches its inputs; otherwise it passes after a skip note (ADR 0020). Running CI once, on each PR's final head, is the project's policy (AGENTS.md), not something CircleCI enforces. `make check` runs the protobuf, lint, Go and Python checks locally and in the pre-push hook, on one Python version and without the mapping-selection check | [CI](ci.md), [ADR 0014](design/0014-ci-on-pull-requests.md), [ADR 0020](design/0020-implicated-only-ci.md) |
-| Many small pull requests | One concern each, from the templates in `.github/`, each with its changelog entry | 199 merged pull requests by 10 November 2026; [changelog](../CHANGELOG.md) |
+| Many small pull requests | One concern each, from the templates in `.github/`, each with its changelog entry | 223 merged pull requests by 16 November 2026; [changelog](../CHANGELOG.md) |
 | Feedback sought | CodeRabbit and CodeAnt review every pull request I open, with inline comments; each thread gets a fix or a reason before merging | Resolved CodeRabbit thread on #264, CodeAnt thread on #263 |
 | Feedback given | I review pull requests written by an AI agent and comment on them | Comments on the agent-written #185 and #219, each closed with the reason it was superseded (#213, #216, #217). A review with inline comments before an agent-written PR merges is still open in #269 |
 
@@ -172,7 +172,7 @@ checking claims instead of trusting them.
 - **Coverage is not test strength.** Mutation testing found tests that
   ran code without checking its result, in packages at 90% coverage or
   more.
-- **Small pull requests.** 199 merged pull requests by 10 November 2026,
+- **Small pull requests.** 223 merged pull requests by 16 November 2026,
   each reviewed by an AI agent and tested in CI before merging
   ([Process and review](#process-and-review)); several real bugs were found
   in review, not by tests.
