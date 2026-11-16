@@ -186,3 +186,28 @@ def test_the_troubleshooting_section_names_real_targets_and_messages():
     rows = [line.split("|")[1] for line in markdown.splitlines() if line.startswith("| `")]
     for _, quoted in re.findall(r"(`+)(.+?)\1", "".join(rows)):
         assert quoted in code, quoted
+
+
+def test_setup_fetch_cannot_hang_the_demo():
+    """§1 refreshes origin/main over the network; a hung connection must
+    stop the run with the reason within a minute, not hang the first cell."""
+    source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
+    assert '"fetch", "origin", "main", timeout=60)' in source
+    assert "except (RuntimeError, subprocess.TimeoutExpired) as error:" in source
+
+
+def test_every_demo_section_has_its_narration():
+    """Each section from setup to the evaluation has a presenter's note
+    just before its code cell, saying what the cell does and what to point
+    at; the story and the takeaway frame them."""
+    all_cells = cells()
+    ids = [cell["id"] for cell in all_cells]
+    assert {"story-arc", "story-close"} <= set(ids)
+    for number in range(1, 15):
+        index = next(
+            i
+            for i, cell in enumerate(all_cells)
+            if cell["source"].startswith(f"> **Narration: §{number},")
+        )
+        assert all_cells[index]["cell_type"] == "markdown"
+        assert all_cells[index + 1]["cell_type"] == "code", number
