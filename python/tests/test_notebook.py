@@ -37,6 +37,15 @@ def test_the_notebook_runs_the_demo_pipeline():
         assert step in source, step
 
 
+def test_section_two_opens_the_status_page():
+    """Section 2 renders a link that opens the status page in the browser:
+    the workers' live view, refreshed every few seconds. The bare URL is
+    not enough of a check: the setup defines METRICS and STATUS on the same
+    address, so the assertion matches the rendered link."""
+    source = "\n".join(cell["source"] for cell in cells() if cell["cell_type"] == "code")
+    assert "[Open the status page](http://127.0.0.1:18780/)" in source
+
+
 def test_the_notebook_shows_the_combiner_and_both_recoveries():
     """The combiner comparison, the worker kill and the coordinator restart
     are each run and checked, not only described."""
