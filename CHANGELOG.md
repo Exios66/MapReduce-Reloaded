@@ -15,6 +15,11 @@ cut a release.
 
 ### Added
 
+- Notebook: section 2 of `examples/demo.ipynb` renders a link that opens
+  the coordinator's status page in a browser beside the demo, so the
+  workers' heartbeats, running tasks and every job's progress bars can be
+  watched while the sections run; the page refreshes itself every few
+  seconds (#372).
 - CI: the `go` and `python` jobs store JUnit test results (`gotestsum` for
   Go, `pytest --junitxml` for Python, enabled by `JUNIT_DIR` in the
   `Makefile`, one report per test pass) with `store_test_results`, in the
