@@ -22,6 +22,13 @@ cut a release.
   the numbers a fresh cluster gives, and a closing sums up what held.
   `python/tests/test_notebook.py` checks that every section keeps its
   text (#374).
+- Notebook: `examples/demo.ipynb` is laid out for presenting. Its figures
+  are numbered and captioned (Figures 1 and 2 drawn live in §6 and §8, the
+  evaluation's from Figure 3) and drawn at high resolution; results show as
+  tables and one-line summaries instead of raw Python values; each section
+  opens after a rule; and a scorecard after §14 lists every claim the run
+  checked, marking a fault section switched off as skipped rather than
+  held (#374).
 - Notebook: section 2 of `examples/demo.ipynb` renders a link that opens
   the coordinator's status page in a browser beside the demo, so the
   workers' heartbeats, running tasks and every job's progress bars can be

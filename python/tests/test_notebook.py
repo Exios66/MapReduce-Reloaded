@@ -22,6 +22,14 @@ def cells():
     return document["cells"]
 
 
+RULE = "---\n\n"  # the horizontal rule each section opens with
+
+
+def heading(cell):
+    """A markdown cell's text after its opening rule, if it has one."""
+    return cell["source"].removeprefix(RULE)
+
+
 def test_code_cells_compile():
     """Every code cell is valid Python."""
     code = [cell for cell in cells() if cell["cell_type"] == "code"]
@@ -69,9 +77,9 @@ def test_the_notebook_shows_the_combiner_and_both_recoveries():
 def test_sections_are_numbered_in_order_and_listed_in_the_introduction():
     """The headings run 1, 2, 3, ... and the introduction's table names them."""
     headings = [
-        cell["source"].split("\n", 1)[0]
+        heading(cell).split("\n", 1)[0]
         for cell in cells()
-        if cell["cell_type"] == "markdown" and cell["source"].startswith("## ")
+        if cell["cell_type"] == "markdown" and heading(cell).startswith("## ")
     ]
     numbers = [int(h.split()[1].rstrip(".")) for h in headings]
     assert numbers == list(range(1, len(numbers) + 1))
@@ -92,8 +100,8 @@ def test_the_notebook_is_committed_without_outputs():
 
 
 def test_the_evaluation_figures_it_shows_exist():
-    """Section 14 displays committed figures, in both themes, each under
-    its finding."""
+    """Section 14 displays committed figures, in both themes, each captioned
+    with its finding."""
     source = next(cell["source"] for cell in cells() if "display(Image(" in cell["source"])
     figures = re.findall(r'^    "([\w-]+)": "', source, re.MULTILINE)
     # E5 (#346) and E7 (#343) are results too, not only the README's.
@@ -176,9 +184,7 @@ def test_every_cell_has_a_unique_id():
 def test_the_troubleshooting_section_names_real_targets_and_messages():
     """Each make target section 15 tells the presenter to run exists, and
     each message it quotes is one a code cell raises."""
-    markdown = next(
-        c["source"] for c in cells() if c["source"].startswith("## 15. If a cell fails")
-    )
+    markdown = next(heading(c) for c in cells() if heading(c).startswith("## 15. If a cell fails"))
     makefile = (NOTEBOOK.parents[1] / "Makefile").read_text()
     for target in set(re.findall(r"`make ([\w-]+)", markdown)):
         assert re.search(rf"^{re.escape(target)}:", makefile, re.MULTILINE), target
@@ -211,3 +217,51 @@ def test_every_demo_section_tells_its_story():
         assert not all_cells[index]["source"].startswith(">"), name
         if name in story:
             assert all_cells[index + 1]["cell_type"] == "code", name
+
+
+def test_every_section_opens_with_a_rule():
+    """Each numbered section starts after a horizontal rule, so it begins on
+    a clear break when presented."""
+    sections = [c for c in cells() if heading(c).startswith("## ")]
+    assert sections
+    for cell in sections:
+        assert cell["source"].startswith(RULE + "## "), cell["source"][:40]
+
+
+def test_every_figure_is_numbered_and_captioned():
+    """§6 and §8 caption the figures they draw as 1 and 2, and §14 numbers
+    the evaluation's figures from 3, each captioned with its finding."""
+    code = {c["id"]: c["source"] for c in cells() if c["cell_type"] == "code"}
+    assert "def caption(number, text):" in code["cell-2"]
+    assert code["cell-12"].index("plt.show()") < code["cell-12"].index("caption(1, ")
+    assert code["cell-16"].index("plt.show()") < code["cell-16"].index("caption(2, ")
+    assert "enumerate(FIGURES.items(), start=3)" in code["cell-28"]
+    assert "caption(number, finding)" in code["cell-28"]
+    for source in code.values():
+        if "plt.show()" in source:
+            assert "caption(" in source.split("plt.show()")[-1]
+
+
+def test_the_scorecard_lists_what_ran_and_what_was_skipped():
+    """After the closing words, a scorecard lists every claim the run
+    checked; a fault section switched off is recorded as skipped, so the
+    scorecard never claims a check that did not run."""
+    all_cells = cells()
+    ids = [cell["id"] for cell in all_cells]
+    assert ids.index("scorecard") == ids.index("story-close") + 1
+    assert "CHECKS.items()" in all_cells[ids.index("scorecard")]["source"]
+    code = {c["id"]: c["source"] for c in all_cells if c["cell_type"] == "code"}
+    for cell_id, section in (
+        ("cell-8", 4),
+        ("cell-14", 7),
+        ("cell-16", 8),
+        ("cell-18", 9),
+        ("cell-20", 10),
+        ("cell-22", 11),
+        ("cell-26", 13),
+    ):
+        assert re.search(rf"passed\(\s*{section},", code[cell_id]), cell_id
+    assert "skipped(10, " in code["cell-20"] and '"KILL_WORKER is False")' in code["cell-20"]
+    assert (
+        "skipped(11, " in code["cell-22"] and '"RESTART_COORDINATOR is False")' in code["cell-22"]
+    )
