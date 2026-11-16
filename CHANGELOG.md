@@ -15,12 +15,13 @@ cut a release.
 
 ### Added
 
-- Notebook: `examples/demo.ipynb` carries a presenter's narration. *The
-  story in one minute* opens it, a note before each section's code (§1 to
-  §14) says what the cell does, what to point at in its output and what to
-  say, with the numbers a fresh cluster gives, and *The takeaway* closes
-  it. `python/tests/test_notebook.py` checks that every section keeps its
-  note (#374).
+- Notebook: `examples/demo.ipynb` tells its story as it runs, for a
+  presenter to talk through. An opening says what the demo sets out to
+  show, text before each section's code (§1 to §14) says what the cell
+  does, what to point at in its output and how it leads to the next, with
+  the numbers a fresh cluster gives, and a closing sums up what held.
+  `python/tests/test_notebook.py` checks that every section keeps its
+  text (#374).
 - Notebook: section 2 of `examples/demo.ipynb` renders a link that opens
   the coordinator's status page in a browser beside the demo, so the
   workers' heartbeats, running tasks and every job's progress bars can be
@@ -430,7 +431,7 @@ cut a release.
   answer (#374).
 - Docs: `examples/README.md`, the runbook (§5.7) and `docs/demo.md`
   describe the notebook as it runs now: the combiner on and off, the
-  coordinator crash, the evaluation figures and the narration, in about two
+  coordinator crash, the evaluation figures and the story text, in about two
   minutes from a checkout on `main`. `design.md` reports E7's measurement
   of LATE instead of "not evaluated yet", says `-m` asks for M rather than
   setting it exactly, and lists the ADRs to 0025; `docs/report.md` counts

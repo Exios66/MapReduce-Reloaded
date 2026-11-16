@@ -20,9 +20,9 @@ example programs (those live in `go/examples/`).
   a 1 GiB sort and crashes the coordinator during another
   (`KILL_WORKER = False` and `RESTART_COORDINATOR = False` skip them);
   checks local mode, the cluster and `testdata/corpus/expected` against
-  each other, byte for byte; and ends with the evaluation figures. Before
-  each section's code, a narration note says what the cell does, what to
-  point at in its output, and what to say. It runs from the checkout's
+  each other, byte for byte; and ends with the evaluation figures. The text
+  before each section's code tells the story as it runs: what the cell
+  does, what to point at in its output, and how it leads to the next. It runs from the checkout's
   `examples/` directory, on `main` and current with `origin/main`, in about
   two minutes on the course VM. The [demo](../docs/demo.md) is the script
   for a live review, with timings.

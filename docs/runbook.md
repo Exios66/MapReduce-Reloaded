@@ -228,7 +228,8 @@ The same demo is in [`examples/demo.ipynb`](../examples/demo.ipynb), which
 runs it cell by cell in Jupyter: upload, submit, read, plot, the job file,
 the combiner on and off, a second program, a worker killed mid-job, the
 coordinator crashed mid-job, the metrics, a local-mode check and the
-evaluation figures, each section with a narration note for the presenter. Install its dependencies with
+evaluation figures, with text before each section's code that tells the
+story as it runs. Install its dependencies with
 `python/.venv/bin/pip install -e 'python[notebook]'`.
 
 ### 5.8 The soak run (#160)

@@ -196,18 +196,18 @@ def test_setup_fetch_cannot_hang_the_demo():
     assert "except (RuntimeError, subprocess.TimeoutExpired) as error:" in source
 
 
-def test_every_demo_section_has_its_narration():
-    """Each section from setup to the evaluation has a presenter's note
-    just before its code cell, saying what the cell does and what to point
-    at; the story and the takeaway frame them."""
+def test_every_demo_section_tells_its_story():
+    """Each section from setup to the evaluation has story text just before
+    its code cell, saying what the cell does and what to point at; an opening
+    and a closing frame them. The text reads as prose, not as labelled
+    presenter's notes."""
     all_cells = cells()
     ids = [cell["id"] for cell in all_cells]
-    assert {"story-arc", "story-close"} <= set(ids)
-    for number in range(1, 15):
-        index = next(
-            i
-            for i, cell in enumerate(all_cells)
-            if cell["source"].startswith(f"> **Narration: §{number},")
-        )
-        assert all_cells[index]["cell_type"] == "markdown"
-        assert all_cells[index + 1]["cell_type"] == "code", number
+    story = [f"story-{number}" for number in range(1, 15)]
+    for name in ["story-arc", *story, "story-close"]:
+        index = ids.index(name)
+        assert all_cells[index]["cell_type"] == "markdown", name
+        assert "narration" not in all_cells[index]["source"].lower(), name
+        assert not all_cells[index]["source"].startswith(">"), name
+        if name in story:
+            assert all_cells[index + 1]["cell_type"] == "code", name
