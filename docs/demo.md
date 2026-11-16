@@ -131,7 +131,8 @@ docker compose -p mapreduce -f deploy/compose/compose.yaml up -d worker
 ```
 
 The job still ends `SUCCEEDED` with 64/64 maps and 4/4 reduces, in about
-35 s. The log line `worker lost ... tasks_reset=N` counts the tasks that
+25 to 40 s: the 10-second timeout plus the lost work, redone on three
+workers. The log line `worker lost ... tasks_reset=N` counts the tasks that
 ran again elsewhere: the dead worker's running tasks and its finished map
 tasks, whose output was on its disk (paper §3.3). The status page marks the
 worker dead, then shows the replacement.

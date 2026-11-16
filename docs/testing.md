@@ -50,10 +50,14 @@ Measured on 2026-11-07:
   `cmd/worker` (88.5%) and `examples/invertedindex` (89.5%). Unchecked: the generated protobuf code, the S3 test
   server, `examples/internal/run` (a test helper) and `examples/wordcount`,
   which the cluster, local and golden tests run as their reference.
-- Python: 99.8% of 2,192 statements in 5 checked packages, the generated
-  protobuf code left out. The four lines missed are the IPv6 listener in
+- Python (measured again on 2026-11-16): 99.7% of 2,288 statements in 5
+  checked packages, the generated protobuf code left out. The value depends
+  on the host: four of the seven lines missed are the IPv6 listener in
   `coordinator/statusweb.py`, which `test_serve_ipv6` reaches only on a host
-  with an IPv6 loopback address.
+  with an IPv6 loopback address, such as the course VM (99.9% there). The
+  other three are two guards in the status page's timeline for an attempt
+  with no time window, and the coordinator dropping a job's oldest attempt
+  once it holds `MAX_ATTEMPTS`.
   `tests/test_edges.py` covers the last error paths: the MRKV writer's
   `MAX_BLOCK_SIZE` checks, a bad Snappy length prefix, a write that
   accepts no bytes, and others.

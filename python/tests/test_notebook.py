@@ -68,6 +68,8 @@ def test_the_notebook_shows_the_combiner_and_both_recoveries():
         "assert job.poll() is None",
         '"the job ended before the restart"',
         '"tasks_reset="',
+        # The scorecard says the combiner saved bytes, so §8 asserts it did.
+        "assert saved > 1",
     ):
         assert step in source, step
     # A clean stop tells idle workers to exit, so the coordinator is crashed instead.
@@ -265,3 +267,26 @@ def test_the_scorecard_lists_what_ran_and_what_was_skipped():
     assert (
         "skipped(11, " in code["cell-22"] and '"RESTART_COORDINATOR is False")' in code["cell-22"]
     )
+
+
+def test_running_a_section_again_replaces_its_scorecard_row():
+    """A claim's text can hold measured values, such as the lost worker's id;
+    running its section again, or with its fault switched back on, replaces
+    the row, so the scorecard counts each claim once."""
+    setup = next(c["source"] for c in cells() if c["id"] == "cell-2")
+    helpers = [
+        node
+        for node in ast.parse(setup).body
+        if isinstance(node, ast.FunctionDef) and node.name in ("check_key", "passed", "skipped")
+    ]
+    assert len(helpers) == 3
+    namespace = {"CHECKS": {}}
+    exec(compile(ast.Module(body=helpers, type_ignores=[]), "cell-2", "exec"), namespace)
+    claim = "A worker killed mid-job: the coordinator lost r1-w4 and ran {} of its tasks again"
+    off = "A worker killed mid-job: the job still succeeds"
+    namespace["skipped"](10, off, "KILL_WORKER is False")
+    namespace["passed"](10, claim.format(9))
+    namespace["passed"](10, claim.format(11))
+    namespace["passed"](13, "Local mode and the cluster wrote the same output, byte for byte")
+    assert len(namespace["CHECKS"]) == 2
+    assert namespace["CHECKS"][(10, "A worker killed mid-job")] == (claim.format(11), "✓ held")
