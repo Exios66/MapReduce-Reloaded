@@ -438,9 +438,21 @@ cut a release.
   and `.gitignore` already keeps the directory ignored (#331).
 - The GitHub Actions workflow; CircleCI is the only CI, and a test fails if
   `.github/workflows/` comes back (#294).
+- Docs: the pre-freeze audit's working plan,
+  `docs/superpowers/plans/2026-11-12-freeze-docs-audit.md`. Its work
+  landed in #352, #362, #363 and #364, its checkboxes no longer tracked
+  what remained, and the steps still open are tracked in #269 and #272
+  (#374).
 
 ### Fixed
 
+- Tests: `make check` no longer fails 15 tests on macOS for reasons
+  unrelated to the change being pushed (#373).
+  `bench/experiments.sh` reads the worker IDs without `mapfile`, which
+  macOS's bash 3.2 lacks. `test_bench_run.py` checks the data directory's
+  owner and mode with `find` rather than GNU-only `stat -c`. The two tests
+  that create a file name that is not UTF-8 skip, with the reason, on a
+  filesystem that refuses one, as Apple's APFS does (#374).
 - Notebook: §1's `git fetch origin main` gives up after 60 s with the
   reason, instead of hanging the first cell on a network that does not
   answer (#374).
