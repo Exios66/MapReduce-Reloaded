@@ -145,7 +145,12 @@ def test_setup_stops_on_a_bare_copy_and_warns_on_an_unconfirmed_one():
         assert pattern in source, pattern
     tree = ast.parse(source)
     raised = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, (ast.Raise, ast.Assert))]
-    for warned in ("is not a git clone", "the demo runs from main", "could not reach origin", "behind origin/main"):
+    for warned in (
+        "is not a git clone",
+        "the demo runs from main",
+        "could not reach origin",
+        "behind origin/main",
+    ):
         assert not any(warned in text for text in raised), f"{warned!r} stops the run"
 
 
