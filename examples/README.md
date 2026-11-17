@@ -24,8 +24,10 @@ example programs (those live in `go/examples/`).
   numbered and captioned; and ends with a scorecard of every claim the run
   checked. The text before each section's code tells the story as it runs:
   what the cell does, what to point at in its output, and how it leads to
-  the next. It runs from the checkout's `examples/` directory, on `main` and
-  current with `origin/main`, in about two minutes on the course VM. The
+  the next. It runs from a clone's `examples/` directory in about two
+  minutes on the course VM; a copy it cannot confirm is a clone of `main`
+  current with `origin/main` (a zip download, another branch, no network)
+  gets a warning and runs anyway. The
   [demo](../docs/demo.md) is the script for a live review, with timings.
 
 - [`features.ipynb`](features.ipynb): a tour of the features on one
