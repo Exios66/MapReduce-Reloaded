@@ -142,7 +142,8 @@ def test_setup_stops_on_a_bare_copy_and_warns_on_an_unconfirmed_one():
         "is not a git clone",
         "the demo runs from main",
         "could not reach origin",
-        "HEAD..origin/main",
+        '"HEAD..FETCH_HEAD", check=False)',
+        "could not compare this clone",
         "restart the kernel and run again",
     ):
         assert pattern in source, pattern
@@ -153,6 +154,7 @@ def test_setup_stops_on_a_bare_copy_and_warns_on_an_unconfirmed_one():
         "is not a git clone",
         "the demo runs from main",
         "could not reach origin",
+        "could not compare this clone",
         "behind origin/main",
     ):
         assert not any(warned in text for text in raised), f"{warned!r} stops the run"
