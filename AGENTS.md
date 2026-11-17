@@ -123,6 +123,7 @@ read files, git and the experiment host, and change nothing; so does
 | Read an experiment's results: medians, ranges, invalid and slow runs, overlaps | `python3 .claude/skills/interpreting-bench-results/summarize.py DIR...` |
 | Compare a new run with a published one | `python3 .claude/skills/analyzing-bench-results/compare.py OLD_DIR NEW_DIR` |
 | Snapshot a running campaign on the experiment host | `bash .claude/skills/checking-campaign-status/status.sh HOST` |
+| Run, disturb or screenshot the cluster: start it, word count, kill a worker or restart the coordinator mid-job | `bash .claude/skills/run-mapreduce-reloaded/drive.sh help` |
 | Redraw the evaluation figures from their archives and compare them with the committed ones (needs matplotlib; on the VM) | `make figures-check PLOT_PYTHON=...` |
 | Draw a new figure in the evaluation figures' style, in both themes, refusing colliding or clipped labels (needs matplotlib) | `import figkit` from `.claude/skills/drawing-figures/figkit.py` |
 

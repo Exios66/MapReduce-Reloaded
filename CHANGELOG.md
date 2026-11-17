@@ -15,6 +15,14 @@ cut a release.
 
 ### Added
 
+- Agent tooling: a `run-mapreduce-reloaded` skill in `.claude/skills/`. Its
+  `drive.sh` starts and stops the Compose cluster, runs a word count,
+  writes a Zipf input, prints the status page as text, and kills a worker
+  or restarts the coordinator mid-job, comparing the disturbed run's
+  output with an undisturbed one. It refuses to start, disturb or tear
+  down while a bench script runs or another clone started the cluster,
+  since every clone on a host shares the Compose project and its volumes.
+  `SKILL.md` records the times and gotchas found on the course VM (#375).
 - Notebook: `examples/features.ipynb` tours the system's features on one
   machine, as a companion to the demo: word count in two functions, output
   independent of M, partitioning, the combiner, counters, parameters and
@@ -470,6 +478,13 @@ cut a release.
 
 ### Fixed
 
+- Agent tooling: an interrupted `drive.sh` restores the four workers before
+  it exits, so Ctrl-C during a disturbance no longer leaves the cluster a
+  worker short (#377).
+- Agent tooling: `drive.sh` finds a running benchmark however it was started,
+  so `bash -e bench/run.sh` no longer slips past the guard that protects a
+  running experiment's cluster; `SKILL.md` now says that clones share the
+  Compose project but not the per-checkout output volume (#376).
 - Tests: `make check` no longer fails 15 tests on macOS for reasons
   unrelated to the change being pushed (#373).
   `bench/experiments.sh` reads the worker IDs without `mapfile`, which
