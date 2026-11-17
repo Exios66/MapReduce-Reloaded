@@ -484,7 +484,8 @@ cut a release.
   with `python/.venv/bin/python: not found` (#378).
 - Notebook: the setup steps in `examples/demo.ipynb` (its opening and "How
   to open this notebook") run `make venv` before installing the `notebook`
-  extra, so they work in a fresh clone, which has no `python/.venv` (#378).
+  extra, so they work in a fresh clone, which has no `python/.venv`, and say
+  to pass `BASE_PYTHON=python3.13` when `python3` is newer than 3.13 (#378).
 - Agent tooling: an interrupted `drive.sh` restores the four workers before
   it exits, so Ctrl-C during a disturbance no longer leaves the cluster a
   worker short (#377).
