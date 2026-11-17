@@ -1,6 +1,6 @@
 # Examples
 
-This directory holds the two files the documentation runs, not the compiled
+This directory holds the files the documentation runs, not the compiled
 example programs (those live in `go/examples/`).
 
 - [`wordcount.go`](wordcount.go): word count as a job file, `package job`
@@ -28,7 +28,22 @@ example programs (those live in `go/examples/`).
   current with `origin/main`, in about two minutes on the course VM. The
   [demo](../docs/demo.md) is the script for a live review, with timings.
 
-To run either, start with the commands in the README's
+- [`features.ipynb`](features.ipynb): a tour of the features on one
+  machine, the demo's companion. It needs no cluster and no Docker: it runs
+  every job in its own process with the Python library's local mode, and
+  writes only to a temporary directory it removes, so it is safe to run
+  beside the demo. It writes word count in two functions and checks it
+  against `testdata/corpus/expected`; shows that the output does not depend
+  on M, how keys are partitioned and sorted, the combiner's saving, user
+  counters, parameters and side outputs; runs all seven example programs
+  against their golden output; and shows the MRKV format's codecs and
+  checksums, the external sort, the write-ahead log's recovery rules, and
+  Go and Python agreeing byte for byte. It ends with a scorecard. It is
+  committed with the outputs of a full run, so it reads complete on GitHub;
+  rerun it with `jupyter nbconvert --to notebook --execute --inplace
+  examples/features.ipynb` and the `compression` and `notebook` extras.
+
+To run any of them, start with the commands in the README's
 [quick start](../README.md#quick-start).
 
 The compiled example programs — `grep`, `distsort`, `wordcount`,

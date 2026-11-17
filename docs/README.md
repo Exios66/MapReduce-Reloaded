@@ -29,7 +29,8 @@ Where to start depends on the question.
   known limits.
 - **How do I get from SSH to a running demo?** The [runbook](runbook.md).
   The six-minute walkthrough for a review is [the demo](demo.md). A notebook
-  version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb).
+  version of the runbook demo runs cell by cell in [`examples/demo.ipynb`](../examples/demo.ipynb),
+  and [`examples/features.ipynb`](../examples/features.ipynb) tours the features on one machine, with no cluster.
 - **How do I run the cluster?** [Cluster VM](cluster-vm.md): the VM's specifications,
   the memory budget, setup, and daily use. [`deploy/`](../deploy/) has the Compose project.
 - **Why Go and Python, not C++?** [Language choice](language-choice.md): the

@@ -15,6 +15,15 @@ cut a release.
 
 ### Added
 
+- Notebook: `examples/features.ipynb` tours the system's features on one
+  machine, as a companion to the demo: word count in two functions, output
+  independent of M, partitioning, the combiner, counters, parameters and
+  side outputs, all seven example programs against their golden output,
+  the MRKV codecs and checksums, the external sort, the write-ahead log's
+  recovery, and Go and Python agreeing byte for byte, with a scorecard. It
+  needs no cluster, writes only to a temporary directory, and is committed
+  with a full run's outputs. `python/tests/test_features_notebook.py`
+  checks its layout and outputs and runs its cells (#374).
 - Docs: `docs/report.md` shows the evaluation's eleven figures (E0 to E7,
   the fault summary, and the archived grep and sort rate plots), each
   captioned with its finding and in both color schemes, and cites its

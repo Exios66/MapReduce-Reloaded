@@ -302,6 +302,8 @@ CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
   the results against the paper's §5.
 - [Runbook](docs/runbook.md) and [demo](docs/demo.md): from SSH to a demo.
 - [`examples/demo.ipynb`](examples/demo.ipynb): the demo in Jupyter.
+- [`examples/features.ipynb`](examples/features.ipynb): a tour of the
+  features on one machine, with no cluster.
 - [Changelog](CHANGELOG.md): every release and what changed in it.
 - [Security policy](SECURITY.md): the trust model and how to report a
   vulnerability.
