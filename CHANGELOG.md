@@ -218,7 +218,7 @@ cut a release.
 
 - Notebook: §1 of `examples/demo.ipynb` stops only on a bare copy. A copy
   it cannot confirm is a clone of `main` current with GitHub's (a zip
-  download, another branch, no network, or a clone behind) now prints a
+  download, no `git`, another branch, no network, or a clone behind) now prints a
   warning and runs, and "How to open this notebook" works from any clone,
   not only the course VM's `~/mr-checkout` (#378).
 - Tooling: editors show the same lint warnings the build does, and none

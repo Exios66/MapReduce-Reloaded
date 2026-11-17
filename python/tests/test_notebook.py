@@ -131,11 +131,14 @@ def test_setup_clears_what_an_interrupted_run_left():
 def test_setup_stops_on_a_bare_copy_and_warns_on_an_unconfirmed_one():
     """§1 stops on a bare copy, which cannot run the demo, and only warns
     when it cannot confirm a clone of main current with origin/main: a zip
-    download, another branch, no network or a clone behind still runs."""
+    download, no git, another branch, no network or a clone behind still
+    runs."""
     source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
     for pattern in (
         "--is-inside-work-tree",
         "a bare copy cannot run the demo",
+        'shutil.which("git") is None',
+        "git is not installed",
         "is not a git clone",
         "the demo runs from main",
         "could not reach origin",
@@ -146,6 +149,7 @@ def test_setup_stops_on_a_bare_copy_and_warns_on_an_unconfirmed_one():
     tree = ast.parse(source)
     raised = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, (ast.Raise, ast.Assert))]
     for warned in (
+        "git is not installed",
         "is not a git clone",
         "the demo runs from main",
         "could not reach origin",
