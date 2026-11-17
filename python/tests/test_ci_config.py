@@ -308,6 +308,7 @@ def test_narrow_mode_without_a_part_is_an_error():
             env={**os.environ, "MR_CI_GO_NARROW": narrow, "MAKE": "true"},
             capture_output=True,
             text=True,
+            check=False,
         )
         assert result.returncode == 2 and "narrow mode needs a part" in result.stderr
 
@@ -369,9 +370,10 @@ def test_go_job_rejects_an_unplanned_node_count():
             env={**os.environ, "CIRCLE_NODE_TOTAL": str(total), "MAKE": "true"},
             capture_output=True,
             text=True,
+            check=False,
         )
         assert result.returncode == 2 and "1 or 3 CircleCI nodes" in result.stderr
-    result = subprocess.run([CI_GO_JOB], cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run([CI_GO_JOB], cwd=ROOT, capture_output=True, text=True, check=False)
     assert result.returncode == 2
 
 
@@ -484,7 +486,7 @@ def fake_go_download(tmp_path):
             "HOME": str(tmp_path),
             **env,
         }
-        return subprocess.run([INSTALL_GO], capture_output=True, text=True, env=full)
+        return subprocess.run([INSTALL_GO], capture_output=True, text=True, env=full, check=False)
 
     publish()
     return run, publish, calls, tmp_path / "cache" / f"go{version}-{arch}"

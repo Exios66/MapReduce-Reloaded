@@ -131,7 +131,7 @@ and does not wait for readiness; workers also wait for it themselves).
 ### What each service is
 
 | Service | Profile | Image | Command | Memory, CPU | Container port, host port | Mounts |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | `coordinator` | none | `mapreduce-reloaded`, built from `go/` | `coordinator -addr :7070 -http :8080 -data-dir /out/wal` | `mem_limit: 256m`, no CPU limit | 7070 gRPC, host 18770; 8080 status page and `/metrics`, host 18780 | `data/` at `/data`, `testdata/corpus` at `/corpus` (read-only), volume `output` at `/out` |
 | `worker` | none | `mapreduce-reloaded` | `worker -coordinator coordinator:7070 -http :8081 -min-free-mib 2048` | `mem_limit: 768m`, `cpus: 1`, 4 replicas | 8081 `/metrics`, not published; 7071 shuffle, the worker's default `-listen`, not published | the same three mounts |
 | `mr` | `tools` | `mapreduce-reloaded` | entrypoint `mr`, arguments from `run` | `mem_limit: 128m`, no CPU limit | none | the same three mounts |
@@ -156,7 +156,7 @@ Notes on the table:
 ### What breaks when one dies
 
 | Service | Effect | How it comes back |
-|---|---|---|
+| --- | --- | --- |
 | `coordinator` | No new tasks and no status page. Workers keep trying and register again. Without `-data-dir` the job would be lost; with it, a restarted coordinator replays `/out/wal`, keeps finished tasks and resumes the job (`make e2e` kills and restarts it to check this). A clean `docker compose stop` also tells the workers to exit; a crash or `docker kill` does not | `docker start` after a crash or `docker kill`. A clean stop, `docker restart` included, also ends the workers, which have no restart policy, so run `make cluster-up` then |
 | `worker` | After 10 s without a heartbeat the coordinator declares it dead. Its running tasks, and its finished map tasks, whose output was on its disk, run again on the others. E3 measured the cost ([bench/README.md](../bench/README.md#e3-losing-a-worker)). The job finishes on three workers | Compose has no restart policy here, so it stays down until `make cluster-up` or `docker start` |
 | `mr` | Nothing: it is a short-lived command | `run --rm` starts a new one |
@@ -188,7 +188,7 @@ workers call `coordinator:7070`, Prometheus calls `coordinator:8080` and
 `worker:8081`, and the Go containers call `s3:9000`.
 
 | Port | Where | Protocol | Published on the host? |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 7070 | coordinator | gRPC: `SubmitJob`, `GetJobStatus`, and the workers' four calls | `127.0.0.1:18770` |
 | 8080 | coordinator | HTTP: status page, `/metrics` | `127.0.0.1:18780` |
 | 7071 | each worker | gRPC: `ShuffleService.FetchPartition` | no |
@@ -221,7 +221,7 @@ Rules behind the table:
 ## 4. Volumes
 
 | Mount | Kind | Where it is mounted | Holds | Survives `make cluster-down`? |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `../../data` | bind mount of the repository's `data/` | `/data` in the coordinator, workers and `mr` | Job input and output: the shared storage | yes |
 | `../../testdata/corpus` | bind mount, read-only | `/corpus` in the same three; `/data/corpus` in `s3` | The four-book test corpus | yes: it is in the repository |
 | `output` | named volume, one per checkout: `mapreduce_output_<directory>_<hash>` | `/out` in the same three | The write-ahead log at `/out/wal`; the experiments' inputs and outputs | yes; `make cluster-clean` deletes it |
@@ -302,7 +302,7 @@ reducers read from the machine that did the map. Three consequences:
 ## 5. Decision log
 
 | Decision | Chosen | Rejected | Why | Record |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Orchestrator | Docker Compose on one VM | Kubernetes | The assignment asks for Compose on one VM with 4 vCPUs. Kubernetes is a stretch item, in the report's list of modern extensions (#43–#55) | [Design](../design.md#assignment-requirements), [report](report.md#future-work) |
 | Shared storage | A bind-mounted host directory, `data/` | HDFS; S3 as the default; a named volume only | HDFS needs a NameNode, DataNodes and Java in an 8 GB VM for locality that one VM cannot show. S3 adds a service to every run. A named volume cannot be reached by the host client | [ADR 0016](design/0016-shared-storage-and-host-client.md) |
 | Images | One image with `coordinator`, `worker` and `mr` | One image for each | One Dockerfile and one build, and the three binaries cannot differ in version (this reasoning is not in an ADR). The cost is that each container holds binaries it does not run; image size was not measured. Only `coordinator` has a `build:`, and the others use the same tag | Dockerfile comment; no ADR |
@@ -344,7 +344,7 @@ final stage's layers end up in the image: the compiler stays in `build`.
 ### The make targets
 
 | Target | What it runs |
-|---|---|
+| --- | --- |
 | `make cluster-up` | `make data` (creates `data/input` and `data/out`, and makes `data/out` writable by all), then `docker compose -p mapreduce -f deploy/compose/compose.yaml up -d --build`. That builds the image, creates the network and the `output` volume, and starts the coordinator and four workers in the background |
 | `make e2e` | `cluster-up`, then `make mr` (builds the host client `bin/mr`), then `scripts/e2e.sh`. The script checks that the image runs as a non-root user and that `coordinator`, `worker` and `mr status` print usage; uploads the corpus; submits word count with `bin/mr` (M = 7, R = 4); checks that no container was OOM-killed; compares the output with the golden files and deletes it; checks the coordinator's `/metrics` for 4 completed reduce tasks; starts Prometheus and queries it for the job's series; then kills the coordinator with `docker kill`, starts it, and checks the job still reports `SUCCEEDED` |
 | `make monitoring-up` | `up -d prometheus grafana` with the `monitoring` profile on |
@@ -387,7 +387,7 @@ the status page and `/metrics` instead.
 `$COMPOSE` is the command prefix set in section 6.
 
 | Symptom | Cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `bin/mr` cannot connect to the coordinator, or reports it unavailable | The cluster is not running, or the coordinator exited. Or you ran `mr` inside a container with the host address: there, `127.0.0.1` is the container | On the host: `$COMPOSE ps`, then `make cluster-up`. In a container: `-coordinator coordinator:7070` |
 | Prometheus, Grafana or the `s3` store is missing from `docker compose ps` | They have profiles, which are off by default. This is by design | `make monitoring-up` for the first two; `$COMPOSE --profile s3 up -d --wait s3` for the store. `run --rm mr` works without a profile flag |
 | A job fails with `permission denied` under `/data/out`, or you cannot delete its output | `data/` was created by Docker as root, because the cluster was started with a bare `docker compose up`, which skips `make data` | Remove or `chown` the root-owned `data/` with `sudo`, then run `make cluster-up` |

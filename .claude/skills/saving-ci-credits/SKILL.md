@@ -19,7 +19,7 @@ It checks that every commit is the owner's, by email (AGENTS.md "Commits and PRs
 ## Which push is which
 
 | Situation | Head commit | Behind main |
-|---|---|---|
+| --- | --- | --- |
 | Work or review still going on | `[skip ci]` | leave it |
 | Opening the PR | anything: opening always runs one pipeline, so open only when ready for review | leave it |
 | Final push | no `[skip ci]` | 0: merge main, then `make check` |

@@ -50,7 +50,7 @@ def fake_go(tmp_path):
             "GOBIN": str(gobin),
             **env,
         }
-        return subprocess.run([SCRIPT, pin], capture_output=True, text=True, env=full)
+        return subprocess.run([SCRIPT, pin], capture_output=True, text=True, env=full, check=False)
 
     return run, binary, log, gobin
 

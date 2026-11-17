@@ -32,7 +32,7 @@ The Go version (`go/pkg/api/api_test.go`) has the same shape, using
 ## The pieces
 
 | Piece | Purpose | Paper |
-|---|---|---|
+| --- | --- | --- |
 | Mapper, Reducer | The user's two functions | §2 |
 | Combiner | Pre-sums on the map side; same code as a reducer | §4.3 |
 | Partitioner | Picks the reducer for a key; default is the #5 hash | §4.1 |

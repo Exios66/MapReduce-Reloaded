@@ -8,7 +8,7 @@ written under a temporary name and renamed once complete (§4.5). Here,
 ## What happens
 
 | Step | Where the file is |
-|------|-------------------|
+| --- | --- |
 | The task writes it | `<output>/_temporary/<name>.<task>.attempt-<n>` |
 | The attempt fails | removed |
 | The attempt succeeds | renamed to `<output>/<name>` |

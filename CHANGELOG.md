@@ -208,6 +208,15 @@ cut a release.
 
 ### Changed
 
+- Tooling: editors show the same lint warnings the build does, and none
+  today. A new `.markdownlint.jsonc` mirrors `.pymarkdown.json` for
+  markdownlint (as VS Code's extension runs it), lets `CHANGELOG.md` repeat
+  its release headings, and sets tables to the compact style, one space
+  inside each pipe; every table in the docs now uses it, and
+  `docs/tests/test_markdown_tables.py` keeps it so. The pull request
+  templates may start at a second-level heading. Every `subprocess.run`
+  call in the Python code, scripts and tests now says `check=False` or
+  `check=True`, and ruff checks this (PLW1510) in `make py-lint` (#374).
 - Docs: `AGENTS.md` has a Branches section that agents follow along with
   the repository's GitHub settings: one branch per PR, a merged PR's branch
   deleted (GitHub's "Automatically delete head branches"), empty branches

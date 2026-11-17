@@ -132,7 +132,7 @@ def read_output(d: Path, r: int) -> list[bytes]:
 
 def run(label: str, cmd: list[str], out: Path, want: list[bytes], r: int) -> bool:
     start = time.monotonic()
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    p = subprocess.run(cmd, capture_output=True, text=True, check=False)
     took = time.monotonic() - start
     if p.returncode != 0:
         print(f"{label}: exit {p.returncode}\n{p.stdout}{p.stderr}")

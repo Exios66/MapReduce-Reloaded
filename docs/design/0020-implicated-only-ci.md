@@ -58,7 +58,7 @@ One pattern may map to several parameters (multiple lines). Anchored
 regexes; `re.search` semantics in the guard script.
 
 | Changed files | Jobs run |
-|---|---|
+| --- | --- |
 | `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod` | all (run-all) |
 | `go/**` | go |
 | `python/**` | python-3.11, python-3.13, go (the go job runs py-e2e) |

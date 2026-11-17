@@ -36,7 +36,7 @@ speak the same language if both understand the ticket format.
 ### `types.proto` — shared vocabulary
 
 | Type | Meaning | Paper |
-|---|---|---|
+| --- | --- | --- |
 | `TaskKind` | Map or reduce | §3.1 |
 | `TaskState` | Idle, in progress, or completed | §3.2 |
 | `TaskId` | "Job X, map task #7": a piece of work | |

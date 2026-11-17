@@ -47,7 +47,7 @@ and the job continues.
 ## Feature parity
 
 | Area | Paper features | State |
-|---|---|---|
+| --- | --- | --- |
 | Programming model, combiner, ordering, formats, partitioning, local mode, side outputs, counters, example programs | F1, F14–F18, F20, F22, F23 | Go and Python |
 | Splitting, master and tasks, shuffle, output files, atomic commit, task granularity | F2–F7, F10, F12 | Go; Python for splitting, partitioning and commit in local mode |
 | Worker failure, master recovery, backup tasks, bad records | F8, F9, F13, F19 | Go |
@@ -88,7 +88,7 @@ change behavior:
 ## Evaluation
 
 | Experiment | Result |
-|---|---|
+| --- | --- |
 | E0: scaling | 3.7× on four workers for word count, 3.1× for sort, 2.0× for grep |
 | E1: combiner | 15× to 78× fewer bytes shuffled, 16–42% faster |
 | §5.4 and E2: backup tasks | With one worker at 0.2 CPU, 11.4 s with backups and 17.9 s without (+58%; the paper saw +44%). With no straggler, no significant cost over ten interleaved pairs |
@@ -234,7 +234,7 @@ an AI agent plays the teammate, as the assignment allows
 ([design.md](../design.md#process)).
 
 | Practice | How it is enforced | Evidence |
-|---|---|---|
+| --- | --- | --- |
 | Never push to `main` | Branch protection on `main`: a pull request is required, the branch must be up to date, and the CircleCI checks must pass | Rule verified on 2026-10-29 (#267, #269) |
 | CI runs tests on pull requests | Six CircleCI checks are required to merge: `proto`, `go`, `python-3.11`, `python-3.13`, `lint` and `mapping-coverage`. Each runs its tests when the pull request touches its inputs; otherwise it passes after a skip note (ADR 0020). Running CI once, on each PR's final head, is the project's policy (AGENTS.md), not something CircleCI enforces. `make check` runs the protobuf, lint, Go and Python checks locally and in the pre-push hook, on one Python version and without the mapping-selection check | [CI](ci.md), [ADR 0014](design/0014-ci-on-pull-requests.md), [ADR 0020](design/0020-implicated-only-ci.md) |
 | Many small pull requests | One concern each, from the templates in `.github/`, each with its changelog entry | 223 merged pull requests by 16 November 2026; [changelog](../CHANGELOG.md) |

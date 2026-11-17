@@ -13,7 +13,7 @@ course VM.
 ## What each moment shows
 
 | Time | Moment | Requirement or paper section |
-|---|---|---|
+| --- | --- | --- |
 | 0:00 | Four workers, one CPU each, and the coordinator | Cluster of 1 coordinator and 4 one-CPU workers (§5.1 of the assignment) |
 | 0:30 | `mr submit` of a Go job file, from the host | Client submits a job from a file; map and reduce are user code (paper §2) |
 | 1:15 | The same job with the combiner off | Combiner (paper §4.3), measured in E1 and E6 |
@@ -184,7 +184,7 @@ make cluster-down    # keeps the output volume: the demo's write-ahead log and d
 Each answer has a command or a page to show.
 
 | Question | Show |
-|---|---|
+| --- | --- |
 | How do you know it is correct? | `make chaos RUNS=5 SEED=1`: seeded worker kills and pauses and coordinator crashes, each run checked against the reference output. [Testing](testing.md) lists the rest: golden vectors shared by Go and Python, a model-based test of the coordinator, fuzzing, mutation testing |
 | Which paper features are built? | [Paper mapping](paper-mapping.md): F1–F24, each with its code and the test that proves it; `internal/papermap` fails the build if one is missing |
 | What about stragglers? | [`faults.png`](../bench/evaluation/faults.png) and [E2](../bench/README.md#evaluation-e0e7): backups cut a straggler's job from 17.9 s to 11.4 s. [E7](../bench/README.md#evaluation-e0e7): on four workers of mixed speeds either rule cuts a sort by 32%; LATE needs fewer backups (1 against 5), and the two times overlap. `deploy/compose/backups-off.yaml` turns them off; `speculation-late.yaml` switches to LATE (ADR 0019) |

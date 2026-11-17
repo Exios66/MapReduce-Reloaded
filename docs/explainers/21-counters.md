@@ -23,7 +23,7 @@ where every task runs once.
 ## Built-in counters
 
 | Counter | What it counts |
-|---------|----------------|
+| --- | --- |
 | `map.input.records` | records read by map tasks |
 | `map.input.bytes` | the size of the input splits |
 | `map.output.records` | records emitted by the mapper |

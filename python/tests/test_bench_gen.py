@@ -119,6 +119,7 @@ def test_book_needs_the_book(tmp_path):
     r = subprocess.run(
         [sys.executable, BENCH / "gen-book.py", "10", "1", tmp_path / "none.txt"],
         capture_output=True,
+        check=False,
     )
     assert r.returncode != 0 and b"fetch-data.sh" in r.stderr
 
@@ -160,6 +161,8 @@ def test_crawl_needs_enough_text(tmp_path, pages, message):
     if pages:
         wet_file(tmp_path / "a.warc.wet.gz", pages)
     r = subprocess.run(
-        [sys.executable, BENCH / "gen-crawl.py", "100", "eng", tmp_path], capture_output=True
+        [sys.executable, BENCH / "gen-crawl.py", "100", "eng", tmp_path],
+        capture_output=True,
+        check=False,
     )
     assert r.returncode != 0 and message in r.stderr

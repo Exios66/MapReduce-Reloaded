@@ -35,7 +35,7 @@ the disk.
   values and check that every key still appears once, in order.
 
 | | Go (`go/internal/extsort`) | Python (`mapreduce_reloaded.extsort`) |
-|---|---|---|
+| --- | --- | --- |
 | Sort | `Sorter` with `Add`, `Sorted`, `Close` | `Sorter` with `add`, `sorted`, `close` |
 | Merge | `container/heap`, ties by run index | `heapq.merge` (stable) |
 | Group | `Groups`, an `iter.Seq2` | `groups`, built on `itertools.groupby` |

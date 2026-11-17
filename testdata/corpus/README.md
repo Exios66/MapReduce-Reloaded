@@ -6,7 +6,7 @@ them. Every way of running a job, in both languages, is checked against
 counted, partitioned, sorted or written shows up here first.
 
 | File | Work | Author | Project Gutenberg eBook | Bytes | Words | Distinct words |
-|---|---|---|---|---:|---:|---:|
+| --- | --- | --- | --- | ---: | ---: | ---: |
 | `alice.txt` | Alice's Adventures in Wonderland | Lewis Carroll | #11 | 147,800 | 26,449 | 5,298 |
 | `jekyll.txt` | The Strange Case of Dr. Jekyll and Mr. Hyde | Robert Louis Stevenson | #42 | 143,270 | 25,740 | 6,187 |
 | `raven.txt` | The Raven | Edgar Allan Poe | #17192 | 46,567 | 7,183 | 2,731 |
@@ -38,7 +38,7 @@ case and punctuation count: `the`, `The` and `THE` are three words, and
   `to` and `a` all hash to part 0.
 
 | Part | Distinct words | Occurrences | Bytes |
-|---|---:|---:|---:|
+| --- | ---: | ---: | ---: |
 | `part-r-00000` | 4,198 | 26,911 | 43,666 |
 | `part-r-00001` | 4,242 | 17,467 | 44,191 |
 | `part-r-00002` | 4,206 | 18,953 | 44,088 |
@@ -53,7 +53,7 @@ against the files.
 ## What is checked against it
 
 | Where it runs | Test |
-|---|---|
+| --- | --- |
 | Local mode, Go, for several values of M, and with input and output in S3 | `go/internal/local/local_test.go`, `go/internal/local/s3_test.go` |
 | Local mode, Python | `python/tests/test_local.py` |
 | The `mr` command, and the job file `examples/wordcount.go` interpreted | `go/cmd/mr/main_test.go`, `go/internal/jobfile/jobfile_test.go` |

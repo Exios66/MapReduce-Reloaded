@@ -19,7 +19,7 @@ Everything described here is built and tested.
 Each requirement of the assignment, and where this repository meets it.
 
 | Requirement | Where | State |
-|---|---|---|
+| --- | --- | --- |
 | Docker Compose on one VM with 4 vCPUs | [`deploy/compose/compose.yaml`](deploy/compose/compose.yaml), [cluster VM](docs/cluster-vm.md) | built |
 | Four worker containers, each limited to 1 CPU | `cpus: 1` on the worker service | built |
 | Client outside every container | `bin/mr` on the VM ([Client interface](#client-interface)) | built |
@@ -54,7 +54,7 @@ bin/mr cat /data/out/wc | head                    # read the output
 `mr submit` takes the five things the assignment lists:
 
 | Assignment | `mr submit` |
-|---|---|
+| --- | --- |
 | where inputs are in shared storage | trailing arguments: paths or globs under `/data` (or `s3://…`) |
 | where outputs go in shared storage | the output directory, e.g. `/data/out/wc` |
 | a file with map and reduce functions | a `.go` job file, read on the client and sent with the job ([ADR 0015](docs/design/0015-user-job-files.md)) |
@@ -105,7 +105,7 @@ or authenticated: the cluster trusts its network, and Compose publishes the
 coordinator on the VM's loopback only ([ADR 0018](docs/design/0018-trust-model.md)).
 
 | From → to | RPCs | Notes |
-|---|---|---|
+| --- | --- | --- |
 | client → coordinator | `SubmitJob`, `GetJobStatus` | `-wait` polls status until the job ends |
 | worker → coordinator | `RegisterWorker`, `Heartbeat`, `RequestTask`, `ReportTask` | Workers pull tasks. The coordinator never opens a connection to a worker, so a worker behind a restart just registers again |
 | worker → worker | `ShuffleService.FetchPartition` | Server-streaming, 64 KiB chunks, resumable from a byte offset ([ADR 0008](docs/design/0008-shuffle.md)) |
@@ -134,7 +134,7 @@ input with a plain copy and read output without a container
 ### Data formats
 
 | Data | Format |
-|---|---|
+| --- | --- |
 | Input | Text, one record per line (key = byte offset, value = line), or MRKV records (`-input-format kv`) |
 | Intermediate | MRKV: our block format of length-prefixed key/value records, with a CRC-32C per block and a footer; blocks optionally compressed with zstd or Snappy ([spec](docs/file-format.md), [ADR 0004](docs/design/0004-intermediate-file-format.md)). One sorted file per map task and reduce partition |
 | Output | Text, `key<TAB>value` per line, one `part-r-NNNNN` per reduce task (default), or MRKV (`-output-format kv`) |
@@ -153,7 +153,7 @@ CircleCI runs them on every pull request, and not on pushes to `main`
 [ADR 0021](docs/design/0021-no-ci-on-main-pushes.md), [CI](docs/ci.md)).
 
 | Kind | What it checks | Where |
-|---|---|---|
+| --- | --- | --- |
 | Unit | Each package: splits, task table, WAL replay, external sort, combiner, formats, partitioner, shuffle resume, storage | `go test ./...`, `pytest` |
 | Cross-language | Go and Python agree on the partition hash and on MRKV, byte for byte, from shared test vectors | `testdata/hash`, `testdata/format` |
 | Golden | Local mode and the cluster give identical output for every example program | `go/internal/worker/examples_test.go` |
@@ -227,7 +227,7 @@ The cluster shares one VM with other coursework, so nothing it keeps grows
 without bound ([ADR 0017](docs/design/0017-disk-and-memory-bounds.md)):
 
 | What | Bound |
-|---|---|
+| --- | --- |
 | Map output on each worker | Deleted once the job ends: each heartbeat reply lists the active jobs, and the worker deletes the rest (§3.1 step 7) |
 | Map output of a killed worker | Without `-work-dir`, each worker locks its temporary directory while it runs; a starting worker deletes the directories whose lock it can take, those of dead workers |
 | Experiment results and inputs | `bench/experiments.sh` keeps a rerun's earlier results in `bench/results/previous/` (last three per experiment) and deletes interrupted runs' outputs and inputs of other sizes from the volume; results kept for good are in `bench/evaluation/` |
@@ -252,7 +252,7 @@ the range shown as an error bar. Each plot's caption states the input size,
 M, R and the commit.
 
 | # | Question | Experiment | Plot |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | E0 | Is the job faster when its tasks are spread over all four 1-CPU workers, as the assignment's deployment intends? | grep, sort and Zipf word count (1 GiB) on 1, 2 and 4 workers | Job time against workers, one line per program, with ideal linear speed-up dashed |
 | E1 | How much does the combiner save? | Zipf word count, 1 GiB, Zipf exponent 0.5, 1.0 and 1.5, combiner on and off (`-combiner=false`), alternating which runs first | Two panels: bytes shuffled and job time, grouped bars per exponent |
 | E2 | Do backup tasks hide a straggler? | sort, 1 GiB, M = 32; one worker throttled to 0.2 CPU (`docker update --cpus 0.2`) at the start; coordinator `-backups` on and off; also no straggler | Tasks completed against time, one line per setting, as the paper's Figure 3; job-time bars beside it |
@@ -627,7 +627,7 @@ no reducer is told about them.
 ## Differences from the 2004 paper
 
 | Paper (§) | This system | Why | Record |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Google's internal RPC (§3.1) | gRPC and protobuf, with Go and Python generated from `proto/` | Both languages must speak one wire contract, and the shuffle needs streaming. | [ADR 0003](docs/design/0003-rpc-contract.md), [explainer](docs/explainers/03-rpc-contract.md) |
 | GFS holds input and output (§3.1) | A host directory bind-mounted at `/data` in every container , read and written through `internal/storage`, or S3-compatible object storage (`s3://bucket/key`, configured by the standard AWS environment variables). Without a rename, an S3 commit is a server-side copy, then a delete. | GFS is not available, the cluster runs on one VM, and the client on the host must reach the same files. | [ADR 0016](docs/design/0016-shared-storage-and-host-client.md), [cluster VM](docs/cluster-vm.md), [ADR 0013](docs/design/0013-commit-on-object-storage.md) |
 | Intermediate records in files of undescribed format (§3.1) | MRKV: checksummed blocks of records with a footer, each block optionally compressed with zstd or Snappy (#42). | Go and Python must agree byte for byte (uncompressed) or record for record (compressed), corruption must be detected, and fetches must resume. | [ADR 0004](docs/design/0004-intermediate-file-format.md), [file format](docs/file-format.md), [explainer](docs/explainers/04-file-format.md) |

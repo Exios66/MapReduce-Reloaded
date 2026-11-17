@@ -54,7 +54,12 @@ def branch(tmp_path):
 
     def run():
         result = subprocess.run(
-            ["bash", str(PREFLIGHT)], cwd=clone, env=env, capture_output=True, text=True
+            ["bash", str(PREFLIGHT)],
+            cwd=clone,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         identity = [line for line in result.stdout.splitlines() if "commit" in line]
         return result.returncode, identity

@@ -10,10 +10,10 @@ coordinator, which needs no connection back to them.
 
 ## Giving its work back
 
-| The dead worker's…  | Becomes | Why |
-|---------------------|---------|-----|
-| running tasks       | idle    | they will never report |
-| completed map tasks | idle    | their output was on its disk |
+| The dead worker's… | Becomes | Why |
+| --- | --- | --- |
+| running tasks | idle | they will never report |
+| completed map tasks | idle | their output was on its disk |
 | completed reduce tasks | done | their output is in the job's output directory |
 
 Reduce tasks only start once every map task is done, so the reset map

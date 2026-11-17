@@ -10,7 +10,7 @@ them to predict how long a job would take and to find slow machines.
 `coordinator -http :8080` (the default) serves:
 
 | Path | What | Where |
-|------|------|-------|
+| --- | --- | --- |
 | `/` | Jobs as compact cards, each linkable as `#job-<id>`: duration, state badge, map and reduce progress with a percentage, backup attempts, host- and zone-local map counts, key counters, all counters in a `<details>`, and errors; live workers with their zone, slots in use, heartbeat age and what each runs, with the percentage of its input each task reported done in the last heartbeat; lost workers and the tasks that had to run again. It updates every 2 seconds without reloading, can be paused, and follows the reader's light or dark color scheme; `?theme=dark` forces dark. | `statusweb/status.html` |
 | `/metrics` | `mr_workers`, `mr_job_tasks{job,kind,state}`, `mr_job_duration_seconds{job}`, `mr_job_backups{job,state}`, `mr_job_map_tasks_local{job,level}` and `mr_job_counter{job,name}`, in the Prometheus text format | `statusweb/metrics.go` |
 
@@ -67,7 +67,7 @@ its own and those of the attempt's user code (`Context.Logger`), with
 is `info`. The events, at `info` unless noted:
 
 | From | Message | Fields |
-|---|---|---|
+| --- | --- | --- |
 | Coordinator | `worker registered` | `worker`, `host`, `shuffle_address`, `workers` |
 | Coordinator | `job submitted` | `job`, `program`, `inputs`, `output`, `map_tasks`, `reduce_tasks`, `combiner`, `workers` |
 | Coordinator | `task assigned` | `job`, `kind`, `index`, `attempt`, `worker`, `backup`, `locality` |

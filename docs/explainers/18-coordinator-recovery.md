@@ -8,7 +8,7 @@ log and carries on with the job.
 ## What is logged
 
 | Record | Written when |
-|--------|--------------|
+| --- | --- |
 | `JobSubmitted` | a job is accepted, with its splits |
 | `TaskAssigned` | an attempt starts on a worker |
 | `ReportTaskRequest` | a worker reports an attempt, as received |
@@ -26,7 +26,7 @@ logged: workers register again.
 ## What a restart keeps
 
 | State | After a restart |
-|-------|-----------------|
+| --- | --- |
 | completed reduce tasks | done: their output is in the output directory |
 | completed map tasks | done: their output is still on the workers |
 | running attempts | stopped, and their tasks run again |

@@ -22,7 +22,7 @@ run on CircleCI. [Status](#status) says what has been confirmed.
 ## The jobs
 
 | Check name | Make targets | Image, resource class |
-|---|---|---|
+| --- | --- | --- |
 | `proto` | `make proto-check` (buf lint, buf breaking against a fresh `origin/main`, generated code is current) | `cimg/python:3.13`, medium |
 | `go` | `make sh-lint go-lint go-test py-e2e` (shellcheck, gofmt, vet, golangci-lint, race tests, paper mapping, coverage floors, and the Python coordinator with the Go commands), split across three nodes (see [Pipeline time](#pipeline-time)) | `cimg/python:3.13`, medium, `parallelism: 3` |
 | `python-3.11` | `make py-lint py-test` (ruff, the Python tests and coverage floors) | `cimg/python:3.11`, small |
@@ -79,7 +79,7 @@ regex matches it. Three rules keep the selection conservative:
   setup step cannot skip a job silently.
 
 | Changed files | Jobs run |
-|---|---|
+| --- | --- |
 | `.circleci/**`, `Makefile`, `python/pyproject.toml`, `scripts/**`, `bin/**`, `go/go.mod`, `.gitignore` | all (run-all) |
 | any deleted file, any unmapped file | all (run-all) |
 | `go/**` | go |
@@ -165,7 +165,7 @@ How each job meets its requirements:
   runs each part its files implicate:
 
   | Part | Parameter | Files | Runs |
-  |---|---|---|---|
+  | --- | --- | --- | --- |
   | python | `run-go-python` | `python/**` | `make go-python-test` on node 0, `make py-e2e` on node 2 |
   | docs | `run-go-docs` | `README.md`, `docs/paper-mapping.md` | `make go-python-test` on node 0 |
   | sh | `run-sh-lint` | `*.sh`, `.githooks/**` | `make sh-lint` on node 2 |
@@ -241,7 +241,7 @@ was always `go`, which ran its parts in series in one step. Measured on
 implicated):
 
 | Job | Before | Longest step |
-|---|---|---|
+| --- | --- | --- |
 | `go` | 395 s | `make go-lint go-test py-e2e`, 366 s |
 | `proto` | 180 s | `make tools` rebuilding buf, 151 s |
 | `python-3.13` | 103 s | `make py-lint py-test`, 69 s |
@@ -257,7 +257,7 @@ so CircleCI ran about 1.27 times slower. Split across the three nodes, each
 with about 30 s of setup:
 
 | Go node | Runs | Estimated |
-|---|---|---|
+| --- | --- | --- |
 | 0 | `go-test-race` | about 220 s |
 | 1 | `go-test-cover` | about 140 s |
 | 2 | `sh-lint`, `go-lint`, `py-e2e` | about 100 s |
@@ -285,7 +285,7 @@ checked with an A/B run ([ADR 0025](design/0025-narrow-go-modes-and-docs-tests.m
 to two CPUs, warm build caches, two runs of each pass in turn:
 
 | Go node | Runs | A | B |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 0 | `go-test-race` | 203 s, 180 s | 156 s, 136 s |
 | 1 | `go-test-cover` | 103 s, 100 s | 111 s, 100 s |
 | 2 | `go-lint`, `py-e2e` | | 23 s + 49 s |
@@ -300,7 +300,7 @@ has room to spare.
 Caches only save time; none of them replaces a check.
 
 | Cache | Key | What a hit skips |
-|---|---|---|
+| --- | --- | --- |
 | pip downloads | Python version, `python/pyproject.toml` | Downloads. `pip install` still runs. |
 | Go toolchain | architecture, Go version | The download. The script runs the restored `go` and rejects a wrong version. |
 | Go modules | `go/go.sum` | Downloads. `go mod download` still runs. |
@@ -397,7 +397,7 @@ these. Do them in order. Each step is safe to stop after.
 ## Required checks
 
 | Branch protection | Source |
-|---|---|
+| --- | --- |
 | Pull request required, `main` | GitHub |
 | `proto`, `go`, `python-3.11`, `python-3.13`, `lint`, `mapping-coverage` | CircleCI, as GitHub names them |
 | Branch up to date with `main` before merging | GitHub (strict status checks, on since 2026-10-28) |

@@ -11,7 +11,7 @@ slower.
 ## What happens
 
 | Step | Where |
-|------|-------|
+| --- | --- |
 | A worker asks for work and no task of the current phase is idle | `Server.RequestTask` |
 | The coordinator offers it the in-progress task whose attempt started first, of those with one attempt, running on another worker | `TaskTable.Backup` |
 | The backup is an ordinary attempt, with the next attempt number | `TaskTable.Assign` |

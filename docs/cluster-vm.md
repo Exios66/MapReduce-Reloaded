@@ -22,7 +22,7 @@ Measured on the course VM on 2026-10-26 (`lscpu`, `/proc/meminfo`,
 `lsblk`, `df`):
 
 | | |
-|---|---|
+| --- | --- |
 | CPU | 4 vCPUs, Intel Xeon Silver 4516Y+, 1 thread per core, KVM guest |
 | Memory | 8 GB: `MemTotal` 8,130,756 kB (7,940 MB), no swap |
 | Disk | 35 GB (`/dev/sda`), with a 33 GB root filesystem (`/dev/sda1`) holding `$HOME`, Docker and job data |
@@ -47,7 +47,7 @@ that a job runs faster when its tasks are spread over all four. Compose sets
 CPU per container.
 
 | Service | CPU limit | Why |
-|---|---|---|
+| --- | --- | --- |
 | worker (× 4) | 1 CPU each | One worker per vCPU: a job that keeps all four busy uses the whole VM, and one that runs on fewer workers is measurably slower |
 | coordinator | none | It only schedules and stores locations (§3.2), and it is idle most of the time |
 | mr, s3, prometheus, grafana | none | Short-lived or optional; the benchmarks record whether they ran |
@@ -67,7 +67,7 @@ keeps well under it. Each service gets a hard memory limit (`mem_limit` in
 slowing down the whole VM.
 
 | Service | Limit | Why this much |
-|---|---|---|
+| --- | --- | --- |
 | coordinator | 256 MB | Holds only task state and partition locations, never data (§3.2) |
 | worker (× 4) | 768 MB each | 256 MB sort buffer (#10 spills beyond that), the rest for the Go runtime, gRPC and file buffers |
 | mr (on demand) | 128 MB | Submits jobs and polls status; workers process the data |

@@ -10,7 +10,7 @@ The current results are the rerun of 11 November 2026, at commit `8f0ddb9`
 Each directory is named for the commit it ran at, or for what it was.
 
 | Directory | Ran at | What it was | Replaced by |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | [`8f0ddb9-E0-first/`](8f0ddb9-E0-first/) | `8f0ddb9`, 11 Nov 2026 | The rerun's first E0, five runs, with every program's input in the page cache at once | [`../E0/`](../E0/), at `3a907de`; its [`NOTE.md`](8f0ddb9-E0-first/NOTE.md) says why |
 | [`paper-2707160/`](paper-2707160/) | `2707160`, 28 Oct 2026 | One grep run over 10 GB and one sort over 1 GiB, with `bench/run.sh`: the rate samples behind the two rates plots in [the evaluation against the paper](../../../docs/evaluation.md) | Not rerun; E0 has the rerun's grep and sort times, without rate samples |
 | [`before-8f0ddb9/`](before-8f0ddb9/) | Several commits, late Oct 2026 | E0–E6 as first published, three repeats each, with their harness logs | `../E0/` to `../E6/` and `../E2-pairs/` |

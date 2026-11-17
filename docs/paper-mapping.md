@@ -15,17 +15,17 @@ the paper, the notes below the table say how.
 
 Status: `planned` → `in progress` → `done`.
 
-| ID  | Feature | Paper § | Phase | Go | Python | Test | Status |
-|-----|---------|---------|-------|----|--------|------|--------|
-| F1  | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | `Example_wordCount`, `TestWordCountGolden`, `test_api.py`, `test_wordcount_golden` | done |
-| F2  | Input splitting (16–64 MB) | §3.1 | 2 | `go/internal/split` | `mapreduce_reloaded/split.py` | `TestPlanCoversInput`, `test_split.py` | done |
-| F3  | Master + M map / R reduce tasks | §3.1 | 2 | `go/internal/coordinator`, `go/internal/worker` | — | `TestClusterWordCount`, `TestRequestTask`, `TestReportTask` | done |
-| F4  | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition`, `go/internal/task` | `mapreduce_reloaded/partition` | `TestVectors`, `test_partition_hash.py`, `TestClusterMapOutputMatchesLocal` | done |
-| F5  | Remote fetch, merge, group, reduce | §3.1 | 2 | `go/internal/shuffle`, `go/internal/task` | — | `TestFetch`, `TestFetchResumes`, `TestClusterWordCount` | done |
-| F6  | R output files | §3.1 | 2 | `go/internal/task` | `mapreduce_reloaded/local.py` | `TestWordCountGolden`, `test_wordcount_golden` | done |
-| F7  | Master data structures | §3.2 | 2 | `go/internal/coordinator` | — | `TestInvariants`, `TestResetWorker` | done |
-| F8  | Worker failure + map re-execution | §3.3 | 3 | `go/internal/coordinator`, `go/internal/worker` | — | `TestExpire`, `TestClusterSurvivesWorkerLoss`, `TestChaos` | done |
-| F9  | Master checkpoint / recovery | §3.3 | 3 | `go/internal/wal`, `go/internal/coordinator` | — | `TestRecover`, `TestClusterSurvivesCoordinatorRestart`, `TestChaos` | done |
+| ID | Feature | Paper § | Phase | Go | Python | Test | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| F1 | Map/Reduce programming model | §2 | 1 | `go/pkg/api` | `mapreduce_reloaded/api.py` | `Example_wordCount`, `TestWordCountGolden`, `test_api.py`, `test_wordcount_golden` | done |
+| F2 | Input splitting (16–64 MB) | §3.1 | 2 | `go/internal/split` | `mapreduce_reloaded/split.py` | `TestPlanCoversInput`, `test_split.py` | done |
+| F3 | Master + M map / R reduce tasks | §3.1 | 2 | `go/internal/coordinator`, `go/internal/worker` | — | `TestClusterWordCount`, `TestRequestTask`, `TestReportTask` | done |
+| F4 | Partition `hash(key) mod R`, spill to local disk | §3.1 | 2 | `go/internal/partition`, `go/internal/task` | `mapreduce_reloaded/partition` | `TestVectors`, `test_partition_hash.py`, `TestClusterMapOutputMatchesLocal` | done |
+| F5 | Remote fetch, merge, group, reduce | §3.1 | 2 | `go/internal/shuffle`, `go/internal/task` | — | `TestFetch`, `TestFetchResumes`, `TestClusterWordCount` | done |
+| F6 | R output files | §3.1 | 2 | `go/internal/task` | `mapreduce_reloaded/local.py` | `TestWordCountGolden`, `test_wordcount_golden` | done |
+| F7 | Master data structures | §3.2 | 2 | `go/internal/coordinator` | — | `TestInvariants`, `TestResetWorker` | done |
+| F8 | Worker failure + map re-execution | §3.3 | 3 | `go/internal/coordinator`, `go/internal/worker` | — | `TestExpire`, `TestClusterSurvivesWorkerLoss`, `TestChaos` | done |
+| F9 | Master checkpoint / recovery | §3.3 | 3 | `go/internal/wal`, `go/internal/coordinator` | — | `TestRecover`, `TestClusterSurvivesCoordinatorRestart`, `TestChaos` | done |
 | F10 | Atomic commits | §3.3 | 2 | `go/internal/task`, `go/internal/storage`, `go/internal/coordinator` | `mapreduce_reloaded/local.py` | `TestFailedAttemptLeavesNoFiles`, `TestFirstCompletionWins`, `TestDuplicateAttemptsS3`, `test_failed_reduce_leaves_no_part` | done |
 | F11 | Locality-aware scheduling | §3.4 | 4 | `go/internal/coordinator` | — | `TestLocality`, `TestLocalityWait`, `TestClusterLocality` | done |
 | F12 | Task granularity (M, R ≫ workers) | §3.5 | 2 | `go/internal/split`, `go/internal/coordinator` | `mapreduce_reloaded/split.py` | `TestSizeFor`, `TestSubmitJob` | done |

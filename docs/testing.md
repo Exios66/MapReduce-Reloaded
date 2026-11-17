@@ -9,7 +9,7 @@ test below are run by hand or by their own target, and CI runs none of the
 rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 
 | Kind | Command | In `make check` | Where |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Unit | `cd go && go test ./...`, `cd python && python -m pytest` | yes | next to each package |
 | File format, the same bytes in Go and Python | `go test ./internal/formats/kv`, `python -m pytest tests/test_kv.py tests/test_kv_block_shapes.py` | yes | `testdata/format/`, `TestCompressedBlockShapes` |
 | Golden output, Go against Python | `go test ./cmd/mr -run TestExamples` | yes | `testdata/examples/`, #153 |
@@ -77,7 +77,7 @@ a package; run it on the VM.
 Measured on 2026-11-07:
 
 | Package, files | Killed | Survived | Score |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `internal/partition`, `hash.go` | 7 | 0 | 100% |
 | `internal/extsort`, `merge.go sorter.go` | 71 | 5 | 93.4% |
 | `internal/coordinator`, `tasktable.go` | 171 | 15 | 91.9% |
@@ -124,7 +124,7 @@ function with [mutmut](https://github.com/boxed/mutmut), installed by
 files and the tests it runs. It takes about a minute.
 
 | File | Killed | Survived | Score |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `formats/kv.py` | 372 | 77 | 82.9% |
 | `partition/hash.py` | 11 | 3 | 78.6% |
 

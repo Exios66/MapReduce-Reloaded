@@ -41,6 +41,7 @@ def bin_dir(tmp_path_factory):
         cwd=ROOT / "go",
         capture_output=True,
         text=True,
+        check=False,
     )
     if build.returncode != 0:
         give_up(f"cannot build the Go commands: {build.stderr}")
@@ -139,6 +140,7 @@ class Cluster:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return None
@@ -189,7 +191,9 @@ class Cluster:
 def mr(bin_dir, *args):
     """Runs the mr client and returns its stdout."""
     try:
-        r = subprocess.run([str(bin_dir / "mr"), *args], capture_output=True, text=True, timeout=60)
+        r = subprocess.run(
+            [str(bin_dir / "mr"), *args], capture_output=True, text=True, timeout=60, check=False
+        )
     except subprocess.TimeoutExpired:
         pytest.fail(f"mr {' '.join(args)} did not exit within 60s")
     if r.returncode != 0:

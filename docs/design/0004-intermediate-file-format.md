@@ -43,7 +43,7 @@ The parts work together:
 ## Alternatives considered
 
 | Option | Why not |
-|---|---|
+| --- | --- |
 | Hadoop SequenceFile | Tied to Java types. Its sync-marker scheme is more complex than we need. There is no maintained Go/Python library that writes it byte-exactly. |
 | Avro container files | Needs a schema for opaque byte pairs. The library dependency is heavier, and byte-exact output across languages is not guaranteed. |
 | Parquet | Columnar and built for analytical scans, not append-only streaming of sorted pairs. Writing small runs costs too much. It will be supported as a user *input/output* format in Phase 6 (#51, stretch). |

@@ -10,7 +10,7 @@ answers three questions:
 3. **How are output records written?** (`Create`)
 
 | Format | Input record | Output line | Splits |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `text` | key = byte offset of the line, value = the line | `key<TAB>value\n` | every `split_size` bytes |
 | `kv` | the stored key and value | an MRKV file (#8) | one per file |
 

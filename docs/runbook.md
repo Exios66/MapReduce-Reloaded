@@ -268,7 +268,7 @@ write-ahead log, and all unselected directories are preserved.
 ## Troubleshooting
 
 | Symptom | Fix |
-|---|---|
+| --- | --- |
 | `make: command not found` | `sudo apt-get install -y make` |
 | `go: command not found` | `export PATH="$HOME/.local/go/bin:$PATH"` (step 2 adds it to `~/.bashrc`) |
 | `ssh: Could not resolve hostname` or a timeout | Connect to the VPN |

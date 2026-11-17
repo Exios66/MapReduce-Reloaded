@@ -1,0 +1,24 @@
+{
+  // markdownlint's settings, for editors such as VS Code's markdownlint
+  // extension. They mirror .pymarkdown.json, which make md-lint runs, so the
+  // editor flags what the build flags and nothing else:
+  // - line length (MD013) is off: the docs use long lines and wide tables;
+  // - MD018 is off: "#35"-style issue references in lists are not headings;
+  // - MD036 is off: the roadmap uses bold labels as subheads;
+  // - inline HTML (MD033) allows the figures' <picture>, <source> and <img>,
+  //   and <sub>;
+  // - hard tabs (MD010) are allowed in code blocks, as Go formats them;
+  // - a heading may repeat one under another parent (MD024), as CHANGELOG.md's
+  //   Added and Fixed do under each release; pymarkdown is turned off there
+  //   by a pragma in the file instead.
+  // Tables use the compact style (MD060), one space inside each pipe, which
+  // docs/tests/test_markdown_tables.py checks in make check.
+  "default": true,
+  "MD013": false,
+  "MD018": false,
+  "MD036": false,
+  "MD033": { "allowed_elements": ["picture", "source", "img", "sub"] },
+  "MD010": { "code_blocks": false },
+  "MD024": { "siblings_only": true },
+  "MD060": { "style": "compact" }
+}

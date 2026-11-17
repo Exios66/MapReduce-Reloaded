@@ -47,7 +47,7 @@ Where to start depends on the question.
 Short ADRs: the decision, the alternatives, and what follows from it.
 
 | ADR | Decision |
-|---|---|
+| --- | --- |
 | [0001](design/0001-languages-and-shared-contract.md) | Go primary, Python reference, one shared contract |
 | [0002](design/0002-local-quality-gate.md) | Local quality gate (`make check` and a pre-push hook) |
 | [0003](design/0003-rpc-contract.md) | The gRPC/protobuf contract |
@@ -81,7 +81,7 @@ likely to ask. The number is the issue that built it. File numbering starts
 at 03: there are no explainers 01 and 02, and the files were not renumbered.
 
 | Component | Issue |
-|---|---|
+| --- | --- |
 | [The RPC Contract](explainers/03-rpc-contract.md) | #3 |
 | [The MRKV File Format](explainers/04-file-format.md) | #4 |
 | [The Partition Hash](explainers/05-partition-hash.md) | #5 |
