@@ -216,6 +216,11 @@ cut a release.
 
 ### Changed
 
+- Notebook: §1 of `examples/demo.ipynb` stops only on a bare copy. A copy
+  it cannot confirm is a clone of `main` current with GitHub's (a zip
+  download, no `git`, another branch, no network, or a clone behind) now prints a
+  warning and runs, and "How to open this notebook" works from any clone,
+  not only the course VM's `~/mr-checkout` (#378).
 - Tooling: editors show the same lint warnings the build does, and none
   today. A new `.markdownlint.jsonc` mirrors `.pymarkdown.json` for
   markdownlint (as VS Code's extension runs it), lets `CHANGELOG.md` repeat
@@ -478,6 +483,14 @@ cut a release.
 
 ### Fixed
 
+- Docs: the runbook's one-time VM setup runs plain `make check`, which
+  already uses the Python venv, instead of `make check
+  PYTHON=python/.venv/bin/python`, which failed in the Python lint step
+  with `python/.venv/bin/python: not found` (#378).
+- Notebook: the setup steps in `examples/demo.ipynb` (its opening and "How
+  to open this notebook") run `make venv` before installing the `notebook`
+  extra, so they work in a fresh clone, which has no `python/.venv`, and say
+  to pass `BASE_PYTHON=python3.13` when `python3` is newer than 3.13 (#378).
 - Agent tooling: an interrupted `drive.sh` restores the four workers before
   it exits, so Ctrl-C during a disturbance no longer leaves the cluster a
   worker short (#377).

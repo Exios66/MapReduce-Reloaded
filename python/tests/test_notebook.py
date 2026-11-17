@@ -128,18 +128,36 @@ def test_setup_clears_what_an_interrupted_run_left():
         assert "data/out/notebook-" in assignment, assignment
 
 
-def test_setup_refuses_a_bare_or_stale_checkout():
-    """§1 checks that the checkout is a work tree on main, current with
-    origin/main, and says what to do otherwise."""
+def test_setup_stops_on_a_bare_copy_and_warns_on_an_unconfirmed_one():
+    """§1 stops on a bare copy, which cannot run the demo, and only warns
+    when it cannot confirm a clone of main current with origin/main: a zip
+    download, no git, another branch, no network or a clone behind still
+    runs."""
     source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
     for pattern in (
         "--is-inside-work-tree",
         "a bare copy cannot run the demo",
+        'shutil.which("git") is None',
+        "git is not installed",
+        "is not a git clone",
         "the demo runs from main",
-        "HEAD..origin/main",
+        "could not reach origin",
+        '"HEAD..FETCH_HEAD", check=False)',
+        "could not compare this clone",
         "restart the kernel and run again",
     ):
         assert pattern in source, pattern
+    tree = ast.parse(source)
+    raised = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, (ast.Raise, ast.Assert))]
+    for warned in (
+        "git is not installed",
+        "is not a git clone",
+        "the demo runs from main",
+        "could not reach origin",
+        "could not compare this clone",
+        "behind origin/main",
+    ):
+        assert not any(warned in text for text in raised), f"{warned!r} stops the run"
 
 
 def test_setup_defines_run_before_the_checkout_checks_use_it():
@@ -198,10 +216,10 @@ def test_the_troubleshooting_section_names_real_targets_and_messages():
 
 def test_setup_fetch_cannot_hang_the_demo():
     """§1 refreshes origin/main over the network; a hung connection must
-    stop the run with the reason within a minute, not hang the first cell."""
+    give up within a minute with a warning, not hang the first cell."""
     source = next(c["source"] for c in cells() if "def find_root()" in c["source"])
     assert '"fetch", "origin", "main", timeout=60)' in source
-    assert "except (RuntimeError, subprocess.TimeoutExpired) as error:" in source
+    assert "except (RuntimeError, subprocess.TimeoutExpired):" in source
 
 
 def test_every_demo_section_tells_its_story():

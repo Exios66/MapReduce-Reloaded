@@ -41,7 +41,7 @@ scripts/vm-setup.sh --install                # Go, the Python venv, golangci-lin
 echo 'export PATH="$HOME/.local/go/bin:$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 scripts/vm-setup.sh                          # every line should say OK
-make check PYTHON=python/.venv/bin/python    # the full Go and Python quality gate
+make check                                   # the full Go and Python quality gate; it uses the venv
 ```
 
 No reboot is needed after installing `make` or Go.
