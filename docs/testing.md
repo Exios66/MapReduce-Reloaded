@@ -9,7 +9,7 @@ test below are run by hand or by their own target, and CI runs none of the
 rows marked "no" (Docker, S3, extended chaos, fuzz, flaky, benchmarks).
 
 | Kind | Command | In `make check` | Where |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Unit | `cd go && go test ./...`, `cd python && python -m pytest` | yes | next to each package |
 | File format, the same bytes in Go and Python | `go test ./internal/formats/kv`, `python -m pytest tests/test_kv.py tests/test_kv_block_shapes.py` | yes | `testdata/format/`, `TestCompressedBlockShapes` |
 | Golden output, Go against Python | `go test ./cmd/mr -run TestExamples` | yes | `testdata/examples/`, #153 |
@@ -50,10 +50,14 @@ Measured on 2026-11-07:
   `cmd/worker` (88.5%) and `examples/invertedindex` (89.5%). Unchecked: the generated protobuf code, the S3 test
   server, `examples/internal/run` (a test helper) and `examples/wordcount`,
   which the cluster, local and golden tests run as their reference.
-- Python: 99.8% of 2,192 statements in 5 checked packages, the generated
-  protobuf code left out. The four lines missed are the IPv6 listener in
+- Python (measured again on 2026-11-16): 99.7% of 2,288 statements in 5
+  checked packages, the generated protobuf code left out. The value depends
+  on the host: four of the seven lines missed are the IPv6 listener in
   `coordinator/statusweb.py`, which `test_serve_ipv6` reaches only on a host
-  with an IPv6 loopback address.
+  with an IPv6 loopback address, such as the course VM (99.9% there). The
+  other three are two guards in the status page's timeline for an attempt
+  with no time window, and the coordinator dropping a job's oldest attempt
+  once it holds `MAX_ATTEMPTS`.
   `tests/test_edges.py` covers the last error paths: the MRKV writer's
   `MAX_BLOCK_SIZE` checks, a bad Snappy length prefix, a write that
   accepts no bytes, and others.
@@ -73,7 +77,7 @@ a package; run it on the VM.
 Measured on 2026-11-07:
 
 | Package, files | Killed | Survived | Score |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `internal/partition`, `hash.go` | 7 | 0 | 100% |
 | `internal/extsort`, `merge.go sorter.go` | 71 | 5 | 93.4% |
 | `internal/coordinator`, `tasktable.go` | 171 | 15 | 91.9% |
@@ -120,7 +124,7 @@ function with [mutmut](https://github.com/boxed/mutmut), installed by
 files and the tests it runs. It takes about a minute.
 
 | File | Killed | Survived | Score |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `formats/kv.py` | 372 | 77 | 82.9% |
 | `partition/hash.py` | 11 | 3 | 78.6% |
 

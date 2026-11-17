@@ -9,7 +9,7 @@ skip the records that crash it (§4.6).
 ## What happens
 
 | Step | Where |
-|------|-------|
+| --- | --- |
 | The task runner numbers each record: an input record's number in its split, or a key group's number in a reduce task, counting from 0 | `task.Map`, `task.Reduce` |
 | A panic in the user's code fails the attempt with a `CrashError` naming the record | `taskContext.call` |
 | The worker reports that record as `failed_record` | `Worker.report` |

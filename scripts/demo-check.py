@@ -45,7 +45,7 @@ class Check(NamedTuple):
 def docker(args: list[str]) -> str:
     try:
         out = subprocess.run(
-            ["docker", *args], cwd=ROOT, capture_output=True, text=True, timeout=20
+            ["docker", *args], cwd=ROOT, capture_output=True, text=True, timeout=20, check=False
         )
     except (OSError, subprocess.TimeoutExpired) as e:
         raise RuntimeError(str(e)) from e

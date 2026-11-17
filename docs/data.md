@@ -24,7 +24,7 @@ graphs. These are not public, so no run here can repeat them exactly.
 ## How ours compare
 
 | Paper | Here | Committed? | How it matches |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | §5.2 grep records | [`bench/gen-grep.py`](../bench/gen-grep.py) | generated | The same record size and match rate, so a grep's output has an exact number of lines |
 | §5.3 sort records | [`bench/gen-sort.py`](../bench/gen-sort.py) | generated | gensort-style ASCII records with 10-byte keys. The keys are random bytes, not printable ones, so distsort's range partitions are even |
 | §5.4, §5.5 | Experiments E2 and E3 on the sort input | generated | [Evaluation](evaluation.md) |
@@ -60,7 +60,7 @@ pinned by its SHA-256 sum, so a file that changes upstream fails the fetch
 rather than changing the results.
 
 | Dataset | Program | Input | Keys out | Go | Python |
-|---|---|---:|---:|---|---|
+| --- | --- | ---: | ---: | --- | --- |
 | War and Peace (Project Gutenberg #2600) | `wordcount` | 3.2 MB, 563,296 words | 41,631 | same, 0.5 s | same, 2.6 s |
 | NASA Kennedy Space Center web log, July 1995 | `urlfreq` | 205 MB, 1,891,714 requests | 21,668 | same, 2.7 s | same, 13.5 s |
 | Google programming contest web graph, 2002 (SNAP) | `reverselinks` | 75 MB, 5,105,039 links | 714,545 | same, 5.2 s | same, 47.8 s |

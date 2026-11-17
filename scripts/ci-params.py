@@ -89,7 +89,7 @@ def fetch_main():
     except subprocess.CalledProcessError:
         pass
     url = subprocess.run(
-        ["git", "config", "--get", "remote.origin.url"], text=True, capture_output=True
+        ["git", "config", "--get", "remote.origin.url"], text=True, capture_output=True, check=False
     ).stdout.strip()
     slug = re.sub(r"^.*github\.com[:/]|\.git$", "", url)
     _git("fetch", "--quiet", f"https://github.com/{slug}.git", ref)

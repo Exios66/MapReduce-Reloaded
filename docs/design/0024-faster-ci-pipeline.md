@@ -10,7 +10,7 @@ was all of it. On #352's final run (head `db396e8`, CircleCI jobs 620-625)
 the jobs started together and took:
 
 | Job | Took | Longest step |
-|---|---|---|
+| --- | --- | --- |
 | `go` | 395 s | `make go-lint go-test py-e2e`, 366 s |
 | `proto` | 180 s | `make tools`, 151 s |
 | `python-3.13` | 103 s | `make py-lint py-test`, 69 s |
@@ -51,7 +51,7 @@ often, never by running less of it. Every job, check and make target stays.
    node its part of the same make targets:
 
    | Node | Full mode | Narrow mode (only `python/` changed) |
-   |---|---|---|
+   | --- | --- | --- |
    | 0 | `make go-test-race` | `make go-python-test` |
    | 1 | `make go-test-cover` | nothing |
    | 2 | `make sh-lint go-lint py-e2e` | `make py-e2e` |

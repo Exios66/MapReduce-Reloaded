@@ -17,7 +17,7 @@ We need a replacement that:
 The contract lives in `proto/mapreduce/v1/` as four files.
 
 | File | Contents |
-|---|---|
+| --- | --- |
 | `types.proto` | Shared data types: `TaskId`, `TaskAttemptId`, `InputSplit`, `PartitionLocation`, `JobSpec`, `Counters`, `WorkerInfo`, and the `TaskKind` / `TaskState` enums |
 | `coordinator.proto` | `CoordinatorService` (`RegisterWorker`, `RequestTask`, `ReportTask`, `Heartbeat`, `SubmitJob`, `GetJobStatus`) |
 | `shuffle.proto` | `ShuffleService.FetchPartition`, a server-streaming RPC that every worker serves |

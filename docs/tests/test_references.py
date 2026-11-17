@@ -46,7 +46,9 @@ CITATION = re.compile(r"\((?:[^()]*#\d+[^()]*|`[0-9a-f]{7,40}`[^()]*)\)\.?$")
 
 @cache
 def tracked() -> tuple[str, ...]:
-    out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True)
+    out = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=False
+    )
     if out.returncode != 0:
         pytest.skip("not a git checkout")
     return tuple(f for f in out.stdout.split("\0") if f)
@@ -124,6 +126,7 @@ def ignored(paths: list[str]) -> set[str]:
         input="\n".join(asked),
         capture_output=True,
         text=True,
+        check=False,
     )
     return {asked[form] for form in out.stdout.split() if form in asked}
 

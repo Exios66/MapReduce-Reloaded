@@ -74,6 +74,7 @@ def wrapper(tree):
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     installs = tree / "installs"
     return result, installs.read_text() if installs.exists() else ""

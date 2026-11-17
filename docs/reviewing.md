@@ -24,7 +24,7 @@ yourself. [The report](report.md) is the summary; this page is the map.
 ## Where each part lives
 
 | Concern | Code | Explainer or record |
-|---|---|---|
+| --- | --- | --- |
 | Client: submit, status, cat, local runs | `go/cmd/mr` | [Explainer 14](explainers/14-cluster.md) |
 | Coordinator state and scheduling | `go/internal/coordinator` (`tasktable.go`, `server.go`, `registry.go`) | [13](explainers/13-task-table.md), [16](explainers/16-worker-failure.md), [20](explainers/20-backup-tasks.md) |
 | Coordinator recovery | `go/internal/wal`, `go/internal/coordinator/recover.go` | [18](explainers/18-coordinator-recovery.md), [ADR 0007](design/0007-write-ahead-log.md) |
@@ -44,7 +44,7 @@ test for each of the paper's features F1–F24.
 ## Checking a claim yourself
 
 | Claim | How to check it |
-|---|---|
+| --- | --- |
 | The tests pass | `make check`: protobuf, lint, Go and Python tests, coverage floors. On a pull request, CI runs the jobs whose inputs it touches; the other required jobs pass after a skip note ([CI](ci.md)) |
 | The cluster's output is correct | `make e2e`: word count on the Compose cluster, compared byte for byte with `testdata/corpus/expected` |
 | Failures do not change the output | `make chaos RUNS=5 SEED=1`: seeded worker kills, pauses and coordinator crashes; a failing seed replays with `scripts/chaos.sh 1 SEED` |

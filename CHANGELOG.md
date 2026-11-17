@@ -23,6 +23,37 @@ cut a release.
   down while a bench script runs or another clone started the cluster,
   since every clone on a host shares the Compose project and its volumes.
   `SKILL.md` records the times and gotchas found on the course VM (#375).
+- Notebook: `examples/features.ipynb` tours the system's features on one
+  machine, as a companion to the demo: word count in two functions, output
+  independent of M, partitioning, the combiner, counters, parameters and
+  side outputs, all seven example programs against their golden output,
+  the MRKV codecs and checksums, the external sort, the write-ahead log's
+  recovery, and Go and Python agreeing byte for byte, with a scorecard. It
+  needs no cluster, writes only to a temporary directory, and is committed
+  with a full run's outputs. `python/tests/test_features_notebook.py`
+  checks its layout and outputs and runs its cells (#374).
+- Docs: `docs/report.md` shows the evaluation's eleven figures (E0 to E7,
+  the fault summary, and the archived grep and sort rate plots), each
+  captioned with its finding and in both color schemes, and cites its
+  sources: a numbered References section lists the MapReduce and LATE
+  papers, the tools the system builds on (Yaegi, gRPC, Protocol Buffers,
+  zstd, Snappy, Prometheus) and the four real datasets, cited in the
+  text. Its demo section describes the notebook's story, scorecard and
+  figures (#374).
+- Notebook: `examples/demo.ipynb` tells its story as it runs, for a
+  presenter to talk through. An opening says what the demo sets out to
+  show, text before each section's code (§1 to §14) says what the cell
+  does, what to point at in its output and how it leads to the next, with
+  the numbers a fresh cluster gives, and a closing sums up what held.
+  `python/tests/test_notebook.py` checks that every section keeps its
+  text (#374).
+- Notebook: `examples/demo.ipynb` is laid out for presenting. Its figures
+  are numbered and captioned (Figures 1 and 2 drawn live in §6 and §8, the
+  evaluation's from Figure 3) and drawn at high resolution; results show as
+  tables and one-line summaries instead of raw Python values; each section
+  opens after a rule; and a scorecard after §14 lists every claim the run
+  checked, marking a fault section switched off as skipped rather than
+  held (#374).
 - Notebook: section 2 of `examples/demo.ipynb` renders a link that opens
   the coordinator's status page in a browser beside the demo, so the
   workers' heartbeats, running tasks and every job's progress bars can be
@@ -185,6 +216,21 @@ cut a release.
 
 ### Changed
 
+- Tooling: editors show the same lint warnings the build does, and none
+  today. A new `.markdownlint.jsonc` mirrors `.pymarkdown.json` for
+  markdownlint (as VS Code's extension runs it), lets `CHANGELOG.md` repeat
+  its release headings, and sets tables to the compact style, one space
+  inside each pipe; every table in the docs now uses it, and
+  `docs/tests/test_markdown_tables.py` keeps it so. The pull request
+  templates may start at a second-level heading. Every `subprocess.run`
+  call in the Python code, scripts and tests now says `check=False` or
+  `check=True`, and ruff checks this (PLW1510) in `make py-lint` (#374).
+- Docs: `AGENTS.md` has a Branches section that agents follow along with
+  the repository's GitHub settings: one branch per PR, a merged PR's branch
+  deleted (GitHub's "Automatically delete head branches"), empty branches
+  deleted, and a branch with unmerged work or an open PR kept. Commit
+  messages, PR descriptions and comments carry no session links or
+  attribution footers. `CLAUDE.md`'s summary says the same (#374).
 - Compose: each checkout has its own output volume,
   `mapreduce_output_<directory>_<hash>`, instead of one named after the
   project. Every checkout on a machine shares the project `mapreduce`, so
@@ -424,17 +470,48 @@ cut a release.
   and `.gitignore` already keeps the directory ignored (#331).
 - The GitHub Actions workflow; CircleCI is the only CI, and a test fails if
   `.github/workflows/` comes back (#294).
+- Docs: the pre-freeze audit's working plan,
+  `docs/superpowers/plans/2026-11-12-freeze-docs-audit.md`. Its work
+  landed in #352, #362, #363 and #364, its checkboxes no longer tracked
+  what remained, and the steps still open are tracked in #269 and #272
+  (#374).
 
 ### Fixed
 
 - Docs: the runbook's one-time VM setup runs plain `make check`, which
   already uses the Python venv, instead of `make check
   PYTHON=python/.venv/bin/python`, which failed in the Python lint step
-  with `python/.venv/bin/python: not found` (#377).
+  with `python/.venv/bin/python: not found` (#378).
+- Agent tooling: an interrupted `drive.sh` restores the four workers before
+  it exits, so Ctrl-C during a disturbance no longer leaves the cluster a
+  worker short (#377).
 - Agent tooling: `drive.sh` finds a running benchmark however it was started,
   so `bash -e bench/run.sh` no longer slips past the guard that protects a
   running experiment's cluster; `SKILL.md` now says that clones share the
   Compose project but not the per-checkout output volume (#376).
+- Tests: `make check` no longer fails 15 tests on macOS for reasons
+  unrelated to the change being pushed (#373).
+  `bench/experiments.sh` reads the worker IDs without `mapfile`, which
+  macOS's bash 3.2 lacks. `test_bench_run.py` checks the data directory's
+  owner and mode with `find` rather than GNU-only `stat -c`. The two tests
+  that create a file name that is not UTF-8 skip, with the reason, on a
+  filesystem that refuses one, as Apple's APFS does (#374).
+- Notebook: §1's `git fetch origin main` gives up after 60 s with the
+  reason, instead of hanging the first cell on a network that does not
+  answer (#374).
+- Docs: `examples/README.md`, the runbook (§5.7) and `docs/demo.md`
+  describe the notebook as it runs now: the combiner on and off, the
+  coordinator crash, the evaluation figures and the story text, in about two
+  minutes from a checkout on `main`. `design.md` reports E7's measurement
+  of LATE instead of "not evaluated yet", says `-m` asks for M rather than
+  setting it exactly, and lists the ADRs to 0025; `docs/report.md` counts
+  24 ADRs and 223 merged pull requests by 16 November 2026 (#374).
+- Docs: `docs/testing.md` gives the Python coverage measured now (99.7% of
+  2,288 statements, 99.9% on a host with IPv6) and names the lines missed;
+  `docs/demo.md` puts the killed-worker sort at 25 to 40 s, as the notebook
+  does; `design.md`'s testing table and roadmap item 5 say `-m` asks for M,
+  as the README does, and the roadmap adds that every non-empty input file
+  gets at least one map task, so a job can run more than `-m` (#374).
 - Docs: the runbook's one-time VM setup and session start use `~/mr-checkout`,
   the checkout every demo document and the prepared VM already use, instead
   of cloning into `~/MapReduce-Reloaded` (#371).

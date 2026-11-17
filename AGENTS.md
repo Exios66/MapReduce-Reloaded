@@ -138,3 +138,26 @@ spelling of the name. GitHub may commit a merge or squash made in its web
 interface, as long as the owner authored it. Never commit under an agent's
 or a tool's identity, except for the accepted contributor listed. The
 preflight script checks this.
+
+Commit messages, PR descriptions and comments carry no session links and no
+attribution footers: no `Co-Authored-By`, no `Generated with` line, no link
+back to an agent's session.
+
+## Branches
+
+The owner sets these rules in the repository's GitHub settings; agents
+follow them too.
+
+1. One branch per PR, named for its change: `docs/...`, `fix/...`,
+   `ci/...`, `bench/...`. Push only to the branch the work was given.
+2. A merged PR's branch is deleted. GitHub does this on merge
+   ("Automatically delete head branches", under the repository's
+   Settings → General → Pull Requests); then delete the local copy with
+   `git branch -d` and drop stale remote-tracking refs with
+   `git fetch --prune`.
+3. A branch with no commits beyond `main` and no open PR is empty: delete
+   it. List them with `git branch -r --merged origin/main`.
+4. Keep a branch that has unmerged commits until the owner decides. Never
+   delete a branch with an open PR, or one whose work is someone else's.
+5. Do not start new work on a merged PR's branch. Restart it from the latest
+   `main` first, and open a new PR for the new work.

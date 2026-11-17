@@ -9,7 +9,7 @@ is `8f0ddb9` plus input isolation and changes nothing in the system (#347).
 Every `machine.json` names its commit and `"dirty": false`.
 
 | Experiment | Data | Runs per setting | Figure |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | E0: scaling over workers | [`E0/`](E0/) (`3a907de`) | 5 | [`E0.png`](E0.png) |
 | E1: what the combiner saves | [`E1/`](E1/) | 5 | [`E1.png`](E1.png) |
 | E2: backup tasks and a straggler | [`E2/`](E2/), [`E2-pairs/`](E2-pairs/) | 5; E2-pairs 10 pairs | [`E2.png`](E2.png), [`E2-comparison.png`](E2-comparison.png) |

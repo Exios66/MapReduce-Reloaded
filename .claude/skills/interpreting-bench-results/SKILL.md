@@ -18,7 +18,7 @@ Per setting, program and worker count: valid runs, median and range of the exper
 ## Rules
 
 | Question | Rule |
-|---|---|
+| --- | --- |
 | Which clock? | `seconds` is the coordinator's job time, which E0, E1, E2, E5, E6 and E7 report; E3 and E4 report `wall_seconds`, from when `mr submit` returned, because a restarted coordinator times its jobs from the replay. Say which one you report, and never mix the two in one comparison. |
 | Which runs count? | `valid=1` only: output matched the reference for that input, the checksum of the first run on it that succeeded without missing its event (normally the warm-up or calibration run), and a disturbed job had not finished before its event. The harness deletes each output after checksumming it, so the `valid` column is the record; no checksum is kept. |
 | Which settings count? | Not `warmup` or `calibrate`: they prepare the measured runs. |

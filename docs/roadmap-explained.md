@@ -171,7 +171,7 @@ a report**. Out-of-scope issues stay open with a `[stretch]` prefix and
 appear in the report as future work.
 
 | Week | Issues | Milestone at the end of the week |
-|---|---|---|
+| --- | --- | --- |
 | 1 | #4 file format, #5 hash, #7 API, #8 reader/writer | Contract complete in both languages |
 | 2 | #9 formats, #10 external sort, #11 combiner, #12 local mode | `mr run --local wordcount` works (the oracle) |
 | 3 | #14 splitting, #15 task table, #16 scheduling, #17 map spill, #18 shuffle | Map side runs distributed |

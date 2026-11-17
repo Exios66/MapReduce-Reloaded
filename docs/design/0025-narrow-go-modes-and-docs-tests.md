@@ -63,7 +63,7 @@ become shorter than the others. Measured on one machine pinned to two CPUs,
 warm caches, `main` at `605430b` (A) against this branch (B):
 
 | Part | A | B |
-|---|---|---|
+| --- | --- | --- |
 | `go-test-race` (node 0) | 203 s, 180 s | 156 s, 136 s |
 | `go-test-cover` (node 1) | 103 s, 100 s | 111 s, 100 s |
 | `go-lint` + `py-e2e` (node 2) | | 23 s + 49 s |

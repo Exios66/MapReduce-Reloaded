@@ -17,7 +17,7 @@ This project is a solo submission for Honors Project 1. The course's
 requirements come before the stretch phases of this roadmap.
 
 | Date (2026) | Deliverable | State |
-|---|---|---|
+| --- | --- | --- |
 | Nov 1 | Email Tyler that this is a solo team, with the repository link (the repository is public, so no invite is needed) | to confirm |
 | Nov 6 | [design.md](../design.md#key-decisions) answers the design questions | done |
 | Nov 16 | Final code merged to `main` through pull requests | in progress; the demo checklist is in [demo.md](demo.md#before-the-day) |
@@ -36,7 +36,10 @@ before it merges ([design.md](../design.md#process)):
    ([ADR 0016](design/0016-shared-storage-and-host-client.md)).
 4. **Host client:** `make mr`, `mr upload`, `mr cat`, and `127.0.0.1:18770`
    as the default coordinator address (ADR 0016).
-5. **Exact M:** `-m` gives the number of map tasks (ADR 0016).
+5. **Exact M:** `-m` sets the number of map tasks. Each non-empty input
+   file gets at least one, so a job over more files than `-m` runs one
+   task per file, and a file too small to cut that finely gets fewer.
+   `mr submit` prints the count (ADR 0016).
 6. **Job files:** `mr submit job.go …`, `JobSpec.program_source`, Yaegi in
    the worker, and `examples/wordcount.go`
    ([ADR 0015](design/0015-user-job-files.md)) (done, with the fatal
@@ -125,7 +128,7 @@ week-by-week schedule and a plain-language walkthrough, is in
 Each item maps to a paper section and will get a test.
 
 | # | Paper feature (§) | How we implement it |
-|---|---|---|
+| --- | --- | --- |
 | F1 | Programming model: `map(k1,v1)→list(k2,v2)`, `reduce(k2,list(v2))→list(v2)` (§2) | `Mapper`/`Reducer` interfaces in Go; `Mapper`/`Reducer` classes in Python |
 | F2 | Input split into M pieces of 16–64 MB (§3.1) | `split.Plan` with a configurable split size; split on record boundaries |
 | F3 | One master, M map tasks, R reduce tasks (§3.1) | Coordinator with a task scheduler; workers pull tasks over RPC |

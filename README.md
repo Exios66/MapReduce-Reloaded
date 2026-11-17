@@ -54,7 +54,7 @@ volumes.
 ## Capabilities
 
 | Area | What is implemented |
-|---|---|
+| --- | --- |
 | Paper model | Map, reduce, combiner, partitioning, ordering, counters, side outputs, local mode — F1–F23, each with its test in the [paper mapping](docs/paper-mapping.md) |
 | Fault tolerance | Worker loss (tasks re-run elsewhere), coordinator crash (write-ahead log replay), backup tasks for stragglers, bad-record skipping, disk-full pause |
 | Storage | The host's shared `data/` directory, or an S3-compatible store; commit-on-object-storage |
@@ -77,7 +77,7 @@ number is the median of five runs, the settings taking turns within each
 repeat, and every run's output matched the normal run's.
 
 | Experiment | Result | Figure |
-|---|---|---|
+| --- | --- | --- |
 | E0: scaling over workers | Word count runs 3.7× faster on 4 workers than on 1, distributed sort 3.1×, grep 2.0× | [E0](#e0-scaling-over-workers) |
 | E1: the combiner | 15× to 78× fewer bytes shuffled, 16–42% less job time, more as the keys get more skewed | [E1](#e1-the-combiner) |
 | E2: backup tasks | With one worker at 0.2 CPU, backups cut 17.9 s to 11.4 s; with no straggler they cost nothing measurable | [E2](#e2-backup-tasks), [E2–E4](#e2-to-e4-together-what-each-fault-costs) |
@@ -200,7 +200,7 @@ mr cat </data/output-dir>
 ```
 
 | Flag | Meaning |
-|---|---|
+| --- | --- |
 | `-m M` | The number of map tasks to ask for. The input is cut into M splits by size, but each non-empty file gets at least one (more files than M means one task per file), and a file too small to split that finely gets fewer; `mr submit` prints the resulting count. Default: one per 64 MiB |
 | `-r R` | Number of reduce tasks and output files. Default: 2 per worker |
 | `-wait` | Wait for the job and print its status and counters |
@@ -218,7 +218,7 @@ imported. [`examples/wordcount.go`](examples/wordcount.go) is a complete one.
 ## Example programs
 
 | Program | Paper | Input | Output |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `wordcount` | §2 | Any text | Each word and its count |
 | `grep` | §2.3 | Any text; `-param pattern=STRING` | Each line that contains the string |
 | `invertedindex` | §2.3 | Any text | Each word and the files it occurs in |
@@ -302,6 +302,8 @@ CI runs the same targets in six jobs (`proto`, `go`, `python-3.11`,
   the results against the paper's §5.
 - [Runbook](docs/runbook.md) and [demo](docs/demo.md): from SSH to a demo.
 - [`examples/demo.ipynb`](examples/demo.ipynb): the demo in Jupyter.
+- [`examples/features.ipynb`](examples/features.ipynb): a tour of the
+  features on one machine, with no cluster.
 - [Changelog](CHANGELOG.md): every release and what changed in it.
 - [Security policy](SECURITY.md): the trust model and how to report a
   vulnerability.

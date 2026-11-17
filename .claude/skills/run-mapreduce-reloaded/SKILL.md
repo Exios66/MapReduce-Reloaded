@@ -79,6 +79,8 @@ one card per job.
 - `--virtual-time-budget` is needed for the screenshot: the page polls the
   coordinator every few seconds, so the browser never goes idle on its own.
 - Run the script with `bash`: a copy made with `scp` loses its exec bit.
+- Ctrl-C after the kill restores the four workers before the script exits,
+  so an interrupted disturbance does not leave the cluster a worker short.
 
 ## Troubleshooting
 

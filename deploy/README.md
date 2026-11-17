@@ -6,7 +6,7 @@ topology](../docs/docker-topology.md) for what each container does, the ports
 and volumes, and the reasons, written for a reader new to Docker.
 
 | Path | Contents |
-|---|---|
+| --- | --- |
 | [`docker/Dockerfile`](docker/Dockerfile) | A multi-stage build of one small, static, distroless image with the `coordinator`, `worker` and `mr` binaries |
 | [`compose/compose.yaml`](compose/compose.yaml) | The Compose project `mapreduce`; [`compose/README.md`](compose/README.md) says what each file in `compose/` is for |
 | [`compose/backups-off.yaml`](compose/backups-off.yaml), [`compose/speculation-late.yaml`](compose/speculation-late.yaml) | Overrides of the coordinator's backup policy for the experiments in [`bench/experiments.sh`](../bench/experiments.sh): no backups (E2, E7), and LATE (E7, [ADR 0019](../docs/design/0019-late-speculation.md)) |
@@ -16,7 +16,7 @@ and volumes, and the reasons, written for a reader new to Docker.
 ## Services
 
 | Service | Profile | `mem_limit` | `cpus` | Notes |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `coordinator` | default | 256 MB | — | gRPC on 18770 and the status page on 18780, both on loopback |
 | `worker` | default | 768 MB | 1 | 4 replicas, one per vCPU; scale with `--scale worker=N`; serves `/metrics` on 8081 inside the network |
 | `mr` | `tools` | 128 MB | — | Runs one CLI command, e.g. `docker compose ... run --rm mr submit ...` |
