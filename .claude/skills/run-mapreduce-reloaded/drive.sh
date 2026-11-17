@@ -25,9 +25,10 @@ guard() {
     local busy owners
     # Processes running a bench script: as the program or as an interpreter's first argument.
     # ps, not pgrep -a: the BSD pgrep on macOS prints bare PIDs, so the guard
-    # would pass silently there.
+    # would pass silently there. Any argument counts, so `bash -e bench/run.sh`
+    # and `python3 -u bench/run.py` are found as well as a direct run.
     busy=$(ps -eo pid=,args= | awk -v s='(^|/)bench/[a-z0-9-]+[.](sh|py)$' \
-        '$2 ~ s || ($2 ~ /(^|\/)(ba|da)?sh$|python3?$/ && $3 ~ s)' || true)
+        '{ for (i = 2; i <= NF; i++) if ($i ~ s) { print; next } }' || true)
     if [ -n "$busy" ]; then
         printf 'refusing: a bench script is running and shares this cluster:\n%s\n' "$busy" >&2
         exit 3

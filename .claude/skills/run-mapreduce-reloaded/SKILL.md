@@ -16,16 +16,17 @@ bash .claude/skills/run-mapreduce-reloaded/drive.sh help
 
 ## One clone at a time
 
-Every clone on a host drives the same Compose project, `mapreduce`, and the
-same `mapreduce_output` volume, which holds the coordinator's WAL and the
-experiments' inputs and outputs. Running `up` from a second clone
-recreates the cluster under a running experiment, and `down` deletes that
-volume. So `drive.sh` refuses every command that starts, disturbs or stops
-the cluster (exit 3) while a `bench/*.sh` or `bench/*.py` script is running,
-or while a cluster started from another clone exists. If nothing in that
-clone is needed, stop its cluster from there, or set `MR_DRIVE_FORCE=1`.
-Never set it while `checking-campaign-status` shows a chain or campaign
-running.
+Every clone on a host drives the same Compose project, `mapreduce`: the
+containers and their network are shared, so `up` from a second clone
+recreates the cluster under a running experiment and stops it. The output
+volume is not shared: `scripts/output-volume.sh` gives each checkout its own
+`mapreduce_output_<directory>_<hash>`, so `down` deletes only the calling
+checkout's write-ahead log and data. Because the containers are shared,
+`drive.sh` refuses every command that starts, disturbs or stops the cluster
+(exit 3) while a `bench/*.sh` or `bench/*.py` script is running, or while a
+cluster started from another clone exists. If nothing in that clone is
+needed, stop its cluster from there, or set `MR_DRIVE_FORCE=1`. Never set it
+while `checking-campaign-status` shows a chain or campaign running.
 
 ## Commands
 
@@ -66,10 +67,9 @@ one card per job.
 
 ## Gotchas
 
-- The status page lists every job in the WAL, including other clones' and
-  past experiments' jobs, because the WAL is in the shared volume. Job IDs
-  continue from there (`job-59` after an experiment), so read the ID that
-  `drive.sh` prints.
+- The status page lists every job in this checkout's WAL, including past
+  experiments' jobs. Job IDs continue from there (`job-59` after an
+  experiment), so read the ID that `drive.sh` prints.
 - `page` always shows "No answer from the coordinator. Showing the last
   update." because that line is hidden by the page's script, not by HTML.
   It does not mean the coordinator is down; `status` tells you.

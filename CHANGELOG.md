@@ -427,6 +427,10 @@ cut a release.
 
 ### Fixed
 
+- Agent tooling: `drive.sh` finds a running benchmark however it was started,
+  so `bash -e bench/run.sh` no longer slips past the guard that protects a
+  running experiment's cluster; `SKILL.md` now says that clones share the
+  Compose project but not the per-checkout output volume (#376).
 - Docs: the runbook's one-time VM setup and session start use `~/mr-checkout`,
   the checkout every demo document and the prepared VM already use, instead
   of cloning into `~/MapReduce-Reloaded` (#371).
