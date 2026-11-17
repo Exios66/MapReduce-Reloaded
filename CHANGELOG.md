@@ -15,6 +15,14 @@ cut a release.
 
 ### Added
 
+- Docs: `docs/report.md` shows the evaluation's eleven figures (E0 to E7,
+  the fault summary, and the archived grep and sort rate plots), each
+  captioned with its finding and in both color schemes, and cites its
+  sources: a numbered References section lists the MapReduce and LATE
+  papers, the tools the system builds on (Yaegi, gRPC, Protocol Buffers,
+  zstd, Snappy, Prometheus) and the four real datasets, cited in the
+  text. Its demo section describes the notebook's story, scorecard and
+  figures (#374).
 - Notebook: `examples/demo.ipynb` tells its story as it runs, for a
   presenter to talk through. An opening says what the demo sets out to
   show, text before each section's code (§1 to §14) says what the cell
