@@ -199,6 +199,12 @@ cut a release.
 
 ### Changed
 
+- Docs: `AGENTS.md` has a Branches section that agents follow along with
+  the repository's GitHub settings: one branch per PR, a merged PR's branch
+  deleted (GitHub's "Automatically delete head branches"), empty branches
+  deleted, and a branch with unmerged work or an open PR kept. Commit
+  messages, PR descriptions and comments carry no session links or
+  attribution footers. `CLAUDE.md`'s summary says the same (#374).
 - Compose: each checkout has its own output volume,
   `mapreduce_output_<directory>_<hash>`, instead of one named after the
   project. Every checkout on a machine shares the project `mapreduce`, so
