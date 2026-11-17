@@ -121,6 +121,9 @@ disturb() {
         echo "the job ended before a map was seen running, so nothing was disturbed; use a bigger input" >&2
         return 1
     fi
+    # An interrupt after the kill must not leave a worker stopped.
+    trap 'restore_workers; exit 130' INT
+    trap 'restore_workers; exit 143' TERM
     case $1 in
     kill-worker)
         victim=$("${compose[@]}" ps -q worker | head -1 || true)
@@ -136,6 +139,7 @@ disturb() {
         wait_done "$job" || failed=1
     fi
     restore_workers
+    trap - INT TERM
     [ "$failed" = 0 ] || return 1
     compare_outputs "$ref" "$out" || cmp_status=$?
     case $cmp_status in
