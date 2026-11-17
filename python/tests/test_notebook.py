@@ -288,5 +288,9 @@ def test_running_a_section_again_replaces_its_scorecard_row():
     namespace["passed"](10, claim.format(9))
     namespace["passed"](10, claim.format(11))
     namespace["passed"](13, "Local mode and the cluster wrote the same output, byte for byte")
-    assert len(namespace["CHECKS"]) == 2
+    combiner = "The combiner cut the bytes shuffled, and the output did not change: {}× fewer"
+    namespace["passed"](8, combiner.format("3.1"))
+    namespace["passed"](8, combiner.format("3.2"))
+    assert len(namespace["CHECKS"]) == 3
+    assert namespace["CHECKS"][(8, combiner.split(":")[0])] == (combiner.format("3.2"), "✓ held")
     assert namespace["CHECKS"][(10, "A worker killed mid-job")] == (claim.format(11), "✓ held")

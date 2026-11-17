@@ -126,11 +126,14 @@ def no_jupyter(monkeypatch):
 
 def test_its_checks_hold_when_it_runs(no_jupyter, capsys):
     """Runs every cell but the Go one, which builds or needs bin/mr; go/cmd/mr's
-    tests check the Go and Python examples against each other already."""
+    tests check the Go and Python examples against each other already. The
+    write-ahead log's cell runs twice, as a reader running it again would:
+    it damages its log, so a rerun must start from a new one."""
     namespace = {}
     for cell in code():
-        if cell["id"] != "go":
-            exec(compile(cell["source"], f"features.ipynb:{cell['id']}", "exec"), namespace)
+        runs = {"go": 0, "wal": 2}.get(cell["id"], 1)
+        for _ in range(runs):  # the notebook's own cells, as Jupyter runs them
+            exec(compile(cell["source"], f"features.ipynb:{cell['id']}", "exec"), namespace)  # nosec B102
     assert namespace["HAVE_PLOT"] is False
     assert not namespace["WORK"].exists(), "the last cell did not remove the temporary directory"
     held = [result for _, result in namespace["CHECKS"].values()]

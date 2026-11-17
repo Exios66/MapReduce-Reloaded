@@ -36,8 +36,10 @@ before it merges ([design.md](../design.md#process)):
    ([ADR 0016](design/0016-shared-storage-and-host-client.md)).
 4. **Host client:** `make mr`, `mr upload`, `mr cat`, and `127.0.0.1:18770`
    as the default coordinator address (ADR 0016).
-5. **Exact M:** `-m` sets the number of map tasks, as far as the input
-   can be cut that finely, and `mr submit` prints the count (ADR 0016).
+5. **Exact M:** `-m` sets the number of map tasks. Each non-empty input
+   file gets at least one, so a job over more files than `-m` runs one
+   task per file, and a file too small to cut that finely gets fewer.
+   `mr submit` prints the count (ADR 0016).
 6. **Job files:** `mr submit job.go …`, `JobSpec.program_source`, Yaegi in
    the worker, and `examples/wordcount.go`
    ([ADR 0015](design/0015-user-job-files.md)) (done, with the fatal

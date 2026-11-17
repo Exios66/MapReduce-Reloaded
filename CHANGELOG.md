@@ -491,7 +491,8 @@ cut a release.
   2,288 statements, 99.9% on a host with IPv6) and names the lines missed;
   `docs/demo.md` puts the killed-worker sort at 25 to 40 s, as the notebook
   does; `design.md`'s testing table and roadmap item 5 say `-m` asks for M,
-  as the README does (#374).
+  as the README does, and the roadmap adds that every non-empty input file
+  gets at least one map task, so a job can run more than `-m` (#374).
 - Docs: the runbook's one-time VM setup and session start use `~/mr-checkout`,
   the checkout every demo document and the prepared VM already use, instead
   of cloning into `~/MapReduce-Reloaded` (#371).
