@@ -427,6 +427,9 @@ cut a release.
 
 ### Fixed
 
+- Agent tooling: an interrupted `drive.sh` restores the four workers before
+  it exits, so Ctrl-C during a disturbance no longer leaves the cluster a
+  worker short (#377).
 - Agent tooling: `drive.sh` finds a running benchmark however it was started,
   so `bash -e bench/run.sh` no longer slips past the guard that protects a
   running experiment's cluster; `SKILL.md` now says that clones share the
