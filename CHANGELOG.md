@@ -15,6 +15,14 @@ cut a release.
 
 ### Added
 
+- Agent tooling: a `run-mapreduce-reloaded` skill in `.claude/skills/`. Its
+  `drive.sh` starts and stops the Compose cluster, runs a word count,
+  writes a Zipf input, prints the status page as text, and kills a worker
+  or restarts the coordinator mid-job, comparing the disturbed run's
+  output with an undisturbed one. It refuses to start, disturb or tear
+  down while a bench script runs or another clone started the cluster,
+  since every clone on a host shares the Compose project and its volumes.
+  `SKILL.md` records the times and gotchas found on the course VM (#375).
 - Notebook: section 2 of `examples/demo.ipynb` renders a link that opens
   the coordinator's status page in a browser beside the demo, so the
   workers' heartbeats, running tasks and every job's progress bars can be
