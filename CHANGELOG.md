@@ -15,6 +15,14 @@ cut a release.
 
 ### Added
 
+- Agent tooling: a `run-mapreduce-reloaded` skill in `.claude/skills/`. Its
+  `drive.sh` starts and stops the Compose cluster, runs a word count,
+  writes a Zipf input, prints the status page as text, and kills a worker
+  or restarts the coordinator mid-job, comparing the disturbed run's
+  output with an undisturbed one. It refuses to start, disturb or tear
+  down while a bench script runs or another clone started the cluster,
+  since every clone on a host shares the Compose project and its volumes.
+  `SKILL.md` records the times and gotchas found on the course VM (#375).
 - Notebook: section 2 of `examples/demo.ipynb` renders a link that opens
   the coordinator's status page in a browser beside the demo, so the
   workers' heartbeats, running tasks and every job's progress bars can be
@@ -422,7 +430,11 @@ cut a release.
 - Docs: the runbook's one-time VM setup runs plain `make check`, which
   already uses the Python venv, instead of `make check
   PYTHON=python/.venv/bin/python`, which failed in the Python lint step
-  with `python/.venv/bin/python: not found` (#376).
+  with `python/.venv/bin/python: not found` (#377).
+- Agent tooling: `drive.sh` finds a running benchmark however it was started,
+  so `bash -e bench/run.sh` no longer slips past the guard that protects a
+  running experiment's cluster; `SKILL.md` now says that clones share the
+  Compose project but not the per-checkout output volume (#376).
 - Docs: the runbook's one-time VM setup and session start use `~/mr-checkout`,
   the checkout every demo document and the prepared VM already use, instead
   of cloning into `~/MapReduce-Reloaded` (#371).
