@@ -86,3 +86,4 @@ one card per job.
 | --- | --- |
 | `refusing: another clone started the cluster` | Run `down` from the clone it names, or `MR_DRIVE_FORCE=1` if nothing there is needed |
 | `refusing: a bench script is running` | Wait for it; `checking-campaign-status` shows how far it has got |
+| `the job ended before a map was seen running` | The input is too small to still be running when a map finishes; remove `data/input/zipf/` and run `big` again |

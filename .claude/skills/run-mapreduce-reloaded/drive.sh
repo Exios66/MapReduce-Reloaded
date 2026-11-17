@@ -55,39 +55,99 @@ wait_done() {
     [ "$s" = SUCCEEDED ]
 }
 
+# maps_done JOB: the map count on the job's status line, e.g. 3/16, or nothing
+# if the coordinator cannot be reached.
+maps_done() { bin/mr status "$1" 2>/dev/null | awk '$1 == "map" { print $2 }'; }
+
+# disturbed_ready JOB: waits until a map has finished and the job is still
+# running, so the kill or restart lands while it still has work to recover.
+# Returns 1 if the job ended first: nothing was then disturbed, and a run that
+# passed without it would not show that recovery works.
+disturbed_ready() {
+    local maps
+    for _ in $(seq 600); do
+        case $(state "$1") in
+        SUCCEEDED | FAILED) return 1 ;;
+        esac
+        maps=$(maps_done "$1")
+        case $maps in
+        '' | 0/*) ;;
+        *) return 0 ;;
+        esac
+        sleep 0.5
+    done
+    return 1
+}
+
+# restore_workers: brings the cluster back to four workers whatever the
+# disturbance did, so a failed kill or a failed job leaves no worker stopped.
+restore_workers() {
+    "${compose[@]}" up -d --scale worker=4 coordinator worker >/dev/null 2>&1 || true
+}
+
+# compare_outputs REF OUT: 0 when their sorted contents are byte-identical, 1
+# when they differ, 2 when either cannot be read. cmp, not sha256sum, which
+# stock macOS lacks; an unreadable output must not count as a match.
+compare_outputs() {
+    local a b
+    a=$(mktemp) || return 2
+    b=$(mktemp) || { rm -f "$a"; return 2; }
+    if ! bin/mr cat "$1" | sort > "$a" || ! bin/mr cat "$2" | sort > "$b"; then
+        rm -f "$a" "$b"
+        return 2
+    fi
+    if cmp -s "$a" "$b"; then
+        rm -f "$a" "$b"
+        return 0
+    fi
+    rm -f "$a" "$b"
+    return 1
+}
+
 # disturb WHAT: runs word count on the big input and, once maps are under way,
 # kills one worker or restarts the coordinator. The output must match an
 # undisturbed run's.
 disturb() {
     [ -f data/input/zipf/zipf.txt ] || bash "$0" big
-    local ref=/data/out/drive-ref out=/data/out/drive-$1 job
+    local ref=/data/out/drive-ref out=/data/out/drive-$1 job failed=0 victim cmp_status=0
     rm -rf "data/out/drive-ref" "data/out/drive-$1"
     job=$(bin/mr submit -m 16 -r 4 wordcount "$ref" /data/input/zipf/zipf.txt | tail -1)
     echo "reference run $job"
     wait_done "$job" >/dev/null
     job=$(bin/mr submit -m 16 -r 4 wordcount "$out" /data/input/zipf/zipf.txt | tail -1)
     echo "disturbed run $job"
-    until bin/mr status "$job" 2>/dev/null | awk '$1 == "map" { split($2, a, "/"); exit !(a[1] > 0) }'; do sleep 0.5; done
-    case $1 in
-    kill-worker)
-        local victim
-        victim=$("${compose[@]}" ps -q worker | head -1)
-        echo "killing worker $victim at $(bin/mr status "$job" | awk '$1 == "map" { print "map " $2 }')"
-        docker kill "$victim" >/dev/null
-        ;;
-    restart-coordinator)
-        echo "restarting the coordinator at $(bin/mr status "$job" | awk '$1 == "map" { print "map " $2 }')"
-        "${compose[@]}" restart coordinator >/dev/null
-        ;;
-    esac
-    wait_done "$job"
-    "${compose[@]}" up -d --scale worker=4 coordinator worker >/dev/null 2>&1
-    if [ "$(bin/mr cat "$ref" | sort | sha256sum)" = "$(bin/mr cat "$out" | sort | sha256sum)" ]; then
-        echo "output matches the undisturbed run"
-    else
-        echo "OUTPUT DIFFERS from the undisturbed run" >&2
+    if ! disturbed_ready "$job"; then
+        echo "the job ended before a map was seen running, so nothing was disturbed; use a bigger input" >&2
         return 1
     fi
+    case $1 in
+    kill-worker)
+        victim=$("${compose[@]}" ps -q worker | head -1 || true)
+        echo "killing worker $victim at map $(maps_done "$job")"
+        docker kill "$victim" >/dev/null || failed=1
+        ;;
+    restart-coordinator)
+        echo "restarting the coordinator at map $(maps_done "$job")"
+        "${compose[@]}" restart coordinator >/dev/null || failed=1
+        ;;
+    esac
+    if [ "$failed" = 0 ]; then
+        wait_done "$job" || failed=1
+    fi
+    restore_workers
+    [ "$failed" = 0 ] || return 1
+    compare_outputs "$ref" "$out" || cmp_status=$?
+    case $cmp_status in
+    0) echo "output matches the undisturbed run" ;;
+    1)
+        echo "OUTPUT DIFFERS from the undisturbed run" >&2
+        return 1
+        ;;
+    *)
+        echo "could not read the outputs to compare them" >&2
+        return 1
+        ;;
+    esac
 }
 
 case ${1:-help} in
