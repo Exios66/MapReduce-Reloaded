@@ -419,6 +419,10 @@ cut a release.
 
 ### Fixed
 
+- Docs: the runbook's one-time VM setup runs plain `make check`, which
+  already uses the Python venv, instead of `make check
+  PYTHON=python/.venv/bin/python`, which failed in the Python lint step
+  with `python/.venv/bin/python: not found` (#376).
 - Docs: the runbook's one-time VM setup and session start use `~/mr-checkout`,
   the checkout every demo document and the prepared VM already use, instead
   of cloning into `~/MapReduce-Reloaded` (#371).
