@@ -37,7 +37,7 @@ footer := end_marker total_records block_count footer_checksum
 ### Header (8 bytes)
 
 | Offset | Size | Field | Value |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 0 | 4 | `magic` | ASCII `MRKV` (`4D 52 4B 56`) |
 | 4 | 1 | `version` | `0x01` |
 | 5 | 1 | `codec` | Compression of block payloads; see [Codecs](#codecs) |
@@ -46,7 +46,7 @@ footer := end_marker total_records block_count footer_checksum
 ### Block
 
 | Size | Field | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | 4 | `stored_len` (`u32`) | Bytes of `payload` as stored. Always ≥ 1, because 0 marks the footer. |
 | 4 | `record_count` (`u32`) | Records in this block. Always ≥ 1. |
 | 4 | `checksum` (`u32`) | `crc32c(payload)`, computed over the **stored** (possibly compressed) bytes |
@@ -78,7 +78,7 @@ Rules:
 ### Footer (24 bytes)
 
 | Size | Field | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | 4 | `end_marker` (`u32`) | `0`. Tells the reader that the footer starts here, not another block. |
 | 8 | `total_records` (`u64`) | Sum of `record_count` over all blocks |
 | 8 | `block_count` (`u64`) | Number of blocks |
@@ -89,7 +89,7 @@ No bytes may follow the footer.
 ## Codecs
 
 | ID | Codec | Status |
-|---|---|---|
+| --- | --- | --- |
 | 0 | none | The payload is the records as they are |
 | 1 | zstd | The payload is one zstd frame ([RFC 8878](https://www.rfc-editor.org/rfc/rfc8878)) |
 | 2 | snappy | The payload is in Snappy's block format, without the framing format |
@@ -182,7 +182,7 @@ feature F14).
 ## Errors a reader must detect
 
 | Error kind | Condition |
-|---|---|
+| --- | --- |
 | `bad_magic` | The first 4 bytes are not `MRKV` |
 | `unsupported_version` | `version` is not 1 |
 | `unsupported_codec` | `codec` is unknown or not supported |

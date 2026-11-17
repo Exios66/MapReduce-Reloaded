@@ -69,6 +69,7 @@ def test_pre_push_clears_git_repository_environment(tmp_path, check_exit):
         text=True,
         capture_output=True,
         timeout=15,
+        check=False,
     )
     assert result.returncode == check_exit, result.stdout + result.stderr
     assert git("ls-files").splitlines() == [".githooks/pre-push"]

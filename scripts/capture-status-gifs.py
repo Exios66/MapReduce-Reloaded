@@ -298,7 +298,7 @@ def main() -> None:
     prov = {
         "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "commit": subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
         ).stdout.strip(),
         "machine": {
             "host": platform.node(),
@@ -317,10 +317,10 @@ def main() -> None:
         "speed_factor": round(args.interval / (args.gif_delay / 100), 1),
         "window": args.window,
         "chrome": subprocess.run(
-            [chrome_bin(), "--version"], capture_output=True, text=True
+            [chrome_bin(), "--version"], capture_output=True, text=True, check=False
         ).stdout.strip(),
         "ffmpeg": subprocess.run(
-            [FFMPEG, "-version"], capture_output=True, text=True
+            [FFMPEG, "-version"], capture_output=True, text=True, check=False
         ).stdout.splitlines()[0],
         "gifs": report,
     }

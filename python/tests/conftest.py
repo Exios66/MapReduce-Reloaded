@@ -61,7 +61,11 @@ def _unrouted(files):
     spec.loader.exec_module(ci_params)
     mapping = ci_params.load_mapping((ROOT / ".circleci/mapping.txt").read_text())
     tracked = subprocess.run(
-        ["git", "ls-files", "-z", "--", *files], cwd=ROOT, capture_output=True, text=True
+        ["git", "ls-files", "-z", "--", *files],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if tracked.returncode != 0:
         return []  # not a git checkout: nothing to check against

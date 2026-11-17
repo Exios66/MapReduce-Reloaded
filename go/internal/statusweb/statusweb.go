@@ -50,10 +50,7 @@ var tmpl = template.Must(template.New("status").Funcs(template.FuncMap{
 	// timeline is a job's attempts as bars bounded by the job's run, oldest
 	// first, or nil if the status holds none. Each bar says the attempt,
 	// the window it covers, and its kind (a color).
-	"timeline": func(j *pb.GetJobStatusResponse, now time.Time,
-		attempts map[string][]coordinator.AttemptRange) []attemptBar {
-		return timeline(j, now, attempts)
-	},
+	"timeline": timeline,
 	// heartbeat is how long before now the worker was last seen, "3s ago",
 	// or "" if it never was.
 	"heartbeat": func(now, seen time.Time) string {

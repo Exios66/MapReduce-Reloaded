@@ -142,7 +142,7 @@ def docker_compose():
     if not docker:
         pytest.skip("Docker CLI not installed; skipping Compose validation")
     version = subprocess.run(
-        [docker, "compose", "version"], capture_output=True, text=True, timeout=15
+        [docker, "compose", "version"], capture_output=True, text=True, timeout=15, check=False
     )
     if version.returncode:
         pytest.skip(f"Docker Compose plugin unavailable: {version.stderr.strip()}")

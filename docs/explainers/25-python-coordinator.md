@@ -15,7 +15,7 @@ for user functions (#38); the workers in any cluster are the Go ones.
 ## What is shared with the Go coordinator
 
 | Part | Python | How it matches Go |
-|------|--------|-------------------|
+| --- | --- | --- |
 | Messages and RPCs | `gen/`, generated from `proto/mapreduce/v1` | The same `.proto` files; `make proto` regenerates both languages |
 | Flags and defaults | `coordinator/__main__.py` | `-addr`, `-http`, `-data-dir`, `-backups`, `-speculation`, `-keep-jobs`, `-max-task-failures`, `-log-format`, with Go's names and timings (3 s heartbeat, 10 s worker timeout) |
 | Job validation | `coordinator/wire.py` | The checks and wording of `go/pkg/api` `JobSpec.Validate` |
@@ -100,7 +100,7 @@ port, starts three Go workers against it, and drives it with the Go `mr`.
 The scenarios are those of `go/internal/e2e/process_test.go`, ported:
 
 | Test | What it shows |
-|------|---------------|
+| --- | --- |
 | `test_word_count` | Word count over the corpus equals the golden output, with the expected counters; `SIGTERM` stops every process cleanly |
 | `test_examples` | Each example program gives the expected output in `testdata/examples/` |
 | `test_worker_killed` | A worker killed with `SIGKILL` mid-job does not change the output |

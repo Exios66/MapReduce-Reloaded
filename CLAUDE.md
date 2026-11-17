@@ -4,10 +4,12 @@ Follow the rules in AGENTS.md, imported here so Claude Code loads them:
 
 @AGENTS.md
 
-In short: commit with no excess footers & frontmatter, add every PR's entry
-to `CHANGELOG.md` under `## [Unreleased]`, and run the full CI suite on the
-PR's final head, rerunning it after a failed final pipeline or after updating
-the branch when `main` moves. AGENTS.md has the details.
+In short: commit with no excess footers & frontmatter, and put no session
+links or footers in PR descriptions or comments; add every PR's entry to
+`CHANGELOG.md` under `## [Unreleased]`; run the full CI suite on the PR's
+final head, rerunning it after a failed final pipeline or after updating the
+branch when `main` moves; and delete a branch once its PR merges.
+AGENTS.md has the details.
 
 Skills for CI credits, reading and comparing bench results, and campaign
 status live in `.claude/skills/`; AGENTS.md lists their scripts.

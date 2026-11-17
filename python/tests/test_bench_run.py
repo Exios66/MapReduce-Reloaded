@@ -23,13 +23,14 @@ def test_input_is_accessible_to_nonroot_workers(tmp_path, mask, existing_data):
     if existing_data:
         data.mkdir(mode=0o700)
     # At Compose startup, the bind mount must already belong to the caller
-    # and be traversable. Docker must not create it as root.
+    # and be traversable. Docker must not create it as root. find's -user and
+    # -perm work in GNU and BSD find alike; stat -c is GNU only (#373).
     code = f"""
         umask {mask}
         docker() {{
             [ "$1" != compose ] || {{
-                [ -d data ] && [ "$(stat -c %u data)" = "$(id -u)" ] || exit 91
-                [ $(( 8#$(stat -c %a data) & 0111 )) -eq $((0111)) ] || exit 92
+                [ -d data ] && [ -n "$(find data -prune -user "$(id -u)")" ] || exit 91
+                [ -n "$(find data -prune -perm -0111)" ] || exit 92
             }}
         }}
         source "$0" grep

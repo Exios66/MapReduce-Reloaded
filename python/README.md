@@ -57,7 +57,7 @@ killed worker and a restarted coordinator.
 ## Layout (`mapreduce_reloaded/`)
 
 | Module | Role |
-|---|---|
+| --- | --- |
 | `api.py` | `Program`, `JobSpec`, the `@mapper`, `@reducer` and `@combiner` decorators, and the task context |
 | `local.py` | Local mode, with the same counters as Go |
 | `split.py`, `extsort.py`, `combine.py` | Input splits, external sort, the combiner |

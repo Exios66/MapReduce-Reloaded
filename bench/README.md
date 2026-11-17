@@ -13,7 +13,7 @@ instead, and no seed. Measured on the machine below, each
 writes 64 MB in about a second, except `gen-zipf.py`, which takes about 6 s.
 
 | Script | Records | For |
-|---|---|---|
+| --- | --- | --- |
 | [`gen-words.py`](gen-words.py) | Lines of 5 to 15 words from the test corpus | Word count, the codec benchmark |
 | [`gen-grep.py`](gen-grep.py) | 100-byte records; the pattern `XYZ` is in 92,337 per 10^10 records, as in the paper's grep (§5.2) | `grep` with `-param pattern=XYZ` |
 | [`gen-sort.py`](gen-sort.py) | TeraSort-style 100-byte records with random 10-byte keys, as in the paper's sort (§5.3) | `distsort` |
@@ -57,7 +57,7 @@ rise in steps of whole tasks. The shuffle is counted as it is fetched.
 Compose cluster, through [`run.sh`](run.sh):
 
 | Scenario | Input | Program |
-|---|---|---|
+| --- | --- | --- |
 | `grep` | `gen-grep.py` | `grep` for `XYZ` (§5.2) |
 | `sort` | `gen-sort.py` | `distsort` (§5.3) |
 | `zipf` | `gen-zipf.py` | `wordcount` |
@@ -103,7 +103,7 @@ VM, which has 4 vCPUs (Intel Xeon Silver 4516Y+) and 8 GB
 ([the VM](../docs/cluster-vm.md#the-vm)). Time is the median of three runs, with the range. Each results section in this file identifies its machine; do not compare development-machine numbers with course-VM numbers.
 
 | Job | Codec | Bytes shuffled | vs none | Time (s) |
-|---|---|---:|---:|---|
+| --- | --- | ---: | ---: | --- |
 | wordcount | none | 2,071,855 | 1.00 | 2.81 (2.75–2.99) |
 | wordcount | zstd | 1,225,752 | 0.59 | 2.93 (2.55–3.02) |
 | wordcount | snappy | 1,930,867 | 0.93 | 3.00 (2.80–3.04) |
@@ -261,7 +261,7 @@ those two commits; its `NOTE.md` gives the setup.
 </picture>
 
 | Program | 1 worker (s) | 2 workers (s) | 4 workers (s) | Speed-up at 4 |
-|---|---|---|---|---:|
+| --- | --- | --- | --- | ---: |
 | grep | 2.58 (2.04–2.61) | 1.22 (1.18–1.23) | 1.28 (0.79–1.43) | 2.0× |
 | distsort | 25.04 (23.98–25.66) | 13.37 (12.86–14.12) | 8.06 (7.63–8.91) | 3.1× |
 | wordcount | 148.35 (148.01–150.24) | 75.16 (74.95–76.37) | 40.10 (38.52–40.27) | 3.7× |
@@ -293,7 +293,7 @@ those two commits; its `NOTE.md` gives the setup.
 </picture>
 
 | Zipf exponent | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
-|---|---:|---:|---:|---|---|---:|
+| --- | ---: | ---: | ---: | --- | --- | ---: |
 | 0.5 | 91,561,690 | 1,402,591,670 | 6.5% | 36.49 (36.31–38.32) | 43.23 (42.97–44.15) | 16% |
 | 1.0 | 88,755,466 | 1,512,014,251 | 5.9% | 38.37 (37.99–39.22) | 48.64 (47.83–49.57) | 21% |
 | 1.5 | 21,885,547 | 1,715,904,960 | 1.3% | 29.93 (28.79–29.95) | 51.25 (50.64–51.74) | 42% |
@@ -319,7 +319,7 @@ joins the two medians without a straggler and the lower row those with
 one; on the right are the straggler runs' tasks finished over time.
 
 | Setting | Job time (s) | Backups run | Backups won |
-|---|---|---:|---:|
+| --- | --- | ---: | ---: |
 | no straggler, backups on | 7.83 (7.27–8.42) | 4–6 | 0 |
 | no straggler, backups off | 8.08 (7.99–8.33) | 0 | 0 |
 | straggler, backups on | 11.36 (10.82–11.84) | 4 | 1–2 |
@@ -353,7 +353,7 @@ kill times are measured from submission; the saved data does not record
 the offset between those two clocks.
 
 | Worker killed at | Job time (s) | Cost |
-|---|---|---:|
+| --- | --- | ---: |
 | no failure | 7.86 (7.03–7.88) | |
 | 1.8 s (25%) | 15.78 (13.88–16.11) | +7.9 s |
 | 3.6 s (50%) | 20.70 (19.71–23.22) | +12.8 s |
@@ -379,7 +379,7 @@ the offset between those two clocks.
 </picture>
 
 | Setting | Job time (s) |
-|---|---|
+| --- | --- |
 | no restart | 7.95 (7.58–8.13) |
 | coordinator killed and restarted at 3.8 s (50%) | 9.18 (8.90–9.74) |
 
@@ -411,7 +411,7 @@ if every disturbed run was valid.
 </picture>
 
 | Setting | Job time (s) | Map phase (s) |
-|---|---|---|
+| --- | --- | --- |
 | compiled `wordcount` | 39.11 (37.75–39.19) | 37.5 |
 | job file, `examples/wordcount.go` (`api.Words`, `api.Sum`) | 89.67 (88.50–90.36) | 83.0 |
 | job file, `bench/jobs/wordcount-naive.go` (its own word test) | 400.43 (399.88–401.09) | 393.5 |
@@ -438,7 +438,7 @@ if every disturbed run was valid.
 </picture>
 
 | Input | Bytes shuffled, on | Bytes shuffled, off | On / off | Time on (s) | Time off (s) | Time saved |
-|---|---:|---:|---:|---|---|---:|
+| --- | ---: | ---: | ---: | --- | --- | ---: |
 | Crawled English | 265,983,823 | 1,374,954,686 | 19.3% | 31.48 (30.52–32.78) | 35.41 (35.19–36.05) | 11% |
 | Crawled, every language | 417,952,270 | 1,320,092,762 | 31.7% | 30.94 (30.68–31.47) | 33.68 (31.92–34.05) | 8% |
 | Book (War and Peace lines) | 43,372,796 | 1,452,704,780 | 3.0% | 33.09 (32.96–34.27) | 43.30 (42.71–45.30) | 24% |
@@ -470,7 +470,7 @@ E2 slows one worker. E7 slows all four, each to a different speed, which is
 what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for.
 
 | Setting | Job time (s) | Backups run | Backups won |
-|---|---|---:|---:|
+| --- | --- | ---: | ---: |
 | no backups (`mixed-off`) | 25.16 (24.48–26.07) | 0 | 0 |
 | the paper's rule (`mixed-paper`) | 17.23 (16.65–19.60) | 4–5 | 1–3 |
 | LATE (`mixed-late`) | 17.04 (16.98–20.04) | 1–2 | 1 |
@@ -482,7 +482,7 @@ what LATE ([ADR 0019](../docs/design/0019-late-speculation.md)) is for.
   idle, whatever their progress.
 
 | Setting | Coordinator | Compose files |
-|---|---|---|
+| --- | --- | --- |
 | `mixed-paper` | `-speculation=paper` (the default): the oldest attempt, once nothing is idle (§3.6) | `compose.yaml` |
 | `mixed-late` | `-speculation=late` | `compose.yaml`, [`speculation-late.yaml`](../deploy/compose/speculation-late.yaml) |
 | `mixed-off` | `-backups=false` | `compose.yaml`, [`backups-off.yaml`](../deploy/compose/backups-off.yaml) |

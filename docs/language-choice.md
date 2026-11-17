@@ -13,7 +13,7 @@ nothing was measured, the page says so.
 ## 1. Constraints
 
 | Constraint | Source |
-|---|---|
+| --- | --- |
 | One VM with 4 vCPUs and 8 GB, running one coordinator and four workers limited to one CPU each | [Design](../design.md), [cluster VM](cluster-vm.md) |
 | Memory limits of 256 MB for the coordinator and 768 MB for each worker, with a 256 MB sort buffer inside the worker's share | [Cluster VM](cluster-vm.md#memory-budget) |
 | A client outside every container, which submits a file of map and reduce functions | [Design](../design.md#client-interface) |
@@ -129,7 +129,7 @@ five runs
 ([bench/README.md, E5](../bench/README.md#e5-what-an-interpreted-job-file-costs)):
 
 | Setting | Job time |
-|---|---:|
+| --- | ---: |
 | Compiled `wordcount` | 39.11 s |
 | Job file `examples/wordcount.go`, which uses the compiled helpers `api.Words` and `api.Sum` | 89.67 s (2.3×) |
 | Job file `bench/jobs/wordcount-naive.go`, which tests for word boundaries itself | 400.43 s (10.2×) |
@@ -190,7 +190,7 @@ so they agree because of the files and not because they were written to the
 same prose.
 
 | Part of the contract | Where it is defined | Shared test data | Go test | Python test |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Wire messages and RPCs | [`proto/mapreduce/v1/`](../proto/mapreduce/v1/) ([README](../proto/README.md)) | `testdata/proto/` (text and binary forms) | `go/internal/contract` | `python/tests/test_contract.py` |
 | MRKV block format, with its codecs | [file format](file-format.md) | `testdata/format/` and its `vectors.json` | `go/internal/formats/kv` | `test_kv.py`, `test_format_vectors.py` |
 | Partition hash, FNV-1a 64 mod R | [file format](file-format.md), [explainer](explainers/05-partition-hash.md) | `testdata/hash/vectors.json` | `TestVectors` in `go/internal/partition` | `test_partition_hash.py` |
@@ -259,7 +259,7 @@ The rows are the alternatives in ADR 0001. Go only was added to the ADR
 later, with this report; the decision already implied it.
 
 | Alternative | Why not |
-|---|---|
+| --- | --- |
 | C++, as in the paper | Most faithful to the code, slow to develop, and not a language the author works in. Fidelity here is behavioural |
 | Python only | The interpreter and the GIL fit the performance experiments poorly (not measured here, see section 4). It would also have no second implementation to compare with |
 | Rust | Best raw performance, but development speed would limit how many of the paper's features get built |

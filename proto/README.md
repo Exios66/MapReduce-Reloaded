@@ -5,7 +5,7 @@ The protobuf definitions every component shares, in package `mapreduce.v1`
 generated from them and committed.
 
 | File | Contents |
-|---|---|
+| --- | --- |
 | [`coordinator.proto`](mapreduce/v1/coordinator.proto) | `CoordinatorService`: `RegisterWorker`, `RequestTask`, `ReportTask`, `Heartbeat`, `SubmitJob`, `GetJobStatus`. Workers pull tasks; clients submit and monitor jobs. |
 | [`shuffle.proto`](mapreduce/v1/shuffle.proto) | `ShuffleService.FetchPartition`: a stream from the worker that holds a map task's output |
 | [`types.proto`](mapreduce/v1/types.proto) | Messages shared by both: `JobSpec`, tasks, attempts, counters, worker info |

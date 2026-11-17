@@ -10,7 +10,7 @@ both languages. Every later piece (map output, sort, shuffle, reduce input)
 reads and writes data through it.
 
 | | Go (`go/internal/formats/kv`) | Python (`mapreduce_reloaded.formats.kv`) |
-|---|---|---|
+| --- | --- | --- |
 | Write | `w := kv.NewWriter(f)`, `w.Write(k, v)`, `w.Close()` | `with kv.Writer(f) as w: w.write(k, v)` |
 | Read | `for r.Next() { r.Key(), r.Value() }`, then `r.Err()` | `for k, v in kv.read(f):` |
 | Errors | `errors.Is(err, kv.ErrChecksumMismatch)` | `FormatError` with `.kind == "checksum_mismatch"` |

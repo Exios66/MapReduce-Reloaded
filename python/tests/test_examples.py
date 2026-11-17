@@ -67,7 +67,10 @@ def test_invertedindex(tmp_path, m):
 def test_invertedindex_non_utf8_name(tmp_path):
     # A file name is bytes on Linux; it need not be UTF-8.
     path = tmp_path / os.fsdecode(b"\xff.txt")
-    path.write_bytes(b"x y\n")
+    try:
+        path.write_bytes(b"x y\n")
+    except OSError as e:  # macOS's APFS refuses names that are not UTF-8 (#373)
+        pytest.skip(f"this filesystem cannot store a file name that is not UTF-8: {e}")
     out = run(tmp_path, invertedindex.program, 1, {}, (str(path),))
     assert (out / "part-r-00000").read_bytes() == b"x\t\xff.txt\ny\t\xff.txt\n"
 

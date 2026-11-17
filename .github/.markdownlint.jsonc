@@ -1,0 +1,6 @@
+{
+  // A pull request's title is its top-level heading, so the templates start
+  // at "## Executive summary" (MD041 expects a "# " first).
+  "extends": "../.markdownlint.jsonc",
+  "MD041": false
+}

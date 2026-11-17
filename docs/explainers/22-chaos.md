@@ -12,7 +12,7 @@ with backups on and three workers, submits word count over the corpus, and
 then makes six random choices, a few milliseconds apart:
 
 | Event | How | What it exercises |
-|-------|-----|-------------------|
+| --- | --- | --- |
 | A machine dies, and another joins | the worker's context is cancelled and its shuffle server stops | heartbeat timeout, re-running its maps (#23), lost map output |
 | A machine stalls for 50–250 ms | the worker's RPCs, in and out, are held up | stragglers, backups (#25), a live worker declared dead and its late reports rejected |
 | The coordinator restarts | it stops, then recovers from its write-ahead log | recovery (#24), workers registering again |

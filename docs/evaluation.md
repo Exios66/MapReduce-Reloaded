@@ -12,8 +12,8 @@ CPU each under Compose ([cluster VM](cluster-vm.md)). The paper's cluster
 had about 1,800 machines, each with two 2 GHz Xeons, 4 GB of memory and two
 160 GB IDE disks, on gigabit Ethernet (§5.1).
 
-| §  | Paper | Here | Data |
-|---|---|---|---|
+| § | Paper | Here | Data |
+| --- | --- | --- | --- |
 | 5.2 Grep | 1 TB, M = 15,000, R = 1: 150 s | 10 GB, M = 160, R = 1: 18.3 s (one run, 28 Oct, archived) | [`archive/paper-2707160/grep`](../bench/evaluation/archive/paper-2707160/grep) |
 | 5.3 Sort | 1 TB, M = 15,000, R = 4,000: 891 s | 1 GiB, M = 32, R = 4: 8.1 s (E0, four workers); 7.8 s in the archived run | E0, [`archive/paper-2707160/sort`](../bench/evaluation/archive/paper-2707160/sort) |
 | 5.4 No backup tasks | +44% (1,283 s) | +58% with a straggler; no statistically significant cost without one | E2 |
@@ -152,7 +152,7 @@ one worker slow, at 0.2 CPU, and measures the job with and without backups,
 and with no straggler:
 
 | Setting | Job time (s) |
-|---|---|
+| --- | --- |
 | straggler, backups on | 11.36 |
 | straggler, backups off | 17.90 (+58%) |
 | no straggler, backups on | 7.67 |
@@ -199,7 +199,7 @@ cluster restarted them, the lost map work ran again, and the job took
 restart it:
 
 | Worker killed at | Job time (s) | Cost |
-|---|---|---:|
+| --- | --- | ---: |
 | no failure | 7.86 | |
 | 1.8 s (25%) | 15.78 | +101% |
 | 3.6 s (50%) | 20.70 | +164% |
@@ -238,7 +238,7 @@ E7 compares the paper's rule, LATE and no backups with all four workers
 throttled to 1, 0.6, 0.3 and 0.15 CPUs, on the same 1 GiB sort:
 
 | Setting | Job time (s) | Backups run | Backups won |
-|---|---|---:|---:|
+| --- | --- | ---: | ---: |
 | no backups | 25.16 (24.48–26.07) | 0 | 0 |
 | the paper's rule | 17.23 (16.65–19.60) | 4–5 | 1–3 |
 | LATE | 17.04 (16.98–20.04) | 1–2 | 1 |

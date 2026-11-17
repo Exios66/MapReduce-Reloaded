@@ -226,8 +226,10 @@ This adds 512 MB of memory limits.
 
 The same demo is in [`examples/demo.ipynb`](../examples/demo.ipynb), which
 runs it cell by cell in Jupyter: upload, submit, read, plot, the job file,
-a second program, a worker killed mid-job, the metrics, and a local-mode
-check. Install its dependencies with
+the combiner on and off, a second program, a worker killed mid-job, the
+coordinator crashed mid-job, the metrics, a local-mode check and the
+evaluation figures, with text before each section's code that tells the
+story as it runs. Install its dependencies with
 `python/.venv/bin/pip install -e 'python[notebook]'`.
 
 ### 5.8 The soak run (#160)
@@ -266,7 +268,7 @@ write-ahead log, and all unselected directories are preserved.
 ## Troubleshooting
 
 | Symptom | Fix |
-|---|---|
+| --- | --- |
 | `make: command not found` | `sudo apt-get install -y make` |
 | `go: command not found` | `export PATH="$HOME/.local/go/bin:$PATH"` (step 2 adds it to `~/.bashrc`) |
 | `ssh: Could not resolve hostname` or a timeout | Connect to the VPN |

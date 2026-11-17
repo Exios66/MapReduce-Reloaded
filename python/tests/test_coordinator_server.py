@@ -1332,7 +1332,11 @@ def test_source_over_the_limit_is_invalid():
 
 def test_path_keeps_bytes_that_are_not_utf8(tmp_path):
     name = os.fsencode(tmp_path) + b"/\xff"
-    with open(name, "wb") as f:
+    try:
+        f = open(name, "wb")  # closed by the with below
+    except OSError as e:  # macOS's APFS refuses names that are not UTF-8 (#373)
+        pytest.skip(f"this filesystem cannot store a file name that is not UTF-8: {e}")
+    with f:
         f.write(b"x")
     u = uri(os.fsdecode(name))
     assert u.endswith("/%FF")

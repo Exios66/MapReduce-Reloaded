@@ -8,7 +8,7 @@ that most input is read from local disk (§3.4).
 ## What happens
 
 | Step | Where |
-|------|-------|
+| --- | --- |
 | A worker registers with its host and zone | `WorkerInfo` |
 | At submit, each split is labelled with the hosts or zones that hold it, and the labels are logged with the splits | `Config.Locate`, `JobSubmitted` |
 | A worker asks for work and gets the idle map task nearest to it: host, then zone, then any | `Server.RequestTask`, `TaskTable.Next` |

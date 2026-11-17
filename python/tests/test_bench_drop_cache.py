@@ -60,5 +60,7 @@ def test_no_arguments_prints_usage_and_exits_2(drop_cache, capsys):
 def test_real_fadvise_on_linux(tmp_path):
     f = tmp_path / "input.txt"
     f.write_bytes(b"x" * 65536)
-    result = subprocess.run([sys.executable, SCRIPT, f], capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, SCRIPT, f], capture_output=True, text=True, check=False
+    )
     assert result.returncode == 0, result.stderr

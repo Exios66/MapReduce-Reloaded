@@ -605,8 +605,9 @@ e7_cpus=${E7_CPUS:-1 0.6 0.3 0.15}
 # the order compose lists them. It saves their IDs in slow, so that cleanup
 # and unthrottle restore them.
 throttle() {
-    local ids i cpus=("$@")
-    mapfile -t ids < <("${compose[@]}" ps -q worker)
+    local ids=() id i cpus=("$@")
+    # A read loop rather than mapfile, which macOS's bash 3.2 lacks (#373).
+    while IFS= read -r id || [ -n "$id" ]; do ids+=("$id"); done < <("${compose[@]}" ps -q worker)
     if [ "${#ids[@]}" != "$#" ]; then
         echo "experiments: ${#ids[@]} workers are running; expected $# CPU limits" >&2
         exit 1

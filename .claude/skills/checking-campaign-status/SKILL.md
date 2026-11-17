@@ -16,7 +16,7 @@ bash .claude/skills/checking-campaign-status/status.sh HOST [REPO] [RUNS]
 ## Reading it
 
 | Output | Meaning |
-|---|---|
+| --- | --- |
 | `GATE PASS NAME` | the chunk's runs were all valid, at the expected commit, and archived |
 | `FAIL` or `ABORT` | the chain stopped: read the chunk's log tail before anything else |
 | runs started not increasing between two snapshots several minutes apart | possibly stuck: check the chunk's log and `docker ps` |
