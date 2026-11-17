@@ -190,8 +190,9 @@ are not a special feature: the assignment requires them.
    the first to finish wins ([ADR 0010](docs/design/0010-backup-tasks.md)).
    Beyond the paper, `-speculation=late` picks the task by estimated time
    left (LATE, Zaharia et al., OSDI 2008) instead of by age
-   ([ADR 0019](docs/design/0019-late-speculation.md)); it is opt-in, and
-   not yet evaluated (#59).
+   ([ADR 0019](docs/design/0019-late-speculation.md)); it is opt-in. E7
+   measured it on workers of mixed speeds: either rule cuts a sort by 32%,
+   LATE with fewer backups, and the two times overlap (#59).
 3. **Worker failure handling** (§3.3). Heartbeats detect a dead worker; its
    running tasks and its completed map tasks (whose output was on its disk)
    run again elsewhere ([ADR 0009](docs/design/0009-failure-detection.md)).
