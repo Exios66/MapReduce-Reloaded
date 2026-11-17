@@ -1415,13 +1415,13 @@ def main():
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else results
     out.mkdir(parents=True, exist_ok=True)
     draw = {
-        "E0": lambda rows, png, t: e0(rows, png, t),
-        "E1": lambda rows, png, t: e1(rows, png, t),
+        "E0": e0,
+        "E1": e1,
         "E2": lambda rows, png, t: e2(rows, results, png, t),
         "E3": lambda rows, png, t: e3(rows, results, png, t),
         "E4": lambda rows, png, t: e4(rows, results, png, t),
         "E5": lambda rows, png, t: e5(rows, results, png, t),
-        "E6": lambda rows, png, t: e6(rows, png, t),
+        "E6": e6,
         "E7": lambda rows, png, t: e7(rows, png, t, e7_cpus(results)),
     }
     for exp, fn in draw.items():
